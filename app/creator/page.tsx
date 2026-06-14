@@ -1,0 +1,6 @@
+import { Header } from '@/components/Header';
+import { Sidebar } from '@/components/Sidebar';
+
+export default function Creator() {
+  return <><Header/><main className="layout"><Sidebar/><section className="panel"><h2>Creator Studio</h2><p className="muted">This is where your original content will be created and saved to Supabase.</p><div className="card" style={{borderColor:'#facc15',background:'#fffbeb'}}><strong>Reference-safe rule:</strong> use textbooks as references, then write original explanations, questions, distinctions, and mnemonics in your own words.</div><br/><div className="form-grid"><input placeholder="Concept name"/><input placeholder="Type, e.g. Drug Class"/><select><option>High</option><option>Medium</option><option>Low</option></select><select><option>Beginner</option><option>Intermediate</option><option>Advanced</option></select><input placeholder="Estimated study time, e.g. 15 min"/><input placeholder="Sub-mastery areas, comma separated"/></div><br/><textarea placeholder="Original summary in your own words"/><br/><br/><textarea placeholder="Why this matters"/><br/><br/><button className="btn primary">Save Concept</button><p className="muted">Next build: this button will insert into the concepts table.</p></section></main></>;
+}
