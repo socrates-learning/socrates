@@ -1,4 +1,4 @@
-# Pharm Mastery Alpha
+# Socrates
 
 Real app foundation for the concept-network learning platform.
 

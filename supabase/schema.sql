@@ -1,4 +1,4 @@
--- Pharm Mastery Alpha database schema
+-- Socrates database schema
 -- Run this in Supabase SQL Editor.
 
 create extension if not exists "uuid-ossp";
