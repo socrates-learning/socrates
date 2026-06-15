@@ -4,6 +4,17 @@ import { Sidebar } from '@/components/Sidebar';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 
+function slugify(text: string) {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '');
+}
+
+function isUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+}
+
 export default async function ConceptPage({
   params,
 }: {
@@ -11,21 +22,43 @@ export default async function ConceptPage({
 }) {
   const { id } = await params;
 
-  const { data: concept } = await supabase
-    .from('concepts')
-    .select(`
-      id,
-      name,
-      concept_type,
-      importance,
-      difficulty,
-      estimated_time,
-      summary,
-      why_it_matters,
-      status
-    `)
-    .eq('id', id)
-    .single();
+  let concept = null;
+
+  if (isUuid(id)) {
+    const { data } = await supabase
+      .from('concepts')
+      .select(`
+        id,
+        name,
+        concept_type,
+        importance,
+        difficulty,
+        estimated_time,
+        summary,
+        why_it_matters,
+        status
+      `)
+      .eq('id', id)
+      .single();
+
+    concept = data;
+  } else {
+    const { data } = await supabase
+      .from('concepts')
+      .select(`
+        id,
+        name,
+        concept_type,
+        importance,
+        difficulty,
+        estimated_time,
+        summary,
+        why_it_matters,
+        status
+      `);
+
+    concept = data?.find((item) => slugify(item.name) === id) || null;
+  }
 
   if (!concept) {
     return (
