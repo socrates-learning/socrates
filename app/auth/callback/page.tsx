@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect } from 'react';
+import { Suspense, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 
-export default function AuthCallbackPage() {
+function AuthCallbackContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -29,5 +29,13 @@ export default function AuthCallbackPage() {
         <p className="muted">Please wait while Socrates completes your login.</p>
       </section>
     </main>
+  );
+}
+
+export default function AuthCallbackPage() {
+  return (
+    <Suspense fallback={<p>Signing you in...</p>}>
+      <AuthCallbackContent />
+    </Suspense>
   );
 }
