@@ -4,43 +4,74 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 
-type Concept = {
+type LibraryNode = {
   id: string;
   name: string;
-  concept_type: string | null;
+  node_type: string | null;
+  parent_id: string | null;
+};
+
+type Placement = {
+  concept_id: string;
+  library_node_id: string;
+  concepts: {
+    id: string;
+    name: string;
+    concept_type: string | null;
+  } | null;
 };
 
 export function Sidebar({ activeId }: { activeId?: string }) {
-  const [concepts, setConcepts] = useState<Concept[]>([]);
+  const [nodes, setNodes] = useState<LibraryNode[]>([]);
+  const [placements, setPlacements] = useState<Placement[]>([]);
 
   useEffect(() => {
-    async function loadConcepts() {
-      const { data } = await supabase
-        .from('concepts')
-        .select('id, name, concept_type')
+    async function loadSidebar() {
+      const { data: nodeData } = await supabase
+        .from('library_nodes')
+        .select('id, name, node_type, parent_id')
         .order('name');
 
-      setConcepts(data || []);
+      const { data: placementData } = await supabase
+        .from('concept_placements')
+        .select(`
+          concept_id,
+          library_node_id,
+          concepts (
+            id,
+            name,
+            concept_type
+          )
+        `)
+        .order('sort_order');
+
+      setNodes(nodeData || []);
+      setPlacements((placementData || []) as unknown as Placement[]);
     }
 
-    loadConcepts();
+    loadSidebar();
   }, []);
 
-  return (
-    <aside className="panel sidebar">
-      <h3>Knowledge Library</h3>
+  function renderNode(node: LibraryNode) {
+    const childNodes = nodes.filter((child) => child.parent_id === node.id);
+    const nodePlacements = placements.filter(
+      (placement) => placement.library_node_id === node.id
+    );
 
-      <strong>Pharmacology</strong>
+    return (
+      <div className="sub" key={node.id}>
+        <strong>{node.name}</strong>
 
-      <div className="sub">
-        <strong>Cardiovascular Pharmacology</strong>
+        {childNodes.map((child) => renderNode(child))}
 
-        <div className="sub">
-          <strong>Hypertension Drugs</strong>
+        {nodePlacements.map((placement) => {
+          const concept = placement.concepts;
 
-          {concepts.map((concept) => (
+          if (!concept) return null;
+
+          return (
             <Link
-              key={concept.id}
+              key={`${node.id}-${concept.id}`}
               className={`tree-item ${activeId === concept.id ? 'active' : ''}`}
               href={`/concepts/${concept.id}`}
             >
@@ -50,9 +81,28 @@ export function Sidebar({ activeId }: { activeId?: string }) {
                 {concept.concept_type || 'Concept'}
               </small>
             </Link>
-          ))}
-        </div>
+          );
+        })}
       </div>
+    );
+  }
+
+  const pharmacologyNode = nodes.find((node) => node.name === 'Pharmacology');
+
+  return (
+    <aside className="panel sidebar">
+      <h3>Knowledge Library</h3>
+
+      {pharmacologyNode ? (
+        <>
+          <strong>{pharmacologyNode.name}</strong>
+          {nodes
+            .filter((node) => node.parent_id === pharmacologyNode.id)
+            .map((node) => renderNode(node))}
+        </>
+      ) : (
+        <p className="muted">Loading library...</p>
+      )}
     </aside>
   );
 }
