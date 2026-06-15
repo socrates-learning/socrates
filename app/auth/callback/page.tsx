@@ -16,6 +16,8 @@ function AuthCallbackContent() {
         await supabase.auth.exchangeCodeForSession(code);
       }
 
+      await supabase.rpc('assign_role_from_approved_domain');
+
       router.replace('/admin');
     }
 

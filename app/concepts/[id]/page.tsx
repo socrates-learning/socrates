@@ -1,7 +1,4 @@
-import { ConceptNotes } from '@/components/ConceptNotes';
-import { ConceptReview } from '@/components/ConceptReview';
-import { ConceptDistinctions } from '@/components/ConceptDistinctions';
-import { ConceptNetwork } from '@/components/ConceptNetwork';
+import { ConceptTabs } from '@/components/ConceptTabs';
 import { Header } from '@/components/Header';
 import { Sidebar } from '@/components/Sidebar';
 import { supabase } from '@/lib/supabase';
@@ -38,7 +35,9 @@ export default async function ConceptPage({
           <Sidebar />
           <section className="panel">
             <h2>Concept not found</h2>
-            <p className="muted">This concept does not exist or is not published yet.</p>
+            <p className="muted">
+              This concept does not exist or is not published yet.
+            </p>
             <Link className="btn primary" href="/pharmacology">
               Back to Pharmacology
             </Link>
@@ -52,7 +51,7 @@ export default async function ConceptPage({
     <>
       <Header />
       <main className="layout">
-        <Sidebar />
+        <Sidebar activeId={concept.id} />
 
         <section className="stack">
           <div className="panel concept-title">
@@ -73,67 +72,12 @@ export default async function ConceptPage({
             </div>
           </div>
 
-          <div className="tabs">
-            <button className="tab active">Learn</button>
-            <button className="tab">Review</button>
-            <button className="tab">Distinctions</button>
-            <button className="tab">Notes</button>
-            <button className="tab">Network</button>
-            <Link className="tab" href="/creator">
-              Create
-            </Link>
-          </div>
-
-          <div className="grid">
-            <div className="card">
-              <h3>Summary</h3>
-              <p>{concept.summary}</p>
-            </div>
-
-            <div className="card">
-              <h3>Why this matters</h3>
-              <p>{concept.why_it_matters || 'No explanation added yet.'}</p>
-            </div>
-
-            <div className="card">
-              <h3>Status</h3>
-              <p className="muted">{concept.status}</p>
-            </div>
-
-            <div className="card">
-  <h3>Notes</h3>
-  <ConceptNotes conceptId={concept.id} />
-</div>
-
-<div className="card">
-  <ConceptReview conceptId={concept.id} />
-</div>
-
-            <div className="card">
-              <h3>Sub-Mastery</h3>
-              {['Mechanism', 'Clinical Uses', 'Adverse Effects', 'Contraindications', 'Distinctions'].map((s) => (
-                <p key={s}>
-                  <strong>{s}</strong>
-                  <br />
-                  <span className="muted">50%</span>
-                  <span className="bar">
-                    <span style={{ width: '50%' }} />
-                  </span>
-                </p>
-              ))}
-            </div>
-
-            <div className="card">
-  <h3>Distinctions</h3>
-  <ConceptDistinctions conceptId={concept.id} />
-</div>
-
-<div className="card">
-  <h3>Network</h3>
-  <ConceptNetwork conceptId={concept.id} />
-</div>
-
-          </div>
+          <ConceptTabs
+            conceptId={concept.id}
+            summary={concept.summary}
+            whyItMatters={concept.why_it_matters}
+            status={concept.status}
+          />
         </section>
       </main>
     </>

@@ -5,13 +5,20 @@ import { Header } from '@/components/Header';
 import { Sidebar } from '@/components/Sidebar';
 import { supabase } from '@/lib/supabase';
 
+type LibraryNode = {
+  id: string;
+  name: string;
+  node_type: string | null;
+};
+
 export default function Creator() {
   const [status, setStatus] = useState('');
   const [loading, setLoading] = useState(true);
   const [role, setRole] = useState<string | null>(null);
+  const [nodes, setNodes] = useState<LibraryNode[]>([]);
 
   useEffect(() => {
-    async function checkRole() {
+    async function loadPageData() {
       const { data: userData } = await supabase.auth.getUser();
 
       if (!userData.user) {
@@ -19,17 +26,24 @@ export default function Creator() {
         return;
       }
 
-      const { data } = await supabase
+      const { data: roleData } = await supabase
         .from('user_roles')
         .select('role')
         .eq('user_id', userData.user.id)
         .single();
 
-      setRole(data?.role ?? null);
+      setRole(roleData?.role ?? null);
+
+      const { data: nodeData } = await supabase
+        .from('library_nodes')
+        .select('id, name, node_type')
+        .order('name');
+
+      setNodes(nodeData || []);
       setLoading(false);
     }
 
-    checkRole();
+    loadPageData();
   }, []);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -39,6 +53,12 @@ export default function Creator() {
     setStatus('Saving...');
 
     const form = new FormData(formElement);
+    const libraryNodeId = String(form.get('library_node_id'));
+
+    if (!libraryNodeId) {
+      setStatus('Please choose a category.');
+      return;
+    }
 
     const concept = {
       name: String(form.get('name')),
@@ -67,7 +87,7 @@ export default function Creator() {
       .from('concept_placements')
       .insert({
         concept_id: data.id,
-        library_node_id: 'e3f6ad89-7616-4ea0-bc5d-5f4b0e02b2c6',
+        library_node_id: libraryNodeId,
         sort_order: 0,
       });
 
@@ -76,7 +96,7 @@ export default function Creator() {
       return;
     }
 
-    setStatus('Concept saved as draft under Pharmacology.');
+    setStatus('Concept saved as draft in the selected category.');
     formElement.reset();
   }
 
@@ -109,12 +129,25 @@ export default function Creator() {
 
         <section className="panel">
           <h2>Creator Studio</h2>
-          <p className="muted">Add draft concepts to the Socrates database.</p>
+          <p className="muted">
+            Add draft concepts and place them into a Socrates category.
+          </p>
 
           <form onSubmit={handleSubmit}>
             <div className="form-grid">
               <input name="name" placeholder="Concept name" required />
               <input name="concept_type" placeholder="Type, e.g. Drug Class" />
+
+              <select name="library_node_id" defaultValue="" required>
+                <option value="" disabled>
+                  Choose category
+                </option>
+                {nodes.map((node) => (
+                  <option key={node.id} value={node.id}>
+                    {node.name} {node.node_type ? `(${node.node_type})` : ''}
+                  </option>
+                ))}
+              </select>
 
               <select name="importance" defaultValue="High">
                 <option>High</option>
