@@ -1,6 +1,39 @@
 import Link from 'next/link';
-import { demoConcepts } from '@/lib/demo-data';
+
+const concepts = [
+  {
+    id: '8d017b8c-1bb7-4336-a40a-1ca1983e6023',
+    name: 'Beta Blockers Demo',
+    type: 'Drug Class',
+  },
+];
 
 export function Sidebar({ activeId }: { activeId?: string }) {
-  return <aside className="panel sidebar"><h3>Knowledge Library</h3><strong>Pharmacology</strong><div className="sub"><strong>Cardiovascular Pharmacology</strong><div className="sub"><strong>Hypertension Drugs</strong>{demoConcepts.filter(c=>['ace-inhibitors','arbs','hyperkalemia'].includes(c.id)).map(c=><Link key={c.id} className={`tree-item ${activeId===c.id?'active':''}`} href={`/concepts/${c.id}`}>{c.name}<br/><small className="muted">{c.type}</small></Link>)}</div></div><br/><strong>Physiology</strong><div className="sub"><Link className={`tree-item ${activeId==='raas'?'active':''}`} href="/concepts/raas">Renin-Angiotensin-Aldosterone System<br/><small className="muted">Physiology System</small></Link></div></aside>;
+  return (
+    <aside className="panel sidebar">
+      <h3>Knowledge Library</h3>
+
+      <strong>Pharmacology</strong>
+
+      <div className="sub">
+        <strong>Cardiovascular Pharmacology</strong>
+
+        <div className="sub">
+          <strong>Hypertension Drugs</strong>
+
+          {concepts.map((concept) => (
+            <Link
+              key={concept.id}
+              className={`tree-item ${activeId === concept.id ? 'active' : ''}`}
+              href={`/concepts/${concept.id}`}
+            >
+              {concept.name}
+              <br />
+              <small className="muted">{concept.type}</small>
+            </Link>
+          ))}
+        </div>
+      </div>
+    </aside>
+  );
 }
