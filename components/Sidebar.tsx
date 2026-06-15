@@ -65,9 +65,11 @@ export function Sidebar({ activeId }: { activeId?: string }) {
         {childNodes.map((child) => renderNode(child))}
 
         {nodePlacements.map((placement) => {
-          const concept = placement.concepts;
+          const concept = Array.isArray(placement.concepts)
+  ? placement.concepts[0]
+  : placement.concepts;
 
-          if (!concept) return null;
+if (!concept) return null;
 
           return (
             <Link
