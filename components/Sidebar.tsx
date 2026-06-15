@@ -11,14 +11,16 @@ type LibraryNode = {
   parent_id: string | null;
 };
 
+type Concept = {
+  id: string;
+  name: string;
+  concept_type: string | null;
+};
+
 type Placement = {
   concept_id: string;
   library_node_id: string;
-  concepts: {
-    id: string;
-    name: string;
-    concept_type: string | null;
-  } | null;
+  concepts: Concept | Concept[] | null;
 };
 
 export function Sidebar({ activeId }: { activeId?: string }) {
@@ -52,6 +54,14 @@ export function Sidebar({ activeId }: { activeId?: string }) {
     loadSidebar();
   }, []);
 
+  function getConceptFromPlacement(placement: Placement): Concept | null {
+    if (Array.isArray(placement.concepts)) {
+      return placement.concepts[0] || null;
+    }
+
+    return placement.concepts || null;
+  }
+
   function renderNode(node: LibraryNode) {
     const childNodes = nodes.filter((child) => child.parent_id === node.id);
     const nodePlacements = placements.filter(
@@ -65,17 +75,17 @@ export function Sidebar({ activeId }: { activeId?: string }) {
         {childNodes.map((child) => renderNode(child))}
 
         {nodePlacements.map((placement) => {
-          const concept = Array.isArray(placement.concepts)
-  ? placement.concepts[0]
-  : placement.concepts;
+          const concept = getConceptFromPlacement(placement);
 
-if (!concept) return null;
+          if (!concept) return null;
 
           return (
             <Link
-              key={`${node.id}-${concept.id}`}
-              className={`tree-item ${activeId === concept.id ? 'active' : ''}`}
-              href={`/concepts/${concept.id}`}
+              key={`${node.id}-${placement.concept_id}`}
+              className={`tree-item ${
+                activeId === placement.concept_id ? 'active' : ''
+              }`}
+              href={`/concepts/${placement.concept_id}`}
             >
               {concept.name}
               <br />
