@@ -30,8 +30,15 @@ export function ConceptReview({
   const [status, setStatus] = useState('');
   const [saving, setSaving] = useState(false);
   const [complete, setComplete] = useState(false);
+  const [sessionScores, setSessionScores] = useState<number[]>([]);
 
   const currentSection = sections[currentIndex];
+  const sessionMastery = sessionScores.length
+    ? Math.round(
+        sessionScores.reduce((total, score) => total + score * 25, 0) /
+          sessionScores.length
+      )
+    : null;
 
   async function saveScore(score: number) {
     if (!currentSection || saving) return;
@@ -63,6 +70,8 @@ export function ConceptReview({
       setSaving(false);
       return;
     }
+
+    setSessionScores((scores) => [...scores, score]);
 
     if (isLastCard) {
       setComplete(true);
@@ -96,6 +105,7 @@ export function ConceptReview({
       <div>
         <h3>Review Complete</h3>
         <p className="muted">Completed {sections.length} of {sections.length} cards</p>
+        <p>Session Mastery: {sessionMastery ?? 0}%</p>
         <button
           className="btn primary"
           type="button"
@@ -104,6 +114,7 @@ export function ConceptReview({
             setRevealed(false);
             setComplete(false);
             setStatus('');
+            setSessionScores([]);
           }}
         >
           Restart Review
@@ -114,6 +125,10 @@ export function ConceptReview({
 
   return (
     <div>
+      <p className="muted">
+        Session Mastery: {sessionMastery === null ? '—' : `${sessionMastery}%`}
+      </p>
+
       <p className="muted">
         Card {currentIndex + 1} of {sections.length}
       </p>
