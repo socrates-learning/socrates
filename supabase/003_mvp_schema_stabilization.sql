@@ -48,6 +48,13 @@ create table if not exists public.concept_distinctions (
   created_at timestamptz not null default now()
 );
 
+alter table public.concept_distinctions
+  add column if not exists created_by uuid
+    references auth.users(id) on delete set null default auth.uid();
+
+alter table public.concept_distinctions
+  alter column created_by set default auth.uid();
+
 create index if not exists concept_distinctions_concept_id_idx
   on public.concept_distinctions(concept_id);
 
