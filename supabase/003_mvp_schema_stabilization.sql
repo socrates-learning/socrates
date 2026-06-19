@@ -281,6 +281,8 @@ begin
 end;
 $$;
 
+drop function if exists public.set_user_role_by_email(text, text);
+
 create or replace function public.set_user_role_by_email(
   target_email text,
   new_role text
