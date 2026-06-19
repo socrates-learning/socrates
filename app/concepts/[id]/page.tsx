@@ -100,6 +100,25 @@ export default async function ConceptPage({
     console.error('Failed to load concept sections:', sectionsError);
   }
 
+  const { data: reviewAttempts, error: reviewAttemptsError } = await supabase
+    .from('review_attempts')
+    .select('score')
+    .eq('concept_id', concept.id)
+    .not('score', 'is', null);
+
+  if (reviewAttemptsError && process.env.NODE_ENV !== 'production') {
+    console.error('Failed to load review attempts:', reviewAttemptsError);
+  }
+
+  const scores = (reviewAttempts || []).flatMap((attempt) =>
+    attempt.score === null ? [] : [attempt.score]
+  );
+  const mastery = scores.length
+    ? Math.round(
+        scores.reduce((total, score) => total + score * 25, 0) / scores.length
+      )
+    : 0;
+
   return (
     <>
       <Header />
@@ -118,9 +137,9 @@ export default async function ConceptPage({
 
             <div className="mastery">
               <strong>Overall Mastery</strong>
-              <h2 style={{ margin: '4px 0' }}>50%</h2>
+              <h2 style={{ margin: '4px 0' }}>{mastery}%</h2>
               <div className="bar">
-                <span style={{ width: '50%' }} />
+                <span style={{ width: `${mastery}%` }} />
               </div>
             </div>
           </div>
