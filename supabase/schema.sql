@@ -53,11 +53,7 @@ create table public.concept_relationships (
   created_at timestamptz default now(),
   unique(source_concept_id, target_concept_id, relationship_type)
 );
-alter table public.concept_tags enable row level security;
-alter table public.concept_aliases enable row level security;
 
-create policy "Public concept tags are readable" on public.concept_tags for select using (true);
-create policy "Public concept aliases are readable" on public.concept_aliases for select using (true);
 create table public.learn_sections (
   id uuid primary key default uuid_generate_v4(),
   concept_id uuid references public.concepts(id) on delete cascade,
