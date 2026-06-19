@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 
 type ReviewSection = {
@@ -25,6 +26,7 @@ export function ConceptReview({
   conceptId: string;
   sections: ReviewSection[];
 }) {
+  const router = useRouter();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [revealed, setRevealed] = useState(false);
   const [status, setStatus] = useState('');
@@ -77,6 +79,7 @@ export function ConceptReview({
       setComplete(true);
       setRevealed(false);
       setStatus('');
+      router.refresh();
     } else {
       const nextIndex = currentIndex + 1;
 
