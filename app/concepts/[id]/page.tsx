@@ -1,7 +1,7 @@
 import { ConceptTabs } from '@/components/ConceptTabs';
 import { Header } from '@/components/Header';
 import { Sidebar } from '@/components/Sidebar';
-import { supabase } from '@/lib/supabase';
+import { createSupabaseServerClient } from '@/lib/supabase-server';
 import Link from 'next/link';
 
 function slugify(text: string) {
@@ -21,11 +21,12 @@ export default async function ConceptPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  const supabase = await createSupabaseServerClient();
 
   let concept = null;
 
   if (isUuid(id)) {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('concepts')
       .select(`
         id,
@@ -41,9 +42,13 @@ export default async function ConceptPage({
       .eq('id', id)
       .single();
 
+    if (error && process.env.NODE_ENV !== 'production') {
+      console.error('Failed to load concept by ID:', error);
+    }
+
     concept = data;
   } else {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('concepts')
       .select(`
         id,
@@ -56,6 +61,10 @@ export default async function ConceptPage({
         why_it_matters,
         status
       `);
+
+    if (error && process.env.NODE_ENV !== 'production') {
+      console.error('Failed to load concepts by slug:', error);
+    }
 
     concept = data?.find((item) => slugify(item.name) === id) || null;
   }
