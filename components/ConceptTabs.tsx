@@ -94,7 +94,7 @@ export function ConceptTabs({
 
       {activeTab === 'review' && (
         <div className="card">
-          <ConceptReview conceptId={conceptId} />
+          <ConceptReview conceptId={conceptId} sections={sections} />
         </div>
       )}
 
