@@ -9,6 +9,7 @@ type LibraryNode = {
   id: string;
   name: string;
   node_type: string | null;
+  parent_id: string | null;
 };
 
 type Concept = {
@@ -16,6 +17,24 @@ type Concept = {
   name: string;
   concept_type: string | null;
 };
+
+function getCategoryPath(node: LibraryNode, nodes: LibraryNode[]) {
+  const names = [node.name];
+  const visited = new Set([node.id]);
+  let parentId = node.parent_id;
+
+  while (parentId) {
+    const parent = nodes.find((item) => item.id === parentId);
+
+    if (!parent || visited.has(parent.id)) break;
+
+    names.unshift(parent.name);
+    visited.add(parent.id);
+    parentId = parent.parent_id;
+  }
+
+  return names.join(' / ');
+}
 
 export default function Creator() {
   const [status, setStatus] = useState('');
@@ -43,7 +62,7 @@ export default function Creator() {
 
     const { data: nodeData } = await supabase
       .from('library_nodes')
-      .select('id, name, node_type')
+      .select('id, name, node_type, parent_id')
       .order('name');
 
     const { data: conceptData } = await supabase
@@ -110,23 +129,36 @@ export default function Creator() {
       return;
     }
 
-    const { error: overviewError } = await supabase
-      .from('learn_sections')
-      .insert({
-        concept_id: data.id,
-        title: 'Overview',
-        body: String(form.get('overview')),
-        sort_order: 0,
-      });
+    const sectionInputs = [
+  { title: 'Overview', field: 'overview', sort_order: 0, required: true },
+  { title: 'Mechanism', field: 'mechanism', sort_order: 1 },
+  { title: 'Clinical Uses', field: 'clinical_uses', sort_order: 2 },
+  { title: 'Adverse Effects', field: 'adverse_effects', sort_order: 3 },
+  { title: 'Contraindications', field: 'contraindications', sort_order: 4 },
+  { title: 'Key Distinctions', field: 'key_distinctions', sort_order: 5 },
+];
 
-    if (overviewError) {
-      setStatus(
-        `Concept and placement saved, but Overview failed: ${overviewError.message}`
-      );
-      return;
-    }
+const sections = sectionInputs
+  .map((section) => ({
+    concept_id: data.id,
+    title: section.title,
+    body: String(form.get(section.field) || '').trim(),
+    sort_order: section.sort_order,
+  }))
+  .filter((section) => section.body.length > 0);
 
-    setStatus('Concept and Overview saved as draft in the selected category.');
+const { error: sectionsError } = await supabase
+  .from('learn_sections')
+  .insert(sections);
+
+if (sectionsError) {
+  setStatus(
+    `Concept and placement saved, but article sections failed: ${sectionsError.message}`
+  );
+  return;
+}
+
+setStatus('Concept and article sections saved as draft in the selected category.');
     formElement.reset();
     await loadPageData();
   }
@@ -189,6 +221,8 @@ export default function Creator() {
     );
   }
 
+  const placementNodes = nodes.filter((node) => node.parent_id !== null);
+
   return (
     <>
       <Header />
@@ -211,9 +245,10 @@ export default function Creator() {
                   <option value="" disabled>
                     Choose category
                   </option>
-                  {nodes.map((node) => (
+                  {placementNodes.map((node) => (
                     <option key={node.id} value={node.id}>
-                      {node.name} {node.node_type ? `(${node.node_type})` : ''}
+                      {getCategoryPath(node, nodes)}{' '}
+                      {node.node_type ? `(${node.node_type})` : ''}
                     </option>
                   ))}
                 </select>
@@ -239,29 +274,55 @@ export default function Creator() {
               <br />
 
               <textarea
-                name="summary"
-                placeholder="Original summary in your own words"
-                required
-              />
+  name="overview"
+  placeholder="Wikipedia-style Overview"
+  required
+/>
 
-              <br />
-              <br />
+<br />
+<br />
 
-              <textarea name="why_it_matters" placeholder="Why this matters" />
+<textarea
+  name="mechanism"
+  placeholder="Mechanism"
+/>
 
-              <br />
-              <br />
+<br />
+<br />
 
-              <textarea
-                name="overview"
-                placeholder="Wikipedia-style Overview"
-                required
-              />
+<textarea
+  name="clinical_uses"
+  placeholder="Clinical Uses"
+/>
 
-              <br />
-              <br />
+<br />
+<br />
 
-              <button className="btn primary" type="submit">
+<textarea
+  name="adverse_effects"
+  placeholder="Adverse Effects"
+/>
+
+<br />
+<br />
+
+<textarea
+  name="contraindications"
+  placeholder="Contraindications"
+/>
+
+<br />
+<br />
+
+<textarea
+  name="key_distinctions"
+  placeholder="Key Distinctions"
+/>
+
+<br />
+<br />
+
+<button className="btn primary" type="submit">
                 Save Draft Concept
               </button>
 
@@ -293,9 +354,10 @@ export default function Creator() {
                   <option value="" disabled>
                     Choose additional category
                   </option>
-                  {nodes.map((node) => (
+                  {placementNodes.map((node) => (
                     <option key={node.id} value={node.id}>
-                      {node.name} {node.node_type ? `(${node.node_type})` : ''}
+                      {getCategoryPath(node, nodes)}{' '}
+                      {node.node_type ? `(${node.node_type})` : ''}
                     </option>
                   ))}
                 </select>
