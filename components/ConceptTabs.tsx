@@ -12,11 +12,18 @@ export function ConceptTabs({
   summary,
   whyItMatters,
   status,
+  sections,
 }: {
   conceptId: string;
   summary: string | null;
   whyItMatters: string | null;
   status: string | null;
+  sections: Array<{
+    id: string;
+    title: string;
+    body: string;
+    sort_order: number | null;
+  }>;
 }) {
   const [activeTab, setActiveTab] = useState('learn');
 
@@ -50,6 +57,13 @@ export function ConceptTabs({
             <h3>Why this matters</h3>
             <p>{whyItMatters || 'No explanation added yet.'}</p>
           </div>
+
+          {sections.map((section) => (
+            <div className="card" key={section.id}>
+              <h3>{section.title}</h3>
+              <p>{section.body}</p>
+            </div>
+          ))}
 
           <div className="card">
             <h3>Status</h3>

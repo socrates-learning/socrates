@@ -110,7 +110,23 @@ export default function Creator() {
       return;
     }
 
-    setStatus('Concept saved as draft in the selected category.');
+    const { error: overviewError } = await supabase
+      .from('learn_sections')
+      .insert({
+        concept_id: data.id,
+        title: 'Overview',
+        body: String(form.get('overview')),
+        sort_order: 0,
+      });
+
+    if (overviewError) {
+      setStatus(
+        `Concept and placement saved, but Overview failed: ${overviewError.message}`
+      );
+      return;
+    }
+
+    setStatus('Concept and Overview saved as draft in the selected category.');
     formElement.reset();
     await loadPageData();
   }
@@ -232,6 +248,15 @@ export default function Creator() {
               <br />
 
               <textarea name="why_it_matters" placeholder="Why this matters" />
+
+              <br />
+              <br />
+
+              <textarea
+                name="overview"
+                placeholder="Wikipedia-style Overview"
+                required
+              />
 
               <br />
               <br />

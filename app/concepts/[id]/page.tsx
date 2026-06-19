@@ -89,6 +89,17 @@ export default async function ConceptPage({
     );
   }
 
+  const { data: sections, error: sectionsError } = await supabase
+    .from('learn_sections')
+    .select('id, title, body, sort_order')
+    .eq('concept_id', concept.id)
+    .order('sort_order')
+    .order('created_at');
+
+  if (sectionsError && process.env.NODE_ENV !== 'production') {
+    console.error('Failed to load concept sections:', sectionsError);
+  }
+
   return (
     <>
       <Header />
@@ -119,6 +130,7 @@ export default async function ConceptPage({
             summary={concept.summary}
             whyItMatters={concept.why_it_matters}
             status={concept.status}
+            sections={sections || []}
           />
         </section>
       </main>
