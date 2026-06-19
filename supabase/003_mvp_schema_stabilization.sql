@@ -2,19 +2,37 @@
 -- Run after schema.sql and 002_flexible_taxonomy.sql.
 
 alter table public.concepts
-  add column status text not null default 'draft'
+  add column if not exists status text not null default 'draft'
   check (status in ('draft', 'published', 'archived'));
 
 alter table public.concepts
   alter column created_by set default auth.uid();
 
 alter table public.review_attempts
-  add column concept_id uuid references public.concepts(id) on delete cascade,
-  add column score smallint check (score between 1 and 4),
-  add constraint review_attempts_has_target
-    check (concept_id is not null or learning_object_id is not null);
+  add column if not exists concept_id uuid
+    references public.concepts(id) on delete cascade,
+  add column if not exists score smallint check (score between 1 and 4);
 
-create table public.user_roles (
+do $migration$
+begin
+  if not exists (
+    select 1
+    from pg_constraint c
+    join pg_class t on t.oid = c.conrelid
+    join pg_namespace n on n.oid = t.relnamespace
+    where n.nspname = 'public'
+      and t.relname = 'review_attempts'
+      and c.conname = 'review_attempts_has_target'
+  ) then
+    alter table public.review_attempts
+      add constraint review_attempts_has_target
+      check (concept_id is not null or learning_object_id is not null)
+      not valid;
+  end if;
+end
+$migration$;
+
+create table if not exists public.user_roles (
   user_id uuid primary key references auth.users(id) on delete cascade,
   role text not null default 'learner'
     check (role in ('learner', 'editor', 'admin')),
@@ -22,7 +40,7 @@ create table public.user_roles (
   updated_at timestamptz not null default now()
 );
 
-create table public.concept_distinctions (
+create table if not exists public.concept_distinctions (
   id uuid primary key default uuid_generate_v4(),
   concept_id uuid not null references public.concepts(id) on delete cascade,
   distinction text not null,
@@ -30,81 +48,172 @@ create table public.concept_distinctions (
   created_at timestamptz not null default now()
 );
 
-create index concept_distinctions_concept_id_idx
+create index if not exists concept_distinctions_concept_id_idx
   on public.concept_distinctions(concept_id);
 
-create index review_attempts_concept_id_idx
+create index if not exists review_attempts_concept_id_idx
   on public.review_attempts(concept_id);
 
 alter table public.user_roles enable row level security;
 alter table public.concept_distinctions enable row level security;
 
-create policy "Users read own role" on public.user_roles
-  for select using (auth.uid() = user_id);
+do $migration$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'user_roles'
+      and policyname = 'Users read own role'
+  ) then
+    execute $policy$
+      create policy "Users read own role" on public.user_roles
+        for select using (auth.uid() = user_id)
+    $policy$;
+  end if;
+end
+$migration$;
 
-create policy "Readable concept distinctions" on public.concept_distinctions
-  for select using (
-    exists (
-      select 1
-      from public.concepts c
-      where c.id = concept_id
-        and (c.is_public = true or c.created_by = auth.uid())
-    )
-  );
+do $migration$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'concept_distinctions'
+      and policyname = 'Readable concept distinctions'
+  ) then
+    execute $policy$
+      create policy "Readable concept distinctions" on public.concept_distinctions
+        for select using (
+          exists (
+            select 1
+            from public.concepts c
+            where c.id = concept_id
+              and (c.is_public = true or c.created_by = auth.uid())
+          )
+        )
+    $policy$;
+  end if;
+end
+$migration$;
 
-create policy "Editors manage concept distinctions" on public.concept_distinctions
-  for all
-  using (
-    exists (
-      select 1 from public.user_roles ur
-      where ur.user_id = auth.uid() and ur.role in ('editor', 'admin')
-    )
-  )
-  with check (
-    auth.uid() = created_by
-    and exists (
-      select 1 from public.user_roles ur
-      where ur.user_id = auth.uid() and ur.role in ('editor', 'admin')
-    )
-  );
+do $migration$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'concept_distinctions'
+      and policyname = 'Editors manage concept distinctions'
+  ) then
+    execute $policy$
+      create policy "Editors manage concept distinctions" on public.concept_distinctions
+        for all
+        using (
+          exists (
+            select 1 from public.user_roles ur
+            where ur.user_id = auth.uid() and ur.role in ('editor', 'admin')
+          )
+        )
+        with check (
+          auth.uid() = created_by
+          and exists (
+            select 1 from public.user_roles ur
+            where ur.user_id = auth.uid() and ur.role in ('editor', 'admin')
+          )
+        )
+    $policy$;
+  end if;
+end
+$migration$;
 
-create policy "Public library nodes are readable" on public.library_nodes
-  for select using (true);
+do $migration$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'library_nodes'
+      and policyname = 'Public library nodes are readable'
+  ) then
+    execute $policy$
+      create policy "Public library nodes are readable" on public.library_nodes
+        for select using (true)
+    $policy$;
+  end if;
+end
+$migration$;
 
-create policy "Readable concept placements" on public.concept_placements
-  for select using (
-    exists (
-      select 1
-      from public.concepts c
-      where c.id = concept_id
-        and (c.is_public = true or c.created_by = auth.uid())
-    )
-  );
+do $migration$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'concept_placements'
+      and policyname = 'Readable concept placements'
+  ) then
+    execute $policy$
+      create policy "Readable concept placements" on public.concept_placements
+        for select using (
+          exists (
+            select 1
+            from public.concepts c
+            where c.id = concept_id
+              and (c.is_public = true or c.created_by = auth.uid())
+          )
+        )
+    $policy$;
+  end if;
+end
+$migration$;
 
-create policy "Editors insert concept placements" on public.concept_placements
-  for insert with check (
-    exists (
-      select 1 from public.user_roles ur
-      where ur.user_id = auth.uid() and ur.role in ('editor', 'admin')
-    )
-    and exists (
-      select 1
-      from public.concepts c
-      where c.id = concept_id
-        and (c.is_public = true or c.created_by = auth.uid())
-    )
-  );
+do $migration$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'concept_placements'
+      and policyname = 'Editors insert concept placements'
+  ) then
+    execute $policy$
+      create policy "Editors insert concept placements" on public.concept_placements
+        for insert with check (
+          exists (
+            select 1 from public.user_roles ur
+            where ur.user_id = auth.uid() and ur.role in ('editor', 'admin')
+          )
+          and exists (
+            select 1
+            from public.concepts c
+            where c.id = concept_id
+              and (c.is_public = true or c.created_by = auth.uid())
+          )
+        )
+    $policy$;
+  end if;
+end
+$migration$;
 
-drop policy "Creators can insert concepts" on public.concepts;
+drop policy if exists "Creators can insert concepts" on public.concepts;
 
-create policy "Editors can insert concepts" on public.concepts
-  for insert with check (
-    auth.uid() = created_by
-    and exists (
-      select 1 from public.user_roles ur
-      where ur.user_id = auth.uid() and ur.role in ('editor', 'admin')
-    )
-  );
+do $migration$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'concepts'
+      and policyname = 'Editors can insert concepts'
+  ) then
+    execute $policy$
+      create policy "Editors can insert concepts" on public.concepts
+        for insert with check (
+          auth.uid() = created_by
+          and exists (
+            select 1 from public.user_roles ur
+            where ur.user_id = auth.uid() and ur.role in ('editor', 'admin')
+          )
+        )
+    $policy$;
+  end if;
+end
+$migration$;
 
 -- Compatibility RPC for the current callback. Approved-domain configuration is
 -- not yet part of the repository, so new users receive the least-privileged role.
