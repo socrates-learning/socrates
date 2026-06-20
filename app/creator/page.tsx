@@ -16,7 +16,27 @@ type Concept = {
   id: string;
   name: string;
   concept_type: string | null;
+  created_by: string | null;
 };
+
+type Source = {
+  id: string;
+  title: string;
+  author: string | null;
+  url: string | null;
+  license: string | null;
+  source_type: string | null;
+};
+
+const sourceTypes = [
+  'public_domain',
+  'open_educational_resource',
+  'government',
+  'original_author',
+  'ai_assisted',
+  'faculty_notes',
+  'other',
+];
 
 function getCategoryPath(node: LibraryNode, nodes: LibraryNode[]) {
   const names = [node.name];
@@ -39,10 +59,29 @@ function getCategoryPath(node: LibraryNode, nodes: LibraryNode[]) {
 export default function Creator() {
   const [status, setStatus] = useState('');
   const [assignStatus, setAssignStatus] = useState('');
+  const [sourceStatus, setSourceStatus] = useState('');
+  const [attributionStatus, setAttributionStatus] = useState('');
   const [loading, setLoading] = useState(true);
   const [role, setRole] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
   const [nodes, setNodes] = useState<LibraryNode[]>([]);
   const [concepts, setConcepts] = useState<Concept[]>([]);
+  const [sources, setSources] = useState<Source[]>([]);
+
+  async function loadSources(userId: string) {
+    const { data, error } = await supabase
+      .from('sources')
+      .select('id, title, author, url, license, source_type')
+      .eq('created_by', userId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      setSourceStatus(`Unable to load sources: ${error.message}`);
+      return;
+    }
+
+    setSources(data || []);
+  }
 
   async function loadPageData() {
     const { data: userData } = await supabase.auth.getUser();
@@ -52,6 +91,8 @@ export default function Creator() {
       return;
     }
 
+    setUserId(userData.user.id);
+
     const { data: roleData } = await supabase
       .from('user_roles')
       .select('role')
@@ -60,6 +101,8 @@ export default function Creator() {
 
     setRole(roleData?.role ?? null);
 
+    await loadSources(userData.user.id);
+
     const { data: nodeData } = await supabase
       .from('library_nodes')
       .select('id, name, node_type, parent_id')
@@ -67,7 +110,7 @@ export default function Creator() {
 
     const { data: conceptData } = await supabase
       .from('concepts')
-      .select('id, name, concept_type')
+      .select('id, name, concept_type, created_by')
       .order('name');
 
     setNodes(nodeData || []);
@@ -200,6 +243,91 @@ setStatus('Concept and article sections saved as draft in the selected category.
     formElement.reset();
   }
 
+  async function handleSourceSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const formElement = event.currentTarget;
+    setSourceStatus('Saving source...');
+
+    const { data: userData, error: userError } = await supabase.auth.getUser();
+
+    if (userError || !userData.user) {
+      setSourceStatus('Error: You must be signed in to create a source.');
+      return;
+    }
+
+    const form = new FormData(formElement);
+    const optionalValue = (name: string) => {
+      const value = String(form.get(name) || '').trim();
+      return value || null;
+    };
+    const title = String(form.get('source_title') || '').trim();
+
+    if (!title) {
+      setSourceStatus('Error: Source title is required.');
+      return;
+    }
+
+    const { error } = await supabase.from('sources').insert({
+      title,
+      author: optionalValue('source_author'),
+      url: optionalValue('source_url'),
+      license: optionalValue('source_license'),
+      source_type: optionalValue('source_type'),
+      created_by: userData.user.id,
+    });
+
+    if (error) {
+      setSourceStatus(`Error: ${error.message}`);
+      return;
+    }
+
+    formElement.reset();
+    setSourceStatus('Source saved successfully.');
+    await loadSources(userData.user.id);
+  }
+
+  async function handleAttributionSubmit(
+    event: React.FormEvent<HTMLFormElement>
+  ) {
+    event.preventDefault();
+
+    const formElement = event.currentTarget;
+    setAttributionStatus('Saving attribution...');
+
+    const { data: userData, error: userError } = await supabase.auth.getUser();
+
+    if (userError || !userData.user) {
+      setAttributionStatus('Error: You must be signed in to add attribution.');
+      return;
+    }
+
+    const form = new FormData(formElement);
+    const conceptId = String(form.get('attribution_concept_id') || '');
+    const sourceId = String(form.get('attribution_source_id') || '');
+    const noteValue = String(form.get('attribution_note') || '').trim();
+
+    if (!conceptId || !sourceId) {
+      setAttributionStatus('Error: Choose both a concept and a source.');
+      return;
+    }
+
+    const { error } = await supabase.from('content_source_notes').insert({
+      concept_id: conceptId,
+      source_id: sourceId,
+      note: noteValue || null,
+      created_by: userData.user.id,
+    });
+
+    if (error) {
+      setAttributionStatus(`Error: ${error.message}`);
+      return;
+    }
+
+    formElement.reset();
+    setAttributionStatus('Source attached to concept successfully.');
+  }
+
   if (loading) {
     return <p>Loading...</p>;
   }
@@ -222,6 +350,9 @@ setStatus('Concept and article sections saved as draft in the selected category.
   }
 
   const placementNodes = nodes.filter((node) => node.parent_id !== null);
+  const attributionConcepts = concepts.filter(
+    (concept) => concept.created_by === userId
+  );
 
   return (
     <>
@@ -370,6 +501,124 @@ setStatus('Concept and article sections saved as draft in the selected category.
               </button>
 
               {assignStatus && <p className="muted">{assignStatus}</p>}
+            </form>
+          </div>
+
+          <div className="panel">
+            <h2>Sources</h2>
+            <p className="muted">
+              Add source records for future content attribution.
+            </p>
+
+            <form onSubmit={handleSourceSubmit}>
+              <div className="form-grid">
+                <input
+                  name="source_title"
+                  placeholder="Title"
+                  required
+                />
+                <input name="source_author" placeholder="Author" />
+                <input name="source_url" type="url" placeholder="URL" />
+                <input name="source_license" placeholder="License" />
+                <select name="source_type" defaultValue="" required>
+                  <option value="" disabled>
+                    Choose source type
+                  </option>
+                  {sourceTypes.map((sourceType) => (
+                    <option key={sourceType} value={sourceType}>
+                      {sourceType}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <br />
+
+              <button className="btn primary" type="submit">
+                Save Source
+              </button>
+
+              {sourceStatus && <p className="muted">{sourceStatus}</p>}
+            </form>
+
+            <h3>Your Sources</h3>
+            {sources.length === 0 ? (
+              <p className="muted">No sources added yet.</p>
+            ) : (
+              sources.map((source) => (
+                <div className="card" key={source.id}>
+                  <strong>{source.title}</strong>
+                  <p className="muted">
+                    {[source.author, source.source_type, source.license]
+                      .filter(Boolean)
+                      .join(' · ') || 'No additional details'}
+                  </p>
+                  {source.url && (
+                    <a href={source.url} target="_blank" rel="noreferrer">
+                      {source.url}
+                    </a>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+
+          <div className="panel">
+            <h2>Attach Source to Concept</h2>
+            <p className="muted">
+              Connect one of your saved sources to one of your concepts.
+            </p>
+
+            <form onSubmit={handleAttributionSubmit}>
+              <div className="form-grid">
+                <select
+                  name="attribution_concept_id"
+                  defaultValue=""
+                  required
+                >
+                  <option value="" disabled>
+                    Choose concept
+                  </option>
+                  {attributionConcepts.map((concept) => (
+                    <option key={concept.id} value={concept.id}>
+                      {concept.name}
+                    </option>
+                  ))}
+                </select>
+
+                <select
+                  name="attribution_source_id"
+                  defaultValue=""
+                  required
+                >
+                  <option value="" disabled>
+                    Choose source
+                  </option>
+                  {sources.map((source) => (
+                    <option key={source.id} value={source.id}>
+                      {source.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <br />
+
+              <textarea
+                name="attribution_note"
+                placeholder="Attribution note"
+              />
+
+              <br />
+              <br />
+
+              <button className="btn primary" type="submit">
+                Attach Source
+              </button>
+
+              {attributionStatus && (
+                <p className="muted">{attributionStatus}</p>
+              )}
             </form>
           </div>
         </section>
