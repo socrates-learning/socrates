@@ -14,6 +14,7 @@ export function ConceptTabs({
   status,
   sections,
   sources,
+  relationships,
 }: {
   conceptId: string;
   summary: string | null;
@@ -33,6 +34,14 @@ export function ConceptTabs({
     source_type: string | null;
     note: string | null;
     url: string | null;
+  }>;
+  relationships: Array<{
+    id: string;
+    relationship_type: string;
+    concept: {
+      id: string;
+      name: string;
+    };
   }>;
 }) {
   const [activeTab, setActiveTab] = useState('learn');
@@ -150,6 +159,24 @@ export function ConceptTabs({
                 </div>
               </div>
             ))}
+          </div>
+
+          <div className="card">
+            <h3>Related Concepts</h3>
+            {relationships.length === 0 ? (
+              <p className="muted">No related concepts yet.</p>
+            ) : (
+              relationships.map((relationship) => (
+                <div key={relationship.id} style={{ marginBottom: '16px' }}>
+                  <Link href={`/concepts/${relationship.concept.id}`}>
+                    <strong>{relationship.concept.name}</strong>
+                  </Link>
+                  <p className="muted">
+                    {relationship.relationship_type.replaceAll('_', ' ')}
+                  </p>
+                </div>
+              ))
+            )}
           </div>
 
           <div className="card">

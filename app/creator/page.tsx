@@ -60,6 +60,15 @@ const sourceTypes = [
   'other',
 ];
 
+const relationshipTypes = [
+  'related_to',
+  'prerequisite_for',
+  'treats',
+  'causes',
+  'acts_on',
+  'compares_with',
+];
+
 const managedSectionFields = [
   { title: 'Overview', field: 'overview', sort_order: 0 },
   { title: 'Mechanism', field: 'mechanism', sort_order: 1 },
@@ -103,6 +112,7 @@ export default function Creator() {
   const [assignStatus, setAssignStatus] = useState('');
   const [sourceStatus, setSourceStatus] = useState('');
   const [attributionStatus, setAttributionStatus] = useState('');
+  const [relationshipStatus, setRelationshipStatus] = useState('');
   const [loading, setLoading] = useState(true);
   const [role, setRole] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
@@ -412,6 +422,55 @@ setStatus('Concept and article sections saved as draft in the selected category.
 
     formElement.reset();
     setAttributionStatus('Source attached to concept successfully.');
+  }
+
+  async function handleRelationshipSubmit(
+    event: React.FormEvent<HTMLFormElement>
+  ) {
+    event.preventDefault();
+
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
+    const sourceConceptId = String(form.get('source_concept_id') || '');
+    const targetConceptId = String(form.get('target_concept_id') || '');
+    const relationshipType = String(form.get('relationship_type') || '');
+
+    if (!userId) {
+      setRelationshipStatus('Error: You must be signed in.');
+      return;
+    }
+
+    if (!sourceConceptId || !targetConceptId || !relationshipType) {
+      setRelationshipStatus('Error: Complete all relationship fields.');
+      return;
+    }
+
+    if (sourceConceptId === targetConceptId) {
+      setRelationshipStatus('Error: Choose two different concepts.');
+      return;
+    }
+
+    setRelationshipStatus('Saving relationship...');
+
+    const { error } = await supabase.from('concept_relationships').insert({
+      source_concept_id: sourceConceptId,
+      target_concept_id: targetConceptId,
+      relationship_type: relationshipType,
+      created_by: userId,
+    });
+
+    if (error) {
+      if (error.message.includes('duplicate')) {
+        setRelationshipStatus('That relationship already exists.');
+        return;
+      }
+
+      setRelationshipStatus(`Error: ${error.message}`);
+      return;
+    }
+
+    formElement.reset();
+    setRelationshipStatus('Relationship saved successfully.');
   }
 
   function handleEditConcept(concept: ManagedConcept) {
@@ -907,6 +966,60 @@ setStatus('Concept and article sections saved as draft in the selected category.
             {managementStatus && (
               <p className="muted">{managementStatus}</p>
             )}
+          </div>
+
+          <div className="panel">
+            <h2>Relationship Management</h2>
+            <p className="muted">
+              Connect two concepts you created.
+            </p>
+
+            <form onSubmit={handleRelationshipSubmit}>
+              <div className="form-grid">
+                <select name="source_concept_id" defaultValue="" required>
+                  <option value="" disabled>
+                    Choose source concept
+                  </option>
+                  {ownedConcepts.map((concept) => (
+                    <option key={concept.id} value={concept.id}>
+                      {concept.name}
+                    </option>
+                  ))}
+                </select>
+
+                <select name="relationship_type" defaultValue="" required>
+                  <option value="" disabled>
+                    Choose relationship type
+                  </option>
+                  {relationshipTypes.map((relationshipType) => (
+                    <option key={relationshipType} value={relationshipType}>
+                      {relationshipType}
+                    </option>
+                  ))}
+                </select>
+
+                <select name="target_concept_id" defaultValue="" required>
+                  <option value="" disabled>
+                    Choose target concept
+                  </option>
+                  {ownedConcepts.map((concept) => (
+                    <option key={concept.id} value={concept.id}>
+                      {concept.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <br />
+
+              <button className="btn primary" type="submit">
+                Save Relationship
+              </button>
+
+              {relationshipStatus && (
+                <p className="muted">{relationshipStatus}</p>
+              )}
+            </form>
           </div>
         </section>
       </main>

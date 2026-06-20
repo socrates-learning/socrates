@@ -154,6 +154,49 @@ export default async function ConceptPage({
       : [];
   });
 
+  const { data: relationshipRows, error: relationshipsError } = await supabase
+    .from('concept_relationships')
+    .select(`
+      id,
+      source_concept_id,
+      target_concept_id,
+      relationship_type,
+      source_concept:concepts!concept_relationships_source_concept_id_fkey (
+        id,
+        name
+      ),
+      target_concept:concepts!concept_relationships_target_concept_id_fkey (
+        id,
+        name
+      )
+    `)
+    .or(`source_concept_id.eq.${concept.id},target_concept_id.eq.${concept.id}`)
+    .order('created_at');
+
+  if (relationshipsError && process.env.NODE_ENV !== 'production') {
+    console.error('Failed to load concept relationships:', relationshipsError);
+  }
+
+  const relationships = (relationshipRows || []).flatMap((relationship) => {
+    const connectedConceptValue =
+      relationship.source_concept_id === concept.id
+        ? relationship.target_concept
+        : relationship.source_concept;
+    const connectedConcept = Array.isArray(connectedConceptValue)
+      ? connectedConceptValue[0]
+      : connectedConceptValue;
+
+    return connectedConcept
+      ? [
+          {
+            id: relationship.id,
+            relationship_type: relationship.relationship_type,
+            concept: connectedConcept,
+          },
+        ]
+      : [];
+  });
+
   const { data: reviewAttempts, error: reviewAttemptsError } = await supabase
     .from('review_attempts')
     .select('score, learn_section_id, created_at')
@@ -242,6 +285,7 @@ export default async function ConceptPage({
             status={concept.status}
             sections={sectionsWithMastery}
             sources={sources}
+            relationships={relationships}
           />
         </section>
       </main>
