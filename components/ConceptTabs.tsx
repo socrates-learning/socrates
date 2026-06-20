@@ -9,6 +9,7 @@ import { ConceptNetwork } from '@/components/ConceptNetwork';
 
 export function ConceptTabs({
   conceptId,
+  conceptName,
   summary,
   whyItMatters,
   status,
@@ -17,6 +18,7 @@ export function ConceptTabs({
   relationships,
 }: {
   conceptId: string;
+  conceptName: string;
   summary: string | null;
   whyItMatters: string | null;
   status: string | null;
@@ -224,7 +226,11 @@ export function ConceptTabs({
       {activeTab === 'network' && (
         <div className="card">
           <h3>Network</h3>
-          <ConceptNetwork conceptId={conceptId} />
+          <ConceptNetwork
+            conceptId={conceptId}
+            conceptName={conceptName}
+            relationships={relationships}
+          />
         </div>
       )}
     </>
