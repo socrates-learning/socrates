@@ -1,6 +1,7 @@
 import { Header } from '@/components/Header';
 import { Sidebar } from '@/components/Sidebar';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
+import Link from 'next/link';
 
 type LibraryNode = {
   id: string;
@@ -13,6 +14,46 @@ type NodeProgress = {
   conceptCount: number;
   mastery: number;
 };
+
+type ConceptPlacement = {
+  concept_id: string;
+  library_node_id: string;
+  concepts:
+    | {
+        id: string;
+        name: string;
+      }
+    | Array<{
+        id: string;
+        name: string;
+      }>
+    | null;
+};
+
+function formatLastReviewed(createdAt: string | null) {
+  if (!createdAt) return 'Never';
+
+  const reviewedAt = new Date(createdAt);
+  const now = new Date();
+  const reviewedDay = Date.UTC(
+    reviewedAt.getUTCFullYear(),
+    reviewedAt.getUTCMonth(),
+    reviewedAt.getUTCDate()
+  );
+  const today = Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    now.getUTCDate()
+  );
+  const daysAgo = Math.max(
+    0,
+    Math.floor((today - reviewedDay) / (24 * 60 * 60 * 1000))
+  );
+
+  if (daysAgo === 0) return 'Today';
+  if (daysAgo === 1) return 'Yesterday';
+  return `${daysAgo} days ago`;
+}
 
 function getDescendantNodeIds(nodeId: string, allNodes: LibraryNode[]) {
   const descendantIds = new Set([nodeId]);
@@ -102,22 +143,21 @@ export default async function PharmacologyLibrary() {
     pharmacologyNodeIds.size > 0
       ? await supabase
           .from('concept_placements')
-          .select('concept_id, library_node_id')
+          .select('concept_id, library_node_id, concepts(id, name)')
           .in('library_node_id', [...pharmacologyNodeIds])
       : { data: [], error: null };
 
+  const placements = (placementsResult.data || []) as ConceptPlacement[];
+
   const conceptIds = [
-    ...new Set(
-      (placementsResult.data || []).map((placement) => placement.concept_id)
-    ),
+    ...new Set(placements.map((placement) => placement.concept_id)),
   ];
   const reviewAttemptsResult =
     conceptIds.length > 0
       ? await supabase
           .from('review_attempts')
-          .select('concept_id, score')
+          .select('concept_id, score, created_at')
           .in('concept_id', conceptIds)
-          .not('score', 'is', null)
       : { data: [], error: null };
 
   if (placementsResult.error || reviewAttemptsResult.error) {
@@ -143,7 +183,7 @@ export default async function PharmacologyLibrary() {
   for (const node of nodes) {
     const descendantNodeIds = getDescendantNodeIds(node.id, nodes);
     const descendantConceptIds = new Set(
-      (placementsResult.data || [])
+      placements
         .filter((placement) =>
           descendantNodeIds.has(placement.library_node_id)
         )
@@ -168,6 +208,32 @@ export default async function PharmacologyLibrary() {
     });
   }
 
+  const newestReviewAttempt = [...(reviewAttemptsResult.data || [])].sort(
+    (a, b) =>
+      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  )[0];
+  const newestPlacement = newestReviewAttempt
+    ? placements.find(
+        (placement) => placement.concept_id === newestReviewAttempt.concept_id
+      )
+    : null;
+  const continueConcept = Array.isArray(newestPlacement?.concepts)
+    ? newestPlacement.concepts[0]
+    : newestPlacement?.concepts;
+  const continueScores = continueConcept
+    ? (reviewAttemptsResult.data || []).flatMap((attempt) =>
+        attempt.concept_id === continueConcept.id && attempt.score !== null
+          ? [attempt.score]
+          : []
+      )
+    : [];
+  const continueMastery = continueScores.length
+    ? Math.round(
+        continueScores.reduce((total, score) => total + score * 25, 0) /
+          continueScores.length
+      )
+    : 0;
+
   return (
     <>
       <Header />
@@ -182,6 +248,25 @@ export default async function PharmacologyLibrary() {
             </p>
 
             <hr />
+
+            {continueConcept && newestReviewAttempt && (
+              <div className="card">
+                <h3>Continue Learning</h3>
+                <strong>{continueConcept.name}</strong>
+                <p className="muted">
+                  {continueMastery}% mastered
+                  <br />
+                  Last reviewed:{' '}
+                  {formatLastReviewed(newestReviewAttempt.created_at)}
+                </p>
+                <Link
+                  className="btn primary"
+                  href={`/concepts/${continueConcept.id}`}
+                >
+                  Resume
+                </Link>
+              </div>
+            )}
 
             <h3>Pharmacology Structure</h3>
 
