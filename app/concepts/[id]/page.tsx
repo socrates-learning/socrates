@@ -15,6 +15,31 @@ function isUuid(value: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 }
 
+function formatLastReviewed(createdAt: string | null) {
+  if (!createdAt) return 'Never';
+
+  const reviewedAt = new Date(createdAt);
+  const now = new Date();
+  const reviewedDay = Date.UTC(
+    reviewedAt.getUTCFullYear(),
+    reviewedAt.getUTCMonth(),
+    reviewedAt.getUTCDate()
+  );
+  const today = Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    now.getUTCDate()
+  );
+  const daysAgo = Math.max(
+    0,
+    Math.floor((today - reviewedDay) / (24 * 60 * 60 * 1000))
+  );
+
+  if (daysAgo === 0) return 'Today';
+  if (daysAgo === 1) return 'Yesterday';
+  return `${daysAgo} days ago`;
+}
+
 export default async function ConceptPage({
   params,
 }: {
@@ -102,7 +127,7 @@ export default async function ConceptPage({
 
   const { data: reviewAttempts, error: reviewAttemptsError } = await supabase
     .from('review_attempts')
-    .select('score, learn_section_id')
+    .select('score, learn_section_id, created_at')
     .eq('concept_id', concept.id)
     .not('score', 'is', null);
 
@@ -118,6 +143,14 @@ export default async function ConceptPage({
         scores.reduce((total, score) => total + score * 25, 0) / scores.length
       )
     : 0;
+  const newestReviewDate = (reviewAttempts || []).reduce<string | null>(
+    (latest, attempt) =>
+      !latest || new Date(attempt.created_at) > new Date(latest)
+        ? attempt.created_at
+        : latest,
+    null
+  );
+  const lastReviewed = formatLastReviewed(newestReviewDate);
 
   const sectionScores = new Map<string, number[]>();
 
@@ -167,6 +200,9 @@ export default async function ConceptPage({
               <div className="bar">
                 <span style={{ width: `${mastery}%` }} />
               </div>
+              <p className="muted" style={{ marginBottom: 0 }}>
+                Last reviewed: {lastReviewed}
+              </p>
             </div>
           </div>
 
