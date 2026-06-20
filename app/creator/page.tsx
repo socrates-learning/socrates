@@ -19,6 +19,28 @@ type Concept = {
   created_by: string | null;
 };
 
+type ManagedConcept = Concept & {
+  summary: string | null;
+  status: string | null;
+  learn_sections: Array<{
+    id: string;
+    title: string;
+    body: string;
+    sort_order: number | null;
+  }>;
+};
+
+type ConceptEditForm = {
+  name: string;
+  summary: string;
+  overview: string;
+  mechanism: string;
+  clinical_uses: string;
+  adverse_effects: string;
+  contraindications: string;
+  key_distinctions: string;
+};
+
 type Source = {
   id: string;
   title: string;
@@ -37,6 +59,26 @@ const sourceTypes = [
   'faculty_notes',
   'other',
 ];
+
+const managedSectionFields = [
+  { title: 'Overview', field: 'overview', sort_order: 0 },
+  { title: 'Mechanism', field: 'mechanism', sort_order: 1 },
+  { title: 'Clinical Uses', field: 'clinical_uses', sort_order: 2 },
+  { title: 'Adverse Effects', field: 'adverse_effects', sort_order: 3 },
+  { title: 'Contraindications', field: 'contraindications', sort_order: 4 },
+  { title: 'Key Distinctions', field: 'key_distinctions', sort_order: 5 },
+] as const;
+
+const emptyConceptEditForm: ConceptEditForm = {
+  name: '',
+  summary: '',
+  overview: '',
+  mechanism: '',
+  clinical_uses: '',
+  adverse_effects: '',
+  contraindications: '',
+  key_distinctions: '',
+};
 
 function getCategoryPath(node: LibraryNode, nodes: LibraryNode[]) {
   const names = [node.name];
@@ -66,7 +108,14 @@ export default function Creator() {
   const [userId, setUserId] = useState<string | null>(null);
   const [nodes, setNodes] = useState<LibraryNode[]>([]);
   const [concepts, setConcepts] = useState<Concept[]>([]);
+  const [ownedConcepts, setOwnedConcepts] = useState<ManagedConcept[]>([]);
   const [sources, setSources] = useState<Source[]>([]);
+  const [conceptSearch, setConceptSearch] = useState('');
+  const [editingConceptId, setEditingConceptId] = useState<string | null>(null);
+  const [conceptEditForm, setConceptEditForm] = useState<ConceptEditForm>(
+    emptyConceptEditForm
+  );
+  const [managementStatus, setManagementStatus] = useState('');
 
   async function loadSources(userId: string) {
     const { data, error } = await supabase
@@ -81,6 +130,48 @@ export default function Creator() {
     }
 
     setSources(data || []);
+  }
+
+  async function loadConcepts() {
+    const { data, error } = await supabase
+      .from('concepts')
+      .select('id, name, concept_type, created_by')
+      .order('name');
+
+    if (error) {
+      setManagementStatus(`Unable to load concepts: ${error.message}`);
+      return;
+    }
+
+    setConcepts(data || []);
+  }
+
+  async function loadManagedConcepts(userId: string) {
+    const { data, error } = await supabase
+      .from('concepts')
+      .select(`
+        id,
+        name,
+        concept_type,
+        created_by,
+        summary,
+        status,
+        learn_sections (
+          id,
+          title,
+          body,
+          sort_order
+        )
+      `)
+      .eq('created_by', userId)
+      .order('name');
+
+    if (error) {
+      setManagementStatus(`Unable to load concepts: ${error.message}`);
+      return;
+    }
+
+    setOwnedConcepts(data || []);
   }
 
   async function loadPageData() {
@@ -108,13 +199,8 @@ export default function Creator() {
       .select('id, name, node_type, parent_id')
       .order('name');
 
-    const { data: conceptData } = await supabase
-      .from('concepts')
-      .select('id, name, concept_type, created_by')
-      .order('name');
-
     setNodes(nodeData || []);
-    setConcepts(conceptData || []);
+    await Promise.all([loadConcepts(), loadManagedConcepts(userData.user.id)]);
     setLoading(false);
   }
 
@@ -328,6 +414,111 @@ setStatus('Concept and article sections saved as draft in the selected category.
     setAttributionStatus('Source attached to concept successfully.');
   }
 
+  function handleEditConcept(concept: ManagedConcept) {
+    const sectionBody = (title: string) =>
+      concept.learn_sections.find(
+        (section) => section.title.toLowerCase() === title.toLowerCase()
+      )?.body || '';
+
+    setEditingConceptId(concept.id);
+    setConceptEditForm({
+      name: concept.name,
+      summary: concept.summary || '',
+      overview: sectionBody('Overview'),
+      mechanism: sectionBody('Mechanism'),
+      clinical_uses: sectionBody('Clinical Uses'),
+      adverse_effects: sectionBody('Adverse Effects'),
+      contraindications: sectionBody('Contraindications'),
+      key_distinctions: sectionBody('Key Distinctions'),
+    });
+    setManagementStatus('');
+  }
+
+  function updateConceptEditField(field: keyof ConceptEditForm, value: string) {
+    setConceptEditForm((current) => ({ ...current, [field]: value }));
+  }
+
+  async function handleConceptUpdate(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const concept = ownedConcepts.find((item) => item.id === editingConceptId);
+
+    if (!concept || !userId) {
+      setManagementStatus('Error: Choose one of your concepts to edit.');
+      return;
+    }
+
+    const name = conceptEditForm.name.trim();
+
+    if (!name) {
+      setManagementStatus('Error: Concept name is required.');
+      return;
+    }
+
+    setManagementStatus('Saving changes...');
+
+    const { error: conceptError } = await supabase
+      .from('concepts')
+      .update({
+        name,
+        summary: conceptEditForm.summary.trim() || null,
+      })
+      .eq('id', concept.id)
+      .eq('created_by', userId);
+
+    if (conceptError) {
+      setManagementStatus(`Error updating concept: ${conceptError.message}`);
+      return;
+    }
+
+    for (const sectionField of managedSectionFields) {
+      const body = conceptEditForm[sectionField.field].trim();
+      const existingSection = concept.learn_sections.find(
+        (section) =>
+          section.title.toLowerCase() === sectionField.title.toLowerCase()
+      );
+
+      if (existingSection && existingSection.body !== body) {
+        const { data, error } = await supabase
+          .from('learn_sections')
+          .update({ body })
+          .eq('id', existingSection.id)
+          .eq('concept_id', concept.id)
+          .select('id')
+          .maybeSingle();
+
+        if (error || !data) {
+          setManagementStatus(
+            `Concept fields saved, but ${sectionField.title} could not be updated: ${
+              error?.message || 'the update was not permitted'
+            }`
+          );
+          await loadManagedConcepts(userId);
+          return;
+        }
+      } else if (!existingSection && body) {
+        const { error } = await supabase.from('learn_sections').insert({
+          concept_id: concept.id,
+          title: sectionField.title,
+          body,
+          sort_order: sectionField.sort_order,
+          created_by: userId,
+        });
+
+        if (error) {
+          setManagementStatus(
+            `Concept fields saved, but ${sectionField.title} could not be added: ${error.message}`
+          );
+          await loadManagedConcepts(userId);
+          return;
+        }
+      }
+    }
+
+    await loadManagedConcepts(userId);
+    setManagementStatus('Concept changes saved successfully.');
+  }
+
   if (loading) {
     return <p>Loading...</p>;
   }
@@ -352,6 +543,9 @@ setStatus('Concept and article sections saved as draft in the selected category.
   const placementNodes = nodes.filter((node) => node.parent_id !== null);
   const attributionConcepts = concepts.filter(
     (concept) => concept.created_by === userId
+  );
+  const managedConcepts = ownedConcepts.filter((concept) =>
+    concept.name.toLowerCase().includes(conceptSearch.trim().toLowerCase())
   );
 
   return (
@@ -620,6 +814,99 @@ setStatus('Concept and article sections saved as draft in the selected category.
                 <p className="muted">{attributionStatus}</p>
               )}
             </form>
+          </div>
+
+          <div className="panel">
+            <h2>Concept Management</h2>
+            <p className="muted">Search and edit concepts you created.</p>
+
+            <input
+              type="search"
+              placeholder="Search concepts by name"
+              value={conceptSearch}
+              onChange={(event) => setConceptSearch(event.target.value)}
+            />
+
+            <br />
+            <br />
+
+            {managedConcepts.length === 0 ? (
+              <p className="muted">No matching concepts found.</p>
+            ) : (
+              managedConcepts.map((concept) => (
+                <div className="card" key={concept.id}>
+                  <strong>{concept.name}</strong>
+                  <p className="muted">
+                    {concept.concept_type || 'Concept'} ·{' '}
+                    {concept.status || 'draft'}
+                  </p>
+                  <button
+                    className="btn ghost"
+                    type="button"
+                    onClick={() => handleEditConcept(concept)}
+                  >
+                    Edit
+                  </button>
+                </div>
+              ))
+            )}
+
+            {editingConceptId && (
+              <form onSubmit={handleConceptUpdate}>
+                <h3>Edit Concept</h3>
+
+                <label>
+                  Name
+                  <input
+                    value={conceptEditForm.name}
+                    onChange={(event) =>
+                      updateConceptEditField('name', event.target.value)
+                    }
+                    required
+                  />
+                </label>
+
+                <br />
+
+                <label>
+                  Summary
+                  <textarea
+                    value={conceptEditForm.summary}
+                    onChange={(event) =>
+                      updateConceptEditField('summary', event.target.value)
+                    }
+                  />
+                </label>
+
+                {managedSectionFields.map((sectionField) => (
+                  <div key={sectionField.field}>
+                    <br />
+                    <label>
+                      {sectionField.title}
+                      <textarea
+                        value={conceptEditForm[sectionField.field]}
+                        onChange={(event) =>
+                          updateConceptEditField(
+                            sectionField.field,
+                            event.target.value
+                          )
+                        }
+                      />
+                    </label>
+                  </div>
+                ))}
+
+                <br />
+
+                <button className="btn primary" type="submit">
+                  Save Changes
+                </button>
+              </form>
+            )}
+
+            {managementStatus && (
+              <p className="muted">{managementStatus}</p>
+            )}
           </div>
         </section>
       </main>
