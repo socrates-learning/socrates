@@ -125,6 +125,35 @@ export default async function ConceptPage({
     console.error('Failed to load concept sections:', sectionsError);
   }
 
+  const { data: sourceNotes, error: sourceNotesError } = await supabase
+    .from('content_source_notes')
+    .select('id, note, sources(title, source_type, url)')
+    .eq('concept_id', concept.id)
+    .is('learn_section_id', null)
+    .order('created_at');
+
+  if (sourceNotesError && process.env.NODE_ENV !== 'production') {
+    console.error('Failed to load concept sources:', sourceNotesError);
+  }
+
+  const sources = (sourceNotes || []).flatMap((sourceNote) => {
+    const source = Array.isArray(sourceNote.sources)
+      ? sourceNote.sources[0]
+      : sourceNote.sources;
+
+    return source
+      ? [
+          {
+            id: sourceNote.id,
+            title: source.title,
+            source_type: source.source_type,
+            note: sourceNote.note,
+            url: source.url,
+          },
+        ]
+      : [];
+  });
+
   const { data: reviewAttempts, error: reviewAttemptsError } = await supabase
     .from('review_attempts')
     .select('score, learn_section_id, created_at')
@@ -212,6 +241,7 @@ export default async function ConceptPage({
             whyItMatters={concept.why_it_matters}
             status={concept.status}
             sections={sectionsWithMastery}
+            sources={sources}
           />
         </section>
       </main>

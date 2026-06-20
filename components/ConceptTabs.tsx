@@ -13,6 +13,7 @@ export function ConceptTabs({
   whyItMatters,
   status,
   sections,
+  sources,
 }: {
   conceptId: string;
   summary: string | null;
@@ -25,6 +26,13 @@ export function ConceptTabs({
     sort_order: number | null;
     mastery: number;
     attemptCount: number;
+  }>;
+  sources: Array<{
+    id: string;
+    title: string;
+    source_type: string | null;
+    note: string | null;
+    url: string | null;
   }>;
 }) {
   const [activeTab, setActiveTab] = useState('learn');
@@ -142,6 +150,26 @@ export function ConceptTabs({
                 </div>
               </div>
             ))}
+          </div>
+
+          <div className="card">
+            <h3>Sources</h3>
+            {sources.length === 0 ? (
+              <p className="muted">No sources attached yet.</p>
+            ) : (
+              sources.map((source) => (
+                <div key={source.id} style={{ marginBottom: '16px' }}>
+                  <strong>{source.title}</strong>
+                  <p className="muted">{source.source_type || 'Unspecified'}</p>
+                  <p>{source.note || 'No note added.'}</p>
+                  {source.url && (
+                    <a href={source.url} target="_blank" rel="noreferrer">
+                      {source.url}
+                    </a>
+                  )}
+                </div>
+              ))
+            )}
           </div>
         </div>
       )}
