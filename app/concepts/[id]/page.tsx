@@ -102,7 +102,7 @@ export default async function ConceptPage({
 
   const { data: reviewAttempts, error: reviewAttemptsError } = await supabase
     .from('review_attempts')
-    .select('score')
+    .select('score, learn_section_id')
     .eq('concept_id', concept.id)
     .not('score', 'is', null);
 
@@ -118,6 +118,32 @@ export default async function ConceptPage({
         scores.reduce((total, score) => total + score * 25, 0) / scores.length
       )
     : 0;
+
+  const sectionScores = new Map<string, number[]>();
+
+  for (const attempt of reviewAttempts || []) {
+    if (attempt.score === null || attempt.learn_section_id === null) continue;
+
+    const scoresForSection = sectionScores.get(attempt.learn_section_id) || [];
+    scoresForSection.push(attempt.score);
+    sectionScores.set(attempt.learn_section_id, scoresForSection);
+  }
+
+  const sectionsWithMastery = (sections || []).map((section) => {
+    const scoresForSection = sectionScores.get(section.id) || [];
+    const sectionMastery = scoresForSection.length
+      ? Math.round(
+          scoresForSection.reduce((total, score) => total + score * 25, 0) /
+            scoresForSection.length
+        )
+      : 0;
+
+    return {
+      ...section,
+      mastery: sectionMastery,
+      attemptCount: scoresForSection.length,
+    };
+  });
 
   return (
     <>
@@ -149,7 +175,7 @@ export default async function ConceptPage({
             summary={concept.summary}
             whyItMatters={concept.why_it_matters}
             status={concept.status}
-            sections={sections || []}
+            sections={sectionsWithMastery}
           />
         </section>
       </main>

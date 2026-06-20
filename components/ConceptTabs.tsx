@@ -23,9 +23,18 @@ export function ConceptTabs({
     title: string;
     body: string;
     sort_order: number | null;
+    mastery: number;
+    attemptCount: number;
   }>;
 }) {
   const [activeTab, setActiveTab] = useState('learn');
+
+  function getMasteryLabel(mastery: number) {
+    if (mastery < 50) return 'Needs review';
+    if (mastery < 75) return 'Developing';
+    if (mastery < 90) return 'Strong';
+    return 'Mastered';
+  }
 
   return (
     <>
@@ -72,21 +81,27 @@ export function ConceptTabs({
 
           <div className="card">
             <h3>Sub-Mastery</h3>
-            {[
-              'Mechanism',
-              'Clinical Uses',
-              'Adverse Effects',
-              'Contraindications',
-              'Distinctions',
-            ].map((section) => (
-              <p key={section}>
-                <strong>{section}</strong>
-                <br />
-                <span className="muted">50%</span>
-                <span className="bar">
-                  <span style={{ width: '50%' }} />
-                </span>
-              </p>
+            {sections.map((section) => (
+              <div key={section.id} style={{ marginBottom: '16px' }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    gap: '16px',
+                    marginBottom: '6px',
+                  }}
+                >
+                  <strong>{section.title}</strong>
+                  <span className="muted">
+                    {section.attemptCount === 0
+                      ? 'Not reviewed yet'
+                      : `${section.mastery}% · ${getMasteryLabel(section.mastery)}`}
+                  </span>
+                </div>
+                <div className="bar">
+                  <span style={{ width: `${section.mastery}%` }} />
+                </div>
+              </div>
             ))}
           </div>
         </div>
