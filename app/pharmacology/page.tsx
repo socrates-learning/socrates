@@ -233,6 +233,51 @@ export default async function PharmacologyLibrary() {
           continueScores.length
       )
     : 0;
+  const siblingConcepts = new Map<string, { id: string; name: string }>();
+
+  if (continueConcept && newestPlacement) {
+    for (const placement of placements) {
+      if (
+        placement.library_node_id !== newestPlacement.library_node_id ||
+        placement.concept_id === continueConcept.id
+      ) {
+        continue;
+      }
+
+      const concept = Array.isArray(placement.concepts)
+        ? placement.concepts[0]
+        : placement.concepts;
+
+      if (concept) siblingConcepts.set(concept.id, concept);
+    }
+  }
+
+  const recommendationCandidates = [...siblingConcepts.values()].map(
+    (concept) => {
+      const attempts = (reviewAttemptsResult.data || []).filter(
+        (attempt) => attempt.concept_id === concept.id
+      );
+      const scores = attempts.flatMap((attempt) =>
+        attempt.score === null ? [] : [attempt.score]
+      );
+
+      return {
+        ...concept,
+        hasAttempts: attempts.length > 0,
+        mastery: scores.length
+          ? Math.round(
+              scores.reduce((total, score) => total + score * 25, 0) /
+                scores.length
+            )
+          : 0,
+      };
+    }
+  );
+  const recommendedConcept =
+    recommendationCandidates.find((concept) => !concept.hasAttempts) ||
+    [...recommendationCandidates].sort(
+      (a, b) => a.mastery - b.mastery
+    )[0];
 
   return (
     <>
@@ -267,6 +312,28 @@ export default async function PharmacologyLibrary() {
                 </Link>
               </div>
             )}
+
+            <div className="card">
+              <h3>Recommended Next</h3>
+              {recommendedConcept ? (
+                <>
+                  <strong>{recommendedConcept.name}</strong>
+                  <p className="muted">
+                    {recommendedConcept.hasAttempts
+                      ? `${recommendedConcept.mastery}% mastered`
+                      : 'Not started'}
+                  </p>
+                  <Link
+                    className="btn primary"
+                    href={`/concepts/${recommendedConcept.id}`}
+                  >
+                    Start
+                  </Link>
+                </>
+              ) : (
+                <p className="muted">No recommendation yet.</p>
+              )}
+            </div>
 
             <h3>Pharmacology Structure</h3>
 
