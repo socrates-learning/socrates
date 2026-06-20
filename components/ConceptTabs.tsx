@@ -36,6 +36,17 @@ export function ConceptTabs({
     return 'Mastered';
   }
 
+  const needsReviewSections = sections
+    .filter((section) => section.attemptCount === 0 || section.mastery < 75)
+    .sort((a, b) => {
+      const aIsUnreviewed = a.attemptCount === 0;
+      const bIsUnreviewed = b.attemptCount === 0;
+
+      if (aIsUnreviewed !== bIsUnreviewed) return aIsUnreviewed ? -1 : 1;
+      return a.mastery - b.mastery;
+    })
+    .slice(0, 3);
+
   return (
     <>
       <div className="tabs">
@@ -65,6 +76,34 @@ export function ConceptTabs({
           <div className="card">
             <h3>Why this matters</h3>
             <p>{whyItMatters || 'No explanation added yet.'}</p>
+          </div>
+
+          <div className="card">
+            <h3>Needs Review</h3>
+            {needsReviewSections.length === 0 ? (
+              <p className="muted">
+                All reviewed sections are currently strong.
+              </p>
+            ) : (
+              needsReviewSections.map((section) => (
+                <div
+                  key={section.id}
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    gap: '16px',
+                    marginBottom: '10px',
+                  }}
+                >
+                  <strong>{section.title}</strong>
+                  <span className="muted">
+                    {section.attemptCount === 0
+                      ? 'Not reviewed yet'
+                      : `${section.mastery}% · ${getMasteryLabel(section.mastery)}`}
+                  </span>
+                </div>
+              ))
+            )}
           </div>
 
           {sections.map((section) => (
