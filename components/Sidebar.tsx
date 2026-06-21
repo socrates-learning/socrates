@@ -56,24 +56,12 @@ export function Sidebar({ activeId }: { activeId?: string }) {
 
       const loadedNodes = nodeData || [];
       const loadedPlacements = (placementData || []) as unknown as Placement[];
-      const nodesById = new Map(loadedNodes.map((node) => [node.id, node]));
       const initiallyExpanded = new Set<string>();
       const pharmacologyNode = loadedNodes.find(
         (node) => node.name === 'Pharmacology'
       );
 
       if (pharmacologyNode) initiallyExpanded.add(pharmacologyNode.id);
-
-      for (const placement of loadedPlacements) {
-        if (placement.concept_id !== activeId) continue;
-
-        let node = nodesById.get(placement.library_node_id);
-
-        while (node) {
-          initiallyExpanded.add(node.id);
-          node = node.parent_id ? nodesById.get(node.parent_id) : undefined;
-        }
-      }
 
       setNodes(loadedNodes);
       setPlacements(loadedPlacements);
@@ -82,6 +70,36 @@ export function Sidebar({ activeId }: { activeId?: string }) {
 
     loadSidebar();
   }, [activeId]);
+
+  useEffect(() => {
+    const query = searchQuery.trim().toLowerCase();
+
+    if (!query) return;
+
+    const matchingNode =
+      nodes.find((node) => node.name.toLowerCase().includes(query)) ||
+      nodes.find((node) =>
+        placements.some((placement) => {
+          if (placement.library_node_id !== node.id) return false;
+
+          const concept = getConceptFromPlacement(placement);
+          return concept ? conceptMatchesSearch(concept) : false;
+        })
+      );
+
+    if (!matchingNode) return;
+
+    const nodesById = new Map(nodes.map((node) => [node.id, node]));
+    const expandedPath: string[] = [matchingNode.id];
+    let parentId = matchingNode.parent_id;
+
+    while (parentId) {
+      expandedPath.unshift(parentId);
+      parentId = nodesById.get(parentId)?.parent_id || null;
+    }
+
+    setExpandedNodeIds(new Set(expandedPath));
+  }, [searchQuery, nodes, placements]);
 
   function getConceptFromPlacement(placement: Placement): Concept | null {
     if (Array.isArray(placement.concepts)) {
@@ -128,17 +146,33 @@ export function Sidebar({ activeId }: { activeId?: string }) {
   }
 
   function toggleNode(nodeId: string) {
+    const nodesById = new Map(nodes.map((node) => [node.id, node]));
+    const ancestorIds: string[] = [];
+    let parentId = nodesById.get(nodeId)?.parent_id;
+
+    while (parentId) {
+      ancestorIds.unshift(parentId);
+      parentId = nodesById.get(parentId)?.parent_id || null;
+    }
+
     setExpandedNodeIds((current) => {
-      const next = new Set(current);
-
-      if (next.has(nodeId)) {
-        next.delete(nodeId);
-      } else {
-        next.add(nodeId);
-      }
-
-      return next;
+      return current.has(nodeId)
+        ? new Set(ancestorIds)
+        : new Set([...ancestorIds, nodeId]);
     });
+  }
+
+  function collapseNode(nodeId: string) {
+    const nodesById = new Map(nodes.map((node) => [node.id, node]));
+    const ancestorIds: string[] = [];
+    let parentId = nodesById.get(nodeId)?.parent_id;
+
+    while (parentId) {
+      ancestorIds.unshift(parentId);
+      parentId = nodesById.get(parentId)?.parent_id || null;
+    }
+
+    setExpandedNodeIds(new Set(ancestorIds));
   }
 
   function renderNode(node: LibraryNode, ancestorMatchesSearch = false) {
@@ -163,7 +197,7 @@ export function Sidebar({ activeId }: { activeId?: string }) {
           return concept ? conceptMatchesSearch(concept) : false;
         })
       : nodePlacements;
-    const isExpanded = query ? true : expandedNodeIds.has(node.id);
+    const isExpanded = expandedNodeIds.has(node.id);
 
     return (
       <div className="library-node" key={node.id}>
@@ -195,6 +229,7 @@ export function Sidebar({ activeId }: { activeId?: string }) {
                     activeId === placement.concept_id ? 'active' : ''
                   }`}
                   href={`/concepts/${placement.concept_id}`}
+                  onClick={() => collapseNode(node.id)}
                 >
                   {concept.name}
                   <br />
