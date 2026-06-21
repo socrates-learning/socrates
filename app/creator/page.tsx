@@ -20,7 +20,11 @@ type Concept = {
 };
 
 type ManagedConcept = Concept & {
+  importance: string | null;
+  difficulty: string | null;
+  estimated_time: string | null;
   summary: string | null;
+  why_it_matters: string | null;
   status: string | null;
   learn_sections: Array<{
     id: string;
@@ -32,7 +36,12 @@ type ManagedConcept = Concept & {
 
 type ConceptEditForm = {
   name: string;
+  concept_type: string;
+  importance: string;
+  difficulty: string;
+  estimated_time: string;
   summary: string;
+  why_it_matters: string;
   overview: string;
   mechanism: string;
   clinical_uses: string;
@@ -80,7 +89,12 @@ const managedSectionFields = [
 
 const emptyConceptEditForm: ConceptEditForm = {
   name: '',
+  concept_type: '',
+  importance: 'Medium',
+  difficulty: 'Beginner',
+  estimated_time: '',
   summary: '',
+  why_it_matters: '',
   overview: '',
   mechanism: '',
   clinical_uses: '',
@@ -108,6 +122,10 @@ function getCategoryPath(node: LibraryNode, nodes: LibraryNode[]) {
 }
 
 export default function Creator() {
+  const [workflow, setWorkflow] = useState<
+    'dashboard' | 'create' | 'edit' | 'relationships' | 'sources'
+  >('dashboard');
+  const [createStep, setCreateStep] = useState<1 | 2>(1);
   const [status, setStatus] = useState('');
   const [assignStatus, setAssignStatus] = useState('');
   const [sourceStatus, setSourceStatus] = useState('');
@@ -164,7 +182,11 @@ export default function Creator() {
         name,
         concept_type,
         created_by,
+        importance,
+        difficulty,
+        estimated_time,
         summary,
+        why_it_matters,
         status,
         learn_sections (
           id,
@@ -218,28 +240,27 @@ export default function Creator() {
     loadPageData();
   }, []);
 
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function handleCreateConcept(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     const formElement = event.currentTarget;
-    setStatus('Saving...');
+    setStatus('Creating draft...');
 
     const form = new FormData(formElement);
     const libraryNodeId = String(form.get('library_node_id'));
+    const name = String(form.get('name') || '').trim();
+    const conceptType = String(form.get('concept_type') || '').trim();
+    const difficulty = String(form.get('difficulty') || 'Beginner');
 
-    if (!libraryNodeId) {
-      setStatus('Please choose a category.');
+    if (!userId || !name || !libraryNodeId) {
+      setStatus('Please provide a name and choose a category.');
       return;
     }
 
     const concept = {
-      name: String(form.get('name')),
-      concept_type: String(form.get('concept_type')),
-      importance: String(form.get('importance')),
-      difficulty: String(form.get('difficulty')),
-      estimated_time: String(form.get('estimated_time')),
-      summary: String(form.get('summary')),
-      why_it_matters: String(form.get('why_it_matters')),
+      name,
+      concept_type: conceptType || null,
+      difficulty,
       is_public: false,
       status: 'draft',
     };
@@ -268,38 +289,17 @@ export default function Creator() {
       return;
     }
 
-    const sectionInputs = [
-  { title: 'Overview', field: 'overview', sort_order: 0, required: true },
-  { title: 'Mechanism', field: 'mechanism', sort_order: 1 },
-  { title: 'Clinical Uses', field: 'clinical_uses', sort_order: 2 },
-  { title: 'Adverse Effects', field: 'adverse_effects', sort_order: 3 },
-  { title: 'Contraindications', field: 'contraindications', sort_order: 4 },
-  { title: 'Key Distinctions', field: 'key_distinctions', sort_order: 5 },
-];
-
-const sections = sectionInputs
-  .map((section) => ({
-    concept_id: data.id,
-    title: section.title,
-    body: String(form.get(section.field) || '').trim(),
-    sort_order: section.sort_order,
-  }))
-  .filter((section) => section.body.length > 0);
-
-const { error: sectionsError } = await supabase
-  .from('learn_sections')
-  .insert(sections);
-
-if (sectionsError) {
-  setStatus(
-    `Concept and placement saved, but article sections failed: ${sectionsError.message}`
-  );
-  return;
-}
-
-setStatus('Concept and article sections saved as draft in the selected category.');
-    formElement.reset();
-    await loadPageData();
+    await Promise.all([loadConcepts(), loadManagedConcepts(userId)]);
+    setEditingConceptId(data.id);
+    setConceptEditForm({
+      ...emptyConceptEditForm,
+      name,
+      concept_type: conceptType,
+      difficulty,
+    });
+    setStatus('Draft created. Complete the concept details below.');
+    setManagementStatus('');
+    setCreateStep(2);
   }
 
   async function handleAssignExisting(event: React.FormEvent<HTMLFormElement>) {
@@ -482,7 +482,12 @@ setStatus('Concept and article sections saved as draft in the selected category.
     setEditingConceptId(concept.id);
     setConceptEditForm({
       name: concept.name,
+      concept_type: concept.concept_type || '',
+      importance: concept.importance || 'Medium',
+      difficulty: concept.difficulty || 'Beginner',
+      estimated_time: concept.estimated_time || '',
       summary: concept.summary || '',
+      why_it_matters: concept.why_it_matters || '',
       overview: sectionBody('Overview'),
       mechanism: sectionBody('Mechanism'),
       clinical_uses: sectionBody('Clinical Uses'),
@@ -520,7 +525,12 @@ setStatus('Concept and article sections saved as draft in the selected category.
       .from('concepts')
       .update({
         name,
+        concept_type: conceptEditForm.concept_type.trim() || null,
+        importance: conceptEditForm.importance,
+        difficulty: conceptEditForm.difficulty,
+        estimated_time: conceptEditForm.estimated_time.trim() || null,
         summary: conceptEditForm.summary.trim() || null,
+        why_it_matters: conceptEditForm.why_it_matters.trim() || null,
       })
       .eq('id', concept.id)
       .eq('created_by', userId);
@@ -607,6 +617,139 @@ setStatus('Concept and article sections saved as draft in the selected category.
     concept.name.toLowerCase().includes(conceptSearch.trim().toLowerCase())
   );
 
+  function openWorkflow(
+    nextWorkflow: 'dashboard' | 'create' | 'edit' | 'relationships' | 'sources'
+  ) {
+    setWorkflow(nextWorkflow);
+
+    if (nextWorkflow === 'create') {
+      setCreateStep(1);
+      setEditingConceptId(null);
+      setConceptEditForm(emptyConceptEditForm);
+      setStatus('');
+      setManagementStatus('');
+    }
+  }
+
+  const conceptEditor = editingConceptId ? (
+    <form onSubmit={handleConceptUpdate}>
+      <h3>Full Concept Editor</h3>
+
+      <div className="form-grid">
+        <label>
+          Name
+          <input
+            value={conceptEditForm.name}
+            onChange={(event) =>
+              updateConceptEditField('name', event.target.value)
+            }
+            required
+          />
+        </label>
+
+        <label>
+          Type
+          <input
+            value={conceptEditForm.concept_type}
+            onChange={(event) =>
+              updateConceptEditField('concept_type', event.target.value)
+            }
+            placeholder="e.g. Drug Class"
+          />
+        </label>
+
+        <label>
+          Importance
+          <select
+            value={conceptEditForm.importance}
+            onChange={(event) =>
+              updateConceptEditField('importance', event.target.value)
+            }
+          >
+            <option>High</option>
+            <option>Medium</option>
+            <option>Low</option>
+          </select>
+        </label>
+
+        <label>
+          Difficulty
+          <select
+            value={conceptEditForm.difficulty}
+            onChange={(event) =>
+              updateConceptEditField('difficulty', event.target.value)
+            }
+          >
+            <option>Beginner</option>
+            <option>Intermediate</option>
+            <option>Advanced</option>
+          </select>
+        </label>
+
+        <label>
+          Estimated study time
+          <input
+            value={conceptEditForm.estimated_time}
+            onChange={(event) =>
+              updateConceptEditField('estimated_time', event.target.value)
+            }
+            placeholder="e.g. 15 min"
+          />
+        </label>
+      </div>
+
+      <br />
+
+      <label>
+        Summary
+        <textarea
+          value={conceptEditForm.summary}
+          onChange={(event) =>
+            updateConceptEditField('summary', event.target.value)
+          }
+        />
+      </label>
+
+      <br />
+
+      <label>
+        Why this matters
+        <textarea
+          value={conceptEditForm.why_it_matters}
+          onChange={(event) =>
+            updateConceptEditField('why_it_matters', event.target.value)
+          }
+        />
+      </label>
+
+      {managedSectionFields.map((sectionField) => (
+        <div key={sectionField.field}>
+          <br />
+          <label>
+            {sectionField.title}
+            <textarea
+              value={conceptEditForm[sectionField.field]}
+              onChange={(event) =>
+                updateConceptEditField(
+                  sectionField.field,
+                  event.target.value
+                )
+              }
+            />
+          </label>
+        </div>
+      ))}
+
+      <br />
+
+      <button className="btn primary" type="submit">
+        Save Changes
+      </button>
+
+      {managementStatus && <p className="muted">{managementStatus}</p>}
+    </form>
+  ) : null;
+
   return (
     <>
       <Header />
@@ -614,429 +757,437 @@ setStatus('Concept and article sections saved as draft in the selected category.
         <Sidebar />
 
         <section className="stack">
-          <div className="panel">
-            <h2>Creator Studio</h2>
-            <p className="muted">
-              Add draft concepts and place them into a Socrates category.
-            </p>
+          {workflow === 'dashboard' && (
+            <div className="panel">
+              <h2>Creator Studio</h2>
+              <p className="muted">
+                Choose the task you want to complete.
+              </p>
 
-            <form onSubmit={handleSubmit}>
-              <div className="form-grid">
-                <input name="name" placeholder="Concept name" required />
-                <input name="concept_type" placeholder="Type, e.g. Drug Class" />
-
-                <select name="library_node_id" defaultValue="" required>
-                  <option value="" disabled>
-                    Choose category
-                  </option>
-                  {placementNodes.map((node) => (
-                    <option key={node.id} value={node.id}>
-                      {getCategoryPath(node, nodes)}{' '}
-                      {node.node_type ? `(${node.node_type})` : ''}
-                    </option>
-                  ))}
-                </select>
-
-                <select name="importance" defaultValue="High">
-                  <option>High</option>
-                  <option>Medium</option>
-                  <option>Low</option>
-                </select>
-
-                <select name="difficulty" defaultValue="Beginner">
-                  <option>Beginner</option>
-                  <option>Intermediate</option>
-                  <option>Advanced</option>
-                </select>
-
-                <input
-                  name="estimated_time"
-                  placeholder="Estimated study time, e.g. 15 min"
-                />
-              </div>
-<br />
-
-<textarea
-  name="summary"
-  placeholder="Original summary in your own words"
-  required
-/>
-
-<br />
-<br />
-
-<textarea
-  name="why_it_matters"
-  placeholder="Why this matters"
-/>
-
-<br />
-<br />
-
-              <textarea
-  name="overview"
-  placeholder="Wikipedia-style Overview"
-  required
-/>
-
-<br />
-<br />
-
-<textarea
-  name="mechanism"
-  placeholder="Mechanism"
-/>
-
-<br />
-<br />
-
-<textarea
-  name="clinical_uses"
-  placeholder="Clinical Uses"
-/>
-
-<br />
-<br />
-
-<textarea
-  name="adverse_effects"
-  placeholder="Adverse Effects"
-/>
-
-<br />
-<br />
-
-<textarea
-  name="contraindications"
-  placeholder="Contraindications"
-/>
-
-<br />
-<br />
-
-<textarea
-  name="key_distinctions"
-  placeholder="Key Distinctions"
-/>
-
-<br />
-<br />
-
-<button className="btn primary" type="submit">
-                Save Draft Concept
-              </button>
-
-              {status && <p className="muted">{status}</p>}
-            </form>
-          </div>
-
-          <div className="panel">
-            <h2>Assign Existing Concept to Another Category</h2>
-            <p className="muted">
-              Use this when one concept belongs in more than one place.
-            </p>
-
-            <form onSubmit={handleAssignExisting}>
-              <div className="form-grid">
-                <select name="existing_concept_id" defaultValue="" required>
-                  <option value="" disabled>
-                    Choose existing concept
-                  </option>
-                  {concepts.map((concept) => (
-                    <option key={concept.id} value={concept.id}>
-                      {concept.name}{' '}
-                      {concept.concept_type ? `(${concept.concept_type})` : ''}
-                    </option>
-                  ))}
-                </select>
-
-                <select name="existing_library_node_id" defaultValue="" required>
-                  <option value="" disabled>
-                    Choose additional category
-                  </option>
-                  {placementNodes.map((node) => (
-                    <option key={node.id} value={node.id}>
-                      {getCategoryPath(node, nodes)}{' '}
-                      {node.node_type ? `(${node.node_type})` : ''}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <br />
-
-              <button className="btn primary" type="submit">
-                Assign Concept
-              </button>
-
-              {assignStatus && <p className="muted">{assignStatus}</p>}
-            </form>
-          </div>
-
-          <div className="panel">
-            <h2>Sources</h2>
-            <p className="muted">
-              Add source records for future content attribution.
-            </p>
-
-            <form onSubmit={handleSourceSubmit}>
-              <div className="form-grid">
-                <input
-                  name="source_title"
-                  placeholder="Title"
-                  required
-                />
-                <input name="source_author" placeholder="Author" />
-                <input name="source_url" type="url" placeholder="URL" />
-                <input name="source_license" placeholder="License" />
-                <select name="source_type" defaultValue="" required>
-                  <option value="" disabled>
-                    Choose source type
-                  </option>
-                  {sourceTypes.map((sourceType) => (
-                    <option key={sourceType} value={sourceType}>
-                      {sourceType}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <br />
-
-              <button className="btn primary" type="submit">
-                Save Source
-              </button>
-
-              {sourceStatus && <p className="muted">{sourceStatus}</p>}
-            </form>
-
-            <h3>Your Sources</h3>
-            {sources.length === 0 ? (
-              <p className="muted">No sources added yet.</p>
-            ) : (
-              sources.map((source) => (
-                <div className="card" key={source.id}>
-                  <strong>{source.title}</strong>
+              <div className="grid">
+                <div className="card">
+                  <h3>Create Concept</h3>
                   <p className="muted">
-                    {[source.author, source.source_type, source.license]
-                      .filter(Boolean)
-                      .join(' · ') || 'No additional details'}
-                  </p>
-                  {source.url && (
-                    <a href={source.url} target="_blank" rel="noreferrer">
-                      {source.url}
-                    </a>
-                  )}
-                </div>
-              ))
-            )}
-          </div>
-
-          <div className="panel">
-            <h2>Attach Source to Concept</h2>
-            <p className="muted">
-              Connect one of your saved sources to one of your concepts.
-            </p>
-
-            <form onSubmit={handleAttributionSubmit}>
-              <div className="form-grid">
-                <select
-                  name="attribution_concept_id"
-                  defaultValue=""
-                  required
-                >
-                  <option value="" disabled>
-                    Choose concept
-                  </option>
-                  {attributionConcepts.map((concept) => (
-                    <option key={concept.id} value={concept.id}>
-                      {concept.name}
-                    </option>
-                  ))}
-                </select>
-
-                <select
-                  name="attribution_source_id"
-                  defaultValue=""
-                  required
-                >
-                  <option value="" disabled>
-                    Choose source
-                  </option>
-                  {sources.map((source) => (
-                    <option key={source.id} value={source.id}>
-                      {source.title}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <br />
-
-              <textarea
-                name="attribution_note"
-                placeholder="Attribution note"
-              />
-
-              <br />
-              <br />
-
-              <button className="btn primary" type="submit">
-                Attach Source
-              </button>
-
-              {attributionStatus && (
-                <p className="muted">{attributionStatus}</p>
-              )}
-            </form>
-          </div>
-
-          <div className="panel">
-            <h2>Concept Management</h2>
-            <p className="muted">Search and edit concepts you created.</p>
-
-            <input
-              type="search"
-              placeholder="Search concepts by name"
-              value={conceptSearch}
-              onChange={(event) => setConceptSearch(event.target.value)}
-            />
-
-            <br />
-            <br />
-
-            {managedConcepts.length === 0 ? (
-              <p className="muted">No matching concepts found.</p>
-            ) : (
-              managedConcepts.map((concept) => (
-                <div className="card" key={concept.id}>
-                  <strong>{concept.name}</strong>
-                  <p className="muted">
-                    {concept.concept_type || 'Concept'} ·{' '}
-                    {concept.status || 'draft'}
+                    Start a draft, choose its category, then add full content.
                   </p>
                   <button
-                    className="btn ghost"
+                    className="btn primary"
                     type="button"
-                    onClick={() => handleEditConcept(concept)}
+                    onClick={() => openWorkflow('create')}
                   >
-                    Edit
+                    Create Concept
                   </button>
                 </div>
-              ))
-            )}
 
-            {editingConceptId && (
-              <form onSubmit={handleConceptUpdate}>
-                <h3>Edit Concept</h3>
+                <div className="card">
+                  <h3>Edit Concepts</h3>
+                  <p className="muted">
+                    Find your concepts, update content, or add categories.
+                  </p>
+                  <button
+                    className="btn primary"
+                    type="button"
+                    onClick={() => openWorkflow('edit')}
+                  >
+                    Edit Concepts
+                  </button>
+                </div>
 
-                <label>
-                  Name
-                  <input
-                    value={conceptEditForm.name}
-                    onChange={(event) =>
-                      updateConceptEditField('name', event.target.value)
-                    }
-                    required
-                  />
-                </label>
+                <div className="card">
+                  <h3>Build Relationships</h3>
+                  <p className="muted">
+                    Connect concepts into the knowledge network.
+                  </p>
+                  <button
+                    className="btn primary"
+                    type="button"
+                    onClick={() => openWorkflow('relationships')}
+                  >
+                    Build Relationships
+                  </button>
+                </div>
 
-                <br />
+                <div className="card">
+                  <h3>Manage Sources</h3>
+                  <p className="muted">
+                    Create reusable sources and attach them to concepts.
+                  </p>
+                  <button
+                    className="btn primary"
+                    type="button"
+                    onClick={() => openWorkflow('sources')}
+                  >
+                    Manage Sources
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
-                <label>
-                  Summary
-                  <textarea
-                    value={conceptEditForm.summary}
-                    onChange={(event) =>
-                      updateConceptEditField('summary', event.target.value)
-                    }
-                  />
-                </label>
+          {workflow === 'create' && (
+            <div className="panel">
+              <button
+                className="btn ghost"
+                type="button"
+                onClick={() => openWorkflow('dashboard')}
+              >
+                Back to Creator Studio
+              </button>
 
-                {managedSectionFields.map((sectionField) => (
-                  <div key={sectionField.field}>
-                    <br />
+              <h2>Create Concept</h2>
+              <p className="muted">Step {createStep} of 2</p>
+
+              {createStep === 1 ? (
+                <form onSubmit={handleCreateConcept}>
+                  <div className="form-grid">
                     <label>
-                      {sectionField.title}
-                      <textarea
-                        value={conceptEditForm[sectionField.field]}
-                        onChange={(event) =>
-                          updateConceptEditField(
-                            sectionField.field,
-                            event.target.value
-                          )
-                        }
+                      Name
+                      <input name="name" placeholder="Concept name" required />
+                    </label>
+
+                    <label>
+                      Type
+                      <input
+                        name="concept_type"
+                        placeholder="e.g. Drug Class"
                       />
                     </label>
+
+                    <label>
+                      Category
+                      <select name="library_node_id" defaultValue="" required>
+                        <option value="" disabled>
+                          Choose category
+                        </option>
+                        {placementNodes.map((node) => (
+                          <option key={node.id} value={node.id}>
+                            {getCategoryPath(node, nodes)}{' '}
+                            {node.node_type ? `(${node.node_type})` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label>
+                      Difficulty
+                      <select name="difficulty" defaultValue="Beginner">
+                        <option>Beginner</option>
+                        <option>Intermediate</option>
+                        <option>Advanced</option>
+                      </select>
+                    </label>
                   </div>
-                ))}
+
+                  <br />
+
+                  <button className="btn primary" type="submit">
+                    Create Draft and Continue
+                  </button>
+
+                  {status && <p className="muted">{status}</p>}
+                </form>
+              ) : (
+                <>
+                  {status && <p className="muted">{status}</p>}
+                  {conceptEditor}
+                </>
+              )}
+            </div>
+          )}
+
+          {workflow === 'edit' && (
+            <>
+              <div className="panel">
+                <button
+                  className="btn ghost"
+                  type="button"
+                  onClick={() => openWorkflow('dashboard')}
+                >
+                  Back to Creator Studio
+                </button>
+
+                <h2>Edit Concepts</h2>
+                <p className="muted">Search and edit concepts you created.</p>
+
+                <input
+                  type="search"
+                  placeholder="Search concepts by name"
+                  value={conceptSearch}
+                  onChange={(event) => setConceptSearch(event.target.value)}
+                />
+
+                <br />
+                <br />
+
+                {managedConcepts.length === 0 ? (
+                  <p className="muted">No matching concepts found.</p>
+                ) : (
+                  managedConcepts.map((concept) => (
+                    <div className="card" key={concept.id}>
+                      <strong>{concept.name}</strong>
+                      <p className="muted">
+                        {concept.concept_type || 'Concept'} ·{' '}
+                        {concept.status || 'draft'}
+                      </p>
+                      <button
+                        className="btn ghost"
+                        type="button"
+                        onClick={() => handleEditConcept(concept)}
+                      >
+                        Edit
+                      </button>
+                    </div>
+                  ))
+                )}
+
+                {conceptEditor}
+                {!editingConceptId && managementStatus && (
+                  <p className="muted">{managementStatus}</p>
+                )}
+              </div>
+
+              <div className="panel">
+                <h2>Assign Another Category</h2>
+                <p className="muted">
+                  Keep concepts discoverable in every relevant category.
+                </p>
+
+                <form onSubmit={handleAssignExisting}>
+                  <div className="form-grid">
+                    <select
+                      name="existing_concept_id"
+                      defaultValue=""
+                      required
+                    >
+                      <option value="" disabled>
+                        Choose existing concept
+                      </option>
+                      {concepts.map((concept) => (
+                        <option key={concept.id} value={concept.id}>
+                          {concept.name}{' '}
+                          {concept.concept_type
+                            ? `(${concept.concept_type})`
+                            : ''}
+                        </option>
+                      ))}
+                    </select>
+
+                    <select
+                      name="existing_library_node_id"
+                      defaultValue=""
+                      required
+                    >
+                      <option value="" disabled>
+                        Choose additional category
+                      </option>
+                      {placementNodes.map((node) => (
+                        <option key={node.id} value={node.id}>
+                          {getCategoryPath(node, nodes)}{' '}
+                          {node.node_type ? `(${node.node_type})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <br />
+
+                  <button className="btn primary" type="submit">
+                    Assign Concept
+                  </button>
+
+                  {assignStatus && <p className="muted">{assignStatus}</p>}
+                </form>
+              </div>
+            </>
+          )}
+
+          {workflow === 'relationships' && (
+            <div className="panel">
+              <button
+                className="btn ghost"
+                type="button"
+                onClick={() => openWorkflow('dashboard')}
+              >
+                Back to Creator Studio
+              </button>
+
+              <h2>Build Relationships</h2>
+              <p className="muted">Connect two concepts you created.</p>
+
+              <form onSubmit={handleRelationshipSubmit}>
+                <div className="form-grid">
+                  <select name="source_concept_id" defaultValue="" required>
+                    <option value="" disabled>
+                      Choose source concept
+                    </option>
+                    {ownedConcepts.map((concept) => (
+                      <option key={concept.id} value={concept.id}>
+                        {concept.name}
+                      </option>
+                    ))}
+                  </select>
+
+                  <select name="relationship_type" defaultValue="" required>
+                    <option value="" disabled>
+                      Choose relationship type
+                    </option>
+                    {relationshipTypes.map((relationshipType) => (
+                      <option key={relationshipType} value={relationshipType}>
+                        {relationshipType}
+                      </option>
+                    ))}
+                  </select>
+
+                  <select name="target_concept_id" defaultValue="" required>
+                    <option value="" disabled>
+                      Choose target concept
+                    </option>
+                    {ownedConcepts.map((concept) => (
+                      <option key={concept.id} value={concept.id}>
+                        {concept.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
                 <br />
 
                 <button className="btn primary" type="submit">
-                  Save Changes
+                  Save Relationship
                 </button>
+
+                {relationshipStatus && (
+                  <p className="muted">{relationshipStatus}</p>
+                )}
               </form>
-            )}
+            </div>
+          )}
 
-            {managementStatus && (
-              <p className="muted">{managementStatus}</p>
-            )}
-          </div>
+          {workflow === 'sources' && (
+            <>
+              <div className="panel">
+                <button
+                  className="btn ghost"
+                  type="button"
+                  onClick={() => openWorkflow('dashboard')}
+                >
+                  Back to Creator Studio
+                </button>
 
-          <div className="panel">
-            <h2>Relationship Management</h2>
-            <p className="muted">
-              Connect two concepts you created.
-            </p>
+                <h2>Manage Sources</h2>
+                <p className="muted">
+                  Add reusable source records for content attribution.
+                </p>
 
-            <form onSubmit={handleRelationshipSubmit}>
-              <div className="form-grid">
-                <select name="source_concept_id" defaultValue="" required>
-                  <option value="" disabled>
-                    Choose source concept
-                  </option>
-                  {ownedConcepts.map((concept) => (
-                    <option key={concept.id} value={concept.id}>
-                      {concept.name}
-                    </option>
-                  ))}
-                </select>
+                <form onSubmit={handleSourceSubmit}>
+                  <div className="form-grid">
+                    <input name="source_title" placeholder="Title" required />
+                    <input name="source_author" placeholder="Author" />
+                    <input name="source_url" type="url" placeholder="URL" />
+                    <input name="source_license" placeholder="License" />
+                    <select name="source_type" defaultValue="" required>
+                      <option value="" disabled>
+                        Choose source type
+                      </option>
+                      {sourceTypes.map((sourceType) => (
+                        <option key={sourceType} value={sourceType}>
+                          {sourceType}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-                <select name="relationship_type" defaultValue="" required>
-                  <option value="" disabled>
-                    Choose relationship type
-                  </option>
-                  {relationshipTypes.map((relationshipType) => (
-                    <option key={relationshipType} value={relationshipType}>
-                      {relationshipType}
-                    </option>
-                  ))}
-                </select>
+                  <br />
 
-                <select name="target_concept_id" defaultValue="" required>
-                  <option value="" disabled>
-                    Choose target concept
-                  </option>
-                  {ownedConcepts.map((concept) => (
-                    <option key={concept.id} value={concept.id}>
-                      {concept.name}
-                    </option>
-                  ))}
-                </select>
+                  <button className="btn primary" type="submit">
+                    Save Source
+                  </button>
+
+                  {sourceStatus && <p className="muted">{sourceStatus}</p>}
+                </form>
+
+                <h3>Your Sources</h3>
+                {sources.length === 0 ? (
+                  <p className="muted">No sources added yet.</p>
+                ) : (
+                  sources.map((source) => (
+                    <div className="card" key={source.id}>
+                      <strong>{source.title}</strong>
+                      <p className="muted">
+                        {[source.author, source.source_type, source.license]
+                          .filter(Boolean)
+                          .join(' · ') || 'No additional details'}
+                      </p>
+                      {source.url && (
+                        <a href={source.url} target="_blank" rel="noreferrer">
+                          {source.url}
+                        </a>
+                      )}
+                    </div>
+                  ))
+                )}
               </div>
 
-              <br />
+              <div className="panel">
+                <h2>Attach Source to Concept</h2>
+                <p className="muted">
+                  Connect one of your sources to one of your concepts.
+                </p>
 
-              <button className="btn primary" type="submit">
-                Save Relationship
-              </button>
+                <form onSubmit={handleAttributionSubmit}>
+                  <div className="form-grid">
+                    <select
+                      name="attribution_concept_id"
+                      defaultValue=""
+                      required
+                    >
+                      <option value="" disabled>
+                        Choose concept
+                      </option>
+                      {attributionConcepts.map((concept) => (
+                        <option key={concept.id} value={concept.id}>
+                          {concept.name}
+                        </option>
+                      ))}
+                    </select>
 
-              {relationshipStatus && (
-                <p className="muted">{relationshipStatus}</p>
-              )}
-            </form>
-          </div>
+                    <select
+                      name="attribution_source_id"
+                      defaultValue=""
+                      required
+                    >
+                      <option value="" disabled>
+                        Choose source
+                      </option>
+                      {sources.map((source) => (
+                        <option key={source.id} value={source.id}>
+                          {source.title}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <br />
+
+                  <textarea
+                    name="attribution_note"
+                    placeholder="Attribution note"
+                  />
+
+                  <br />
+                  <br />
+
+                  <button className="btn primary" type="submit">
+                    Attach Source
+                  </button>
+
+                  {attributionStatus && (
+                    <p className="muted">{attributionStatus}</p>
+                  )}
+                </form>
+              </div>
+            </>
+          )}
         </section>
       </main>
     </>
