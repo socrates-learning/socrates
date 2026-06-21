@@ -36,3 +36,8 @@ Use the same `source_key` in later calls to attach that source to additional
 concepts. Source metadata is updated in place instead of creating duplicates.
 Placements, article sections, and relationships can be inserted after the
 function returns the concept UUID.
+
+Existing seed batches are backfilled by `013_backfill_seed_sources.sql`. It
+reuses sources by canonical URL and uses conflict-safe attachments, so
+rerunning it does not duplicate sources or concept attribution. When migration
+`012` is present, its source-key trigger also assigns canonical keys.
