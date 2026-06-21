@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase';
 
 type LibraryNode = {
   id: string;
+  library_id: string;
   name: string;
   node_type: string | null;
   parent_id: string | null;
@@ -123,7 +124,12 @@ function getCategoryPath(node: LibraryNode, nodes: LibraryNode[]) {
 
 export default function Creator() {
   const [workflow, setWorkflow] = useState<
-    'dashboard' | 'create' | 'edit' | 'relationships' | 'sources'
+    | 'dashboard'
+    | 'create'
+    | 'edit'
+    | 'relationships'
+    | 'sources'
+    | 'categories'
   >('dashboard');
   const [createStep, setCreateStep] = useState<1 | 2>(1);
   const [status, setStatus] = useState('');
@@ -144,6 +150,7 @@ export default function Creator() {
     emptyConceptEditForm
   );
   const [managementStatus, setManagementStatus] = useState('');
+  const [categoryStatus, setCategoryStatus] = useState('');
 
   async function loadSources(userId: string) {
     const { data, error } = await supabase
@@ -228,7 +235,7 @@ export default function Creator() {
 
     const { data: nodeData } = await supabase
       .from('library_nodes')
-      .select('id, name, node_type, parent_id')
+      .select('id, library_id, name, node_type, parent_id')
       .order('name');
 
     setNodes(nodeData || []);
@@ -337,6 +344,90 @@ export default function Creator() {
 
     setAssignStatus('Concept assigned to the selected category.');
     formElement.reset();
+  }
+
+  async function handleCategoryCreate(
+    event: React.FormEvent<HTMLFormElement>
+  ) {
+    event.preventDefault();
+
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
+    const name = String(form.get('category_name') || '').trim();
+    const parentId = String(form.get('parent_category_id') || '');
+    const parent = nodes.find((node) => node.id === parentId);
+
+    if (!name || !parent) {
+      setCategoryStatus('Error: Provide a name and choose a parent category.');
+      return;
+    }
+
+    setCategoryStatus('Creating category...');
+
+    const { data, error } = await supabase
+      .from('library_nodes')
+      .insert({
+        library_id: parent.library_id,
+        parent_id: parent.id,
+        name,
+        node_type: 'topic',
+        sort_order: 0,
+      })
+      .select('id, library_id, name, node_type, parent_id')
+      .single();
+
+    if (error) {
+      setCategoryStatus(`Error creating category: ${error.message}`);
+      return;
+    }
+
+    setNodes((current) =>
+      [...current, data].sort((a, b) => a.name.localeCompare(b.name))
+    );
+    formElement.reset();
+    setCategoryStatus('Category created successfully.');
+  }
+
+  async function handleCategoryRename(
+    event: React.FormEvent<HTMLFormElement>
+  ) {
+    event.preventDefault();
+
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
+    const categoryId = String(form.get('rename_category_id') || '');
+    const name = String(form.get('renamed_category_name') || '').trim();
+
+    if (!categoryId || !name) {
+      setCategoryStatus('Error: Choose a category and provide its new name.');
+      return;
+    }
+
+    setCategoryStatus('Renaming category...');
+
+    const { data, error } = await supabase
+      .from('library_nodes')
+      .update({ name })
+      .eq('id', categoryId)
+      .select('id')
+      .maybeSingle();
+
+    if (error || !data) {
+      setCategoryStatus(
+        `Error renaming category: ${
+          error?.message || 'the update was not permitted'
+        }`
+      );
+      return;
+    }
+
+    setNodes((current) =>
+      current
+        .map((node) => (node.id === categoryId ? { ...node, name } : node))
+        .sort((a, b) => a.name.localeCompare(b.name))
+    );
+    formElement.reset();
+    setCategoryStatus('Category renamed successfully.');
   }
 
   async function handleSourceSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -618,7 +709,13 @@ export default function Creator() {
   );
 
   function openWorkflow(
-    nextWorkflow: 'dashboard' | 'create' | 'edit' | 'relationships' | 'sources'
+    nextWorkflow:
+      | 'dashboard'
+      | 'create'
+      | 'edit'
+      | 'relationships'
+      | 'sources'
+      | 'categories'
   ) {
     setWorkflow(nextWorkflow);
 
@@ -782,7 +879,7 @@ export default function Creator() {
                 <div className="card">
                   <h3>Edit Concepts</h3>
                   <p className="muted">
-                    Find your concepts, update content, or add categories.
+                    Find your concepts and update their content.
                   </p>
                   <button
                     className="btn primary"
@@ -818,6 +915,20 @@ export default function Creator() {
                     onClick={() => openWorkflow('sources')}
                   >
                     Manage Sources
+                  </button>
+                </div>
+
+                <div className="card">
+                  <h3>Manage Categories</h3>
+                  <p className="muted">
+                    Create nested categories, rename them, and place concepts.
+                  </p>
+                  <button
+                    className="btn primary"
+                    type="button"
+                    onClick={() => openWorkflow('categories')}
+                  >
+                    Manage Categories
                   </button>
                 </div>
               </div>
@@ -946,10 +1057,90 @@ export default function Creator() {
                 )}
               </div>
 
+            </>
+          )}
+
+          {workflow === 'categories' && (
+            <>
               <div className="panel">
-                <h2>Assign Another Category</h2>
+                <button
+                  className="btn ghost"
+                  type="button"
+                  onClick={() => openWorkflow('dashboard')}
+                >
+                  Back to Creator Studio
+                </button>
+
+                <h2>Manage Categories</h2>
                 <p className="muted">
-                  Keep concepts discoverable in every relevant category.
+                  Nest categories to any depth by choosing an existing parent.
+                </p>
+
+                <h3>Create Category</h3>
+                <form onSubmit={handleCategoryCreate}>
+                  <div className="form-grid">
+                    <input
+                      name="category_name"
+                      placeholder="Category name"
+                      required
+                    />
+
+                    <select name="parent_category_id" defaultValue="" required>
+                      <option value="" disabled>
+                        Choose parent category
+                      </option>
+                      {nodes.map((node) => (
+                        <option key={node.id} value={node.id}>
+                          {getCategoryPath(node, nodes)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <br />
+
+                  <button className="btn primary" type="submit">
+                    Create Category
+                  </button>
+                </form>
+
+                <h3>Rename Category</h3>
+                <form onSubmit={handleCategoryRename}>
+                  <div className="form-grid">
+                    <select name="rename_category_id" defaultValue="" required>
+                      <option value="" disabled>
+                        Choose category
+                      </option>
+                      {placementNodes.map((node) => (
+                        <option key={node.id} value={node.id}>
+                          {getCategoryPath(node, nodes)}
+                        </option>
+                      ))}
+                    </select>
+
+                    <input
+                      name="renamed_category_name"
+                      placeholder="New category name"
+                      required
+                    />
+                  </div>
+
+                  <br />
+
+                  <button className="btn primary" type="submit">
+                    Rename Category
+                  </button>
+                </form>
+
+                {categoryStatus && (
+                  <p className="muted">{categoryStatus}</p>
+                )}
+              </div>
+
+              <div className="panel">
+                <h2>Assign Concept to Category</h2>
+                <p className="muted">
+                  One concept can appear in as many categories as needed.
                 </p>
 
                 <form onSubmit={handleAssignExisting}>
@@ -978,12 +1169,11 @@ export default function Creator() {
                       required
                     >
                       <option value="" disabled>
-                        Choose additional category
+                        Choose category
                       </option>
                       {placementNodes.map((node) => (
                         <option key={node.id} value={node.id}>
-                          {getCategoryPath(node, nodes)}{' '}
-                          {node.node_type ? `(${node.node_type})` : ''}
+                          {getCategoryPath(node, nodes)}
                         </option>
                       ))}
                     </select>

@@ -245,7 +245,10 @@ export function Sidebar({ activeId }: { activeId?: string }) {
     );
   }
 
-  const pharmacologyNode = nodes.find((node) => node.name === 'Pharmacology');
+  const rootNodes = nodes.filter((node) => node.parent_id === null);
+  const visibleRootNodes = searchQuery.trim()
+    ? rootNodes.filter((node) => nodeMatchesSearch(node))
+    : rootNodes;
 
   return (
     <aside className="panel sidebar">
@@ -260,11 +263,11 @@ export function Sidebar({ activeId }: { activeId?: string }) {
         onChange={(event) => setSearchQuery(event.target.value)}
       />
 
-      {pharmacologyNode ? (
-        searchQuery.trim() && !nodeMatchesSearch(pharmacologyNode) ? (
-          <p className="muted">No matching concepts found.</p>
+      {rootNodes.length > 0 ? (
+        visibleRootNodes.length > 0 ? (
+          visibleRootNodes.map((node) => renderNode(node))
         ) : (
-          renderNode(pharmacologyNode)
+          <p className="muted">No matching concepts found.</p>
         )
       ) : (
         <p className="muted">Loading library...</p>
