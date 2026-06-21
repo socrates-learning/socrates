@@ -127,7 +127,7 @@ export default async function ConceptPage({
 
   const { data: sourceNotes, error: sourceNotesError } = await supabase
     .from('content_source_notes')
-    .select('id, note, sources(title, source_type, url)')
+    .select('id, note, sources(title, author, source_type, url)')
     .eq('concept_id', concept.id)
     .is('learn_section_id', null)
     .order('created_at');
@@ -146,6 +146,7 @@ export default async function ConceptPage({
           {
             id: sourceNote.id,
             title: source.title,
+            author: source.author,
             source_type: source.source_type,
             note: sourceNote.note,
             url: source.url,

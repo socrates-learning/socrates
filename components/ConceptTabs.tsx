@@ -33,6 +33,7 @@ export function ConceptTabs({
   sources: Array<{
     id: string;
     title: string;
+    author: string | null;
     source_type: string | null;
     note: string | null;
     url: string | null;
@@ -189,7 +190,11 @@ export function ConceptTabs({
               sources.map((source) => (
                 <div key={source.id} style={{ marginBottom: '16px' }}>
                   <strong>{source.title}</strong>
-                  <p className="muted">{source.source_type || 'Unspecified'}</p>
+                  <p className="muted">
+                    Author: {source.author || 'Not specified'}
+                    <br />
+                    Source type: {source.source_type || 'Unspecified'}
+                  </p>
                   <p>{source.note || 'No note added.'}</p>
                   {source.url && (
                     <a href={source.url} target="_blank" rel="noreferrer">
