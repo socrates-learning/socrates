@@ -145,6 +145,26 @@ button, .btn, .tab, .tree-item {
   color:white;
 }
 
+.concept-tabs {
+  align-items:center;
+  flex-wrap:nowrap;
+  gap:4px;
+  height:48px;
+  margin:8px 0 12px;
+  overflow-x:auto;
+  border-bottom:1px solid var(--line);
+}
+
+.concept-tabs .tab {
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  flex:0 0 auto;
+  height:40px;
+  padding:0 14px;
+  white-space:nowrap;
+}
+
 .grid {
   display:grid;
   grid-template-columns:repeat(3,minmax(0,1fr));

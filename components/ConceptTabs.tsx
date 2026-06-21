@@ -68,7 +68,7 @@ export function ConceptTabs({
 
   return (
     <>
-      <div className="tabs">
+      <div className="tabs concept-tabs">
         {['learn', 'review', 'distinctions', 'notes', 'network'].map((tab) => (
           <button
             key={tab}
