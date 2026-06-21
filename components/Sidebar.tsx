@@ -15,6 +15,7 @@ type Concept = {
   id: string;
   name: string;
   concept_type: string | null;
+  status: string | null;
 };
 
 type Placement = {
@@ -43,12 +44,14 @@ export function Sidebar({ activeId }: { activeId?: string }) {
         .select(`
           concept_id,
           library_node_id,
-          concepts (
+          concepts!inner (
             id,
             name,
-            concept_type
+            concept_type,
+            status
           )
         `)
+        .neq('concepts.status', 'archived')
         .order('sort_order');
 
       const loadedNodes = nodeData || [];

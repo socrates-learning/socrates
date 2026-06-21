@@ -198,6 +198,66 @@ export default async function ConceptPage({
       : [];
   });
 
+  const directConceptIds = [
+    ...new Set(relationships.map((relationship) => relationship.concept.id)),
+  ];
+  let secondHopRelationshipRows: NonNullable<typeof relationshipRows> = [];
+
+  if (directConceptIds.length > 0) {
+    const { data, error } = await supabase
+      .from('concept_relationships')
+      .select(`
+        id,
+        source_concept_id,
+        target_concept_id,
+        relationship_type,
+        source_concept:concepts!concept_relationships_source_concept_id_fkey (
+          id,
+          name
+        ),
+        target_concept:concepts!concept_relationships_target_concept_id_fkey (
+          id,
+          name
+        )
+      `)
+      .or(
+        `source_concept_id.in.(${directConceptIds.join(',')}),target_concept_id.in.(${directConceptIds.join(',')})`
+      )
+      .order('created_at');
+
+    if (error && process.env.NODE_ENV !== 'production') {
+      console.error('Failed to load second-hop concept relationships:', error);
+    }
+
+    secondHopRelationshipRows = data || [];
+  }
+
+  const networkRelationships = [
+    ...new Map(
+      [...(relationshipRows || []), ...secondHopRelationshipRows].map(
+        (relationship) => [relationship.id, relationship]
+      )
+    ).values(),
+  ].flatMap((relationship) => {
+    const sourceConcept = Array.isArray(relationship.source_concept)
+      ? relationship.source_concept[0]
+      : relationship.source_concept;
+    const targetConcept = Array.isArray(relationship.target_concept)
+      ? relationship.target_concept[0]
+      : relationship.target_concept;
+
+    return sourceConcept && targetConcept
+      ? [
+          {
+            id: relationship.id,
+            relationship_type: relationship.relationship_type,
+            source_concept: sourceConcept,
+            target_concept: targetConcept,
+          },
+        ]
+      : [];
+  });
+
   const { data: reviewAttempts, error: reviewAttemptsError } = await supabase
     .from('review_attempts')
     .select('score, learn_section_id, created_at')
@@ -288,6 +348,7 @@ export default async function ConceptPage({
             sections={sectionsWithMastery}
             sources={sources}
             relationships={relationships}
+            networkRelationships={networkRelationships}
           />
         </section>
       </main>

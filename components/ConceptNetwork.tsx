@@ -2,19 +2,50 @@
 
 import Link from 'next/link';
 
+type Concept = {
+  id: string;
+  name: string;
+};
+
 type Relationship = {
   id: string;
   relationship_type: string;
-  concept: {
-    id: string;
-    name: string;
-  };
+  source_concept: Concept;
+  target_concept: Concept;
 };
 
-type PositionedConcept = Relationship['concept'] & {
+type PositionedConcept = Concept & {
+  hop: 1 | 2;
   x: number;
   y: number;
 };
+
+const canvas = {
+  width: 960,
+  height: 620,
+  centerX: 480,
+  centerY: 310,
+};
+
+function positionRing(
+  concepts: Concept[],
+  hop: 1 | 2,
+  radiusX: number,
+  radiusY: number,
+  angleOffset: number
+) {
+  return concepts.map((concept, index): PositionedConcept => {
+    const angle =
+      (index / concepts.length) * Math.PI * 2 + angleOffset;
+
+    return {
+      ...concept,
+      hop,
+      x: canvas.centerX + Math.cos(angle) * radiusX,
+      y: canvas.centerY + Math.sin(angle) * radiusY,
+    };
+  });
+}
 
 export function ConceptNetwork({
   conceptId,
@@ -25,69 +56,130 @@ export function ConceptNetwork({
   conceptName: string;
   relationships: Relationship[];
 }) {
-  const relatedConcepts = [
-    ...new Map(
-      relationships.map((relationship) => [
-        relationship.concept.id,
-        relationship.concept,
-      ])
-    ).values(),
-  ];
-  const positionedConcepts: PositionedConcept[] = relatedConcepts.map(
-    (concept, index) => {
-      const angle = (index / relatedConcepts.length) * Math.PI * 2 - Math.PI / 2;
+  const conceptsById = new Map<string, Concept>();
 
-      return {
-        ...concept,
-        x: 400 + Math.cos(angle) * 290,
-        y: 210 + Math.sin(angle) * 140,
-      };
+  for (const relationship of relationships) {
+    conceptsById.set(
+      relationship.source_concept.id,
+      relationship.source_concept
+    );
+    conceptsById.set(
+      relationship.target_concept.id,
+      relationship.target_concept
+    );
+  }
+
+  const directConceptIds = new Set<string>();
+
+  for (const relationship of relationships) {
+    if (relationship.source_concept.id === conceptId) {
+      directConceptIds.add(relationship.target_concept.id);
     }
-  );
+
+    if (relationship.target_concept.id === conceptId) {
+      directConceptIds.add(relationship.source_concept.id);
+    }
+  }
+
+  const secondHopConceptIds = new Set<string>();
+
+  for (const relationship of relationships) {
+    const { source_concept: source, target_concept: target } = relationship;
+
+    if (
+      directConceptIds.has(source.id) &&
+      target.id !== conceptId &&
+      !directConceptIds.has(target.id)
+    ) {
+      secondHopConceptIds.add(target.id);
+    }
+
+    if (
+      directConceptIds.has(target.id) &&
+      source.id !== conceptId &&
+      !directConceptIds.has(source.id)
+    ) {
+      secondHopConceptIds.add(source.id);
+    }
+  }
+
+  const directConcepts = [...directConceptIds]
+    .map((id) => conceptsById.get(id))
+    .filter((concept): concept is Concept => Boolean(concept))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const secondHopConcepts = [...secondHopConceptIds]
+    .map((id) => conceptsById.get(id))
+    .filter((concept): concept is Concept => Boolean(concept))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const positionedConcepts = [
+    ...positionRing(directConcepts, 1, 245, 135, -Math.PI / 2),
+    ...positionRing(
+      secondHopConcepts,
+      2,
+      390,
+      235,
+      -Math.PI / 2 + Math.PI / Math.max(secondHopConcepts.length, 1)
+    ),
+  ];
   const positionsByConceptId = new Map(
     positionedConcepts.map((concept) => [concept.id, concept])
   );
+  const visibleConceptIds = new Set([
+    conceptId,
+    ...directConceptIds,
+    ...secondHopConceptIds,
+  ]);
+  const visibleRelationships = relationships.filter(
+    (relationship) =>
+      visibleConceptIds.has(relationship.source_concept.id) &&
+      visibleConceptIds.has(relationship.target_concept.id)
+  );
 
-  if (relationships.length === 0) {
+  if (directConcepts.length === 0) {
     return <p className="muted">No network connections yet.</p>;
+  }
+
+  function getPosition(id: string) {
+    return id === conceptId
+      ? { x: canvas.centerX, y: canvas.centerY }
+      : positionsByConceptId.get(id);
   }
 
   return (
     <div style={{ overflowX: 'auto' }}>
       <div
         style={{
-          minWidth: '680px',
-          height: '420px',
+          minWidth: `${canvas.width}px`,
+          height: `${canvas.height}px`,
           position: 'relative',
         }}
       >
         <svg
           aria-hidden="true"
-          viewBox="0 0 800 420"
+          viewBox={`0 0 ${canvas.width} ${canvas.height}`}
           style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
         >
-          {relationships.map((relationship) => {
-            const connectedConcept = positionsByConceptId.get(
-              relationship.concept.id
-            );
+          {visibleRelationships.map((relationship) => {
+            const source = getPosition(relationship.source_concept.id);
+            const target = getPosition(relationship.target_concept.id);
 
-            if (!connectedConcept) return null;
+            if (!source || !target) return null;
 
             return (
               <g key={relationship.id}>
                 <line
-                  x1="400"
-                  y1="210"
-                  x2={connectedConcept.x}
-                  y2={connectedConcept.y}
+                  x1={source.x}
+                  y1={source.y}
+                  x2={target.x}
+                  y2={target.y}
                   stroke="#94a3b8"
                   strokeWidth="2"
                 />
                 <text
-                  x={(400 + connectedConcept.x) / 2}
-                  y={(210 + connectedConcept.y) / 2 - 8}
+                  x={(source.x + target.x) / 2}
+                  y={(source.y + target.y) / 2 - 8}
                   fill="#64748b"
-                  fontSize="12"
+                  fontSize="11"
                   textAnchor="middle"
                 >
                   {relationship.relationship_type.replaceAll('_', ' ')}
@@ -102,8 +194,8 @@ export function ConceptNetwork({
           className="card"
           style={{
             position: 'absolute',
-            left: '50%',
-            top: '50%',
+            left: `${(canvas.centerX / canvas.width) * 100}%`,
+            top: `${(canvas.centerY / canvas.height) * 100}%`,
             width: '170px',
             minHeight: '76px',
             transform: 'translate(-50%, -50%)',
@@ -124,14 +216,16 @@ export function ConceptNetwork({
             className="card"
             style={{
               position: 'absolute',
-              left: `${(concept.x / 800) * 100}%`,
-              top: `${(concept.y / 420) * 100}%`,
-              width: '160px',
-              minHeight: '70px',
+              left: `${(concept.x / canvas.width) * 100}%`,
+              top: `${(concept.y / canvas.height) * 100}%`,
+              width: concept.hop === 1 ? '160px' : '148px',
+              minHeight: concept.hop === 1 ? '70px' : '62px',
               transform: 'translate(-50%, -50%)',
               display: 'grid',
               placeItems: 'center',
               textAlign: 'center',
+              background: concept.hop === 1 ? '#ffffff' : '#f8fafc',
+              borderColor: concept.hop === 1 ? '#94a3b8' : '#cbd5e1',
             }}
           >
             <strong>{concept.name}</strong>

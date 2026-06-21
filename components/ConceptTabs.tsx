@@ -16,6 +16,7 @@ export function ConceptTabs({
   sections,
   sources,
   relationships,
+  networkRelationships,
 }: {
   conceptId: string;
   conceptName: string;
@@ -42,6 +43,18 @@ export function ConceptTabs({
     id: string;
     relationship_type: string;
     concept: {
+      id: string;
+      name: string;
+    };
+  }>;
+  networkRelationships: Array<{
+    id: string;
+    relationship_type: string;
+    source_concept: {
+      id: string;
+      name: string;
+    };
+    target_concept: {
       id: string;
       name: string;
     };
@@ -234,7 +247,7 @@ export function ConceptTabs({
           <ConceptNetwork
             conceptId={conceptId}
             conceptName={conceptName}
-            relationships={relationships}
+            relationships={networkRelationships}
           />
         </div>
       )}
