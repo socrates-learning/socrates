@@ -62,6 +62,50 @@ button, .btn, .tab, .tree-item {
 
 .sidebar h3 { margin-top:0; }
 
+.library-search {
+  margin-bottom:10px;
+}
+
+.library-node {
+  margin:3px 0;
+}
+
+.library-node-toggle {
+  display:flex;
+  align-items:center;
+  gap:6px;
+  width:100%;
+  padding:8px;
+  border:0;
+  border-radius:8px;
+  background:transparent;
+  color:var(--text);
+  font:inherit;
+  font-weight:800;
+  text-align:left;
+  cursor:pointer;
+}
+
+.library-node-toggle:hover {
+  background:var(--soft);
+}
+
+.library-node-toggle span {
+  width:14px;
+  color:var(--muted);
+  text-align:center;
+}
+
+.library-node-children {
+  margin-left:10px;
+  padding-left:8px;
+  border-left:2px solid #e2e8f0;
+}
+
+.sidebar .tree-item {
+  padding:8px 10px;
+}
+
 .tree-item {
   display:block;
   padding:10px 12px;
