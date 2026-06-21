@@ -654,8 +654,24 @@ setStatus('Concept and article sections saved as draft in the selected category.
                   placeholder="Estimated study time, e.g. 15 min"
                 />
               </div>
+<br />
 
-              <br />
+<textarea
+  name="summary"
+  placeholder="Original summary in your own words"
+  required
+/>
+
+<br />
+<br />
+
+<textarea
+  name="why_it_matters"
+  placeholder="Why this matters"
+/>
+
+<br />
+<br />
 
               <textarea
   name="overview"

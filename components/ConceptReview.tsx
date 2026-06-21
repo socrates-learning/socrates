@@ -63,6 +63,7 @@ export function ConceptReview({
     const { error } = await supabase.from('review_attempts').insert({
       user_id: userData.user.id,
       concept_id: conceptId,
+      learn_section_id: currentSection.id,
       score,
       result,
     });
