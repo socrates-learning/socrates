@@ -413,6 +413,11 @@ begin
       ('Stroke Volume', 'Preload', 'related_to'),
       ('Stroke Volume', 'Afterload', 'related_to'),
       ('Stroke Volume', 'Contractility', 'related_to'),
+      ('Cardiac Output', 'Stroke Volume', 'related_to'),
+      ('Cardiac Output', 'Preload', 'related_to'),
+      ('Cardiac Output', 'Afterload', 'related_to'),
+      ('Cardiac Output', 'Contractility', 'related_to'),
+      ('Cardiac Output', 'Heart Failure', 'related_to'),
       ('Venous Return', 'Preload', 'related_to'),
       ('Fluid Overload', 'Pulmonary Edema', 'causes'),
       ('BNP', 'Fluid Overload', 'related_to'),
@@ -445,6 +450,7 @@ do $verify$
 declare
   owner_id uuid;
   missing_attribution text;
+  missing_relationships text;
 begin
   select c.created_by
   into owner_id
@@ -498,6 +504,39 @@ begin
       )
   ) <> 10 then
     raise exception 'Expected all 10 Heart Failure Physiology concepts';
+  end if;
+
+  select string_agg(
+    relationship.source_name || ' -> ' || relationship.target_name,
+    ', '
+    order by relationship.target_name
+  )
+  into missing_relationships
+  from (
+    values
+      ('Cardiac Output', 'Stroke Volume', 'related_to'),
+      ('Cardiac Output', 'Preload', 'related_to'),
+      ('Cardiac Output', 'Afterload', 'related_to'),
+      ('Cardiac Output', 'Contractility', 'related_to'),
+      ('Cardiac Output', 'Heart Failure', 'related_to')
+  ) as relationship(source_name, target_name, relationship_type)
+  where not exists (
+    select 1
+    from public.concept_relationships cr
+    join public.concepts source_concept
+      on source_concept.id = cr.source_concept_id
+    join public.concepts target_concept
+      on target_concept.id = cr.target_concept_id
+    where lower(source_concept.name) = lower(relationship.source_name)
+      and lower(target_concept.name) = lower(relationship.target_name)
+      and source_concept.created_by = owner_id
+      and target_concept.created_by = owner_id
+      and cr.relationship_type = relationship.relationship_type
+  );
+
+  if missing_relationships is not null then
+    raise exception 'Heart Failure Physiology relationships incomplete: %',
+      missing_relationships;
   end if;
 end
 $verify$;
