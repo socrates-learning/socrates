@@ -931,6 +931,26 @@ export default function Creator() {
                     Manage Categories
                   </button>
                 </div>
+
+                <div className="card">
+                  <h3>Create Article</h3>
+                  <p className="muted">
+                    Start a sourced, concept-linked wiki article.
+                  </p>
+                  <button className="btn ghost" type="button" disabled>
+                    Coming soon
+                  </button>
+                </div>
+
+                <div className="card">
+                  <h3>Manage Articles</h3>
+                  <p className="muted">
+                    Edit drafts, review revisions, and publish articles.
+                  </p>
+                  <button className="btn ghost" type="button" disabled>
+                    Coming soon
+                  </button>
+                </div>
               </div>
             </div>
           )}
