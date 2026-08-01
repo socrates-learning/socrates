@@ -74,14 +74,8 @@ export default function AdminUsersPage() {
                 <select
                   defaultValue={user.role || 'learner'}
                   onChange={(event) => {
-  if (user.role === 'admin' && user.email === 'itxier@gmail.com') {
-    setStatus('You cannot change your own admin role here.');
-    event.currentTarget.value = 'admin';
-    return;
-  }
-
-  updateRole(user.email, event.target.value);
-}}
+                    updateRole(user.email, event.target.value);
+                  }}
                 >
                   <option value="learner">Learner</option>
                   <option value="editor">Editor</option>

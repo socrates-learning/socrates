@@ -105,6 +105,8 @@ const emptyConceptEditForm: ConceptEditForm = {
   key_distinctions: '',
 };
 
+type LifecycleFilter = 'all' | 'draft' | 'published' | 'archived';
+
 function getCategoryPath(node: LibraryNode, nodes: LibraryNode[]) {
   const names = [node.name];
   const visited = new Set([node.id]);
@@ -146,6 +148,8 @@ export default function Creator() {
   const [ownedConcepts, setOwnedConcepts] = useState<ManagedConcept[]>([]);
   const [sources, setSources] = useState<Source[]>([]);
   const [conceptSearch, setConceptSearch] = useState('');
+  const [lifecycleFilter, setLifecycleFilter] =
+    useState<LifecycleFilter>('all');
   const [editingConceptId, setEditingConceptId] = useState<string | null>(null);
   const [conceptEditForm, setConceptEditForm] = useState<ConceptEditForm>(
     emptyConceptEditForm
@@ -642,7 +646,7 @@ export default function Creator() {
     const concept = ownedConcepts.find((item) => item.id === editingConceptId);
 
     if (!concept || !userId) {
-      setManagementStatus('Error: Choose one of your concepts to edit.');
+      setManagementStatus('Error: Choose a library concept to edit.');
       return;
     }
 
@@ -750,8 +754,17 @@ export default function Creator() {
 
   const placementNodes = nodes.filter((node) => node.parent_id !== null);
   const attributionConcepts = concepts;
-  const managedConcepts = ownedConcepts.filter((concept) =>
-    concept.name.toLowerCase().includes(conceptSearch.trim().toLowerCase())
+  const managedConcepts = ownedConcepts.filter((concept) => {
+    const matchesSearch = concept.name
+      .toLowerCase()
+      .includes(conceptSearch.trim().toLowerCase());
+    const matchesLifecycle =
+      lifecycleFilter === 'all' || (concept.status || 'draft') === lifecycleFilter;
+
+    return matchesSearch && matchesLifecycle;
+  });
+  const selectedConcept = ownedConcepts.find(
+    (concept) => concept.id === editingConceptId
   );
 
   function openWorkflow(
@@ -777,6 +790,11 @@ export default function Creator() {
   const conceptEditor = editingConceptId ? (
     <form onSubmit={handleConceptUpdate}>
       <h3>Full Concept Editor</h3>
+      {selectedConcept && (
+        <p className="muted">
+          Editing {selectedConcept.name} · {selectedConcept.status || 'draft'}
+        </p>
+      )}
 
       <div className="form-grid">
         <label>
@@ -922,11 +940,11 @@ export default function Creator() {
                   </button>
                 </div>
 
-                <div className="card">
-                  <h3>Edit Concepts</h3>
-                  <p className="muted">
-                    Find your concepts and update their content.
-                  </p>
+	                <div className="card">
+	                  <h3>Edit Concepts</h3>
+	                  <p className="muted">
+	                    Find library concepts and update their content.
+	                  </p>
                   <button
                     className="btn primary"
                     type="button"
@@ -1083,31 +1101,53 @@ export default function Creator() {
                   Back to Creator Studio
                 </button>
 
-                <h2>Edit Concepts</h2>
-                <p className="muted">
-                  Search and edit concepts across the content library.
-                </p>
+	                <h2>Library Concepts</h2>
+	                <p className="muted">
+	                  Search and edit concepts across the content library.
+	                </p>
 
-                <input
-                  type="search"
-                  placeholder="Search concepts by name"
-                  value={conceptSearch}
-                  onChange={(event) => setConceptSearch(event.target.value)}
-                />
+	                <div className="form-grid">
+	                  <input
+	                    type="search"
+	                    placeholder="Search concepts by name"
+	                    value={conceptSearch}
+	                    onChange={(event) => setConceptSearch(event.target.value)}
+	                  />
 
-                <br />
-                <br />
+	                  <select
+	                    aria-label="Filter concepts by lifecycle"
+	                    value={lifecycleFilter}
+	                    onChange={(event) =>
+	                      setLifecycleFilter(event.target.value as LifecycleFilter)
+	                    }
+	                  >
+	                    <option value="all">All lifecycle states</option>
+	                    <option value="draft">Draft</option>
+	                    <option value="published">Published</option>
+	                    <option value="archived">Archived</option>
+	                  </select>
+	                </div>
+
+	                <br />
+	                <br />
 
                 {managedConcepts.length === 0 ? (
                   <p className="muted">No matching concepts found.</p>
                 ) : (
-                  managedConcepts.map((concept) => (
-                    <div className="card" key={concept.id}>
-                      <strong>{concept.name}</strong>
-                      <p className="muted">
-                        {concept.concept_type || 'Concept'} ·{' '}
-                        {concept.status || 'draft'}
-                      </p>
+	                  managedConcepts.map((concept) => (
+	                    <div className="card" key={concept.id}>
+	                      <strong>{concept.name}</strong>
+	                      <p className="muted">
+	                        {concept.concept_type || 'Concept'} ·{' '}
+	                        Lifecycle: {concept.status || 'draft'}
+	                        <br />
+	                        Creator:{' '}
+	                        {concept.created_by === userId
+	                          ? 'You'
+	                          : concept.created_by
+	                            ? concept.created_by.slice(0, 8)
+	                            : 'Unknown'}
+	                      </p>
                       <div
                         style={{
                           display: 'flex',
@@ -1443,7 +1483,7 @@ export default function Creator() {
               <div className="panel">
                 <h2>Attach Source to Concept</h2>
                 <p className="muted">
-                  Connect one of your sources to one of your concepts.
+	                  Connect one of your sources to a library concept.
                 </p>
 
                 <form onSubmit={handleAttributionSubmit}>

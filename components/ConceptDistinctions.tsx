@@ -3,8 +3,13 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 
+type ConceptDistinction = {
+  id: string;
+  distinction: string;
+};
+
 export function ConceptDistinctions({ conceptId }: { conceptId: string }) {
-  const [items, setItems] = useState<any[]>([]);
+  const [items, setItems] = useState<ConceptDistinction[]>([]);
 
   useEffect(() => {
     async function load() {

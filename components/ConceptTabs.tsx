@@ -1,11 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ConceptNotes } from '@/components/ConceptNotes';
 import { ConceptReview } from '@/components/ConceptReview';
 import { ConceptDistinctions } from '@/components/ConceptDistinctions';
 import { ConceptNetwork } from '@/components/ConceptNetwork';
+import { supabase } from '@/lib/supabase';
 
 export function ConceptTabs({
   conceptId,
@@ -61,6 +62,7 @@ export function ConceptTabs({
   }>;
 }) {
   const [activeTab, setActiveTab] = useState('learn');
+  const [canCreate, setCanCreate] = useState(false);
   const lifecycleStatus = status || 'draft';
   const lifecycleLabel =
     lifecycleStatus === 'archived'
@@ -69,14 +71,14 @@ export function ConceptTabs({
         ? 'Published'
         : 'Draft';
 
-  function getMasteryLabel(mastery: number) {
+	  function getMasteryLabel(mastery: number) {
     if (mastery < 50) return 'Needs review';
     if (mastery < 75) return 'Developing';
     if (mastery < 90) return 'Strong';
     return 'Mastered';
   }
 
-  const needsReviewSections = sections
+	  const needsReviewSections = sections
     .filter((section) => section.attemptCount === 0 || section.mastery < 75)
     .sort((a, b) => {
       const aIsUnreviewed = a.attemptCount === 0;
@@ -85,7 +87,36 @@ export function ConceptTabs({
       if (aIsUnreviewed !== bIsUnreviewed) return aIsUnreviewed ? -1 : 1;
       return a.mastery - b.mastery;
     })
-    .slice(0, 3);
+	    .slice(0, 3);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadRole() {
+      const { data: userData } = await supabase.auth.getUser();
+
+      if (!userData.user) {
+        if (isMounted) setCanCreate(false);
+        return;
+      }
+
+      const { data: roleData } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', userData.user.id)
+        .maybeSingle();
+
+      if (isMounted) {
+        setCanCreate(roleData?.role === 'editor' || roleData?.role === 'admin');
+      }
+    }
+
+    loadRole();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   return (
     <>
@@ -101,9 +132,11 @@ export function ConceptTabs({
           </button>
         ))}
 
-        <Link className="tab" href="/creator">
-          Create
-        </Link>
+        {canCreate && (
+          <Link className="tab" href="/creator">
+            Create
+          </Link>
+        )}
       </div>
 
       {activeTab === 'learn' && (

@@ -18,7 +18,7 @@ function AuthCallbackContent() {
 
       await supabase.rpc('assign_role_from_approved_domain');
 
-      router.replace('/admin');
+      router.replace('/');
     }
 
     finishLogin();
