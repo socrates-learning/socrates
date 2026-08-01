@@ -103,7 +103,7 @@ export default async function ConceptPage({
           <section className="panel">
             <h2>Concept not found</h2>
             <p className="muted">
-              This concept does not exist or is not published yet.
+              This concept does not exist or is not accessible.
             </p>
             <Link className="btn primary" href="/pharmacology">
               Back to Pharmacology
@@ -320,7 +320,27 @@ export default async function ConceptPage({
         <section className="stack">
           <div className="panel concept-title">
             <div>
-              <h2>{concept.name}</h2>
+              <h2>
+                {concept.name}{' '}
+                {concept.status && concept.status !== 'published' && (
+                  <span
+                    style={{
+                      display: 'inline-block',
+                      marginLeft: '8px',
+                      padding: '4px 8px',
+                      borderRadius: '999px',
+                      background:
+                        concept.status === 'archived' ? '#fee2e2' : '#fef3c7',
+                      color:
+                        concept.status === 'archived' ? '#991b1b' : '#92400e',
+                      fontSize: '0.75rem',
+                      verticalAlign: 'middle',
+                    }}
+                  >
+                    {concept.status === 'archived' ? 'Archived' : 'Draft'}
+                  </span>
+                )}
+              </h2>
               <p className="muted">
                 {concept.concept_type} · {concept.importance} importance ·{' '}
                 {concept.difficulty} · {concept.estimated_time}

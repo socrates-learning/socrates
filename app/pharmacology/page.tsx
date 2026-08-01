@@ -22,10 +22,12 @@ type ConceptPlacement = {
     | {
         id: string;
         name: string;
+        status: string | null;
       }
     | Array<{
         id: string;
         name: string;
+        status: string | null;
       }>
     | null;
 };
@@ -143,7 +145,8 @@ export default async function PharmacologyLibrary() {
     pharmacologyNodeIds.size > 0
       ? await supabase
           .from('concept_placements')
-          .select('concept_id, library_node_id, concepts(id, name)')
+          .select('concept_id, library_node_id, concepts!inner(id, name, status)')
+          .eq('concepts.status', 'published')
           .in('library_node_id', [...pharmacologyNodeIds])
       : { data: [], error: null };
 

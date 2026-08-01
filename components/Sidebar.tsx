@@ -51,7 +51,7 @@ export function Sidebar({ activeId }: { activeId?: string }) {
             status
           )
         `)
-        .neq('concepts.status', 'archived')
+        .eq('concepts.status', 'published')
         .order('sort_order');
 
       const loadedNodes = nodeData || [];

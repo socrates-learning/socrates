@@ -61,6 +61,13 @@ export function ConceptTabs({
   }>;
 }) {
   const [activeTab, setActiveTab] = useState('learn');
+  const lifecycleStatus = status || 'draft';
+  const lifecycleLabel =
+    lifecycleStatus === 'archived'
+      ? 'Archived'
+      : lifecycleStatus === 'published'
+        ? 'Published'
+        : 'Draft';
 
   function getMasteryLabel(mastery: number) {
     if (mastery < 50) return 'Needs review';
@@ -148,7 +155,38 @@ export function ConceptTabs({
 
           <div className="card">
             <h3>Status</h3>
-            <p className="muted">{status || 'draft'}</p>
+            <p>
+              <span
+                style={{
+                  display: 'inline-block',
+                  padding: '6px 10px',
+                  borderRadius: '999px',
+                  background:
+                    lifecycleStatus === 'published'
+                      ? '#dcfce7'
+                      : lifecycleStatus === 'archived'
+                        ? '#fee2e2'
+                        : '#fef3c7',
+                  color:
+                    lifecycleStatus === 'published'
+                      ? '#166534'
+                      : lifecycleStatus === 'archived'
+                        ? '#991b1b'
+                        : '#92400e',
+                  fontWeight: 800,
+                }}
+              >
+                {lifecycleLabel}
+              </span>
+            </p>
+            {lifecycleStatus === 'draft' && (
+              <p className="muted">Draft content is visible only to editors and admins.</p>
+            )}
+            {lifecycleStatus === 'archived' && (
+              <p className="muted">
+                Archived content is hidden from normal navigation.
+              </p>
+            )}
           </div>
 
           <div className="card">

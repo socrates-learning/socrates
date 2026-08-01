@@ -18,6 +18,7 @@ type Concept = {
   name: string;
   concept_type: string | null;
   created_by: string | null;
+  status: string | null;
 };
 
 type ManagedConcept = Concept & {
@@ -170,7 +171,7 @@ export default function Creator() {
   async function loadConcepts() {
     const { data, error } = await supabase
       .from('concepts')
-      .select('id, name, concept_type, created_by')
+      .select('id, name, concept_type, created_by, status')
       .order('name');
 
     if (error) {
@@ -181,7 +182,7 @@ export default function Creator() {
     setConcepts(data || []);
   }
 
-  async function loadManagedConcepts(userId: string) {
+  async function loadManagedConcepts() {
     const { data, error } = await supabase
       .from('concepts')
       .select(`
@@ -202,7 +203,6 @@ export default function Creator() {
           sort_order
         )
       `)
-      .eq('created_by', userId)
       .order('name');
 
     if (error) {
@@ -239,7 +239,7 @@ export default function Creator() {
       .order('name');
 
     setNodes(nodeData || []);
-    await Promise.all([loadConcepts(), loadManagedConcepts(userData.user.id)]);
+    await Promise.all([loadConcepts(), loadManagedConcepts()]);
     setLoading(false);
   }
 
@@ -296,7 +296,7 @@ export default function Creator() {
       return;
     }
 
-    await Promise.all([loadConcepts(), loadManagedConcepts(userId)]);
+    await Promise.all([loadConcepts(), loadManagedConcepts()]);
     setEditingConceptId(data.id);
     setConceptEditForm({
       ...emptyConceptEditForm,
@@ -564,6 +564,49 @@ export default function Creator() {
     setRelationshipStatus('Relationship saved successfully.');
   }
 
+  async function handleLifecycleUpdate(
+    conceptId: string,
+    nextStatus: 'draft' | 'published' | 'archived'
+  ) {
+    if (!userId) {
+      setManagementStatus('Error: You must be signed in.');
+      return;
+    }
+
+    if (
+      nextStatus === 'archived' &&
+      !window.confirm(
+        'Archive this concept? It will be hidden from normal navigation, but its placements, relationships, notes, reviews, and source links will be preserved.'
+      )
+    ) {
+      return;
+    }
+
+    setManagementStatus(`Updating lifecycle to ${nextStatus}...`);
+
+    const { data, error } = await supabase
+      .from('concepts')
+      .update({
+        status: nextStatus,
+        is_public: nextStatus === 'published',
+      })
+      .eq('id', conceptId)
+      .select('id')
+      .maybeSingle();
+
+    if (error || !data) {
+      setManagementStatus(
+        `Error updating lifecycle: ${
+          error?.message || 'the update was not permitted'
+        }`
+      );
+      return;
+    }
+
+    await Promise.all([loadConcepts(), loadManagedConcepts()]);
+    setManagementStatus(`Concept lifecycle updated to ${nextStatus}.`);
+  }
+
   function handleEditConcept(concept: ManagedConcept) {
     const sectionBody = (title: string) =>
       concept.learn_sections.find(
@@ -612,7 +655,7 @@ export default function Creator() {
 
     setManagementStatus('Saving changes...');
 
-    const { error: conceptError } = await supabase
+    const { data: updatedConcept, error: conceptError } = await supabase
       .from('concepts')
       .update({
         name,
@@ -624,10 +667,15 @@ export default function Creator() {
         why_it_matters: conceptEditForm.why_it_matters.trim() || null,
       })
       .eq('id', concept.id)
-      .eq('created_by', userId);
+      .select('id')
+      .maybeSingle();
 
-    if (conceptError) {
-      setManagementStatus(`Error updating concept: ${conceptError.message}`);
+    if (conceptError || !updatedConcept) {
+      setManagementStatus(
+        `Error updating concept: ${
+          conceptError?.message || 'the update was not permitted'
+        }`
+      );
       return;
     }
 
@@ -653,7 +701,7 @@ export default function Creator() {
               error?.message || 'the update was not permitted'
             }`
           );
-          await loadManagedConcepts(userId);
+          await loadManagedConcepts();
           return;
         }
       } else if (!existingSection && body) {
@@ -669,13 +717,13 @@ export default function Creator() {
           setManagementStatus(
             `Concept fields saved, but ${sectionField.title} could not be added: ${error.message}`
           );
-          await loadManagedConcepts(userId);
+          await loadManagedConcepts();
           return;
         }
       }
     }
 
-    await loadManagedConcepts(userId);
+    await loadManagedConcepts();
     setManagementStatus('Concept changes saved successfully.');
   }
 
@@ -701,9 +749,7 @@ export default function Creator() {
   }
 
   const placementNodes = nodes.filter((node) => node.parent_id !== null);
-  const attributionConcepts = concepts.filter(
-    (concept) => concept.created_by === userId
-  );
+  const attributionConcepts = concepts;
   const managedConcepts = ownedConcepts.filter((concept) =>
     concept.name.toLowerCase().includes(conceptSearch.trim().toLowerCase())
   );
@@ -1038,7 +1084,9 @@ export default function Creator() {
                 </button>
 
                 <h2>Edit Concepts</h2>
-                <p className="muted">Search and edit concepts you created.</p>
+                <p className="muted">
+                  Search and edit concepts across the content library.
+                </p>
 
                 <input
                   type="search"
@@ -1060,6 +1108,60 @@ export default function Creator() {
                         {concept.concept_type || 'Concept'} ·{' '}
                         {concept.status || 'draft'}
                       </p>
+                      <div
+                        style={{
+                          display: 'flex',
+                          gap: '8px',
+                          flexWrap: 'wrap',
+                          marginBottom: '10px',
+                        }}
+                      >
+                        {concept.status !== 'published' && (
+                          <button
+                            className="btn ghost"
+                            type="button"
+                            onClick={() =>
+                              handleLifecycleUpdate(concept.id, 'published')
+                            }
+                          >
+                            Publish
+                          </button>
+                        )}
+
+                        {concept.status === 'published' && (
+                          <button
+                            className="btn ghost"
+                            type="button"
+                            onClick={() =>
+                              handleLifecycleUpdate(concept.id, 'draft')
+                            }
+                          >
+                            Move back to draft
+                          </button>
+                        )}
+
+                        {concept.status === 'archived' ? (
+                          <button
+                            className="btn ghost"
+                            type="button"
+                            onClick={() =>
+                              handleLifecycleUpdate(concept.id, 'draft')
+                            }
+                          >
+                            Restore to draft
+                          </button>
+                        ) : (
+                          <button
+                            className="btn ghost"
+                            type="button"
+                            onClick={() =>
+                              handleLifecycleUpdate(concept.id, 'archived')
+                            }
+                          >
+                            Archive
+                          </button>
+                        )}
+                      </div>
                       <button
                         className="btn ghost"
                         type="button"
@@ -1222,7 +1324,7 @@ export default function Creator() {
               </button>
 
               <h2>Build Relationships</h2>
-              <p className="muted">Connect two concepts you created.</p>
+              <p className="muted">Connect concepts across the content library.</p>
 
               <form onSubmit={handleRelationshipSubmit}>
                 <div className="form-grid">
