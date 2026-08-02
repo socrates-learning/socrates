@@ -24,52 +24,80 @@ type Placement = {
   concepts: Concept | Concept[] | null;
 };
 
-export function Sidebar({ activeId }: { activeId?: string }) {
+export function Sidebar({
+  activeId,
+  activeLibrary,
+}: {
+  activeId?: string;
+  activeLibrary?: { id: string; name: string } | null;
+}) {
   const [nodes, setNodes] = useState<LibraryNode[]>([]);
   const [placements, setPlacements] = useState<Placement[]>([]);
   const [expandedNodeIds, setExpandedNodeIds] = useState<Set<string>>(
     new Set()
   );
   const [searchQuery, setSearchQuery] = useState('');
+  const [isLoading, setIsLoading] = useState(Boolean(activeLibrary?.id));
 
   useEffect(() => {
+    let isMounted = true;
+
     async function loadSidebar() {
+      if (!activeLibrary?.id) {
+        setNodes([]);
+        setPlacements([]);
+        setExpandedNodeIds(new Set());
+        setIsLoading(false);
+        return;
+      }
+
+      setIsLoading(true);
+
       const { data: nodeData } = await supabase
         .from('library_nodes')
         .select('id, name, node_type, parent_id')
+        .eq('library_id', activeLibrary.id)
         .order('name');
 
-      const { data: placementData } = await supabase
-        .from('concept_placements')
-        .select(`
-          concept_id,
-          library_node_id,
-          concepts!inner (
-            id,
-            name,
-            concept_type,
-            status
-          )
-        `)
-        .eq('concepts.status', 'published')
-        .order('sort_order');
-
       const loadedNodes = nodeData || [];
+      const nodeIds = loadedNodes.map((node) => node.id);
+      const { data: placementData } = nodeIds.length
+        ? await supabase
+            .from('concept_placements')
+            .select(`
+              concept_id,
+              library_node_id,
+              concepts!inner (
+                id,
+                name,
+                concept_type,
+                status
+              )
+            `)
+            .eq('concepts.status', 'published')
+            .in('library_node_id', nodeIds)
+            .order('sort_order')
+        : { data: [] };
       const loadedPlacements = (placementData || []) as unknown as Placement[];
       const initiallyExpanded = new Set<string>();
-      const pharmacologyNode = loadedNodes.find(
-        (node) => node.name === 'Pharmacology'
-      );
+      const rootNode = loadedNodes.find((node) => node.parent_id === null);
 
-      if (pharmacologyNode) initiallyExpanded.add(pharmacologyNode.id);
+      if (rootNode) initiallyExpanded.add(rootNode.id);
 
-      setNodes(loadedNodes);
-      setPlacements(loadedPlacements);
-      setExpandedNodeIds(initiallyExpanded);
+      if (isMounted) {
+        setNodes(loadedNodes);
+        setPlacements(loadedPlacements);
+        setExpandedNodeIds(initiallyExpanded);
+        setIsLoading(false);
+      }
     }
 
     loadSidebar();
-  }, [activeId]);
+
+    return () => {
+      isMounted = false;
+    };
+  }, [activeId, activeLibrary?.id]);
 
   useEffect(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -252,7 +280,7 @@ export function Sidebar({ activeId }: { activeId?: string }) {
 
   return (
     <aside className="panel sidebar">
-      <h3>Knowledge Library</h3>
+      <h3>{activeLibrary?.name || 'Knowledge Library'}</h3>
 
       <input
         className="library-search"
@@ -263,14 +291,22 @@ export function Sidebar({ activeId }: { activeId?: string }) {
         onChange={(event) => setSearchQuery(event.target.value)}
       />
 
-      {rootNodes.length > 0 ? (
+      {isLoading ? (
+        <p className="muted">Loading library...</p>
+      ) : !activeLibrary?.id ? (
+        <p className="muted">No active library selected.</p>
+      ) : rootNodes.length > 0 ? (
         visibleRootNodes.length > 0 ? (
           visibleRootNodes.map((node) => renderNode(node))
         ) : (
           <p className="muted">No matching concepts found.</p>
         )
       ) : (
-        <p className="muted">Loading library...</p>
+        <p className="muted">No library categories found yet.</p>
+      )}
+
+      {!isLoading && activeLibrary?.id && placements.length === 0 && (
+        <p className="muted">No published concepts in this library yet.</p>
       )}
     </aside>
   );

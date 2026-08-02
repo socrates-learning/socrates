@@ -39,39 +39,81 @@ export default async function Home() {
   const activeLibrary = activeLibraryContext.library;
   const shouldShowDashboard = !activeLibraryContext.needsSelection;
 
-  const { data: libraries, error: librariesError } = await supabase
-    .from('libraries')
-    .select('id, name, description, slug, status')
-    .order('name');
-
-  const { data: recentConcepts, error: recentConceptsError } = await supabase
-    .from('concepts')
-    .select('id, name, concept_type, summary, created_at')
-    .eq('status', 'published')
-    .order('created_at', { ascending: false })
-    .limit(4);
-
-  const reviewAttemptsResult = user
+  const activeNodesResult = activeLibrary
     ? await supabase
-        .from('review_attempts')
-        .select('concept_id, score, created_at')
-        .order('created_at', { ascending: false })
-        .limit(100)
+        .from('library_nodes')
+        .select('id')
+        .eq('library_id', activeLibrary.id)
     : { data: [], error: null };
+  const activeNodeIds = (activeNodesResult.data || []).map((node) => node.id);
+  const activePlacementsResult =
+    activeNodeIds.length > 0
+      ? await supabase
+          .from('concept_placements')
+          .select(`
+            concept_id,
+            library_node_id,
+            concepts!inner (
+              id,
+              name,
+              concept_type,
+              summary,
+              created_at,
+              status
+            )
+          `)
+          .eq('concepts.status', 'published')
+          .in('library_node_id', activeNodeIds)
+      : { data: [], error: null };
+  const activeConceptsById = new Map<
+    string,
+    {
+      id: string;
+      name: string;
+      concept_type: string | null;
+      summary: string | null;
+      created_at: string | null;
+    }
+  >();
 
-  const newestReviewAttempt = reviewAttemptsResult.data?.[0] || null;
-  const continueConceptResult = newestReviewAttempt?.concept_id
-    ? await supabase
-        .from('concepts')
-        .select('id, name, concept_type')
-        .eq('id', newestReviewAttempt.concept_id)
-        .maybeSingle()
-    : { data: null, error: null };
+  for (const placement of activePlacementsResult.data || []) {
+    const conceptValue = Array.isArray(placement.concepts)
+      ? placement.concepts[0]
+      : placement.concepts;
 
-  const continueScores = continueConceptResult.data
+    if (conceptValue && !activeConceptsById.has(conceptValue.id)) {
+      activeConceptsById.set(conceptValue.id, conceptValue);
+    }
+  }
+
+  const activeConceptIds = [...activeConceptsById.keys()];
+  const recentConcepts = [...activeConceptsById.values()]
+    .sort(
+      (a, b) =>
+        new Date(b.created_at || 0).getTime() -
+        new Date(a.created_at || 0).getTime()
+    )
+    .slice(0, 4);
+  const reviewAttemptsResult =
+    user && activeConceptIds.length > 0
+      ? await supabase
+          .from('review_attempts')
+          .select('concept_id, score, created_at')
+          .in('concept_id', activeConceptIds)
+          .order('created_at', { ascending: false })
+          .limit(100)
+      : { data: [], error: null };
+
+  const newestReviewAttempt = reviewAttemptsResult.data?.find((attempt) =>
+    activeConceptsById.has(attempt.concept_id || '')
+  ) || null;
+  const continueConcept = newestReviewAttempt?.concept_id
+    ? activeConceptsById.get(newestReviewAttempt.concept_id)
+    : null;
+
+  const continueScores = continueConcept
     ? (reviewAttemptsResult.data || []).flatMap((attempt) =>
-        attempt.concept_id === continueConceptResult.data?.id &&
-        attempt.score !== null
+        attempt.concept_id === continueConcept.id && attempt.score !== null
           ? [attempt.score]
           : []
       )
@@ -87,7 +129,7 @@ export default async function Home() {
     <>
       <Header />
       <main className="layout">
-        <Sidebar />
+        <Sidebar activeLibrary={activeLibrary} />
 
         <section className="stack">
           <LibrarySwitcher context={activeLibraryContext} />
@@ -134,18 +176,15 @@ export default async function Home() {
           <div className="dashboard">
             <div className="panel">
               <h3>Continue Learning</h3>
-              <p className="muted">
-                Global until Phase 2D library filtering is connected.
-              </p>
               {!user ? (
                 <p className="muted">
                   Sign in to resume from your latest review activity.
                 </p>
-              ) : continueConceptResult.data && newestReviewAttempt ? (
+              ) : continueConcept && newestReviewAttempt ? (
                 <>
-                  <strong>{continueConceptResult.data.name}</strong>
+                  <strong>{continueConcept.name}</strong>
                   <p className="muted">
-                    {continueConceptResult.data.concept_type || 'Concept'}
+                    {continueConcept.concept_type || 'Concept'}
                     <br />
                     {continueMastery}% mastered
                     <br />
@@ -154,7 +193,7 @@ export default async function Home() {
                   </p>
                   <Link
                     className="btn primary"
-                    href={`/concepts/${continueConceptResult.data.id}`}
+                    href={`/concepts/${continueConcept.id}`}
                   >
                     Resume
                   </Link>
@@ -169,9 +208,6 @@ export default async function Home() {
 
             <div className="panel">
               <h3>Review Activity</h3>
-              <p className="muted">
-                Global until Phase 2D library filtering is connected.
-              </p>
               {reviewAttemptsResult.error ? (
                 <p className="muted">Could not load review activity.</p>
               ) : user ? (
@@ -179,7 +215,7 @@ export default async function Home() {
                   <strong>{reviewAttemptsResult.data?.length || 0}</strong>
                   <br />
                   <span className="muted">
-                    recent review attempts recorded for your account
+                    recent review attempts in {activeLibrary?.name || 'this library'}
                   </span>
                 </p>
               ) : (
@@ -189,15 +225,13 @@ export default async function Home() {
 
             <div className="panel">
               <h3>Recent Published Concepts</h3>
-              <p className="muted">
-                Global until Phase 2D library filtering is connected.
-              </p>
-              {recentConceptsError && (
+              {(activeNodesResult.error || activePlacementsResult.error) && (
                 <p className="muted">Could not load recent concepts.</p>
               )}
 
-              {!recentConceptsError &&
-                (recentConcepts?.length ? (
+              {!activeNodesResult.error &&
+                !activePlacementsResult.error &&
+                (recentConcepts.length ? (
                   recentConcepts.map((concept) => (
                     <p key={concept.id}>
                       <Link href={`/concepts/${concept.id}`}>
@@ -210,41 +244,32 @@ export default async function Home() {
                     </p>
                   ))
                 ) : (
-                  <p className="muted">No published concepts available yet.</p>
+                  <p className="muted">
+                    No published concepts are placed in this library yet.
+                  </p>
                 ))}
             </div>
 
             <div className="panel">
-              <h3>Libraries</h3>
-              {librariesError && (
-                <p className="muted">Could not load libraries.</p>
+              <h3>Active Library Summary</h3>
+              {activeLibrary ? (
+                <>
+                  <p>
+                    <strong>{activeConceptIds.length}</strong>
+                    <br />
+                    <span className="muted">
+                      published concepts placed in {activeLibrary.name}
+                    </span>
+                  </p>
+                  <p>
+                    <strong>{activeNodeIds.length}</strong>
+                    <br />
+                    <span className="muted">library categories</span>
+                  </p>
+                </>
+              ) : (
+                <p className="muted">No active library selected.</p>
               )}
-
-              {!librariesError &&
-                (libraries?.length ? (
-                  libraries.map((library) => (
-                    <p key={library.id}>
-                      <strong>{library.name}</strong>
-                      {library.status && (
-                        <span className="muted"> · {library.status}</span>
-                      )}
-                      <br />
-                      <span className="muted">
-                        {library.description}
-                        {library.slug && (
-                          <>
-                            <br />
-                            <Link href={`/library/${library.slug}`}>
-                              Open library landing
-                            </Link>
-                          </>
-                        )}
-                      </span>
-                    </p>
-                  ))
-                ) : (
-                  <p className="muted">No libraries available yet.</p>
-                ))}
             </div>
           </div>
           )}

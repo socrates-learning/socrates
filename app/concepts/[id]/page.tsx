@@ -1,6 +1,7 @@
 import { ConceptTabs } from '@/components/ConceptTabs';
 import { Header } from '@/components/Header';
 import { Sidebar } from '@/components/Sidebar';
+import { resolveActiveLibraryContext } from '@/lib/library-context';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
 import Link from 'next/link';
 
@@ -47,6 +48,12 @@ export default async function ConceptPage({
 }) {
   const { id } = await params;
   const supabase = await createSupabaseServerClient();
+  const activeLibraryContext = await resolveActiveLibraryContext();
+  const activeLibrary = activeLibraryContext.library;
+  const backHref = activeLibrary ? `/library/${activeLibrary.slug}` : '/';
+  const backLabel = activeLibrary
+    ? `Back to ${activeLibrary.name} Library`
+    : 'Back to library';
 
   let concept = null;
 
@@ -99,14 +106,14 @@ export default async function ConceptPage({
       <>
         <Header />
         <main className="layout">
-          <Sidebar />
+          <Sidebar activeLibrary={activeLibrary} />
           <section className="panel">
             <h2>Concept not found</h2>
             <p className="muted">
               This concept does not exist or is not accessible.
             </p>
-            <Link className="btn primary" href="/pharmacology">
-              Back to Pharmacology
+            <Link className="btn primary" href={backHref}>
+              {backLabel}
             </Link>
           </section>
         </main>
@@ -315,9 +322,15 @@ export default async function ConceptPage({
     <>
       <Header />
       <main className="layout">
-        <Sidebar activeId={concept.id} />
+        <Sidebar activeId={concept.id} activeLibrary={activeLibrary} />
 
         <section className="stack">
+          <div>
+            <Link className="btn ghost" href={backHref}>
+              {backLabel}
+            </Link>
+          </div>
+
           <div className="panel concept-title">
             <div>
               <h2>
