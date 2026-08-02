@@ -1,5 +1,7 @@
 import { Header } from '@/components/Header';
+import { LibrarySwitcher } from '@/components/LibrarySwitcher';
 import { Sidebar } from '@/components/Sidebar';
+import { resolveActiveLibraryContext } from '@/lib/library-context';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
 import Link from 'next/link';
 
@@ -33,10 +35,13 @@ export default async function Home() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  const activeLibraryContext = await resolveActiveLibraryContext();
+  const activeLibrary = activeLibraryContext.library;
+  const shouldShowDashboard = !activeLibraryContext.needsSelection;
 
   const { data: libraries, error: librariesError } = await supabase
     .from('libraries')
-    .select('id, name, description')
+    .select('id, name, description, slug, status')
     .order('name');
 
   const { data: recentConcepts, error: recentConceptsError } = await supabase
@@ -85,6 +90,8 @@ export default async function Home() {
         <Sidebar />
 
         <section className="stack">
+          <LibrarySwitcher context={activeLibraryContext} />
+
           <div className="panel hero">
             <h2>{user ? 'Welcome back' : 'Welcome to Socrates'}</h2>
             <p>
@@ -92,14 +99,44 @@ export default async function Home() {
                 ? `Signed in as ${user.email || 'your Socrates account'}.`
                 : 'Explore the public learning library or sign in to track your review activity.'}
             </p>
-            <Link className="btn primary" href="/pharmacology">
-              Open Pharmacology Library
-            </Link>
+            {activeLibrary ? (
+              <>
+                <p className="muted">
+                  Active library: <strong>{activeLibrary.name}</strong> ·
+                  resolved from {activeLibraryContext.source}
+                </p>
+                <Link
+                  className="btn primary"
+                  href={`/library/${activeLibrary.slug}`}
+                >
+                  Open {activeLibrary.name} Library
+                </Link>
+              </>
+            ) : (
+              <p className="muted">
+                No active library is assigned yet. An admin can assign a primary
+                library membership.
+              </p>
+            )}
           </div>
 
+          {activeLibraryContext.needsSelection && (
+            <div className="panel">
+              <h3>Library Selection Needed</h3>
+              <p className="muted">
+                Your account does not have a primary library membership yet, so
+                Socrates is not showing global learning data here.
+              </p>
+            </div>
+          )}
+
+          {shouldShowDashboard && (
           <div className="dashboard">
             <div className="panel">
               <h3>Continue Learning</h3>
+              <p className="muted">
+                Global until Phase 2D library filtering is connected.
+              </p>
               {!user ? (
                 <p className="muted">
                   Sign in to resume from your latest review activity.
@@ -132,6 +169,9 @@ export default async function Home() {
 
             <div className="panel">
               <h3>Review Activity</h3>
+              <p className="muted">
+                Global until Phase 2D library filtering is connected.
+              </p>
               {reviewAttemptsResult.error ? (
                 <p className="muted">Could not load review activity.</p>
               ) : user ? (
@@ -149,6 +189,9 @@ export default async function Home() {
 
             <div className="panel">
               <h3>Recent Published Concepts</h3>
+              <p className="muted">
+                Global until Phase 2D library filtering is connected.
+              </p>
               {recentConceptsError && (
                 <p className="muted">Could not load recent concepts.</p>
               )}
@@ -182,8 +225,21 @@ export default async function Home() {
                   libraries.map((library) => (
                     <p key={library.id}>
                       <strong>{library.name}</strong>
+                      {library.status && (
+                        <span className="muted"> · {library.status}</span>
+                      )}
                       <br />
-                      <span className="muted">{library.description}</span>
+                      <span className="muted">
+                        {library.description}
+                        {library.slug && (
+                          <>
+                            <br />
+                            <Link href={`/library/${library.slug}`}>
+                              Open library landing
+                            </Link>
+                          </>
+                        )}
+                      </span>
                     </p>
                   ))
                 ) : (
@@ -191,6 +247,7 @@ export default async function Home() {
                 ))}
             </div>
           </div>
+          )}
         </section>
       </main>
     </>

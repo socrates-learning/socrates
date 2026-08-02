@@ -294,6 +294,9 @@ export default async function PharmacologyLibrary() {
             <p className="muted">
               A nested concept library where concepts can belong to multiple categories.
             </p>
+            <Link className="btn ghost" href="/library/pharmacology">
+              View Canonical Library Landing
+            </Link>
 
             <hr />
 
