@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 
 export default function ResetPasswordPage() {
@@ -10,6 +10,28 @@ export default function ResetPasswordPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [message, setMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [hasSession, setHasSession] = useState(false);
+
+  useEffect(() => {
+    async function checkSession() {
+      const {
+        data: { session },
+        error,
+      } = await supabase.auth.getSession();
+
+      if (error) {
+        console.error('Supabase reset session check failed:', error);
+      }
+
+      setHasSession(Boolean(session));
+
+      if (!session) {
+        setMessage('Use the latest password reset email link before setting a new password.');
+      }
+    }
+
+    checkSession();
+  }, []);
 
   async function handleUpdate(event: React.FormEvent) {
     event.preventDefault();
@@ -24,6 +46,11 @@ export default function ResetPasswordPage() {
       return;
     }
 
+    if (!hasSession) {
+      setMessage('Use the latest password reset email link before setting a new password.');
+      return;
+    }
+
     setIsSubmitting(true);
     setMessage('Updating password...');
 
@@ -32,12 +59,14 @@ export default function ResetPasswordPage() {
     setIsSubmitting(false);
 
     if (error) {
+      console.error('Supabase password update failed:', error);
       setMessage('Unable to update password. Use the latest reset email link.');
       return;
     }
 
-    setMessage('Password updated. Redirecting...');
-    router.replace('/');
+    await supabase.auth.signOut();
+    setMessage('Password updated. Redirecting to login...');
+    router.replace('/login');
     router.refresh();
   }
 
@@ -70,7 +99,11 @@ export default function ResetPasswordPage() {
             />
           </label>
 
-          <button className="btn primary" type="submit" disabled={isSubmitting}>
+          <button
+            className="btn primary"
+            type="submit"
+            disabled={isSubmitting || !hasSession}
+          >
             Update Password
           </button>
         </form>

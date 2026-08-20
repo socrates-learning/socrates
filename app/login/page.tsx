@@ -26,6 +26,7 @@ function LoginForm() {
     setIsSubmitting(false);
 
     if (error) {
+      console.error('Supabase password login failed:', error);
       setMessage('Unable to sign in. Check your email and password.');
       return;
     }

@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
+import { getAuthRedirectOrigin } from '@/lib/auth-url';
 import { supabase } from '@/lib/supabase';
 
 export default function ForgotPasswordPage() {
@@ -14,14 +15,15 @@ export default function ForgotPasswordPage() {
     setIsSubmitting(true);
     setMessage('Sending reset email...');
 
-    const origin = window.location.origin;
+    const origin = getAuthRedirectOrigin(window.location.origin);
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${origin}/auth/callback?next=/reset-password`,
+      redirectTo: `${origin}/auth/callback`,
     });
 
     setIsSubmitting(false);
 
     if (error) {
+      console.error('Supabase password reset request failed:', error);
       setMessage('Unable to send reset email. Please try again.');
       return;
     }
