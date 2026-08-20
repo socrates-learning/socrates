@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 
 export default function AdminTestPage() {
@@ -35,7 +36,17 @@ export default function AdminTestPage() {
   return (
     <main className="layout">
       <section className="panel" style={{ maxWidth: 600, margin: '4rem auto' }}>
-        <h1>Admin Access Test</h1>
+        <h1>Temporary Admin Diagnostic</h1>
+        <p className="muted">
+          This page is a development-only access check. Permanent role
+          management lives in Admin User Management.
+        </p>
+
+        <p>
+          <Link className="btn primary" href="/admin/users">
+            Open Admin User Management
+          </Link>
+        </p>
 
         <p className="muted">{message}</p>
 
@@ -48,8 +59,8 @@ export default function AdminTestPage() {
         </p>
 
         {role === 'admin' && <p>✅ Admin access confirmed.</p>}
-        {role === 'editor' && <p>✅ Editor access confirmed.</p>}
-        {role === 'student' && <p>✅ Student access confirmed.</p>}
+        {role === 'editor' && <p>Editor role detected; admin route access should be blocked.</p>}
+        {role === 'learner' && <p>Learner role detected; admin route access should be blocked.</p>}
         {!role && <p>❌ No role detected yet.</p>}
       </section>
     </main>

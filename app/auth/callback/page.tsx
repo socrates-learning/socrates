@@ -16,9 +16,8 @@ function AuthCallbackContent() {
         await supabase.auth.exchangeCodeForSession(code);
       }
 
-      await supabase.rpc('assign_role_from_approved_domain');
-
-      router.replace('/');
+      const nextPath = searchParams.get('next') || '/';
+      router.replace(nextPath.startsWith('/') ? nextPath : '/');
     }
 
     finishLogin();

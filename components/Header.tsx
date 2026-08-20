@@ -32,7 +32,7 @@ export function Header() {
         .eq('user_id', userData.user.id)
         .maybeSingle();
 
-      if (isMounted) setRole(roleData?.role ?? 'learner');
+      if (isMounted) setRole(roleData?.role ?? null);
     }
 
     loadSession();
@@ -54,7 +54,7 @@ export function Header() {
     setEmail(null);
     setRole(null);
     router.refresh();
-    router.push('/');
+    router.push('/login');
   }
 
   const isEditor = role === 'editor' || role === 'admin';
@@ -85,14 +85,14 @@ export function Header() {
         )}
 
         {isAdmin && (
-          <Link className="btn ghost" href="/admin">
+          <Link className="btn ghost" href="/admin/users">
             Admin
           </Link>
         )}
 
         {isAdmin && (
-          <Link className="btn ghost" href="/admin/users">
-            Users
+          <Link className="btn ghost" href="/admin">
+            Diagnostic
           </Link>
         )}
 

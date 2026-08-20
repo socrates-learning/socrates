@@ -58,7 +58,8 @@ export default function AdminUsersPage() {
         <section className="panel">
           <h2>Admin User Management</h2>
           <p className="muted">
-            Manage admin, editor, and learner roles without touching Supabase.
+            Permanent role-management interface for approved Socrates access.
+            Users with no role are pending approval and cannot enter the app.
           </p>
 
           {status && <p className="muted">{status}</p>}
@@ -68,15 +69,20 @@ export default function AdminUsersPage() {
               <div className="card" key={user.user_id}>
                 <h3>{user.email}</h3>
                 <p className="muted">
-                  Current role: {user.role || 'learner / none'}
+                  Current role: {user.role || 'Pending approval / no role'}
                 </p>
 
                 <select
-                  defaultValue={user.role || 'learner'}
+                  defaultValue={user.role || ''}
                   onChange={(event) => {
-                    updateRole(user.email, event.target.value);
+                    if (event.target.value) {
+                      updateRole(user.email, event.target.value);
+                    }
                   }}
                 >
+                  <option value="" disabled>
+                    Assign role
+                  </option>
                   <option value="learner">Learner</option>
                   <option value="editor">Editor</option>
                   <option value="admin">Admin</option>

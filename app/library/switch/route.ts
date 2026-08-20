@@ -24,6 +24,7 @@ export async function POST(request: NextRequest) {
 
   const formData = await request.formData();
   const librarySlug = String(formData.get('library_slug') || '');
+  const returnTo = String(formData.get('return_to') || '');
 
   if (!isValidLibrarySlug(librarySlug)) {
     return new NextResponse('Invalid library slug', { status: 400 });
@@ -40,10 +41,11 @@ export async function POST(request: NextRequest) {
     return new NextResponse('Library not found', { status: 404 });
   }
 
-  const response = NextResponse.redirect(
-    new URL(`/library/${library.slug}`, request.url),
-    303
-  );
+  const redirectPath =
+    returnTo.startsWith('/') && !returnTo.startsWith('//')
+      ? returnTo
+      : `/library/${library.slug}`;
+  const response = NextResponse.redirect(new URL(redirectPath, request.url), 303);
 
   response.cookies.set(ACTIVE_LIBRARY_COOKIE, library.slug, {
     httpOnly: true,

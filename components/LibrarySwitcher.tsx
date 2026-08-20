@@ -3,8 +3,10 @@ import type { ActiveLibraryContext } from '@/lib/library-context';
 
 export async function LibrarySwitcher({
   context,
+  returnTo,
 }: {
   context: ActiveLibraryContext;
+  returnTo?: string;
 }) {
   if (!context.canSwitch) return null;
 
@@ -43,6 +45,8 @@ export async function LibrarySwitcher({
           ))}
         </select>
       </label>
+
+      {returnTo && <input type="hidden" name="return_to" value={returnTo} />}
 
       <button className="btn ghost" type="submit">
         Switch
