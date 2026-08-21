@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Suspense, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 
 function LoginForm() {
@@ -12,6 +12,41 @@ function LoginForm() {
   const [password, setPassword] = useState('');
   const [message, setMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    async function completeRecoveryFromHash() {
+      const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+      const accessToken = hashParams.get('access_token');
+      const refreshToken = hashParams.get('refresh_token');
+      const callbackType = hashParams.get('type');
+
+      if (!accessToken || !refreshToken || callbackType !== 'recovery') {
+        return;
+      }
+
+      setIsSubmitting(true);
+      setMessage('Opening your password reset link...');
+
+      const { error } = await supabase.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken,
+      });
+
+      setIsSubmitting(false);
+
+      if (error) {
+        console.error('Supabase recovery session setup from login failed:', error);
+        setMessage('Password reset link could not be completed. Request a fresh link and try again.');
+        return;
+      }
+
+      window.history.replaceState(null, '', '/login');
+      router.replace('/reset-password');
+      router.refresh();
+    }
+
+    completeRecoveryFromHash();
+  }, [router]);
 
   async function handleLogin(event: React.FormEvent) {
     event.preventDefault();
