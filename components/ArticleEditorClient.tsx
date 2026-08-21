@@ -55,6 +55,118 @@ type AvailableConcept = {
   status: string | null;
 };
 
+type SourceRecord = {
+  id: string;
+  title: string;
+  source_type: string | null;
+  url: string | null;
+};
+
+type QuestionType = 'multiple_choice' | 'true_false' | 'short_answer';
+type QuestionStatus = 'draft' | 'published' | 'archived';
+
+type QuestionOption = {
+  id: string;
+  option_text: string;
+  is_correct: boolean;
+  sort_order: number;
+};
+
+type QuestionAcceptedAnswer = {
+  id: string;
+  answer_text: string;
+  sort_order: number;
+};
+
+type QuestionSourceLink = {
+  id: string;
+  source_id: string;
+  note: string | null;
+  source: SourceRecord | null;
+};
+
+type QuestionRecord = {
+  id: string;
+  concept_id: string;
+  question_type: QuestionType;
+  prompt: string;
+  explanation: string | null;
+  status: QuestionStatus;
+  review_article_concept_id: string | null;
+  sort_order: number;
+  question_options: QuestionOption[];
+  question_accepted_answers: QuestionAcceptedAnswer[];
+  question_sources: QuestionSourceLink[];
+};
+
+type QuestionOptionForm = {
+  clientId: string;
+  id?: string;
+  option_text: string;
+  is_correct: boolean;
+  sort_order: number;
+};
+
+type QuestionAnswerForm = {
+  clientId: string;
+  id?: string;
+  answer_text: string;
+  sort_order: number;
+};
+
+type QuestionForm = {
+  id: string;
+  isNew: boolean;
+  concept_id: string;
+  question_type: QuestionType;
+  prompt: string;
+  explanation: string;
+  status: QuestionStatus;
+  review_article_concept_id: string;
+  sort_order: number;
+  options: QuestionOptionForm[];
+  acceptedAnswers: QuestionAnswerForm[];
+  sourceIds: string[];
+  sourceSelectId: string;
+};
+
+const questionTypeLabels: Record<QuestionType, string> = {
+  multiple_choice: 'Multiple Choice',
+  true_false: 'True / False',
+  short_answer: 'Short Answer',
+};
+
+function createClientId() {
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function createBlankOption(sortOrder: number): QuestionOptionForm {
+  return {
+    clientId: createClientId(),
+    option_text: '',
+    is_correct: false,
+    sort_order: sortOrder,
+  };
+}
+
+function createBlankAnswer(sortOrder: number): QuestionAnswerForm {
+  return {
+    clientId: createClientId(),
+    answer_text: '',
+    sort_order: sortOrder,
+  };
+}
+
+function normalizeQuestionType(value: string | null): QuestionType {
+  if (value === 'true_false' || value === 'short_answer') return value;
+  return 'multiple_choice';
+}
+
+function normalizeQuestionStatus(value: string | null): QuestionStatus {
+  if (value === 'published' || value === 'archived') return value;
+  return 'draft';
+}
+
 function getCategoryPath(node: LibraryNode, nodes: LibraryNode[]) {
   const names = [node.name];
   const visited = new Set([node.id]);
@@ -262,6 +374,141 @@ function normalizeJoinedConcept(row: {
   };
 }
 
+function normalizeQuestion(row: {
+  id: string;
+  concept_id: string;
+  question_type: string | null;
+  prompt: string;
+  explanation: string | null;
+  status: string | null;
+  review_article_concept_id: string | null;
+  sort_order: number | null;
+  question_options?: Array<{
+    id: string;
+    option_text: string;
+    is_correct: boolean;
+    sort_order: number | null;
+  }> | null;
+  question_accepted_answers?: Array<{
+    id: string;
+    answer_text: string;
+    sort_order: number | null;
+  }> | null;
+  question_sources?: Array<{
+    id: string;
+    source_id: string;
+    note: string | null;
+    sources:
+      | SourceRecord
+      | SourceRecord[]
+      | null;
+  }> | null;
+}): QuestionRecord {
+  const options = (row.question_options || [])
+    .map((option) => ({
+      id: option.id,
+      option_text: option.option_text,
+      is_correct: option.is_correct,
+      sort_order: option.sort_order || 0,
+    }))
+    .sort((a, b) => a.sort_order - b.sort_order);
+  const acceptedAnswers = (row.question_accepted_answers || [])
+    .map((answer) => ({
+      id: answer.id,
+      answer_text: answer.answer_text,
+      sort_order: answer.sort_order || 0,
+    }))
+    .sort((a, b) => a.sort_order - b.sort_order);
+  const sourceLinks = (row.question_sources || []).map((sourceLink) => {
+    const source = Array.isArray(sourceLink.sources)
+      ? sourceLink.sources[0] || null
+      : sourceLink.sources;
+
+    return {
+      id: sourceLink.id,
+      source_id: sourceLink.source_id,
+      note: sourceLink.note,
+      source,
+    };
+  });
+
+  return {
+    id: row.id,
+    concept_id: row.concept_id,
+    question_type: normalizeQuestionType(row.question_type),
+    prompt: row.prompt,
+    explanation: row.explanation,
+    status: normalizeQuestionStatus(row.status),
+    review_article_concept_id: row.review_article_concept_id,
+    sort_order: row.sort_order || 0,
+    question_options: options,
+    question_accepted_answers: acceptedAnswers,
+    question_sources: sourceLinks,
+  };
+}
+
+function createQuestionForm(
+  question: QuestionRecord,
+  isNew = false
+): QuestionForm {
+  const options =
+    question.question_type === 'true_false'
+      ? [
+          {
+            clientId: createClientId(),
+            id: question.question_options.find((option) => option.option_text === 'True')?.id,
+            option_text: 'True',
+            is_correct:
+              question.question_options.find((option) => option.option_text === 'True')
+                ?.is_correct || false,
+            sort_order: 0,
+          },
+          {
+            clientId: createClientId(),
+            id: question.question_options.find((option) => option.option_text === 'False')?.id,
+            option_text: 'False',
+            is_correct:
+              question.question_options.find((option) => option.option_text === 'False')
+                ?.is_correct || false,
+            sort_order: 1,
+          },
+        ]
+      : question.question_options.map((option) => ({
+          clientId: createClientId(),
+          id: option.id,
+          option_text: option.option_text,
+          is_correct: option.is_correct,
+          sort_order: option.sort_order,
+        }));
+
+  return {
+    id: question.id,
+    isNew,
+    concept_id: question.concept_id,
+    question_type: question.question_type,
+    prompt: question.prompt,
+    explanation: question.explanation || '',
+    status: question.status,
+    review_article_concept_id: question.review_article_concept_id || '',
+    sort_order: question.sort_order,
+    options:
+      question.question_type === 'multiple_choice' && options.length === 0
+        ? [createBlankOption(0), createBlankOption(1), createBlankOption(2), createBlankOption(3)]
+        : options,
+    acceptedAnswers:
+      question.question_accepted_answers.length > 0
+        ? question.question_accepted_answers.map((answer) => ({
+            clientId: createClientId(),
+            id: answer.id,
+            answer_text: answer.answer_text,
+            sort_order: answer.sort_order,
+          }))
+        : [createBlankAnswer(0)],
+    sourceIds: question.question_sources.map((sourceLink) => sourceLink.source_id),
+    sourceSelectId: '',
+  };
+}
+
 export function ArticleEditorClient({
   article,
   activeLibrary,
@@ -291,6 +538,17 @@ export function ArticleEditorClient({
   const [availableTags, setAvailableTags] = useState<TagRecord[]>([]);
   const [coreConcepts, setCoreConcepts] = useState(article.core_concepts);
   const [availableConcepts, setAvailableConcepts] = useState<AvailableConcept[]>([]);
+  const [availableSources, setAvailableSources] = useState<SourceRecord[]>([]);
+  const [questionBanks, setQuestionBanks] = useState<Record<string, QuestionRecord[]>>({});
+  const [expandedConceptIds, setExpandedConceptIds] = useState<Set<string>>(new Set());
+  const [expandedQuestionIds, setExpandedQuestionIds] = useState<Set<string>>(new Set());
+  const [questionForms, setQuestionForms] = useState<Record<string, QuestionForm>>({});
+  const [questionMessageByConcept, setQuestionMessageByConcept] = useState<
+    Record<string, string>
+  >({});
+  const [newQuestionTypeByConcept, setNewQuestionTypeByConcept] = useState<
+    Record<string, QuestionType>
+  >({});
   const [conceptSearch, setConceptSearch] = useState('');
   const [selectedConceptId, setSelectedConceptId] = useState('');
   const [newConceptName, setNewConceptName] = useState('');
@@ -322,6 +580,24 @@ export function ArticleEditorClient({
     }
 
     loadTags();
+  }, []);
+
+  useEffect(() => {
+    async function loadSources() {
+      const { data, error } = await supabase
+        .from('sources')
+        .select('id, title, source_type, url')
+        .order('title');
+
+      if (error) {
+        setCoreConceptMessage(`Unable to load sources: ${error.message}`);
+        return;
+      }
+
+      setAvailableSources((data || []) as SourceRecord[]);
+    }
+
+    loadSources();
   }, []);
 
   useEffect(() => {
@@ -374,6 +650,75 @@ export function ArticleEditorClient({
     loadAvailableConcepts();
   }, [activeLibrary.id, placementNodes]);
 
+  useEffect(() => {
+    async function loadQuestionBanks() {
+      const conceptIds = coreConcepts
+        .map((concept) => concept.concept_id)
+        .filter(Boolean);
+
+      if (conceptIds.length === 0) {
+        setQuestionBanks({});
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('questions')
+        .select(
+          `
+          id,
+          concept_id,
+          question_type,
+          prompt,
+          explanation,
+          status,
+          review_article_concept_id,
+          sort_order,
+          created_at,
+          question_options (
+            id,
+            option_text,
+            is_correct,
+            sort_order
+          ),
+          question_accepted_answers (
+            id,
+            answer_text,
+            sort_order
+          ),
+          question_sources (
+            id,
+            source_id,
+            note,
+            sources (
+              id,
+              title,
+              source_type,
+              url
+            )
+          )
+        `
+        )
+        .in('concept_id', conceptIds)
+        .order('sort_order')
+        .order('created_at');
+
+      if (error) {
+        setCoreConceptMessage(`Unable to load question banks: ${error.message}`);
+        return;
+      }
+
+      const banks: Record<string, QuestionRecord[]> = {};
+
+      (data || []).map(normalizeQuestion).forEach((question) => {
+        banks[question.concept_id] = [...(banks[question.concept_id] || []), question];
+      });
+
+      setQuestionBanks(banks);
+    }
+
+    loadQuestionBanks();
+  }, [coreConcepts]);
+
   function runCommand(command: string, value?: string) {
     editorRef.current?.focus();
     document.execCommand(command, false, value);
@@ -422,6 +767,453 @@ export function ArticleEditorClient({
     const sections = extractArticleSections(getMarkdown());
     setArticleSections(sections);
     return sections;
+  }
+
+  async function loadQuestionBankForConcept(conceptId: string) {
+    const { data, error } = await supabase
+      .from('questions')
+      .select(
+        `
+        id,
+        concept_id,
+        question_type,
+        prompt,
+        explanation,
+        status,
+        review_article_concept_id,
+        sort_order,
+        created_at,
+        question_options (
+          id,
+          option_text,
+          is_correct,
+          sort_order
+        ),
+        question_accepted_answers (
+          id,
+          answer_text,
+          sort_order
+        ),
+        question_sources (
+          id,
+          source_id,
+          note,
+          sources (
+            id,
+            title,
+            source_type,
+            url
+          )
+        )
+      `
+      )
+      .eq('concept_id', conceptId)
+      .order('sort_order')
+      .order('created_at');
+
+    if (error) {
+      setQuestionMessageByConcept((current) => ({
+        ...current,
+        [conceptId]: `Unable to refresh questions: ${error.message}`,
+      }));
+      return;
+    }
+
+    setQuestionBanks((current) => ({
+      ...current,
+      [conceptId]: (data || []).map(normalizeQuestion),
+    }));
+  }
+
+  function setQuestionMessage(conceptId: string, nextMessage: string) {
+    setQuestionMessageByConcept((current) => ({
+      ...current,
+      [conceptId]: nextMessage,
+    }));
+  }
+
+  function toggleExpandedConcept(conceptId: string) {
+    setExpandedConceptIds((current) => {
+      const next = new Set(current);
+
+      if (next.has(conceptId)) {
+        next.delete(conceptId);
+      } else {
+        next.add(conceptId);
+      }
+
+      return next;
+    });
+  }
+
+  function toggleExpandedQuestion(questionId: string) {
+    setExpandedQuestionIds((current) => {
+      const next = new Set(current);
+
+      if (next.has(questionId)) {
+        next.delete(questionId);
+      } else {
+        next.add(questionId);
+      }
+
+      return next;
+    });
+  }
+
+  function ensureQuestionForm(question: QuestionRecord) {
+    setQuestionForms((current) =>
+      current[question.id]
+        ? current
+        : {
+            ...current,
+            [question.id]: createQuestionForm(question),
+          }
+    );
+  }
+
+  function updateQuestionForm(
+    questionId: string,
+    updater: (form: QuestionForm) => QuestionForm
+  ) {
+    setQuestionForms((current) => {
+      const form = current[questionId];
+
+      if (!form) return current;
+
+      return {
+        ...current,
+        [questionId]: updater(form),
+      };
+    });
+  }
+
+  function addQuestion(conceptLink: LinkedCoreConcept, questionType: QuestionType) {
+    const existingQuestions = questionBanks[conceptLink.concept_id] || [];
+    const tempId = `new-${conceptLink.concept_id}-${createClientId()}`;
+    const question: QuestionRecord = {
+      id: tempId,
+      concept_id: conceptLink.concept_id,
+      question_type: questionType,
+      prompt: '',
+      explanation: '',
+      status: 'draft',
+      review_article_concept_id: conceptLink.id,
+      sort_order: existingQuestions.length,
+      question_options:
+        questionType === 'true_false'
+          ? [
+              { id: 'true', option_text: 'True', is_correct: true, sort_order: 0 },
+              { id: 'false', option_text: 'False', is_correct: false, sort_order: 1 },
+            ]
+          : [],
+      question_accepted_answers: [],
+      question_sources: [],
+    };
+
+    setQuestionBanks((current) => ({
+      ...current,
+      [conceptLink.concept_id]: [...(current[conceptLink.concept_id] || []), question],
+    }));
+    setQuestionForms((current) => ({
+      ...current,
+      [tempId]: createQuestionForm(question, true),
+    }));
+    setExpandedConceptIds((current) => new Set(current).add(conceptLink.concept_id));
+    setExpandedQuestionIds((current) => new Set(current).add(tempId));
+    setQuestionMessage(conceptLink.concept_id, 'New draft question ready.');
+  }
+
+  function addQuestionOption(questionId: string) {
+    updateQuestionForm(questionId, (form) => ({
+      ...form,
+      options: [...form.options, createBlankOption(form.options.length)],
+    }));
+  }
+
+  function removeQuestionOption(questionId: string, clientId: string) {
+    updateQuestionForm(questionId, (form) => ({
+      ...form,
+      options: form.options
+        .filter((option) => option.clientId !== clientId)
+        .map((option, index) => ({ ...option, sort_order: index })),
+    }));
+  }
+
+  function addAcceptedAnswer(questionId: string) {
+    updateQuestionForm(questionId, (form) => ({
+      ...form,
+      acceptedAnswers: [
+        ...form.acceptedAnswers,
+        createBlankAnswer(form.acceptedAnswers.length),
+      ],
+    }));
+  }
+
+  function removeAcceptedAnswer(questionId: string, clientId: string) {
+    updateQuestionForm(questionId, (form) => ({
+      ...form,
+      acceptedAnswers: form.acceptedAnswers
+        .filter((answer) => answer.clientId !== clientId)
+        .map((answer, index) => ({ ...answer, sort_order: index })),
+    }));
+  }
+
+  function addQuestionSource(questionId: string) {
+    updateQuestionForm(questionId, (form) => {
+      if (!form.sourceSelectId || form.sourceIds.includes(form.sourceSelectId)) {
+        return form;
+      }
+
+      return {
+        ...form,
+        sourceIds: [...form.sourceIds, form.sourceSelectId],
+        sourceSelectId: '',
+      };
+    });
+  }
+
+  function removeQuestionSource(questionId: string, sourceId: string) {
+    updateQuestionForm(questionId, (form) => ({
+      ...form,
+      sourceIds: form.sourceIds.filter((id) => id !== sourceId),
+    }));
+  }
+
+  function questionSourceLinks(questionId: string, conceptId: string) {
+    return (
+      questionBanks[conceptId]?.find((question) => question.id === questionId)
+        ?.question_sources || []
+    );
+  }
+
+  async function reconcileQuestionSources(
+    questionId: string,
+    conceptId: string,
+    sourceIds: string[]
+  ) {
+    const existingLinks = questionSourceLinks(questionId, conceptId);
+    const existingSourceIds = existingLinks.map((sourceLink) => sourceLink.source_id);
+
+    for (const sourceId of sourceIds.filter((id) => !existingSourceIds.includes(id))) {
+      const { error } = await supabase.rpc('attach_question_source', {
+        p_question_id: questionId,
+        p_source_id: sourceId,
+        p_note: null,
+      });
+
+      if (error) throw error;
+    }
+
+    for (const sourceLink of existingLinks.filter(
+      (link) => !sourceIds.includes(link.source_id)
+    )) {
+      const { error } = await supabase.rpc('detach_question_source', {
+        p_question_source_id: sourceLink.id,
+      });
+
+      if (error) throw error;
+    }
+  }
+
+  function questionOptionsPayload(form: QuestionForm) {
+    if (form.question_type === 'true_false') {
+      const trueOption = form.options.find((option) => option.option_text === 'True');
+      const falseOption = form.options.find((option) => option.option_text === 'False');
+
+      return [
+        {
+          option_text: 'True',
+          is_correct: Boolean(trueOption?.is_correct),
+          sort_order: 0,
+        },
+        {
+          option_text: 'False',
+          is_correct: Boolean(falseOption?.is_correct),
+          sort_order: 1,
+        },
+      ];
+    }
+
+    return form.options
+      .map((option, index) => ({
+        option_text: option.option_text.trim(),
+        is_correct: option.is_correct,
+        sort_order: index,
+      }))
+      .filter((option) => option.option_text);
+  }
+
+  function acceptedAnswersPayload(form: QuestionForm) {
+    return form.acceptedAnswers
+      .map((answer, index) => ({
+        answer_text: answer.answer_text.trim(),
+        sort_order: index,
+      }))
+      .filter((answer) => answer.answer_text);
+  }
+
+  async function saveQuestion(questionId: string) {
+    const form = questionForms[questionId];
+
+    if (!form) return;
+
+    if (!form.prompt.trim()) {
+      setQuestionMessage(form.concept_id, 'Question prompt is required.');
+      return;
+    }
+
+    setQuestionMessage(form.concept_id, 'Saving question...');
+
+    try {
+      let savedQuestionId = form.id;
+      const targetStatus = form.status;
+      const interimStatus = targetStatus === 'published' ? 'draft' : targetStatus;
+
+      if (form.isNew) {
+        const { data, error } = await supabase.rpc('create_question', {
+          p_concept_id: form.concept_id,
+          p_question_type: form.question_type,
+          p_prompt: form.prompt.trim(),
+          p_explanation: form.explanation.trim() || null,
+          p_review_article_concept_id: form.review_article_concept_id || null,
+          p_sort_order: form.sort_order,
+        });
+
+        if (error) throw error;
+
+        savedQuestionId = (data as { id: string }).id;
+      } else {
+        const { error } = await supabase.rpc('update_question', {
+          p_question_id: form.id,
+          p_question_type: form.question_type,
+          p_prompt: form.prompt.trim(),
+          p_explanation: form.explanation.trim() || null,
+          p_status: interimStatus,
+          p_review_article_concept_id: form.review_article_concept_id || null,
+          p_sort_order: form.sort_order,
+        });
+
+        if (error) throw error;
+      }
+
+      if (form.question_type === 'short_answer') {
+        const { error } = await supabase.rpc('replace_question_accepted_answers', {
+          p_question_id: savedQuestionId,
+          p_answers: acceptedAnswersPayload(form),
+        });
+
+        if (error) throw error;
+
+        const { error: optionError } = await supabase.rpc('replace_question_options', {
+          p_question_id: savedQuestionId,
+          p_options: [],
+        });
+
+        if (optionError) throw optionError;
+      } else {
+        const { error } = await supabase.rpc('replace_question_options', {
+          p_question_id: savedQuestionId,
+          p_options: questionOptionsPayload(form),
+        });
+
+        if (error) throw error;
+
+        const { error: answerError } = await supabase.rpc(
+          'replace_question_accepted_answers',
+          {
+            p_question_id: savedQuestionId,
+            p_answers: [],
+          }
+        );
+
+        if (answerError) throw answerError;
+      }
+
+      await reconcileQuestionSources(savedQuestionId, form.concept_id, form.sourceIds);
+
+      if (targetStatus === 'published') {
+        const { error } = await supabase.rpc('update_question', {
+          p_question_id: savedQuestionId,
+          p_question_type: form.question_type,
+          p_prompt: form.prompt.trim(),
+          p_explanation: form.explanation.trim() || null,
+          p_status: 'published',
+          p_review_article_concept_id: form.review_article_concept_id || null,
+          p_sort_order: form.sort_order,
+        });
+
+        if (error) throw error;
+      }
+
+      setQuestionMessage(form.concept_id, 'Question saved.');
+      setQuestionForms((current) => {
+        const next = { ...current };
+        delete next[questionId];
+        return next;
+      });
+      setExpandedQuestionIds((current) => {
+        const next = new Set(current);
+        next.delete(questionId);
+        next.add(savedQuestionId);
+        return next;
+      });
+      await loadQuestionBankForConcept(form.concept_id);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to save question.';
+      setQuestionMessage(form.concept_id, `Error: ${message}`);
+    }
+  }
+
+  async function archiveQuestion(question: QuestionRecord) {
+    if (!window.confirm('Archive this question?')) return;
+
+    setQuestionMessage(question.concept_id, 'Archiving question...');
+
+    const { error } = await supabase.rpc('archive_question', {
+      p_question_id: question.id,
+    });
+
+    if (error) {
+      setQuestionMessage(question.concept_id, `Error: ${error.message}`);
+      return;
+    }
+
+    setQuestionMessage(question.concept_id, 'Question archived.');
+    await loadQuestionBankForConcept(question.concept_id);
+  }
+
+  async function deleteDraftQuestion(question: QuestionRecord) {
+    if (!window.confirm('Delete this draft question?')) return;
+
+    setQuestionMessage(question.concept_id, 'Deleting draft question...');
+
+    if (question.id.startsWith('new-')) {
+      setQuestionBanks((current) => ({
+        ...current,
+        [question.concept_id]: (current[question.concept_id] || []).filter(
+          (item) => item.id !== question.id
+        ),
+      }));
+      setQuestionForms((current) => {
+        const next = { ...current };
+        delete next[question.id];
+        return next;
+      });
+      setQuestionMessage(question.concept_id, 'Draft question removed.');
+      return;
+    }
+
+    const { error } = await supabase.rpc('delete_draft_question', {
+      p_question_id: question.id,
+    });
+
+    if (error) {
+      setQuestionMessage(question.concept_id, `Error: ${error.message}`);
+      return;
+    }
+
+    setQuestionMessage(question.concept_id, 'Draft question deleted.');
+    await loadQuestionBankForConcept(question.concept_id);
   }
 
   async function saveArticle(nextStatus: 'draft' | 'published') {
@@ -715,6 +1507,378 @@ export function ArticleEditorClient({
     setTags((current) => current.filter((tag) => tag !== tagName));
   }
 
+  function sourceTitle(sourceId: string) {
+    return availableSources.find((source) => source.id === sourceId)?.title || 'Unknown source';
+  }
+
+  function reviewLinksForConcept(conceptId: string) {
+    return coreConcepts.filter((concept) => concept.concept_id === conceptId);
+  }
+
+  function toggleQuestionEditor(question: QuestionRecord) {
+    if (!expandedQuestionIds.has(question.id)) {
+      ensureQuestionForm(question);
+    }
+
+    toggleExpandedQuestion(question.id);
+  }
+
+  function updateQuestionType(questionId: string, questionType: QuestionType) {
+    updateQuestionForm(questionId, (form) => ({
+      ...form,
+      question_type: questionType,
+      options:
+        questionType === 'true_false'
+          ? [
+              {
+                clientId: createClientId(),
+                option_text: 'True',
+                is_correct: true,
+                sort_order: 0,
+              },
+              {
+                clientId: createClientId(),
+                option_text: 'False',
+                is_correct: false,
+                sort_order: 1,
+              },
+            ]
+          : questionType === 'multiple_choice' && form.options.length === 0
+            ? [
+                createBlankOption(0),
+                createBlankOption(1),
+                createBlankOption(2),
+                createBlankOption(3),
+              ]
+            : form.options,
+      acceptedAnswers:
+        questionType === 'short_answer' && form.acceptedAnswers.length === 0
+          ? [createBlankAnswer(0)]
+          : form.acceptedAnswers,
+    }));
+  }
+
+  function renderQuestionEditor(question: QuestionRecord, conceptLink: LinkedCoreConcept) {
+    const form = questionForms[question.id];
+
+    if (!form) return null;
+
+    return (
+      <div className="card" style={{ marginTop: 12 }}>
+        <div className="form-grid">
+          <label>
+            Question Type
+            <select
+              value={form.question_type}
+              onChange={(event) =>
+                updateQuestionType(question.id, event.target.value as QuestionType)
+              }
+            >
+              <option value="multiple_choice">Multiple Choice</option>
+              <option value="true_false">True / False</option>
+              <option value="short_answer">Short Answer</option>
+            </select>
+          </label>
+
+          <label>
+            Status
+            <select
+              value={form.status}
+              onChange={(event) =>
+                updateQuestionForm(question.id, (current) => ({
+                  ...current,
+                  status: event.target.value as QuestionStatus,
+                }))
+              }
+            >
+              <option value="draft">Draft</option>
+              <option value="published">Published</option>
+              <option value="archived">Archived</option>
+            </select>
+          </label>
+        </div>
+
+        <label>
+          Prompt
+          <textarea
+            value={form.prompt}
+            onChange={(event) =>
+              updateQuestionForm(question.id, (current) => ({
+                ...current,
+                prompt: event.target.value,
+              }))
+            }
+            placeholder="Which respiratory change would tend to lower PaCO2?"
+          />
+        </label>
+
+        <br />
+
+        <label>
+          Review Link
+          <select
+            value={form.review_article_concept_id}
+            onChange={(event) =>
+              updateQuestionForm(question.id, (current) => ({
+                ...current,
+                review_article_concept_id: event.target.value,
+              }))
+            }
+          >
+            <option value="">No specific article section</option>
+            {reviewLinksForConcept(conceptLink.concept_id).map((link) => (
+              <option key={link.id} value={link.id}>
+                {title}
+                {link.section_anchor ? ` / ${link.section_anchor}` : ' / Article level'}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <br />
+
+        {form.question_type === 'multiple_choice' && (
+          <div className="card">
+            <h4>Options</h4>
+            <div className="stack">
+              {form.options.map((option, index) => (
+                <div
+                  key={option.clientId}
+                  style={{ display: 'flex', gap: 8, alignItems: 'center' }}
+                >
+                  <strong>{String.fromCharCode(65 + index)}</strong>
+                  <input
+                    value={option.option_text}
+                    onChange={(event) =>
+                      updateQuestionForm(question.id, (current) => ({
+                        ...current,
+                        options: current.options.map((currentOption) =>
+                          currentOption.clientId === option.clientId
+                            ? { ...currentOption, option_text: event.target.value }
+                            : currentOption
+                        ),
+                      }))
+                    }
+                    placeholder="Answer option"
+                  />
+                  <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <input
+                      type="radio"
+                      name={`correct-${question.id}`}
+                      checked={option.is_correct}
+                      onChange={() =>
+                        updateQuestionForm(question.id, (current) => ({
+                          ...current,
+                          options: current.options.map((currentOption) => ({
+                            ...currentOption,
+                            is_correct: currentOption.clientId === option.clientId,
+                          })),
+                        }))
+                      }
+                    />
+                    Correct
+                  </label>
+                  <button
+                    className="btn ghost"
+                    type="button"
+                    onClick={() => removeQuestionOption(question.id, option.clientId)}
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+            <button
+              className="btn ghost"
+              type="button"
+              style={{ marginTop: 12 }}
+              onClick={() => addQuestionOption(question.id)}
+            >
+              + Add Option
+            </button>
+          </div>
+        )}
+
+        {form.question_type === 'true_false' && (
+          <div className="card">
+            <h4>Correct Answer</h4>
+            {['True', 'False'].map((answer) => (
+              <label
+                key={answer}
+                style={{ display: 'flex', gap: 8, alignItems: 'center' }}
+              >
+                <input
+                  type="radio"
+                  name={`true-false-${question.id}`}
+                  checked={form.options.some(
+                    (option) => option.option_text === answer && option.is_correct
+                  )}
+                  onChange={() =>
+                    updateQuestionForm(question.id, (current) => ({
+                      ...current,
+                      options: current.options.map((option) => ({
+                        ...option,
+                        is_correct: option.option_text === answer,
+                      })),
+                    }))
+                  }
+                />
+                {answer}
+              </label>
+            ))}
+          </div>
+        )}
+
+        {form.question_type === 'short_answer' && (
+          <div className="card">
+            <h4>Accepted Answers</h4>
+            <div className="stack">
+              {form.acceptedAnswers.map((answer) => (
+                <div
+                  key={answer.clientId}
+                  style={{ display: 'flex', gap: 8, alignItems: 'center' }}
+                >
+                  <input
+                    value={answer.answer_text}
+                    onChange={(event) =>
+                      updateQuestionForm(question.id, (current) => ({
+                        ...current,
+                        acceptedAnswers: current.acceptedAnswers.map((currentAnswer) =>
+                          currentAnswer.clientId === answer.clientId
+                            ? { ...currentAnswer, answer_text: event.target.value }
+                            : currentAnswer
+                        ),
+                      }))
+                    }
+                    placeholder="PaCO2"
+                  />
+                  <button
+                    className="btn ghost"
+                    type="button"
+                    onClick={() => removeAcceptedAnswer(question.id, answer.clientId)}
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+            <button
+              className="btn ghost"
+              type="button"
+              style={{ marginTop: 12 }}
+              onClick={() => addAcceptedAnswer(question.id)}
+            >
+              + Add Accepted Answer
+            </button>
+          </div>
+        )}
+
+        <br />
+
+        <label>
+          Explanation
+          <textarea
+            value={form.explanation}
+            onChange={(event) =>
+              updateQuestionForm(question.id, (current) => ({
+                ...current,
+                explanation: event.target.value,
+              }))
+            }
+            placeholder="Explain why the answer is correct."
+          />
+        </label>
+
+        <br />
+        <br />
+
+        <div className="card">
+          <h4>Sources</h4>
+          {form.sourceIds.length === 0 ? (
+            <p className="muted">No sources attached yet.</p>
+          ) : (
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {form.sourceIds.map((sourceId) => (
+                <button
+                  className="btn ghost"
+                  type="button"
+                  key={sourceId}
+                  onClick={() => removeQuestionSource(question.id, sourceId)}
+                >
+                  {sourceTitle(sourceId)} ×
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="form-grid" style={{ marginTop: 12 }}>
+            <label>
+              Add Existing Source
+              <select
+                value={form.sourceSelectId}
+                onChange={(event) =>
+                  updateQuestionForm(question.id, (current) => ({
+                    ...current,
+                    sourceSelectId: event.target.value,
+                  }))
+                }
+              >
+                <option value="">Choose source</option>
+                {availableSources.map((source) => (
+                  <option
+                    key={source.id}
+                    value={source.id}
+                    disabled={form.sourceIds.includes(source.id)}
+                  >
+                    {source.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <button
+            className="btn ghost"
+            type="button"
+            style={{ marginTop: 12 }}
+            onClick={() => addQuestionSource(question.id)}
+          >
+            + Add Source
+          </button>
+          <p className="muted">
+            Need a new source? Use Creator Studio Manage Sources, then return here.
+          </p>
+        </div>
+
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 12 }}>
+          <button
+            className="btn primary"
+            type="button"
+            onClick={() => saveQuestion(question.id)}
+          >
+            Save Question
+          </button>
+          <button
+            className="btn ghost"
+            type="button"
+            onClick={() => archiveQuestion(question)}
+            disabled={question.id.startsWith('new-')}
+          >
+            Archive
+          </button>
+          <button
+            className="btn ghost"
+            type="button"
+            onClick={() => deleteDraftQuestion(question)}
+            disabled={!question.id.startsWith('new-') && question.status !== 'draft'}
+          >
+            Delete Draft
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="panel">
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
@@ -913,33 +2077,125 @@ export function ArticleEditorClient({
           <p className="muted">No core concepts linked yet.</p>
         ) : (
           <div className="stack">
-            {coreConcepts.map((link) => (
-              <div className="card" key={link.id}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-                  <div>
-                    <strong>{link.concept?.name || 'Unknown concept'}</strong>
-                    <p className="muted" style={{ marginBottom: 0 }}>
-                      {link.concept?.concept_type || 'Concept'} ·{' '}
-                      {link.concept?.status || 'draft'}
-                      {link.section_anchor ? ` · Section: ${link.section_anchor}` : ''}
-                    </p>
-                    {link.concept?.summary && <p>{link.concept.summary}</p>}
-                  </div>
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                    <Link className="btn ghost" href={`/creator?concept=${link.concept_id}`}>
-                      Edit
-                    </Link>
+            {coreConcepts.map((link) => {
+              const isConceptExpanded = expandedConceptIds.has(link.concept_id);
+              const questions = questionBanks[link.concept_id] || [];
+              const newQuestionType =
+                newQuestionTypeByConcept[link.concept_id] || 'multiple_choice';
+
+              return (
+                <div className="card" key={link.id}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      gap: 12,
+                      alignItems: 'flex-start',
+                    }}
+                  >
                     <button
                       className="btn ghost"
                       type="button"
-                      onClick={() => unlinkCoreConcept(link.id)}
+                      onClick={() => toggleExpandedConcept(link.concept_id)}
                     >
-                      Unlink
+                      {isConceptExpanded ? '▼' : '▶'}
                     </button>
+                    <div style={{ flex: 1 }}>
+                      <strong>{link.concept?.name || 'Unknown concept'}</strong>
+                      <p className="muted" style={{ marginBottom: 0 }}>
+                        {link.concept?.concept_type || 'Concept'} ·{' '}
+                        {link.concept?.status || 'draft'}
+                        {link.section_anchor ? ` · Section: ${link.section_anchor}` : ''}
+                      </p>
+                      {link.concept?.summary && <p>{link.concept.summary}</p>}
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      <Link className="btn ghost" href={`/creator?concept=${link.concept_id}`}>
+                        Edit
+                      </Link>
+                      <button
+                        className="btn ghost"
+                        type="button"
+                        onClick={() => unlinkCoreConcept(link.id)}
+                      >
+                        Unlink
+                      </button>
+                    </div>
                   </div>
+
+                  {isConceptExpanded && (
+                    <div className="card" style={{ marginTop: 12 }}>
+                      <h4>Question Bank</h4>
+                      {questions.length === 0 ? (
+                        <p className="muted">No questions yet.</p>
+                      ) : (
+                        <div className="stack">
+                          {questions.map((question, questionIndex) => {
+                            const isQuestionExpanded = expandedQuestionIds.has(question.id);
+
+                            return (
+                              <div className="card" key={question.id}>
+                                <button
+                                  className="btn ghost"
+                                  type="button"
+                                  onClick={() => toggleQuestionEditor(question)}
+                                >
+                                  {isQuestionExpanded ? '▼' : '▶'} Question{' '}
+                                  {questionIndex + 1}
+                                </button>
+                                <p className="muted" style={{ marginBottom: 0 }}>
+                                  {questionTypeLabels[question.question_type]} ·{' '}
+                                  {question.status}
+                                </p>
+                                <p>
+                                  {question.prompt || 'Untitled draft question'}
+                                </p>
+                                {isQuestionExpanded &&
+                                  renderQuestionEditor(question, link)}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      <div
+                        style={{
+                          display: 'flex',
+                          gap: 10,
+                          flexWrap: 'wrap',
+                          marginTop: 12,
+                        }}
+                      >
+                        <select
+                          value={newQuestionType}
+                          onChange={(event) =>
+                            setNewQuestionTypeByConcept((current) => ({
+                              ...current,
+                              [link.concept_id]: event.target.value as QuestionType,
+                            }))
+                          }
+                        >
+                          <option value="multiple_choice">Multiple Choice</option>
+                          <option value="true_false">True / False</option>
+                          <option value="short_answer">Short Answer</option>
+                        </select>
+                        <button
+                          className="btn ghost"
+                          type="button"
+                          onClick={() => addQuestion(link, newQuestionType)}
+                        >
+                          + Add Question
+                        </button>
+                      </div>
+
+                      {questionMessageByConcept[link.concept_id] && (
+                        <p className="muted">{questionMessageByConcept[link.concept_id]}</p>
+                      )}
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
