@@ -2,12 +2,26 @@
 
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+
+const RECOVERY_TIMEOUT_MS = 12000;
+
+function withRecoveryTimeout<T>(operation: Promise<T>, label: string) {
+  return Promise.race([
+    operation,
+    new Promise<T>((_, reject) => {
+      window.setTimeout(() => {
+        reject(new Error(`${label} timed out`));
+      }, RECOVERY_TIMEOUT_MS);
+    }),
+  ]);
+}
 
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const recoveryAttemptedRef = useRef(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [message, setMessage] = useState('');
@@ -15,6 +29,10 @@ function LoginForm() {
 
   useEffect(() => {
     async function completeRecoveryFromHash() {
+      if (recoveryAttemptedRef.current) {
+        return;
+      }
+
       const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
       const accessToken = hashParams.get('access_token');
       const refreshToken = hashParams.get('refresh_token');
@@ -24,25 +42,54 @@ function LoginForm() {
         return;
       }
 
+      recoveryAttemptedRef.current = true;
       setIsSubmitting(true);
       setMessage('Opening your password reset link...');
 
-      const { error } = await supabase.auth.setSession({
-        access_token: accessToken,
-        refresh_token: refreshToken,
-      });
+      try {
+        const { data, error } = await withRecoveryTimeout(
+          supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          }),
+          'Password reset session setup'
+        );
 
-      setIsSubmitting(false);
+        if (error) {
+          console.error('Supabase recovery session setup from login failed:', error);
+          setMessage('This password reset link is invalid or has expired.');
+          return;
+        }
 
-      if (error) {
-        console.error('Supabase recovery session setup from login failed:', error);
-        setMessage('Password reset link could not be completed. Request a fresh link and try again.');
-        return;
+        if (!data.session) {
+          console.error('Supabase recovery session setup returned no session.');
+          setMessage('This password reset link is invalid or has expired.');
+          return;
+        }
+
+        const {
+          data: { session },
+          error: sessionError,
+        } = await withRecoveryTimeout(
+          supabase.auth.getSession(),
+          'Password reset session confirmation'
+        );
+
+        if (sessionError || !session) {
+          console.error('Supabase recovery session confirmation failed:', sessionError);
+          setMessage('Password reset session could not be confirmed. Request a fresh link and try again.');
+          return;
+        }
+
+        window.history.replaceState(null, '', '/login');
+        router.replace('/reset-password');
+        router.refresh();
+      } catch (error) {
+        console.error('Supabase recovery flow stalled or failed:', error);
+        setMessage('Password reset link could not be opened. Request a fresh link and try again.');
+      } finally {
+        setIsSubmitting(false);
       }
-
-      window.history.replaceState(null, '', '/login');
-      router.replace('/reset-password');
-      router.refresh();
     }
 
     completeRecoveryFromHash();
