@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { MarkdownContent } from '@/components/MarkdownContent';
@@ -25,11 +25,34 @@ type ArticleDraft = {
   placement_ids: string[];
   primary_placement_id: string | null;
   tags: string[];
+  core_concepts: LinkedCoreConcept[];
 };
 
 type TagRecord = {
   id: string;
   name: string;
+};
+
+type LinkedCoreConcept = {
+  id: string;
+  concept_id: string;
+  role: string;
+  section_anchor: string | null;
+  concept: {
+    id: string;
+    name: string;
+    summary: string | null;
+    concept_type: string | null;
+    status: string | null;
+  } | null;
+};
+
+type AvailableConcept = {
+  id: string;
+  name: string;
+  summary: string | null;
+  concept_type: string | null;
+  status: string | null;
 };
 
 function getCategoryPath(node: LibraryNode, nodes: LibraryNode[]) {
@@ -189,6 +212,56 @@ function editorHtmlToMarkdown(root: HTMLElement) {
   return lines.join('\n').trim();
 }
 
+function extractArticleSections(markdown: string) {
+  const sections: string[] = [];
+  const seen = new Set<string>();
+
+  markdown.split(/\r?\n/).forEach((line) => {
+    const match = /^(##|###)\s+(.+)$/.exec(line.trim());
+    const heading = match?.[2]?.replace(/\s+/g, ' ').trim();
+
+    if (heading && !seen.has(heading.toLowerCase())) {
+      seen.add(heading.toLowerCase());
+      sections.push(heading);
+    }
+  });
+
+  return sections;
+}
+
+function normalizeJoinedConcept(row: {
+  id: string;
+  concept_id: string;
+  role: string;
+  section_anchor: string | null;
+  concepts:
+    | {
+        id: string;
+        name: string;
+        summary: string | null;
+        concept_type: string | null;
+        status: string | null;
+      }
+    | Array<{
+        id: string;
+        name: string;
+        summary: string | null;
+        concept_type: string | null;
+        status: string | null;
+      }>
+    | null;
+}): LinkedCoreConcept {
+  const concept = Array.isArray(row.concepts) ? row.concepts[0] || null : row.concepts;
+
+  return {
+    id: row.id,
+    concept_id: row.concept_id,
+    role: row.role,
+    section_anchor: row.section_anchor,
+    concept,
+  };
+}
+
 export function ArticleEditorClient({
   article,
   activeLibrary,
@@ -216,11 +289,31 @@ export function ArticleEditorClient({
   const [tags, setTags] = useState(article.tags);
   const [tagInput, setTagInput] = useState('');
   const [availableTags, setAvailableTags] = useState<TagRecord[]>([]);
+  const [coreConcepts, setCoreConcepts] = useState(article.core_concepts);
+  const [availableConcepts, setAvailableConcepts] = useState<AvailableConcept[]>([]);
+  const [conceptSearch, setConceptSearch] = useState('');
+  const [selectedConceptId, setSelectedConceptId] = useState('');
+  const [newConceptName, setNewConceptName] = useState('');
+  const [newConceptSummary, setNewConceptSummary] = useState('');
+  const [newConceptPlacementIds, setNewConceptPlacementIds] = useState<string[]>(
+    article.placement_ids
+  );
+  const [selectedSectionAnchor, setSelectedSectionAnchor] = useState('');
+  const [articleSections, setArticleSections] = useState(
+    extractArticleSections(article.body_markdown)
+  );
+  const [coreConceptMode, setCoreConceptMode] = useState<
+    'closed' | 'link' | 'create'
+  >('closed');
+  const [coreConceptMessage, setCoreConceptMessage] = useState('');
   const [status, setStatus] = useState(article.status);
   const [previewMarkdown, setPreviewMarkdown] = useState(article.body_markdown);
   const [message, setMessage] = useState('');
   const [isSaving, setIsSaving] = useState(false);
-  const placementNodes = availableNodes.filter((node) => node.parent_id !== null);
+  const placementNodes = useMemo(
+    () => availableNodes.filter((node) => node.parent_id !== null),
+    [availableNodes]
+  );
 
   useEffect(() => {
     async function loadTags() {
@@ -231,6 +324,56 @@ export function ArticleEditorClient({
     loadTags();
   }, []);
 
+  useEffect(() => {
+    async function loadAvailableConcepts() {
+      const nodeIds = placementNodes.map((node) => node.id);
+
+      if (nodeIds.length === 0) {
+        setAvailableConcepts([]);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('concept_placements')
+        .select(
+          `
+          concept_id,
+          concepts (
+            id,
+            name,
+            summary,
+            concept_type,
+            status
+          )
+        `
+        )
+        .in('library_node_id', nodeIds);
+
+      if (error) {
+        setCoreConceptMessage(`Unable to load concepts: ${error.message}`);
+        return;
+      }
+
+      const conceptsById = new Map<string, AvailableConcept>();
+
+      (data || []).forEach((placement) => {
+        const concept = Array.isArray(placement.concepts)
+          ? placement.concepts[0]
+          : placement.concepts;
+
+        if (concept?.id) {
+          conceptsById.set(concept.id, concept);
+        }
+      });
+
+      setAvailableConcepts(
+        [...conceptsById.values()].sort((a, b) => a.name.localeCompare(b.name))
+      );
+    }
+
+    loadAvailableConcepts();
+  }, [activeLibrary.id, placementNodes]);
+
   function runCommand(command: string, value?: string) {
     editorRef.current?.focus();
     document.execCommand(command, false, value);
@@ -238,6 +381,47 @@ export function ArticleEditorClient({
 
   function getMarkdown() {
     return editorRef.current ? editorHtmlToMarkdown(editorRef.current) : '';
+  }
+
+  async function loadCoreConcepts(nextArticleId = articleId) {
+    if (!nextArticleId) {
+      setCoreConcepts([]);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('article_concepts')
+      .select(
+        `
+        id,
+        concept_id,
+        role,
+        section_anchor,
+        concepts (
+          id,
+          name,
+          summary,
+          concept_type,
+          status
+        )
+      `
+      )
+      .eq('article_id', nextArticleId)
+      .order('sort_order')
+      .order('created_at');
+
+    if (error) {
+      setCoreConceptMessage(`Unable to load core concepts: ${error.message}`);
+      return;
+    }
+
+    setCoreConcepts((data || []).map(normalizeJoinedConcept));
+  }
+
+  function refreshSectionOptions() {
+    const sections = extractArticleSections(getMarkdown());
+    setArticleSections(sections);
+    return sections;
   }
 
   async function saveArticle(nextStatus: 'draft' | 'published') {
@@ -280,8 +464,167 @@ export function ArticleEditorClient({
     setSlug(result.slug);
     setStatus(result.status);
     setPreviewMarkdown(markdown);
+    setArticleSections(extractArticleSections(markdown));
     setMessage(nextStatus === 'published' ? 'Article published.' : 'Draft saved.');
     router.refresh();
+  }
+
+  function openCoreConceptMode(mode: 'link' | 'create') {
+    refreshSectionOptions();
+    setCoreConceptMode(mode);
+    setCoreConceptMessage('');
+  }
+
+  async function linkExistingConcept() {
+    if (!articleId) {
+      setCoreConceptMessage('Save the article before linking core concepts.');
+      return;
+    }
+
+    if (!selectedConceptId) {
+      setCoreConceptMessage('Choose a concept to link.');
+      return;
+    }
+
+    if (coreConcepts.some((concept) => concept.concept_id === selectedConceptId)) {
+      setCoreConceptMessage('That concept is already linked to this article.');
+      return;
+    }
+
+    setCoreConceptMessage('Linking concept...');
+
+    const { error } = await supabase.rpc('link_article_core_concept', {
+      p_article_id: articleId,
+      p_concept_id: selectedConceptId,
+      p_section_anchor: selectedSectionAnchor || null,
+      p_role: 'discussed',
+    });
+
+    if (error) {
+      setCoreConceptMessage(`Error: ${error.message}`);
+      return;
+    }
+
+    setSelectedConceptId('');
+    setSelectedSectionAnchor('');
+    setConceptSearch('');
+    setCoreConceptMode('closed');
+    setCoreConceptMessage('Core concept linked.');
+    await loadCoreConcepts(articleId);
+  }
+
+  function toggleNewConceptPlacement(placementId: string) {
+    setNewConceptPlacementIds((current) =>
+      current.includes(placementId)
+        ? current.filter((id) => id !== placementId)
+        : [...current, placementId]
+    );
+  }
+
+  async function createNewCoreConcept() {
+    if (!articleId) {
+      setCoreConceptMessage('Save the article before creating core concepts.');
+      return;
+    }
+
+    if (!newConceptName.trim()) {
+      setCoreConceptMessage('Enter a concept name.');
+      return;
+    }
+
+    if (newConceptPlacementIds.length === 0) {
+      setCoreConceptMessage('Choose at least one concept placement.');
+      return;
+    }
+
+    setCoreConceptMessage('Creating draft concept...');
+
+    const { error } = await supabase.rpc('create_article_core_concept', {
+      p_article_id: articleId,
+      p_name: newConceptName.trim(),
+      p_summary: newConceptSummary.trim() || null,
+      p_active_library_id: activeLibrary.id,
+      p_library_node_ids: newConceptPlacementIds,
+      p_section_anchor: selectedSectionAnchor || null,
+    });
+
+    if (error) {
+      setCoreConceptMessage(`Error: ${error.message}`);
+      return;
+    }
+
+    setNewConceptName('');
+    setNewConceptSummary('');
+    setSelectedSectionAnchor('');
+    setCoreConceptMode('closed');
+    setCoreConceptMessage('Draft core concept created and linked.');
+    await Promise.all([loadCoreConcepts(articleId), reloadAvailableConcepts()]);
+  }
+
+  async function reloadAvailableConcepts() {
+    const nodeIds = placementNodes.map((node) => node.id);
+
+    if (nodeIds.length === 0) {
+      setAvailableConcepts([]);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('concept_placements')
+      .select(
+        `
+        concept_id,
+        concepts (
+          id,
+          name,
+          summary,
+          concept_type,
+          status
+        )
+      `
+      )
+      .in('library_node_id', nodeIds);
+
+    if (error) {
+      setCoreConceptMessage(`Unable to refresh concept list: ${error.message}`);
+      return;
+    }
+
+    const conceptsById = new Map<string, AvailableConcept>();
+
+    (data || []).forEach((placement) => {
+      const concept = Array.isArray(placement.concepts)
+        ? placement.concepts[0]
+        : placement.concepts;
+
+      if (concept?.id) {
+        conceptsById.set(concept.id, concept);
+      }
+    });
+
+    setAvailableConcepts(
+      [...conceptsById.values()].sort((a, b) => a.name.localeCompare(b.name))
+    );
+  }
+
+  async function unlinkCoreConcept(linkId: string) {
+    if (!window.confirm('Unlink this concept from the article? The concept itself will be preserved.')) {
+      return;
+    }
+
+    setCoreConceptMessage('Unlinking concept...');
+
+    const { error } = await supabase.rpc('unlink_article_core_concept', {
+      p_article_concept_id: linkId,
+    });
+
+    if (error) {
+      setCoreConceptMessage(`Error: ${error.message}`);
+      return;
+    }
+
+    setCoreConceptMessage('Core concept unlinked. The concept record was not deleted.');
+    await loadCoreConcepts();
   }
 
   function addPlacement() {
@@ -551,6 +894,228 @@ export function ArticleEditorClient({
         <button className="btn ghost" type="button" onClick={addTag}>
           + Add Tag
         </button>
+      </div>
+
+      <br />
+
+      <div className="card">
+        <h3>Core Concepts</h3>
+        <p className="muted">
+          Link reusable Socrates concepts taught by this article. These are structured
+          relationships, separate from the article prose.
+        </p>
+
+        {!articleId && (
+          <p className="muted">Save the article draft before adding core concepts.</p>
+        )}
+
+        {coreConcepts.length === 0 ? (
+          <p className="muted">No core concepts linked yet.</p>
+        ) : (
+          <div className="stack">
+            {coreConcepts.map((link) => (
+              <div className="card" key={link.id}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                  <div>
+                    <strong>{link.concept?.name || 'Unknown concept'}</strong>
+                    <p className="muted" style={{ marginBottom: 0 }}>
+                      {link.concept?.concept_type || 'Concept'} ·{' '}
+                      {link.concept?.status || 'draft'}
+                      {link.section_anchor ? ` · Section: ${link.section_anchor}` : ''}
+                    </p>
+                    {link.concept?.summary && <p>{link.concept.summary}</p>}
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <Link className="btn ghost" href={`/creator?concept=${link.concept_id}`}>
+                      Edit
+                    </Link>
+                    <button
+                      className="btn ghost"
+                      type="button"
+                      onClick={() => unlinkCoreConcept(link.id)}
+                    >
+                      Unlink
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 12 }}>
+          <button
+            className="btn ghost"
+            type="button"
+            disabled={!articleId}
+            onClick={() => openCoreConceptMode('link')}
+          >
+            Link Existing Concept
+          </button>
+          <button
+            className="btn ghost"
+            type="button"
+            disabled={!articleId}
+            onClick={() => openCoreConceptMode('create')}
+          >
+            + Create New Concept
+          </button>
+        </div>
+
+        {coreConceptMode !== 'closed' && (
+          <div className="card" style={{ marginTop: 16 }}>
+            <h4>
+              {coreConceptMode === 'link'
+                ? 'Link Existing Concept'
+                : 'Create New Core Concept'}
+            </h4>
+
+            <label>
+              Linked Article Section
+              <select
+                value={selectedSectionAnchor}
+                onChange={(event) => setSelectedSectionAnchor(event.target.value)}
+              >
+                <option value="">Article-level concept</option>
+                {articleSections.map((section) => (
+                  <option key={section} value={section}>
+                    {section}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              className="btn ghost"
+              type="button"
+              style={{ marginTop: 8 }}
+              onClick={refreshSectionOptions}
+            >
+              Refresh Sections from Article
+            </button>
+
+            {coreConceptMode === 'link' ? (
+              <>
+                <div className="form-grid" style={{ marginTop: 12 }}>
+                  <label>
+                    Search Concepts
+                    <input
+                      value={conceptSearch}
+                      onChange={(event) => setConceptSearch(event.target.value)}
+                      placeholder="Search active-library concepts"
+                    />
+                  </label>
+                  <label>
+                    Existing Concept
+                    <select
+                      value={selectedConceptId}
+                      onChange={(event) => setSelectedConceptId(event.target.value)}
+                    >
+                      <option value="">Choose concept</option>
+                      {availableConcepts
+                        .filter((concept) => {
+                          const search = conceptSearch.trim().toLowerCase();
+                          return (
+                            !search ||
+                            concept.name.toLowerCase().includes(search) ||
+                            concept.summary?.toLowerCase().includes(search)
+                          );
+                        })
+                        .map((concept) => (
+                          <option
+                            key={concept.id}
+                            value={concept.id}
+                            disabled={coreConcepts.some(
+                              (linked) => linked.concept_id === concept.id
+                            )}
+                          >
+                            {concept.name}
+                            {concept.status ? ` (${concept.status})` : ''}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+                </div>
+
+                <button
+                  className="btn primary"
+                  type="button"
+                  style={{ marginTop: 12 }}
+                  onClick={linkExistingConcept}
+                >
+                  Link Concept
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="form-grid" style={{ marginTop: 12 }}>
+                  <label>
+                    Concept Name
+                    <input
+                      value={newConceptName}
+                      onChange={(event) => setNewConceptName(event.target.value)}
+                      placeholder="The lungs regulate acid-base balance through carbon dioxide"
+                    />
+                  </label>
+                  <label>
+                    Concept Summary / Mastery Statement
+                    <textarea
+                      value={newConceptSummary}
+                      onChange={(event) => setNewConceptSummary(event.target.value)}
+                      placeholder="Ventilation regulates PaCO2, which changes acid-base balance and affects pH."
+                    />
+                  </label>
+                </div>
+
+                <div style={{ marginTop: 12 }}>
+                  <strong>Placement</strong>
+                  <p className="muted">
+                    Choose one or more active-library locations for this reusable concept.
+                  </p>
+                  <div className="stack">
+                    {placementNodes.map((node) => (
+                      <label
+                        key={node.id}
+                        style={{
+                          display: 'flex',
+                          gap: 8,
+                          alignItems: 'center',
+                          fontWeight: 400,
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={newConceptPlacementIds.includes(node.id)}
+                          onChange={() => toggleNewConceptPlacement(node.id)}
+                        />
+                        {getCategoryPath(node, availableNodes)}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <button
+                  className="btn primary"
+                  type="button"
+                  style={{ marginTop: 12 }}
+                  onClick={createNewCoreConcept}
+                >
+                  Create Draft Concept
+                </button>
+              </>
+            )}
+
+            <button
+              className="btn ghost"
+              type="button"
+              style={{ marginTop: 12, marginLeft: 8 }}
+              onClick={() => setCoreConceptMode('closed')}
+            >
+              Cancel
+            </button>
+          </div>
+        )}
+
+        {coreConceptMessage && <p className="muted">{coreConceptMessage}</p>}
       </div>
 
       <br />

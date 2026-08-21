@@ -129,9 +129,11 @@ function getCategoryPath(node: LibraryNode, nodes: LibraryNode[]) {
 
 export function CreatorStudioClient({
   activeLibraryContext,
+  initialConceptId,
   children,
 }: {
   activeLibraryContext: ActiveLibraryContext;
+  initialConceptId?: string;
   children?: React.ReactNode;
 }) {
   const activeLibrary = activeLibraryContext.library;
@@ -245,7 +247,20 @@ export function CreatorStudioClient({
       return;
     }
 
-    setOwnedConcepts(data || []);
+    const managedData = data || [];
+    setOwnedConcepts(managedData);
+
+    if (initialConceptId) {
+      const initialConcept = managedData.find(
+        (concept) => concept.id === initialConceptId
+      );
+
+      if (initialConcept) {
+        setWorkflow('edit');
+        handleEditConcept(initialConcept);
+        setManagementStatus('Opened linked core concept from Article Editor.');
+      }
+    }
   }
 
   async function loadPageData() {

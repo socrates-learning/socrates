@@ -42,6 +42,7 @@ export default async function NewArticlePage() {
                 placement_ids: [],
                 primary_placement_id: null,
                 tags: [],
+                core_concepts: [],
               }}
             />
           ) : (

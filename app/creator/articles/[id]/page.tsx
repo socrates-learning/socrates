@@ -41,6 +41,26 @@ export default async function EditArticlePage({
     .from('article_tags')
     .select('tags(name)')
     .eq('article_id', article.id);
+  const { data: articleConcepts } = await supabase
+    .from('article_concepts')
+    .select(
+      `
+      id,
+      concept_id,
+      role,
+      section_anchor,
+      concepts (
+        id,
+        name,
+        summary,
+        concept_type,
+        status
+      )
+    `
+    )
+    .eq('article_id', article.id)
+    .order('sort_order')
+    .order('created_at');
   const { data: nodes } = activeLibrary
     ? await supabase
         .from('library_nodes')
@@ -65,6 +85,19 @@ export default async function EditArticlePage({
       : articleTag.tags;
 
     return tag?.name ? [tag.name] : [];
+  });
+  const coreConcepts = (articleConcepts || []).map((articleConcept) => {
+    const concept = Array.isArray(articleConcept.concepts)
+      ? articleConcept.concepts[0] || null
+      : articleConcept.concepts;
+
+    return {
+      id: articleConcept.id,
+      concept_id: articleConcept.concept_id,
+      role: articleConcept.role,
+      section_anchor: articleConcept.section_anchor,
+      concept,
+    };
   });
 
   return (
@@ -95,6 +128,7 @@ export default async function EditArticlePage({
                 placement_ids: placementIds,
                 primary_placement_id: primaryPlacement?.library_node_id || null,
                 tags: tagNames,
+                core_concepts: coreConcepts,
               }}
             />
           ) : (
