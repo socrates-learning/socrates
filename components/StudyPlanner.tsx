@@ -263,6 +263,36 @@ export function StudyPlanner({
     };
   }, []);
 
+  useEffect(() => {
+    const layout = document.querySelector<HTMLElement>('main.layout');
+
+    if (!layout) return;
+
+    const previousGridTemplateColumns = layout.style.gridTemplateColumns;
+
+    if (mode === 'setup') {
+      layout.style.gridTemplateColumns = '1fr';
+      window.history.replaceState(null, '', '#set-up-deck');
+      window.dispatchEvent(new Event('socrates-open-deck-setup'));
+    } else {
+      layout.style.gridTemplateColumns = previousGridTemplateColumns;
+
+      if (window.location.hash === '#set-up-deck') {
+        window.history.replaceState(null, '', window.location.pathname);
+      }
+
+      window.dispatchEvent(new Event('socrates-open-deck-dashboard'));
+    }
+
+    return () => {
+      layout.style.gridTemplateColumns = previousGridTemplateColumns;
+    };
+  }, [mode]);
+
+  function openSetupMode() {
+    setMode('setup');
+  }
+
   function descendantNodeIds(nodeId: string) {
     const ids = new Set<string>([nodeId]);
     const queue = [nodeId];
@@ -454,8 +484,6 @@ export function StudyPlanner({
     await refreshResolvedDeck();
     setIsSaving(false);
     setMode('dashboard');
-    window.history.replaceState(null, '', window.location.pathname);
-    window.dispatchEvent(new Event('socrates-open-deck-dashboard'));
     setMessage('Deck saved.');
   }
 
@@ -641,7 +669,15 @@ export function StudyPlanner({
 
   if (mode === 'setup') {
     return (
-      <div className="stack" id="set-up-deck">
+      <div
+        className="stack"
+        id="set-up-deck"
+        style={{
+          margin: '0 auto',
+          maxWidth: 1120,
+          width: '100%',
+        }}
+      >
         <div
           className="panel"
           style={{ border: '1px solid #bfdbfe', boxShadow: '0 8px 24px #0f172a12' }}
@@ -650,16 +686,15 @@ export function StudyPlanner({
           <p className="muted">Build your deck from topic branches</p>
         </div>
 
-        <div
-          className="dashboard"
-          style={{ gridTemplateColumns: 'minmax(0, 1.6fr) minmax(240px, 0.7fr)' }}
-        >
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, width: '100%' }}>
           <div
             className="panel"
             style={{
               border: '1px solid #cbd5e1',
               borderRadius: 16,
               boxShadow: '0 8px 24px #0f172a0d',
+              flex: '1 1 620px',
+              minWidth: 0,
             }}
           >
             {rootNodes.length === 0 ? (
@@ -675,6 +710,8 @@ export function StudyPlanner({
               border: '1px solid #cbd5e1',
               borderRadius: 16,
               boxShadow: '0 8px 24px #0f172a0d',
+              flex: '0 1 320px',
+              minWidth: 260,
             }}
           >
             <h3>Selected</h3>
@@ -700,21 +737,22 @@ export function StudyPlanner({
               <br />
               <strong style={{ fontSize: 36 }}>{totalQuestions}</strong>
             </p>
-            <div
-              style={{
-                background: '#eff6ff',
-                border: '1px solid #bfdbfe',
-                borderRadius: 12,
-                padding: 12,
-              }}
-            >
-              <p className="muted" style={{ margin: 0 }}>
-                Selecting a parent includes all children.
-                <br />
-                Build your deck from topic branches, not individual random cards.
-              </p>
-            </div>
           </div>
+        </div>
+
+        <div
+          className="panel"
+          style={{
+            background: '#eff6ff',
+            border: '1px solid #bfdbfe',
+            borderRadius: 14,
+          }}
+        >
+          <p className="muted" style={{ margin: 0 }}>
+            Selecting a parent includes all children.
+            <br />
+            Build your deck from topic branches, not individual random cards.
+          </p>
         </div>
 
         <div className="panel" style={{ border: '1px solid #e2e8f0', borderRadius: 16 }}>
@@ -854,7 +892,7 @@ export function StudyPlanner({
           <button
             className="btn ghost"
             type="button"
-            onClick={() => setMode('setup')}
+            onClick={openSetupMode}
           >
             Edit Deck
           </button>
@@ -967,7 +1005,7 @@ export function StudyPlanner({
         >
           <h3>Ready to study?</h3>
           <p className="muted">Jump in now or adjust your deck.</p>
-          <button className="btn ghost" type="button" onClick={() => setMode('setup')}>
+          <button className="btn ghost" type="button" onClick={openSetupMode}>
             {resolvedConcepts.length === 0 ? 'Set Up Deck' : 'Adjust Deck'}
           </button>
         </div>
