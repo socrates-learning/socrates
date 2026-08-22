@@ -241,6 +241,21 @@ export function StudyPlanner({
     };
   }, [activeLibrary?.id]);
 
+  useEffect(() => {
+    function openSetupFromHash() {
+      if (window.location.hash === '#set-up-deck') {
+        setMode('setup');
+      }
+    }
+
+    openSetupFromHash();
+    window.addEventListener('hashchange', openSetupFromHash);
+
+    return () => {
+      window.removeEventListener('hashchange', openSetupFromHash);
+    };
+  }, []);
+
   function descendantNodeIds(nodeId: string) {
     const ids = new Set<string>([nodeId]);
     const queue = [nodeId];
@@ -579,7 +594,7 @@ export function StudyPlanner({
 
   if (mode === 'setup') {
     return (
-      <div className="stack">
+      <div className="stack" id="set-up-deck">
         <div className="panel hero">
           <p className="muted" style={{ marginTop: 0 }}>
             Current Subject: {activeLibrary.name}
@@ -699,15 +714,15 @@ export function StudyPlanner({
   }
 
   return (
-    <div className="stack">
+    <div className="stack" id="deck-dashboard">
       <div className="panel hero">
         <p className="muted" style={{ marginTop: 0 }}>
           Current Subject: {activeLibrary.name}
         </p>
-        <h2>Welcome back.</h2>
+        <h2>Deck Dashboard</h2>
         <p>
-          Your active deck is built from the topics you choose. Study delivery comes
-          next; this page now keeps the setup and dashboard pieces in one clean flow.
+          Welcome back. Your current deck is the starting point for studying in{' '}
+          {activeLibrary.name}.
         </p>
       </div>
 
@@ -719,18 +734,27 @@ export function StudyPlanner({
             <br />
             <span className="muted">{activeLibrary.name}</span>
           </p>
-          <p>
-            <strong>{resolvedConcepts.length}</strong>
-            <br />
-            <span className="muted">concepts selected</span>
-          </p>
-          <p>
-            <strong>{totalQuestions}</strong>
-            <br />
-            <span className="muted">published questions available</span>
-          </p>
+          <div
+            className="card"
+            style={{
+              display: 'grid',
+              gap: 12,
+              gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+            }}
+          >
+            <p style={{ margin: 0 }}>
+              <strong>{resolvedConcepts.length}</strong>
+              <br />
+              <span className="muted">concepts selected</span>
+            </p>
+            <p style={{ margin: 0 }}>
+              <strong>{totalQuestions}</strong>
+              <br />
+              <span className="muted">questions available</span>
+            </p>
+          </div>
           {selectedNodeSummaries.length === 0 ? (
-            <p className="muted">Set up your deck by choosing topic branches.</p>
+            <p className="muted">No branches selected yet.</p>
           ) : (
             selectedNodeSummaries.slice(0, 4).map((selection) => (
               <p key={selection.id}>
@@ -758,29 +782,27 @@ export function StudyPlanner({
 
         <div className="panel">
           <h3>Ready to Study?</h3>
-          {resolvedConcepts.length === 0 ? (
-            <>
-              <p className="muted">Create a deck first, then Study Mode can use it.</p>
-              <button
-                className="btn primary"
-                type="button"
-                onClick={() => setMode('setup')}
-              >
-                Set Up Deck
-              </button>
-            </>
-          ) : (
-            <>
-              <p>
-                {resolvedConcepts.length} concepts and {totalQuestions} published
-                questions are ready for the future study loop.
-              </p>
-              <button className="btn primary" type="button" disabled>
-                STUDY
-              </button>
-              <p className="muted">Study Mode will be implemented in the next phase.</p>
-            </>
-          )}
+          <button
+            className="btn primary"
+            type="button"
+            disabled
+            style={{
+              fontSize: 18,
+              justifyContent: 'center',
+              minHeight: 56,
+              width: '100%',
+            }}
+          >
+            STUDY
+          </button>
+          <p className="muted">
+            {resolvedConcepts.length === 0
+              ? 'Set up your deck to begin studying.'
+              : 'Study Mode coming next.'}
+          </p>
+          <button className="btn ghost" type="button" onClick={() => setMode('setup')}>
+            {resolvedConcepts.length === 0 ? 'Set Up Deck' : 'Edit Deck'}
+          </button>
         </div>
       </div>
 

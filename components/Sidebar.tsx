@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 
 type LibraryNode = {
@@ -188,7 +189,19 @@ export function Sidebar({
 
   return (
     <aside className="panel sidebar">
+      <p className="muted" style={{ marginTop: 0, textTransform: 'uppercase' }}>
+        Current Subject
+      </p>
       <h3>{activeLibrary?.name || 'Knowledge Library'}</h3>
+
+      <div className="stack" style={{ marginBottom: 16 }}>
+        <button className="btn primary" type="button" disabled>
+          STUDY
+        </button>
+        <Link className="btn ghost" href="/#set-up-deck">
+          Set Up Deck
+        </Link>
+      </div>
 
       <input
         className="library-search"
