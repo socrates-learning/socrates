@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 
 type LibraryNode = {
@@ -11,17 +10,9 @@ type LibraryNode = {
   parent_id: string | null;
 };
 
-type Concept = {
-  id: string;
-  name: string;
-  concept_type: string | null;
-  status: string | null;
-};
-
 type Placement = {
   concept_id: string;
   library_node_id: string;
-  concepts: Concept | Concept[] | null;
 };
 
 export function Sidebar({
@@ -32,10 +23,7 @@ export function Sidebar({
   activeLibrary?: { id: string; name: string } | null;
 }) {
   const [nodes, setNodes] = useState<LibraryNode[]>([]);
-  const [placements, setPlacements] = useState<Placement[]>([]);
-  const [expandedNodeIds, setExpandedNodeIds] = useState<Set<string>>(
-    new Set()
-  );
+  const [expandedNodeIds, setExpandedNodeIds] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(Boolean(activeLibrary?.id));
 
@@ -45,7 +33,6 @@ export function Sidebar({
     async function loadSidebar() {
       if (!activeLibrary?.id) {
         setNodes([]);
-        setPlacements([]);
         setExpandedNodeIds(new Set());
         setIsLoading(false);
         return;
@@ -58,35 +45,41 @@ export function Sidebar({
         .select('id, name, node_type, parent_id')
         .eq('library_id', activeLibrary.id)
         .order('name');
-
       const loadedNodes = nodeData || [];
-      const nodeIds = loadedNodes.map((node) => node.id);
-      const { data: placementData } = nodeIds.length
-        ? await supabase
-            .from('concept_placements')
-            .select(`
-              concept_id,
-              library_node_id,
-              concepts!inner (
-                id,
-                name,
-                concept_type,
-                status
-              )
-            `)
-            .eq('concepts.status', 'published')
-            .in('library_node_id', nodeIds)
-            .order('sort_order')
-        : { data: [] };
-      const loadedPlacements = (placementData || []) as unknown as Placement[];
-      const initiallyExpanded = new Set<string>();
       const rootNode = loadedNodes.find((node) => node.parent_id === null);
+      const initiallyExpanded = new Set<string>();
 
       if (rootNode) initiallyExpanded.add(rootNode.id);
 
+      if (activeId) {
+        const nodeIds = loadedNodes.map((node) => node.id);
+        const { data: placementData } = nodeIds.length
+          ? await supabase
+              .from('concept_placements')
+              .select('concept_id, library_node_id')
+              .eq('concept_id', activeId)
+              .in('library_node_id', nodeIds)
+              .limit(1)
+          : { data: [] };
+        const activePlacement = (placementData || [])[0] as Placement | undefined;
+
+        if (activePlacement) {
+          const nodesById = new Map(loadedNodes.map((node) => [node.id, node]));
+          let currentNode: LibraryNode | undefined = nodesById.get(
+            activePlacement.library_node_id
+          );
+
+          while (currentNode) {
+            initiallyExpanded.add(currentNode.id);
+            currentNode = currentNode.parent_id
+              ? nodesById.get(currentNode.parent_id)
+              : undefined;
+          }
+        }
+      }
+
       if (isMounted) {
         setNodes(loadedNodes);
-        setPlacements(loadedPlacements);
         setExpandedNodeIds(initiallyExpanded);
         setIsLoading(false);
       }
@@ -104,16 +97,9 @@ export function Sidebar({
 
     if (!query) return;
 
-    const matchingNode =
-      nodes.find((node) => node.name.toLowerCase().includes(query)) ||
-      nodes.find((node) =>
-        placements.some((placement) => {
-          if (placement.library_node_id !== node.id) return false;
-
-          const concept = getConceptFromPlacement(placement);
-          return concept ? conceptMatchesSearch(concept) : false;
-        })
-      );
+    const matchingNode = nodes.find((node) =>
+      node.name.toLowerCase().includes(query)
+    );
 
     if (!matchingNode) return;
 
@@ -127,29 +113,9 @@ export function Sidebar({
     }
 
     setExpandedNodeIds(new Set(expandedPath));
-  }, [searchQuery, nodes, placements]);
+  }, [searchQuery, nodes]);
 
-  function getConceptFromPlacement(placement: Placement): Concept | null {
-    if (Array.isArray(placement.concepts)) {
-      return placement.concepts[0] || null;
-    }
-
-    return placement.concepts || null;
-  }
-
-  function conceptMatchesSearch(concept: Concept) {
-    const query = searchQuery.trim().toLowerCase();
-
-    return (
-      concept.name.toLowerCase().includes(query) ||
-      (concept.concept_type || '').toLowerCase().includes(query)
-    );
-  }
-
-  function nodeMatchesSearch(
-    node: LibraryNode,
-    visited = new Set<string>()
-  ): boolean {
+  function nodeMatchesSearch(node: LibraryNode, visited = new Set<string>()): boolean {
     const query = searchQuery.trim().toLowerCase();
 
     if (!query) return true;
@@ -159,48 +125,23 @@ export function Sidebar({
 
     if (node.name.toLowerCase().includes(query)) return true;
 
-    const hasMatchingConcept = placements.some((placement) => {
-      if (placement.library_node_id !== node.id) return false;
-
-      const concept = getConceptFromPlacement(placement);
-      return concept ? conceptMatchesSearch(concept) : false;
-    });
-
-    if (hasMatchingConcept) return true;
-
     return nodes
       .filter((child) => child.parent_id === node.id)
       .some((child) => nodeMatchesSearch(child, nextVisited));
   }
 
   function toggleNode(nodeId: string) {
-    const nodesById = new Map(nodes.map((node) => [node.id, node]));
-    const ancestorIds: string[] = [];
-    let parentId = nodesById.get(nodeId)?.parent_id;
-
-    while (parentId) {
-      ancestorIds.unshift(parentId);
-      parentId = nodesById.get(parentId)?.parent_id || null;
-    }
-
     setExpandedNodeIds((current) => {
-      return current.has(nodeId)
-        ? new Set(ancestorIds)
-        : new Set([...ancestorIds, nodeId]);
+      const next = new Set(current);
+
+      if (next.has(nodeId)) {
+        next.delete(nodeId);
+      } else {
+        next.add(nodeId);
+      }
+
+      return next;
     });
-  }
-
-  function collapseNode(nodeId: string) {
-    const nodesById = new Map(nodes.map((node) => [node.id, node]));
-    const ancestorIds: string[] = [];
-    let parentId = nodesById.get(nodeId)?.parent_id;
-
-    while (parentId) {
-      ancestorIds.unshift(parentId);
-      parentId = nodesById.get(parentId)?.parent_id || null;
-    }
-
-    setExpandedNodeIds(new Set(ancestorIds));
   }
 
   function renderNode(node: LibraryNode, ancestorMatchesSearch = false) {
@@ -213,18 +154,10 @@ export function Sidebar({
     if (query && !showEntireBranch && !nodeMatchesSearch(node)) return null;
 
     const childNodes = nodes.filter((child) => child.parent_id === node.id);
-    const nodePlacements = placements.filter(
-      (placement) => placement.library_node_id === node.id
-    );
-    const visibleChildNodes = query && !showEntireBranch
-      ? childNodes.filter((child) => nodeMatchesSearch(child))
-      : childNodes;
-    const visiblePlacements = query && !showEntireBranch
-      ? nodePlacements.filter((placement) => {
-          const concept = getConceptFromPlacement(placement);
-          return concept ? conceptMatchesSearch(concept) : false;
-        })
-      : nodePlacements;
+    const visibleChildNodes =
+      query && !showEntireBranch
+        ? childNodes.filter((child) => nodeMatchesSearch(child))
+        : childNodes;
     const isExpanded = expandedNodeIds.has(node.id);
 
     return (
@@ -239,34 +172,9 @@ export function Sidebar({
           {node.name}
         </button>
 
-        {isExpanded && (
+        {isExpanded && visibleChildNodes.length > 0 && (
           <div className="library-node-children">
-            {visibleChildNodes.map((child) =>
-              renderNode(child, showEntireBranch)
-            )}
-
-            {visiblePlacements.map((placement) => {
-              const concept = getConceptFromPlacement(placement);
-
-              if (!concept) return null;
-
-              return (
-                <Link
-                  key={`${node.id}-${placement.concept_id}`}
-                  className={`tree-item ${
-                    activeId === placement.concept_id ? 'active' : ''
-                  }`}
-                  href={`/concepts/${placement.concept_id}`}
-                  onClick={() => collapseNode(node.id)}
-                >
-                  {concept.name}
-                  <br />
-                  <small className="muted">
-                    {concept.concept_type || 'Concept'}
-                  </small>
-                </Link>
-              );
-            })}
+            {visibleChildNodes.map((child) => renderNode(child, showEntireBranch))}
           </div>
         )}
       </div>
@@ -285,8 +193,8 @@ export function Sidebar({
       <input
         className="library-search"
         type="search"
-        aria-label="Search knowledge library"
-        placeholder="Search concepts"
+        aria-label="Search knowledge library topics"
+        placeholder="Search topics"
         value={searchQuery}
         onChange={(event) => setSearchQuery(event.target.value)}
       />
@@ -299,14 +207,10 @@ export function Sidebar({
         visibleRootNodes.length > 0 ? (
           visibleRootNodes.map((node) => renderNode(node))
         ) : (
-          <p className="muted">No matching concepts found.</p>
+          <p className="muted">No matching topics found.</p>
         )
       ) : (
         <p className="muted">No library categories found yet.</p>
-      )}
-
-      {!isLoading && activeLibrary?.id && placements.length === 0 && (
-        <p className="muted">No published concepts in this library yet.</p>
       )}
     </aside>
   );
