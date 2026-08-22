@@ -94,25 +94,30 @@ export function Sidebar({
   }, [activeId, activeLibrary?.id]);
 
   useEffect(() => {
-    function syncDeckSetupState() {
-      setIsDeckSetupOpen(window.location.hash === '#set-up-deck');
-    }
+  function syncDeckSetupState() {
+    setIsDeckSetupOpen(window.location.hash === '#set-up-deck');
+  }
 
-    function markDashboardOpen() {
-      setIsDeckSetupOpen(false);
-    }
+  function markFocusedModeOpen() {
+    setIsDeckSetupOpen(true);
+  }
 
-    syncDeckSetupState();
-    window.addEventListener('hashchange', syncDeckSetupState);
-    window.addEventListener('socrates-open-deck-setup', syncDeckSetupState);
-    window.addEventListener('socrates-open-deck-dashboard', markDashboardOpen);
+  function markDashboardOpen() {
+    setIsDeckSetupOpen(false);
+  }
 
-    return () => {
-      window.removeEventListener('hashchange', syncDeckSetupState);
-      window.removeEventListener('socrates-open-deck-setup', syncDeckSetupState);
-      window.removeEventListener('socrates-open-deck-dashboard', markDashboardOpen);
-    };
-  }, []);
+  syncDeckSetupState();
+
+  window.addEventListener('hashchange', syncDeckSetupState);
+  window.addEventListener('socrates-open-deck-setup', markFocusedModeOpen);
+  window.addEventListener('socrates-open-deck-dashboard', markDashboardOpen);
+
+  return () => {
+    window.removeEventListener('hashchange', syncDeckSetupState);
+    window.removeEventListener('socrates-open-deck-setup', markFocusedModeOpen);
+    window.removeEventListener('socrates-open-deck-dashboard', markDashboardOpen);
+  };
+}, []);
 
   useEffect(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -218,71 +223,256 @@ export function Sidebar({
   }
 
   if (!activeId) {
-    return (
-      <aside
-        className="panel sidebar"
-        style={{
-          background: '#062b4f',
-          color: 'white',
-          display: 'flex',
-          flexDirection: 'column',
-          minHeight: 680,
-        }}
-      >
-        <p style={{ fontSize: 12, marginTop: 0, textTransform: 'uppercase' }}>
+  const navItemStyle = {
+    alignItems: 'center',
+    background: 'transparent',
+    border: 'none',
+    borderRadius: 12,
+    color: 'white',
+    display: 'flex',
+    fontSize: 16,
+    fontWeight: 600,
+    gap: 14,
+    padding: '13px 12px',
+    textAlign: 'left' as const,
+    width: '100%',
+  };
+
+  const iconStyle = {
+    flexShrink: 0,
+    height: 24,
+    width: 24,
+  };
+
+  return (
+    <aside
+      style={{
+        background: 'linear-gradient(180deg, #063b67 0%, #052f56 100%)',
+        borderRadius: 18,
+        color: 'white',
+        display: 'flex',
+        flexDirection: 'column',
+        minHeight: 720,
+        padding: '24px 18px',
+        boxShadow: '0 12px 30px rgba(15, 23, 42, 0.18)',
+      }}
+    >
+      {/* Current Subject */}
+      <div style={{ marginBottom: 28 }}>
+        <p
+          style={{
+            fontSize: 11,
+            fontWeight: 700,
+            letterSpacing: '0.08em',
+            margin: '0 0 10px',
+            opacity: 0.75,
+            textTransform: 'uppercase',
+          }}
+        >
           Current Subject
         </p>
-        <h3 style={{ color: 'white' }}>{activeLibrary?.name || 'Knowledge Library'}</h3>
 
-        <div className="stack" style={{ margin: '16px 0' }}>
-          <button
-            className="btn primary"
-            type="button"
-            onClick={openDeckSetup}
-            style={{
-              fontSize: 20,
-              justifyContent: 'center',
-              minHeight: 64,
-              textTransform: 'uppercase',
-            }}
+        <div
+          style={{
+            alignItems: 'center',
+            display: 'flex',
+            gap: 12,
+          }}
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            style={iconStyle}
+            aria-hidden="true"
           >
-            &gt; STUDY
-          </button>
-          <button className="btn ghost" type="button" onClick={openDeckSetup}>
-            Set Up Deck
-          </button>
-          <button className="btn ghost" type="button" disabled>
-            Make Cards
-          </button>
-          <button className="btn ghost" type="button" disabled>
-            Stats
-          </button>
-          <button className="btn ghost" type="button" disabled>
-            Menu
-          </button>
-        </div>
+            <path d="M12 3 3 8l9 5 9-5-9-5Z" />
+            <path d="m3 12 9 5 9-5" />
+            <path d="m3 16 9 5 9-5" />
+          </svg>
 
-        <div className="stack" style={{ marginTop: 'auto' }}>
-          <button className="btn ghost" type="button" disabled>
-            Account
-          </button>
-          <button className="btn ghost" type="button" disabled>
-            Settings
-          </button>
-          <button
-            className="btn ghost"
-            type="button"
-            onClick={async () => {
-              await supabase.auth.signOut();
-              window.location.href = '/login';
-            }}
-          >
-            Log out
-          </button>
+          <strong style={{ flex: 1, fontSize: 20 }}>
+            {activeLibrary?.name || 'Knowledge Library'}
+          </strong>
+
+          <span style={{ fontSize: 18 }}>⌄</span>
         </div>
-      </aside>
-    );
-  }
+      </div>
+
+      {/* Main STUDY button */}
+      <button
+        type="button"
+        onClick={openDeckSetup}
+        style={{
+          alignItems: 'center',
+          background: 'linear-gradient(135deg, #2563eb, #4f46e5)',
+          border: '2px solid #60a5fa',
+          borderRadius: 14,
+          boxShadow: '0 6px 16px rgba(37, 99, 235, 0.35)',
+          color: 'white',
+          display: 'flex',
+          fontSize: 20,
+          fontWeight: 700,
+          gap: 14,
+          justifyContent: 'center',
+          marginBottom: 18,
+          minHeight: 64,
+          width: '100%',
+        }}
+      >
+        <svg
+          viewBox="0 0 24 24"
+          fill="currentColor"
+          style={{ height: 28, width: 28 }}
+          aria-hidden="true"
+        >
+          <path d="M8 5v14l11-7L8 5Z" />
+        </svg>
+        STUDY
+      </button>
+
+      {/* Main navigation */}
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 6,
+        }}
+      >
+        <button type="button" onClick={openDeckSetup} style={navItemStyle}>
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            style={iconStyle}
+            aria-hidden="true"
+          >
+            <path d="M4 6h16" />
+            <circle cx="9" cy="6" r="2" />
+            <path d="M4 12h16" />
+            <circle cx="15" cy="12" r="2" />
+            <path d="M4 18h16" />
+            <circle cx="7" cy="18" r="2" />
+          </svg>
+          Set Up Deck
+        </button>
+
+        <button type="button" disabled style={{ ...navItemStyle, opacity: 0.65 }}>
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            style={iconStyle}
+            aria-hidden="true"
+          >
+            <rect x="4" y="4" width="16" height="16" rx="2" />
+            <path d="M12 8v8M8 12h8" />
+          </svg>
+          Make Cards
+        </button>
+
+        <button type="button" disabled style={{ ...navItemStyle, opacity: 0.65 }}>
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            style={iconStyle}
+            aria-hidden="true"
+          >
+            <path d="M5 20V10" />
+            <path d="M10 20V4" />
+            <path d="M15 20v-7" />
+            <path d="M20 20V7" />
+          </svg>
+          Stats
+        </button>
+
+        <button type="button" disabled style={{ ...navItemStyle, opacity: 0.65 }}>
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            style={iconStyle}
+            aria-hidden="true"
+          >
+            <path d="M4 7h16M4 12h16M4 17h16" />
+          </svg>
+          Menu
+        </button>
+      </div>
+
+      {/* Bottom account navigation */}
+      <div
+        style={{
+          borderTop: '1px solid rgba(255,255,255,0.25)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 6,
+          marginTop: 'auto',
+          paddingTop: 20,
+        }}
+      >
+        <button type="button" disabled style={{ ...navItemStyle, opacity: 0.75 }}>
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            style={iconStyle}
+            aria-hidden="true"
+          >
+            <circle cx="12" cy="8" r="4" />
+            <path d="M5 21c0-4 3-7 7-7s7 3 7 7" />
+          </svg>
+          Account
+        </button>
+
+        <button type="button" disabled style={{ ...navItemStyle, opacity: 0.75 }}>
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            style={iconStyle}
+            aria-hidden="true"
+          >
+            <circle cx="12" cy="12" r="3" />
+            <path d="M19.4 15a1.8 1.8 0 0 0 .36 1.98l.06.06-2.83 2.83-.06-.06A1.8 1.8 0 0 0 15 19.4a1.8 1.8 0 0 0-1 .6 1.8 1.8 0 0 0-.42 1.16V21h-4v-.09A1.8 1.8 0 0 0 8.6 19.4a1.8 1.8 0 0 0-1.98.36l-.06.06-2.83-2.83.06-.06A1.8 1.8 0 0 0 4.6 15a1.8 1.8 0 0 0-.6-1 1.8 1.8 0 0 0-1.16-.42H3v-4h.09A1.8 1.8 0 0 0 4.6 8.6a1.8 1.8 0 0 0-.36-1.98l-.06-.06 2.83-2.83.06.06A1.8 1.8 0 0 0 9 4.6a1.8 1.8 0 0 0 1-.6A1.8 1.8 0 0 0 10.42 3H14v.09A1.8 1.8 0 0 0 15 4.6a1.8 1.8 0 0 0 1.98-.36l.06-.06 2.83 2.83-.06.06A1.8 1.8 0 0 0 19.4 9c.34.3.72.5 1.16.58H21v4h-.09A1.8 1.8 0 0 0 19.4 15Z" />
+          </svg>
+          Settings
+        </button>
+
+        <button
+          type="button"
+          style={navItemStyle}
+          onClick={async () => {
+            await supabase.auth.signOut();
+            window.location.href = '/login';
+          }}
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            style={iconStyle}
+            aria-hidden="true"
+          >
+            <path d="M10 17l5-5-5-5" />
+            <path d="M15 12H3" />
+            <path d="M14 4h6v16h-6" />
+          </svg>
+          Log out
+        </button>
+      </div>
+    </aside>
+  );
+}
 
   return (
     <aside className="panel sidebar">

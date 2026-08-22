@@ -34,7 +34,7 @@ export default function AdminTestPage() {
   }, []);
 
   return (
-    <main className="layout">
+    <main className="layout" style={{ gridTemplateColumns: '1fr' }}>
       <section className="panel" style={{ maxWidth: 600, margin: '4rem auto' }}>
         <h1>Temporary Admin Diagnostic</h1>
         <p className="muted">

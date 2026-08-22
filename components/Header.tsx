@@ -57,8 +57,18 @@ export function Header() {
     router.push('/login');
   }
 
+  function handleHomeClick() {
+    window.dispatchEvent(new Event('socrates-open-deck-dashboard'));
+  }
+
+  function handleStudyClick() {
+    window.history.replaceState(null, '', '#set-up-deck');
+    window.dispatchEvent(new Event('socrates-open-deck-setup'));
+  }
+
   const isEditor = role === 'editor' || role === 'admin';
   const isAdmin = role === 'admin';
+  const accountLabel = email ? 'Account' : 'Login';
 
   return (
     <header className="header">
@@ -70,13 +80,21 @@ export function Header() {
       </div>
 
       <nav style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-        <Link className="btn ghost" href="/">
+        <Link className="btn ghost" href="/" onClick={handleHomeClick}>
           Home
         </Link>
 
-        <Link className="btn ghost" href="/pharmacology">
-          Pharmacology
-        </Link>
+        <button className="btn ghost" type="button" disabled>
+          Learn
+        </button>
+
+        <button className="btn ghost" type="button" onClick={handleStudyClick}>
+          Study
+        </button>
+
+        <button className="btn ghost" type="button" disabled>
+          Progress
+        </button>
 
         {isEditor && (
           <Link className="btn ghost" href="/creator">
@@ -90,21 +108,35 @@ export function Header() {
           </Link>
         )}
 
-        {isAdmin && (
-          <Link className="btn ghost" href="/admin">
-            Diagnostic
-          </Link>
-        )}
-
         {email ? (
-          <>
-            <span className="muted" style={{ alignSelf: 'center' }}>
-              {email}
-            </span>
-            <button className="btn primary" type="button" onClick={handleLogout}>
-              Logout
-            </button>
-          </>
+          <details style={{ position: 'relative' }}>
+            <summary className="btn primary" style={{ cursor: 'pointer' }}>
+              {accountLabel}
+            </summary>
+            <div
+              className="panel"
+              style={{
+                minWidth: 180,
+                position: 'absolute',
+                right: 0,
+                top: 'calc(100% + 8px)',
+                zIndex: 10,
+              }}
+            >
+              <p className="muted" style={{ marginTop: 0 }}>
+                Signed in
+              </p>
+              <button className="btn ghost" type="button" disabled>
+                Account
+              </button>
+              <button className="btn ghost" type="button" disabled>
+                Settings
+              </button>
+              <button className="btn primary" type="button" onClick={handleLogout}>
+                Logout
+              </button>
+            </div>
+          </details>
         ) : (
           <Link className="btn primary" href="/login">
             Login

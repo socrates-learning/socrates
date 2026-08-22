@@ -46,7 +46,7 @@ type StudyDeckConcept = {
 };
 
 type ConceptOverride = 'included' | 'excluded';
-type PlannerMode = 'dashboard' | 'setup';
+type PlannerMode = 'dashboard' | 'setup' | 'study' | 'feedback';
 
 function getConceptFromPlacement(placement: Placement) {
   return Array.isArray(placement.concepts)
@@ -253,45 +253,57 @@ export function StudyPlanner({
       }
     }
 
+    function openDashboard() {
+      setMode('dashboard');
+    }
+
     openSetupFromHash();
     window.addEventListener('hashchange', openSetupFromHash);
     window.addEventListener('socrates-open-deck-setup', openSetupFromHash);
+    window.addEventListener('socrates-open-deck-dashboard', openDashboard);
 
     return () => {
       window.removeEventListener('hashchange', openSetupFromHash);
       window.removeEventListener('socrates-open-deck-setup', openSetupFromHash);
+      window.removeEventListener('socrates-open-deck-dashboard', openDashboard);
     };
   }, []);
 
   useEffect(() => {
-    const layout = document.querySelector<HTMLElement>('main.layout');
+  const layout = document.querySelector<HTMLElement>('main.layout');
 
-    if (!layout) return;
+  if (!layout) return;
 
-    const previousGridTemplateColumns = layout.style.gridTemplateColumns;
+  if (mode === 'setup' || mode === 'study' || mode === 'feedback') {
+    // Page 2 and Page 3 use the focused full-width layout.
+    layout.style.gridTemplateColumns = '1fr';
 
     if (mode === 'setup') {
-      layout.style.gridTemplateColumns = '1fr';
       window.history.replaceState(null, '', '#set-up-deck');
-      window.dispatchEvent(new Event('socrates-open-deck-setup'));
-    } else {
-      layout.style.gridTemplateColumns = previousGridTemplateColumns;
-
-      if (window.location.hash === '#set-up-deck') {
-        window.history.replaceState(null, '', window.location.pathname);
-      }
-
-      window.dispatchEvent(new Event('socrates-open-deck-dashboard'));
+    } else if (window.location.hash === '#set-up-deck') {
+      window.history.replaceState(null, '', window.location.pathname);
     }
 
-    return () => {
-      layout.style.gridTemplateColumns = previousGridTemplateColumns;
-    };
-  }, [mode]);
+    window.dispatchEvent(new Event('socrates-open-deck-setup'));
+  } else {
+    // Page 1 returns to the normal dashboard layout.
+    layout.style.gridTemplateColumns = '';
+
+    if (window.location.hash === '#set-up-deck') {
+      window.history.replaceState(null, '', window.location.pathname);
+    }
+
+    window.dispatchEvent(new Event('socrates-open-deck-dashboard'));
+  }
+}, [mode]);
 
   function openSetupMode() {
     setMode('setup');
   }
+
+  function openStudyMode() {
+  setMode('study');
+}
 
   function descendantNodeIds(nodeId: string) {
     const ids = new Set<string>([nodeId]);
@@ -533,82 +545,163 @@ export function StudyPlanner({
   }
 
   function renderNode(node: LibraryNode, depth = 0): ReactNode {
-    const children = nodes.filter((child) => child.parent_id === node.id);
-    const isExpanded = expandedNodeIds.has(node.id);
-    const branchConceptCount = branchConceptIds(node.id).length;
-    const selected = selectedNodeIds.has(node.id);
+  const children = nodes.filter((child) => child.parent_id === node.id);
+  const isExpanded = expandedNodeIds.has(node.id);
+  const branchConceptCount = branchConceptIds(node.id).length;
+  const selected = selectedNodeIds.has(node.id);
 
-    return (
+  return (
+    <div
+      key={node.id}
+      style={{
+        marginLeft: depth ? 22 : 0,
+        position: 'relative',
+      }}
+    >
+      {depth > 0 && (
+        <div
+          aria-hidden="true"
+          style={{
+            borderLeft: '2px solid #dbeafe',
+            bottom: 0,
+            left: -12,
+            position: 'absolute',
+            top: -10,
+          }}
+        />
+      )}
+
       <div
-        key={node.id}
         style={{
-          borderBottom: '1px solid #e2e8f0',
-          marginLeft: depth ? 18 : 0,
-          padding: '8px 0',
+          alignItems: 'center',
+          background: selected ? '#eff6ff' : '#ffffff',
+          border: selected ? '1px solid #93c5fd' : '1px solid #e2e8f0',
+          borderRadius: 14,
+          display: 'flex',
+          gap: 10,
+          marginBottom: 8,
+          minHeight: 62,
+          padding: '10px 12px',
+          transition: 'all 0.15s ease',
         }}
       >
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-          <button
-            className="btn ghost"
-            type="button"
-            onClick={() => toggleExpandedNode(node.id)}
-            disabled={children.length === 0}
-            aria-label={isExpanded ? `Collapse ${node.name}` : `Expand ${node.name}`}
-            style={{ minWidth: 36, padding: '6px 8px' }}
-          >
-            {children.length === 0 ? '•' : isExpanded ? '▼' : '▶'}
-          </button>
-          <label
-            style={{
-              display: 'flex',
-              gap: 8,
-              alignItems: 'center',
-              flex: 1,
-            }}
-          >
-            <input
-              type="checkbox"
-              checked={selected}
-              onChange={() => toggleNodeSelection(node.id)}
-            />
-            <span>
-              <strong>{node.name}</strong>
-              <br />
-              <span className="muted">
-                {branchConceptCount} concepts
-              </span>
-            </span>
-          </label>
-          <span
-            className="muted"
-            style={{
-              border: '1px solid #bfdbfe',
-              borderRadius: 8,
-              minWidth: 52,
-              padding: '3px 8px',
-              textAlign: 'right',
-            }}
-          >
-            {branchQuestionCount(node.id)}
-          </span>
-          <button
-            className="btn ghost"
-            type="button"
-            onClick={() => setFocusedNodeId(node.id)}
-            style={{ padding: '6px 10px' }}
-          >
-            Customize
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => toggleExpandedNode(node.id)}
+          disabled={children.length === 0}
+          aria-label={isExpanded ? `Collapse ${node.name}` : `Expand ${node.name}`}
+          style={{
+            alignItems: 'center',
+            background: children.length === 0 ? '#f8fafc' : '#e0f2fe',
+            border: 'none',
+            borderRadius: 10,
+            color: '#0369a1',
+            cursor: children.length === 0 ? 'default' : 'pointer',
+            display: 'flex',
+            flexShrink: 0,
+            fontSize: 13,
+            height: 34,
+            justifyContent: 'center',
+            width: 34,
+          }}
+        >
+          {children.length === 0 ? '•' : isExpanded ? '▼' : '▶'}
+        </button>
 
-        {isExpanded && children.length > 0 && (
-          <div className="stack" style={{ marginTop: 12 }}>
-            {children.map((child) => renderNode(child, depth + 1))}
-          </div>
-        )}
+        <label
+          style={{
+            alignItems: 'center',
+            cursor: 'pointer',
+            display: 'flex',
+            flex: 1,
+            gap: 10,
+            minWidth: 0,
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={() => toggleNodeSelection(node.id)}
+            style={{
+              accentColor: '#2563eb',
+              cursor: 'pointer',
+              height: 18,
+              width: 18,
+            }}
+          />
+
+          <span style={{ minWidth: 0 }}>
+            <strong
+              style={{
+                display: 'block',
+                fontSize: 15,
+                lineHeight: 1.2,
+              }}
+            >
+              {node.name}
+            </strong>
+
+            <span
+              className="muted"
+              style={{
+                fontSize: 12,
+              }}
+            >
+              {branchConceptCount}{' '}
+              {branchConceptCount === 1 ? 'concept' : 'concepts'}
+            </span>
+          </span>
+        </label>
+
+        <span
+          title="Published questions in this branch"
+          style={{
+            background: '#f8fafc',
+            border: '1px solid #dbe3ee',
+            borderRadius: 999,
+            color: '#475569',
+            flexShrink: 0,
+            fontSize: 12,
+            fontWeight: 700,
+            minWidth: 40,
+            padding: '5px 9px',
+            textAlign: 'center',
+          }}
+        >
+          {branchQuestionCount(node.id)}
+        </span>
+
+        <button
+          type="button"
+          onClick={() => setFocusedNodeId(node.id)}
+          style={{
+            background: '#f1f5f9',
+            border: '1px solid #dbe3ee',
+            borderRadius: 9,
+            color: '#334155',
+            cursor: 'pointer',
+            flexShrink: 0,
+            fontSize: 12,
+            fontWeight: 600,
+            padding: '7px 10px',
+          }}
+        >
+          Customize
+        </button>
       </div>
-    );
-  }
+
+      {isExpanded && children.length > 0 && (
+        <div
+          style={{
+            marginTop: 4,
+          }}
+        >
+          {children.map((child) => renderNode(child, depth + 1))}
+        </div>
+      )}
+    </div>
+  );
+}
 
   const rootNodes = nodes.filter((node) => node.parent_id === null);
   const focusedNode = focusedNodeId ? nodesById.get(focusedNodeId) : null;
@@ -668,343 +761,1641 @@ export function StudyPlanner({
   }
 
   if (mode === 'setup') {
-    return (
-      <div
-        className="stack"
-        id="set-up-deck"
+  return (
+    <div
+      id="set-up-deck"
+      style={{
+        margin: '0 auto',
+        maxWidth: 1180,
+        width: '100%',
+      }}
+    >
+      {/* Page heading */}
+      <section
         style={{
-          margin: '0 auto',
-          maxWidth: 1120,
-          width: '100%',
+          background: '#ffffff',
+          border: '1px solid #dbe3ee',
+          borderRadius: 18,
+          boxShadow: '0 10px 30px rgba(15, 23, 42, 0.07)',
+          marginBottom: 18,
+          padding: '24px 28px',
+        }}
+      >
+        <p
+          style={{
+            color: '#64748b',
+            fontSize: 12,
+            fontWeight: 700,
+            letterSpacing: '0.08em',
+            margin: '0 0 6px',
+            textTransform: 'uppercase',
+          }}
+        >
+          Study Setup
+        </p>
+
+        <h1 style={{ margin: '0 0 6px' }}>Set Up Deck</h1>
+
+        <p className="muted" style={{ margin: 0 }}>
+          Choose what you want to study and how you want this session to behave.
+        </p>
+      </section>
+
+      {/* New ↔ Mastery balance */}
+      <section
+        style={{
+          background: '#ffffff',
+          border: '1px solid #dbe3ee',
+          borderRadius: 18,
+          boxShadow: '0 10px 30px rgba(15, 23, 42, 0.07)',
+          marginBottom: 18,
+          padding: 26,
         }}
       >
         <div
-          className="panel"
-          style={{ border: '1px solid #bfdbfe', boxShadow: '0 8px 24px #0f172a12' }}
+          style={{
+            alignItems: 'flex-start',
+            display: 'flex',
+            justifyContent: 'space-between',
+            marginBottom: 22,
+          }}
         >
-          <h2>Set Up Deck</h2>
-          <p className="muted">Build your deck from topic branches</p>
-        </div>
-
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, width: '100%' }}>
-          <div
-            className="panel"
-            style={{
-              border: '1px solid #cbd5e1',
-              borderRadius: 16,
-              boxShadow: '0 8px 24px #0f172a0d',
-              flex: '1 1 620px',
-              minWidth: 0,
-            }}
-          >
-            {rootNodes.length === 0 ? (
-              <p className="muted">No topics are available in this library yet.</p>
-            ) : (
-              <div className="stack">{rootNodes.map((node) => renderNode(node))}</div>
-            )}
-          </div>
-
-          <div
-            className="panel"
-            style={{
-              border: '1px solid #cbd5e1',
-              borderRadius: 16,
-              boxShadow: '0 8px 24px #0f172a0d',
-              flex: '0 1 320px',
-              minWidth: 260,
-            }}
-          >
-            <h3>Selected</h3>
-            {selectedNodeSummaries.length === 0 ? (
-              <p className="muted">No topic branches selected.</p>
-            ) : (
-              <div className="stack">
-                {selectedNodeSummaries.map((selection) => (
-                  <p key={selection.id} style={{ margin: 0 }}>
-                    <strong>{selection.label}</strong>
-                    <br />
-                    <span className="muted">
-                      {selection.conceptCount} concepts · {selection.questionTotal}{' '}
-                      questions
-                    </span>
-                  </p>
-                ))}
-              </div>
-            )}
-            <hr />
-            <p>
-              <span className="muted">Total cards selected</span>
-              <br />
-              <strong style={{ fontSize: 36 }}>{totalQuestions}</strong>
+          <div>
+            <h2 style={{ margin: '0 0 5px' }}>Content Balance</h2>
+            <p className="muted" style={{ margin: 0 }}>
+              Choose whether this session emphasizes new material or repetition for mastery.
             </p>
           </div>
         </div>
 
         <div
-          className="panel"
           style={{
-            background: '#eff6ff',
-            border: '1px solid #bfdbfe',
-            borderRadius: 14,
+            margin: '0 auto',
+            maxWidth: 820,
           }}
         >
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              marginBottom: 10,
+            }}
+          >
+            <div>
+              <strong>More New Content</strong>
+              <p className="muted" style={{ fontSize: 13, margin: '3px 0 0' }}>
+                Introduce more material
+              </p>
+            </div>
+
+            <div style={{ textAlign: 'right' }}>
+              <strong>More Repetition</strong>
+              <p className="muted" style={{ fontSize: 13, margin: '3px 0 0' }}>
+                Reinforce for mastery
+              </p>
+            </div>
+          </div>
+
+          <input
+            aria-label="New content versus mastery balance"
+            type="range"
+            min="0"
+            max="100"
+            defaultValue="50"
+            style={{
+              accentColor: '#2563eb',
+              cursor: 'pointer',
+              width: '100%',
+            }}
+          />
+
+          <div
+            style={{
+              color: '#64748b',
+              display: 'flex',
+              fontSize: 13,
+              fontWeight: 700,
+              justifyContent: 'space-between',
+              marginTop: 4,
+            }}
+          >
+            <span>NEW</span>
+            <span>BALANCED</span>
+            <span>MASTERY</span>
+          </div>
+
+          <p
+            className="muted"
+            style={{
+              fontSize: 12,
+              margin: '12px 0 0',
+              textAlign: 'center',
+            }}
+          >
+            Session balance is a design preview for now. Adaptive scheduling will use it later.
+          </p>
+        </div>
+      </section>
+
+      {/* Topic selection */}
+      <section
+        style={{
+          background: '#ffffff',
+          border: '1px solid #dbe3ee',
+          borderRadius: 18,
+          boxShadow: '0 10px 30px rgba(15, 23, 42, 0.07)',
+          marginBottom: 18,
+          padding: 26,
+        }}
+      >
+        <div style={{ marginBottom: 20 }}>
+          <h2 style={{ margin: '0 0 5px' }}>Select What to Study</h2>
           <p className="muted" style={{ margin: 0 }}>
-            Selecting a parent includes all children.
-            <br />
-            Build your deck from topic branches, not individual random cards.
+            Build your deck from meaningful topic branches.
           </p>
         </div>
 
-        <div className="panel" style={{ border: '1px solid #e2e8f0', borderRadius: 16 }}>
-          <h3>Customize Selected Topic</h3>
-          {focusedNode ? (
-            <>
-              <p className="muted">
-                {getNodePath(focusedNode, nodesById)} · concepts directly placed here
-              </p>
-              {focusedConcepts.length === 0 ? (
-                <p className="muted">
-                  No concepts are directly placed in this topic. Selecting the branch
-                  still includes concepts in descendant topics.
-                </p>
-              ) : (
-                <div className="stack">
-                  {focusedConcepts.map((concept) => (
-                    <div className="card" key={concept.id}>
-                      <label
-                        style={{ display: 'flex', gap: 10, alignItems: 'start' }}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={effectiveConceptSelected(concept.id)}
-                          onChange={(event) =>
-                            setConceptSelection(concept.id, event.target.checked)
-                          }
-                        />
-                        <span>
-                          <strong>{concept.name}</strong>
-                          <br />
-                          <span className="muted">
-                            {concept.concept_type || 'Concept'} ·{' '}
-                            {questionCounts[concept.id] || 0} published questions
-                          </span>
-                          {concept.summary && <p>{concept.summary}</p>}
-                          <Link href={`/concepts/${concept.id}`}>
-                            Open concept detail
-                          </Link>
-                        </span>
-                      </label>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </>
-          ) : (
-            <p className="muted">Choose a topic to customize individual concepts.</p>
-          )}
-        </div>
-
         <div
-          className="panel"
+          style={{
+            alignItems: 'start',
+            display: 'grid',
+            gap: 20,
+            gridTemplateColumns: 'minmax(0, 2fr) minmax(260px, 0.8fr)',
+          }}
+        >
+          {/* Knowledge tree */}
+          <div
+            style={{
+              border: '1px solid #dbe3ee',
+              borderRadius: 16,
+              minWidth: 0,
+              padding: 18,
+            }}
+          >
+            <div
+              style={{
+                alignItems: 'center',
+                display: 'flex',
+                justifyContent: 'space-between',
+                marginBottom: 14,
+              }}
+            >
+              <h3 style={{ margin: 0 }}>Knowledge Tree</h3>
+
+              <span
+                style={{
+                  background: '#eff6ff',
+                  borderRadius: 999,
+                  color: '#1d4ed8',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  padding: '5px 10px',
+                }}
+              >
+                {activeLibrary.name}
+              </span>
+            </div>
+
+            {rootNodes.length === 0 ? (
+              <p className="muted">
+                No topics are available in this library yet.
+              </p>
+            ) : (
+              <div className="stack">
+                {rootNodes.map((node) => renderNode(node))}
+              </div>
+            )}
+          </div>
+
+          {/* Selected summary */}
+          <aside
+            style={{
+              background: '#f8fafc',
+              border: '1px solid #cbd5e1',
+              borderRadius: 16,
+              padding: 20,
+              position: 'sticky',
+              top: 18,
+            }}
+          >
+            <h3 style={{ margin: '0 0 14px' }}>Selected Deck</h3>
+
+            {selectedNodeSummaries.length === 0 ? (
+              <p className="muted">
+                No topic branches selected yet.
+              </p>
+            ) : (
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 12,
+                }}
+              >
+                {selectedNodeSummaries.map((selection) => (
+                  <div
+                    key={selection.id}
+                    style={{
+                      borderBottom: '1px solid #e2e8f0',
+                      paddingBottom: 10,
+                    }}
+                  >
+                    <strong
+                      style={{
+                        display: 'block',
+                        fontSize: 14,
+                        marginBottom: 3,
+                      }}
+                    >
+                      {selection.label}
+                    </strong>
+
+                    <span className="muted" style={{ fontSize: 12 }}>
+                      {selection.conceptCount} concepts ·{' '}
+                      {selection.questionTotal} questions
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div
+              style={{
+                borderTop: '1px solid #cbd5e1',
+                marginTop: 18,
+                paddingTop: 18,
+              }}
+            >
+              <div style={{ marginBottom: 14 }}>
+                <span className="muted" style={{ fontSize: 12 }}>
+                  Concepts selected
+                </span>
+                <br />
+                <strong style={{ fontSize: 28 }}>
+                  {resolvedConcepts.length}
+                </strong>
+              </div>
+
+              <div>
+                <span className="muted" style={{ fontSize: 12 }}>
+                  Questions available
+                </span>
+                <br />
+                <strong
+                  style={{
+                    color: '#1d4ed8',
+                    fontSize: 36,
+                  }}
+                >
+                  {totalQuestions}
+                </strong>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      {/* Parent selection explanation */}
+      <section
+        style={{
+          alignItems: 'flex-start',
+          background: '#eff6ff',
+          border: '1px solid #bfdbfe',
+          borderRadius: 16,
+          display: 'flex',
+          gap: 14,
+          marginBottom: 18,
+          padding: '18px 20px',
+        }}
+      >
+        <div
+          aria-hidden="true"
           style={{
             alignItems: 'center',
-            border: '1px solid #bfdbfe',
+            background: '#ffffff',
+            borderRadius: 999,
+            color: '#2563eb',
+            display: 'flex',
+            flexShrink: 0,
+            fontSize: 18,
+            fontWeight: 700,
+            height: 34,
+            justifyContent: 'center',
+            width: 34,
+          }}
+        >
+          i
+        </div>
+
+        <div>
+          <strong>Selecting a parent includes all children.</strong>
+          <p className="muted" style={{ margin: '4px 0 0' }}>
+            Build your deck from topic branches. You can customize individual concepts when needed.
+          </p>
+        </div>
+      </section>
+
+      {/* Individual concept customization */}
+      <section
+        style={{
+          background: '#ffffff',
+          border: '1px solid #dbe3ee',
+          borderRadius: 18,
+          boxShadow: '0 10px 30px rgba(15, 23, 42, 0.07)',
+          marginBottom: 18,
+          padding: 24,
+        }}
+      >
+        <h3 style={{ margin: '0 0 5px' }}>Customize Selected Topic</h3>
+
+        {focusedNode ? (
+          <>
+            <p className="muted" style={{ marginTop: 0 }}>
+              {getNodePath(focusedNode, nodesById)} · concepts directly placed here
+            </p>
+
+            {focusedConcepts.length === 0 ? (
+              <p className="muted">
+                No concepts are directly placed in this topic. Selecting the branch
+                still includes concepts in descendant topics.
+              </p>
+            ) : (
+              <div
+                style={{
+                  display: 'grid',
+                  gap: 10,
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+                }}
+              >
+                {focusedConcepts.map((concept) => (
+                  <label
+                    key={concept.id}
+                    style={{
+                      alignItems: 'flex-start',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: 12,
+                      display: 'flex',
+                      gap: 10,
+                      padding: 14,
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={effectiveConceptSelected(concept.id)}
+                      onChange={(event) =>
+                        setConceptSelection(concept.id, event.target.checked)
+                      }
+                    />
+
+                    <span>
+                      <strong>{concept.name}</strong>
+                      <br />
+
+                      <span className="muted" style={{ fontSize: 12 }}>
+                        {concept.concept_type || 'Concept'} ·{' '}
+                        {questionCounts[concept.id] || 0} published questions
+                      </span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </>
+        ) : (
+          <p className="muted">
+            Choose a topic if you want to customize individual concepts.
+          </p>
+        )}
+      </section>
+
+      {/* Actions */}
+      <section
+        style={{
+          alignItems: 'center',
+          background: '#ffffff',
+          border: '1px solid #dbe3ee',
+          borderRadius: 18,
+          boxShadow: '0 10px 30px rgba(15, 23, 42, 0.07)',
+          display: 'flex',
+          gap: 14,
+          justifyContent: 'space-between',
+          padding: 20,
+        }}
+      >
+        <button
+          className="btn ghost"
+          type="button"
+          onClick={clearDeck}
+          disabled={isSaving}
+        >
+          Clear All
+        </button>
+
+        <div
+          style={{
             display: 'flex',
             gap: 12,
-            justifyContent: 'space-between',
           }}
         >
           <button
             className="btn ghost"
-            type="button"
-            onClick={clearDeck}
-            disabled={isSaving}
-          >
-            Clear All
-          </button>
-          <button
-            className="btn primary"
             type="button"
             onClick={saveAndReturnToDashboard}
             disabled={isSaving}
           >
             {isSaving ? 'Saving...' : 'Save / Update Deck'}
           </button>
-          <div style={{ textAlign: 'right' }}>
-            <button className="btn primary" type="button" disabled>
-              Start Study
-            </button>
-            <p className="muted" style={{ margin: '6px 0 0' }}>
-              Study Mode coming next.
-            </p>
-          </div>
+
+          <button
+            className="btn primary"
+            type="button"
+            onClick={openStudyMode}
+            style={{
+              fontSize: 16,
+              minWidth: 150,
+              padding: '12px 20px',
+            }}
+           >
+              ▶ START STUDY
+          </button>
         </div>
+      </section>
 
-        {message && <p className="muted">{message}</p>}
-      </div>
-    );
-  }
+      {message && <p className="muted">{message}</p>}
+    </div>
+  );
+}
 
+if (mode === 'study') {
   return (
-    <div className="stack" id="deck-dashboard">
-      <div
-        className="panel"
+    <div
+      id="study-mode"
+      style={{
+        margin: '0 auto',
+        maxWidth: 820,
+        width: '100%',
+      }}
+    >
+      {/* Study header */}
+      <section
         style={{
-          border: '1px solid #cbd5e1',
+          alignItems: 'center',
+          background: '#ffffff',
+          border: '1px solid #dbe3ee',
           borderRadius: 18,
-          boxShadow: '0 12px 32px #0f172a12',
+          boxShadow: '0 10px 30px rgba(15, 23, 42, 0.07)',
+          display: 'flex',
+          justifyContent: 'space-between',
+          marginBottom: 18,
+          padding: '18px 22px',
         }}
       >
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
-          <h2 style={{ marginTop: 0 }}>Welcome back, {displayName}!</h2>
-          <span className="muted">Settings</span>
+        <div>
+          <p
+            style={{
+              color: '#64748b',
+              fontSize: 12,
+              fontWeight: 700,
+              letterSpacing: '0.08em',
+              margin: '0 0 4px',
+              textTransform: 'uppercase',
+            }}
+          >
+            Socrates
+          </p>
+
+          <h2 style={{ margin: 0 }}>Study Mode</h2>
+        </div>
+
+        <button
+          className="btn ghost"
+          type="button"
+          onClick={() => setMode('dashboard')}
+        >
+          × Exit Study
+        </button>
+      </section>
+
+      {/* Progress */}
+      <section
+        style={{
+          background: '#ffffff',
+          border: '1px solid #dbe3ee',
+          borderRadius: 18,
+          boxShadow: '0 10px 30px rgba(15, 23, 42, 0.07)',
+          marginBottom: 18,
+          padding: 22,
+        }}
+      >
+        <div
+          style={{
+            alignItems: 'center',
+            display: 'flex',
+            justifyContent: 'space-between',
+            marginBottom: 10,
+          }}
+        >
+          <strong>Card 1 of 40</strong>
+          <span className="muted">2%</span>
         </div>
 
         <div
-          className="dashboard"
-          style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }}
+          style={{
+            background: '#e2e8f0',
+            borderRadius: 999,
+            height: 8,
+            overflow: 'hidden',
+            width: '100%',
+          }}
         >
-          <div className="card" style={{ textAlign: 'center' }}>
-            <span className="muted">DS</span>
-            <br />
-            <strong>0</strong>
-            <br />
-            <span className="muted">Day Streak</span>
-          </div>
-          <div className="card" style={{ textAlign: 'center' }}>
-            <span className="muted">LS</span>
-            <br />
-            <strong>Not yet</strong>
-            <br />
-            <span className="muted">Last Study</span>
-          </div>
-          <div className="card" style={{ textAlign: 'center' }}>
-            <span className="muted">TW</span>
-            <br />
-            <strong>0m</strong>
-            <br />
-            <span className="muted">This Week</span>
-          </div>
+          <div
+            style={{
+              background: '#2563eb',
+              height: '100%',
+              width: '2%',
+            }}
+          />
+        </div>
+      </section>
+
+      {/* Question card */}
+      <section
+        style={{
+          background: '#ffffff',
+          border: '1px solid #cbd5e1',
+          borderRadius: 20,
+          boxShadow: '0 12px 34px rgba(15, 23, 42, 0.08)',
+          marginBottom: 18,
+          minHeight: 320,
+          padding: 34,
+        }}
+      >
+        <p
+          style={{
+            color: '#64748b',
+            fontSize: 12,
+            fontWeight: 700,
+            letterSpacing: '0.08em',
+            margin: '0 0 18px',
+            textTransform: 'uppercase',
+          }}
+        >
+          Question
+        </p>
+
+        <h2
+          style={{
+            fontSize: 28,
+            lineHeight: 1.35,
+            margin: '0 0 80px',
+          }}
+        >
+          What is the most common cause of acute decompensated heart failure in adults?
+        </h2>
+
+        <button
+          className="btn ghost"
+          type="button"
+          style={{
+            display: 'block',
+            fontSize: 16,
+            margin: '0 auto',
+            padding: '12px 18px',
+          }}
+        >
+          👆 Tap to reveal answer
+        </button>
+      </section>
+
+      {/* Answer preview */}
+      <section
+        style={{
+          background: '#ffffff',
+          border: '1px solid #dbe3ee',
+          borderRadius: 18,
+          boxShadow: '0 10px 30px rgba(15, 23, 42, 0.07)',
+          marginBottom: 18,
+          padding: 26,
+        }}
+      >
+        <p
+          style={{
+            color: '#2563eb',
+            fontSize: 14,
+            fontWeight: 800,
+            margin: '0 0 8px',
+            textTransform: 'uppercase',
+          }}
+        >
+          Answer
+        </p>
+
+        <p
+          style={{
+            fontSize: 18,
+            lineHeight: 1.6,
+            margin: '0 0 22px',
+          }}
+        >
+          Non-adherence to medications and/or dietary restrictions.
+        </p>
+
+        <hr
+          style={{
+            border: 0,
+            borderTop: '1px solid #e2e8f0',
+            margin: '0 0 22px',
+          }}
+        />
+
+        <p
+          style={{
+            color: '#2563eb',
+            fontSize: 14,
+            fontWeight: 800,
+            margin: '0 0 8px',
+            textTransform: 'uppercase',
+          }}
+        >
+          Explanation
+        </p>
+
+        <p
+          style={{
+            lineHeight: 1.7,
+            margin: '0 0 22px',
+          }}
+        >
+          Dietary indiscretion and medication non-compliance are leading precipitants
+          of acute decompensated heart failure.
+        </p>
+
+        <button
+          className="btn ghost"
+          type="button"
+        >
+          📖 Review Concept
+        </button>
+      </section>
+
+      {/* Feedback */}
+      <section
+        style={{
+          display: 'grid',
+          gap: 14,
+          gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+          marginBottom: 18,
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => setMode('feedback')}
+          style={{
+            background: '#ffffff',
+            border: '1px solid #bbf7d0',
+            borderRadius: 18,
+            cursor: 'pointer',
+            fontSize: 16,
+            fontWeight: 700,
+            minHeight: 110,
+            padding: 18,
+          }}
+        >
+          <div style={{ fontSize: 34, marginBottom: 8 }}>👍</div>
+          Got it
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setMode('feedback')}
+          style={{
+            background: '#ffffff',
+            border: '1px solid #fecaca',
+            borderRadius: 18,
+            cursor: 'pointer',
+            fontSize: 16,
+            fontWeight: 700,
+            minHeight: 110,
+            padding: 18,
+          }}
+        >
+          <div style={{ fontSize: 34, marginBottom: 8 }}>👎</div>
+          Didn't get it
+        </button>
+
+        <button
+          type="button"
+           onClick={() => setMode('feedback')}
+           style={{
+            background: '#ffffff',
+            border: '1px solid #dbe3ee',
+            borderRadius: 18,
+            cursor: 'pointer',
+            fontSize: 16,
+            fontWeight: 700,
+            minHeight: 110,
+            padding: 18,
+          }}
+        >
+          <div style={{ fontSize: 34, marginBottom: 8 }}>•••</div>
+          More
+        </button>
+      </section>
+
+      {/* Minimal distraction note */}
+      <section
+        style={{
+          background: '#eff6ff',
+          border: '1px solid #bfdbfe',
+          borderRadius: 16,
+          padding: '16px 18px',
+          textAlign: 'center',
+        }}
+      >
+        <span style={{ marginRight: 8 }}>💡</span>
+        <strong>Minimal distractions</strong>
+        <span className="muted"> — focus on one card at a time.</span>
+      </section>
+    </div>
+  );
+}
+
+if (mode === 'feedback') {
+  const FaceIcon = ({
+    mood,
+    color,
+  }: {
+    mood: 'happy' | 'neutral' | 'sad';
+    color: string;
+  }) => (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 64 64"
+      style={{
+        height: 62,
+        width: 62,
+      }}
+    >
+      <circle
+        cx="32"
+        cy="32"
+        r="25"
+        fill="none"
+        stroke={color}
+        strokeWidth="4"
+      />
+
+      <circle cx="23" cy="26" r="2.8" fill={color} />
+      <circle cx="41" cy="26" r="2.8" fill={color} />
+
+      {mood === 'happy' && (
+        <path
+          d="M20 37 C25 46, 39 46, 44 37"
+          fill="none"
+          stroke={color}
+          strokeWidth="4"
+          strokeLinecap="round"
+        />
+      )}
+
+      {mood === 'neutral' && (
+        <path
+          d="M22 40 H42"
+          fill="none"
+          stroke={color}
+          strokeWidth="4"
+          strokeLinecap="round"
+        />
+      )}
+
+      {mood === 'sad' && (
+        <path
+          d="M20 43 C25 34, 39 34, 44 43"
+          fill="none"
+          stroke={color}
+          strokeWidth="4"
+          strokeLinecap="round"
+        />
+      )}
+    </svg>
+  );
+
+  const troubleCardStyle = {
+    background: '#fffafa',
+    border: '1.5px solid #fecaca',
+    borderRadius: 18,
+    color: '#991b1b',
+    cursor: 'pointer',
+    minHeight: 145,
+    padding: 20,
+    textAlign: 'center' as const,
+  };
+
+  return (
+    <div
+      id="feedback-mode"
+      style={{
+        margin: '0 auto',
+        maxWidth: 900,
+        width: '100%',
+      }}
+    >
+      {/* Header */}
+      <section
+        style={{
+          alignItems: 'center',
+          background: '#ffffff',
+          border: '1px solid #dbe3ee',
+          borderRadius: 18,
+          boxShadow: '0 10px 30px rgba(15, 23, 42, 0.07)',
+          display: 'flex',
+          justifyContent: 'space-between',
+          marginBottom: 18,
+          padding: '18px 24px',
+        }}
+      >
+        <div>
+          <p
+            style={{
+              color: '#64748b',
+              fontSize: 12,
+              fontWeight: 700,
+              letterSpacing: '0.08em',
+              margin: '0 0 4px',
+              textTransform: 'uppercase',
+            }}
+          >
+            Socrates
+          </p>
+
+          <h2 style={{ margin: 0 }}>Feedback & Mastery</h2>
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
-          <h3>Current Deck</h3>
+        <button
+          className="btn ghost"
+          type="button"
+          onClick={() => setMode('dashboard')}
+        >
+          × Exit Study
+        </button>
+      </section>
+
+      {/* Main feedback */}
+      <section
+        style={{
+          background: '#ffffff',
+          border: '1px solid #dbe3ee',
+          borderRadius: 20,
+          boxShadow: '0 10px 30px rgba(15, 23, 42, 0.07)',
+          marginBottom: 18,
+          padding: 28,
+        }}
+      >
+        <h2
+          style={{
+            color: '#1d4ed8',
+            margin: '0 0 22px',
+          }}
+        >
+          How well did you know this?
+        </h2>
+
+        {/* Easy / Average / Hard */}
+        <div
+          style={{
+            display: 'grid',
+            gap: 16,
+            gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+            marginBottom: 32,
+          }}
+        >
+          {/* EASY */}
           <button
-            className="btn ghost"
             type="button"
-            onClick={openSetupMode}
+            style={{
+              background: '#ffffff',
+              border: '2px solid #bbdfc5',
+              borderRadius: 20,
+              cursor: 'pointer',
+              minHeight: 230,
+              padding: 22,
+            }}
           >
-            Edit Deck
+            <FaceIcon mood="happy" color="#2f8f46" />
+
+            <strong
+              style={{
+                color: '#2f8f46',
+                display: 'block',
+                fontSize: 24,
+                margin: '8px 0 10px',
+              }}
+            >
+              Easy
+            </strong>
+
+            <span
+              style={{
+                color: '#334155',
+                fontSize: 16,
+                fontWeight: 600,
+                lineHeight: 1.4,
+              }}
+            >
+              I knew this well
+            </span>
+          </button>
+
+          {/* AVERAGE */}
+          <button
+            type="button"
+            style={{
+              background: '#ffffff',
+              border: '2px solid #ead69b',
+              borderRadius: 20,
+              cursor: 'pointer',
+              minHeight: 230,
+              padding: 22,
+            }}
+          >
+            <FaceIcon mood="neutral" color="#d69e17" />
+
+            <strong
+              style={{
+                color: '#334155',
+                display: 'block',
+                fontSize: 24,
+                margin: '8px 0 10px',
+              }}
+            >
+              Average
+            </strong>
+
+            <span
+              style={{
+                color: '#334155',
+                fontSize: 16,
+                fontWeight: 600,
+                lineHeight: 1.4,
+              }}
+            >
+              I knew part of this
+            </span>
+          </button>
+
+          {/* HARD */}
+          <button
+            type="button"
+            style={{
+              background: '#ffffff',
+              border: '2px solid #f3c2a7',
+              borderRadius: 20,
+              cursor: 'pointer',
+              minHeight: 230,
+              padding: 22,
+            }}
+          >
+            <FaceIcon mood="sad" color="#e3642a" />
+
+            <strong
+              style={{
+                color: '#e3642a',
+                display: 'block',
+                fontSize: 24,
+                margin: '8px 0 10px',
+              }}
+            >
+              Hard
+            </strong>
+
+            <span
+              style={{
+                color: '#334155',
+                fontSize: 16,
+                fontWeight: 600,
+                lineHeight: 1.4,
+              }}
+            >
+              This was challenging
+            </span>
           </button>
         </div>
 
-        <div className="stack">
-          <p>
-            <strong>{deck.name}</strong>
-            <br />
-            <span className="muted">{activeLibrary.name}</span>
-          </p>
-          {selectedNodeSummaries.length === 0 ? (
-            <div
-              className="card"
-              style={{
-                background: '#f8fafc',
-                border: '1px dashed #93c5fd',
-                padding: 18,
-              }}
-            >
-              <strong>No branches selected yet.</strong>
-              <p className="muted" style={{ marginBottom: 0 }}>
-                Use Set Up Deck to choose topic branches for this subject.
-              </p>
-            </div>
-          ) : (
-            selectedNodeSummaries.slice(0, 4).map((selection) => (
-              <div
-                className="card"
-                key={selection.id}
-                style={{
-                  border: '1px solid #dbeafe',
-                  boxShadow: '0 6px 16px #0f172a0a',
-                }}
-              >
-                <div
-                  style={{
-                    display: 'grid',
-                    gap: 12,
-                    gridTemplateColumns: '32px minmax(0, 1fr) auto',
-                    alignItems: 'center',
-                  }}
-                >
-                  <span aria-hidden="true">o</span>
-                  <span>
-                    <strong>{selection.label}</strong>
-                    <br />
-                    <span className="muted">
-                      {selection.conceptCount} concepts · {selection.questionTotal}{' '}
-                      questions
-                    </span>
-                    <span
-                      aria-hidden="true"
-                      style={{
-                        background: '#dbe4f0',
-                        borderRadius: 999,
-                        display: 'block',
-                        height: 6,
-                        marginTop: 8,
-                        overflow: 'hidden',
-                      }}
-                    >
-                      <span
-                        style={{
-                          background: '#bfdbfe',
-                          display: 'block',
-                          height: '100%',
-                          width: '0%',
-                        }}
-                      />
-                    </span>
-                    <span className="muted" style={{ fontSize: 12 }}>
-                      Not reviewed yet
-                    </span>
-                  </span>
-                  <span className="muted" style={{ textAlign: 'right' }}>
-                    {selection.questionTotal} q
-                  </span>
-                </div>
-              </div>
-            ))
-          )}
-          {selectedNodeSummaries.length > 0 && (
+        {/* Trouble choices */}
+        <h2
+          style={{
+            color: '#1d4ed8',
+            margin: '0 0 18px',
+          }}
+        >
+          Having trouble?
+        </h2>
+
+        <div
+          style={{
+            display: 'grid',
+            gap: 14,
+            gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+            marginBottom: 30,
+          }}
+        >
+          <button type="button" style={troubleCardStyle}>
+            <strong style={{ display: 'block', fontSize: 18, marginBottom: 8 }}>
+              Didn't know
+            </strong>
+            <span style={{ color: '#475569' }}>I had no idea</span>
+          </button>
+
+          <button type="button" style={troubleCardStyle}>
+            <strong style={{ display: 'block', fontSize: 18, marginBottom: 8 }}>
+              Forgot / Got it wrong
+            </strong>
+            <span style={{ color: '#475569' }}>
+              I knew it before but missed it
+            </span>
+          </button>
+
+          <button type="button" style={troubleCardStyle}>
+            <strong style={{ display: 'block', fontSize: 18, marginBottom: 8 }}>
+              Too hard
+            </strong>
+            <span style={{ color: '#475569' }}>Above my level</span>
+          </button>
+
+          <button type="button" style={troubleCardStyle}>
+            <strong style={{ display: 'block', fontSize: 18, marginBottom: 8 }}>
+              Unclear
+            </strong>
+            <span style={{ color: '#475569' }}>Question was unclear</span>
+          </button>
+
+          <button type="button" style={troubleCardStyle}>
+            <strong style={{ display: 'block', fontSize: 18, marginBottom: 8 }}>
+              Error
+            </strong>
+            <span style={{ color: '#475569' }}>Question has an error</span>
+          </button>
+
+          <button type="button" style={troubleCardStyle}>
+            <strong style={{ display: 'block', fontSize: 18, marginBottom: 8 }}>
+              Make suggestion
+            </strong>
+            <span style={{ color: '#475569' }}>Improve this card</span>
+          </button>
+        </div>
+
+        <div
+          style={{
+            borderTop: '1px solid #e2e8f0',
+            color: '#475569',
+            fontSize: 15,
+            paddingTop: 20,
+            textAlign: 'center',
+          }}
+        >
+          👆 <strong>Second tap advances to the next card</strong>
+        </div>
+      </section>
+
+      {/* Mastery */}
+      <section
+        style={{
+          background: '#f8fafc',
+          border: '1px solid #dbe3ee',
+          borderRadius: 18,
+          marginBottom: 18,
+          padding: 24,
+        }}
+      >
+        <h3
+          style={{
+            color: '#1d4ed8',
+            margin: '0 0 18px',
+          }}
+        >
+          📈 Mastery & Progress
+        </h3>
+
+        <div
+          style={{
+            display: 'grid',
+            gap: 20,
+            gridTemplateColumns: '1fr 1fr',
+          }}
+        >
+          <div>
+            <span className="muted">Mastery</span>
+            <h3 style={{ margin: '5px 0' }}>Not calculated yet</h3>
             <p className="muted" style={{ margin: 0 }}>
-              {resolvedConcepts.length} concepts selected · {totalQuestions} questions
-              available
+              Mastery will develop from real study history.
             </p>
-          )}
-          {selectedNodeSummaries.length > 4 && (
-            <p className="muted">
-              + {selectedNodeSummaries.length - 4} more selected branches
+          </div>
+
+          <div
+            style={{
+              borderLeft: '1px solid #cbd5e1',
+              paddingLeft: 20,
+            }}
+          >
+            <span className="muted">Next review</span>
+            <h3 style={{ margin: '5px 0' }}>Not scheduled yet</h3>
+            <p className="muted" style={{ margin: 0 }}>
+              Scheduling will update as study data develops.
             </p>
-          )}
+          </div>
+        </div>
+      </section>
+
+      {/* Review concept */}
+      <button
+        className="btn ghost"
+        type="button"
+        style={{
+          border: '1.5px solid #93c5fd',
+          fontSize: 16,
+          padding: '14px 18px',
+          width: '100%',
+        }}
+      >
+        ↗ 📖 Review concept / article if needed
+      </button>
+    </div>
+  );
+}
+  return (
+  <div
+    id="deck-dashboard"
+    style={{
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 22,
+      width: '100%',
+    }}
+  >
+    {/* Welcome + activity summary */}
+    <section
+      style={{
+        background: '#ffffff',
+        border: '1px solid #dbe3ee',
+        borderRadius: 18,
+        boxShadow: '0 10px 30px rgba(15, 23, 42, 0.07)',
+        padding: 24,
+      }}
+    >
+      <div
+        style={{
+          alignItems: 'center',
+          display: 'flex',
+          justifyContent: 'space-between',
+          marginBottom: 20,
+        }}
+      >
+        <div>
+          <p
+            className="muted"
+            style={{
+              fontSize: 13,
+              margin: '0 0 4px',
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+            }}
+          >
+            {activeLibrary.name}
+          </p>
+
+          <h2 style={{ margin: 0 }}>Welcome back, {displayName}!</h2>
+        </div>
+
+        <button
+          className="btn ghost"
+          type="button"
+          aria-label="Settings"
+          title="Settings"
+          style={{
+            borderRadius: 12,
+            fontSize: 20,
+            minHeight: 42,
+            minWidth: 42,
+            padding: 8,
+          }}
+        >
+          ⚙
+        </button>
+      </div>
+
+      <div
+  style={{
+    display: 'flex',
+    justifyContent: 'flex-end',
+    marginBottom: 16,
+  }}
+>
+  <div
+    style={{
+      display: 'flex',
+      gap: 16,
+      alignItems: 'center',
+      flexWrap: 'wrap',
+    }}
+  >
+    {['Learn', 'Study', 'Custom'].map((modeLabel) => (
+      <label
+        key={modeLabel}
+        style={{
+          alignItems: 'center',
+          display: 'flex',
+          gap: 7,
+          fontSize: 14,
+          fontWeight: 600,
+          color: '#334155',
+        }}
+      >
+        <input
+          type="radio"
+          name="study-mode-preview"
+          value={modeLabel}
+          defaultChecked={modeLabel === 'Study'}
+        />
+        {modeLabel}
+      </label>
+    ))}
+  </div>
+</div>
+      <div
+        style={{
+          display: 'grid',
+          gap: 12,
+          gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+        }}
+      >
+        <div
+          className="card"
+          style={{
+            border: '1px solid #e2e8f0',
+            borderRadius: 14,
+            padding: 16,
+            textAlign: 'center',
+          }}
+        >
+          <div style={{ fontSize: 22, marginBottom: 6 }}>🔥</div>
+          <strong style={{ display: 'block', fontSize: 22 }}>0</strong>
+          <span className="muted" style={{ fontSize: 13 }}>
+            Day Streak
+          </span>
         </div>
 
         <div
           className="card"
           style={{
-            background: '#eff6ff',
-            border: '1px solid #bfdbfe',
-            marginTop: 24,
+            border: '1px solid #e2e8f0',
+            borderRadius: 14,
+            padding: 16,
+            textAlign: 'center',
           }}
         >
-          <h3>Ready to study?</h3>
-          <p className="muted">Jump in now or adjust your deck.</p>
-          <button className="btn ghost" type="button" onClick={openSetupMode}>
-            {resolvedConcepts.length === 0 ? 'Set Up Deck' : 'Adjust Deck'}
-          </button>
+          <div style={{ fontSize: 22, marginBottom: 6 }}>▣</div>
+          <strong style={{ display: 'block', fontSize: 18 }}>Not yet</strong>
+          <span className="muted" style={{ fontSize: 13 }}>
+            Last Study
+          </span>
+        </div>
+
+        <div
+          className="card"
+          style={{
+            border: '1px solid #e2e8f0',
+            borderRadius: 14,
+            padding: 16,
+            textAlign: 'center',
+          }}
+        >
+          <div style={{ fontSize: 22, marginBottom: 6 }}>◷</div>
+          <strong style={{ display: 'block', fontSize: 22 }}>0m</strong>
+          <span className="muted" style={{ fontSize: 13 }}>
+            This Week
+          </span>
         </div>
       </div>
+    </section>
 
-      {message && <p className="muted">{message}</p>}
+    {/* Current Deck */}
+    <section
+      style={{
+        background: '#ffffff',
+        border: '1px solid #dbe3ee',
+        borderRadius: 18,
+        boxShadow: '0 10px 30px rgba(15, 23, 42, 0.07)',
+        padding: 24,
+      }}
+    >
+      <div
+        style={{
+          alignItems: 'center',
+          display: 'flex',
+          justifyContent: 'space-between',
+          marginBottom: 18,
+        }}
+      >
+        <div>
+          <h2 style={{ margin: 0 }}>Current Deck</h2>
+          <p className="muted" style={{ margin: '5px 0 0' }}>
+            {deck.name} · {activeLibrary.name}
+          </p>
+        </div>
+
+        <button
+          className="btn ghost"
+          type="button"
+          onClick={openSetupMode}
+        >
+          Edit Deck
+        </button>
+      </div>
+
+      {selectedNodeSummaries.length === 0 ? (
+       <div
+  style={{
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 12,
+  }}
+>
+  {[
+  { name: 'Clinical Practice', icon: '♡', depth: 0 },
+  { name: 'Modules', icon: '▱', depth: 1 },
+  { name: 'Cardiac', icon: '♡', depth: 2 },
+  { name: 'ECG', icon: '⌁', depth: 3 },
+].map((item) => (
+    <div
+      key={item.name}
+      style={{
+        alignItems: 'center',
+        background: '#ffffff',
+        border: '1px solid #dbe3ee',
+        borderRadius: 14,
+        display: 'grid',
+        gap: 14,
+        gridTemplateColumns: '42px minmax(0, 1fr)',
+        padding: '16px 18px',
+        marginLeft: item.depth * 18,
+      }}
+    >
+      <div
+        aria-hidden="true"
+        style={{
+          alignItems: 'center',
+          background: '#eff6ff',
+          borderRadius: 12,
+          color: '#1d4ed8',
+          display: 'flex',
+          fontSize: 20,
+          height: 42,
+          justifyContent: 'center',
+          width: 42,
+        }}
+      >
+        {item.icon}
+      </div>
+
+      <div>
+        <div
+  style={{
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  }}
+>
+  {item.depth > 0 && (
+    <span
+      aria-hidden="true"
+      style={{
+        color: '#94a3b8',
+        fontSize: 14,
+      }}
+    >
+      ↳
+    </span>
+  )}
+
+  <strong>{item.name}</strong>
+
+  <span
+    className="muted"
+    style={{
+      marginLeft: 'auto',
+      fontSize: 13,
+    }}
+  >
+    —
+  </span>
+</div>
+
+        <div
+          style={{
+            background: '#e2e8f0',
+            borderRadius: 999,
+            height: 7,
+            marginBottom: 7,
+            overflow: 'hidden',
+            width: '100%',
+          }}
+        >
+          <div
+            style={{
+              background: '#60a5fa',
+              height: '100%',
+              width: '0%',
+            }}
+          />
+        </div>
+
+        <span
+          className="muted"
+          style={{
+            fontSize: 13,
+          }}
+        >
+          Not reviewed yet
+        </span>
+      </div>
     </div>
-  );
+  ))}
+
+  <button
+    className="btn ghost"
+    type="button"
+    onClick={openSetupMode}
+    style={{
+      alignSelf: 'flex-start',
+      marginTop: 4,
+    }}
+  >
+    Set Up / Edit Deck
+  </button>
+</div>
+      ) : (
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 12,
+          }}
+        >
+          {selectedNodeSummaries.slice(0, 6).map((selection, index) => (
+            <div
+              key={selection.id}
+              style={{
+                alignItems: 'center',
+                background: '#ffffff',
+                border: '1px solid #dbe3ee',
+                borderRadius: 14,
+                display: 'grid',
+                gap: 14,
+                gridTemplateColumns: '42px minmax(0, 1fr) auto',
+                padding: '16px 18px',
+
+              }}
+            >
+              <div
+                aria-hidden="true"
+                style={{
+                  alignItems: 'center',
+                  background: '#eff6ff',
+                  borderRadius: 12,
+                  color: '#1d4ed8',
+                  display: 'flex',
+                  fontSize: 20,
+                  height: 42,
+                  justifyContent: 'center',
+                  width: 42,
+                }}
+              >
+                {index % 3 === 0 ? '♡' : index % 3 === 1 ? '▱' : '⌁'}
+              </div>
+
+              <div>
+                <strong style={{ display: 'block', marginBottom: 5 }}>
+                  {selection.label}
+                </strong>
+
+                <div
+                  aria-hidden="true"
+                  style={{
+                    background: '#e2e8f0',
+                    borderRadius: 999,
+                    height: 7,
+                    marginBottom: 7,
+                    overflow: 'hidden',
+                    width: '100%',
+                  }}
+                >
+                  <div
+                    style={{
+                      background: '#60a5fa',
+                      height: '100%',
+                      width: '0%',
+                    }}
+                  />
+                </div>
+
+                <span className="muted" style={{ fontSize: 13 }}>
+                  {selection.conceptCount} concepts ·{' '}
+                  {selection.questionTotal} questions · Not reviewed yet
+                </span>
+              </div>
+
+              <div
+                style={{
+                  color: '#475569',
+                  fontSize: 13,
+                  textAlign: 'right',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {selection.questionTotal} cards
+              </div>
+            </div>
+          ))}
+
+          {selectedNodeSummaries.length > 6 && (
+            <p className="muted" style={{ margin: 0 }}>
+              + {selectedNodeSummaries.length - 6} more selected topics
+            </p>
+          )}
+        </div>
+      )}
+
+      {selectedNodeSummaries.length > 0 && (
+        <div
+          style={{
+            borderTop: '1px solid #e2e8f0',
+            display: 'flex',
+            gap: 24,
+            marginTop: 18,
+            paddingTop: 16,
+          }}
+        >
+          <span>
+            <strong>{resolvedConcepts.length}</strong>
+            <br />
+            <span className="muted">concepts</span>
+          </span>
+
+          <span>
+            <strong>{totalQuestions}</strong>
+            <br />
+            <span className="muted">questions available</span>
+          </span>
+        </div>
+      )}
+    </section>
+
+    {/* Ready to study */}
+    <section
+      style={{
+        alignItems: 'center',
+        background: '#eff6ff',
+        border: '1px solid #bfdbfe',
+        borderRadius: 18,
+        display: 'flex',
+        gap: 18,
+        padding: 22,
+      }}
+    >
+      <div
+        aria-hidden="true"
+        style={{
+          alignItems: 'center',
+          background: '#ffffff',
+          borderRadius: 999,
+          display: 'flex',
+          fontSize: 28,
+          height: 54,
+          justifyContent: 'center',
+          width: 54,
+        }}
+      >
+        🚀
+      </div>
+
+      <div style={{ flex: 1 }}>
+        <h3 style={{ margin: '0 0 4px' }}>Ready to study?</h3>
+        <p className="muted" style={{ margin: 0 }}>
+          Jump in now or adjust your deck.
+        </p>
+      </div>
+
+      <button
+        className="btn ghost"
+        type="button"
+        onClick={openSetupMode}
+      >
+        {resolvedConcepts.length === 0 ? 'Set Up Deck' : 'Adjust Deck'}
+      </button>
+    </section>
+
+        {message && <p className="muted">{message}</p>}
+  </div>
+);
 }

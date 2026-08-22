@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { Header } from '@/components/Header';
-import { Sidebar } from '@/components/Sidebar';
 import { supabase } from '@/lib/supabase';
 
 type UserRoleRow = {
@@ -52,9 +51,7 @@ export default function AdminUsersPage() {
   return (
     <>
       <Header />
-      <main className="layout">
-        <Sidebar />
-
+      <main className="layout" style={{ gridTemplateColumns: '1fr' }}>
         <section className="panel">
           <h2>Admin User Management</h2>
           <p className="muted">

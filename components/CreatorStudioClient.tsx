@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Header } from '@/components/Header';
-import { Sidebar } from '@/components/Sidebar';
 import { supabase } from '@/lib/supabase';
 import type { ActiveLibraryContext } from '@/lib/library-context';
 
@@ -832,8 +831,7 @@ export function CreatorStudioClient({
     return (
       <>
         <Header />
-        <main className="layout">
-          <Sidebar activeLibrary={activeLibrary} />
+        <main className="layout" style={{ gridTemplateColumns: '1fr' }}>
           <section className="panel">
             <h2>Access Denied</h2>
             <p className="muted">
@@ -1007,9 +1005,7 @@ export function CreatorStudioClient({
   return (
     <>
       <Header />
-      <main className="layout">
-        <Sidebar activeLibrary={activeLibrary} />
-
+      <main className="layout" style={{ gridTemplateColumns: '1fr' }}>
         <section className="stack">
           <div className="panel">
             <p className="muted" style={{ marginTop: 0 }}>

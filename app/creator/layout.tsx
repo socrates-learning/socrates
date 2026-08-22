@@ -1,5 +1,4 @@
 import { Header } from '@/components/Header';
-import { Sidebar } from '@/components/Sidebar';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
 import { redirect } from 'next/navigation';
 
@@ -25,8 +24,7 @@ export default async function CreatorLayout({
     return (
       <>
         <Header />
-        <main className="layout">
-          <Sidebar />
+        <main className="layout" style={{ gridTemplateColumns: '1fr' }}>
           <section className="panel">
             <h2>Access Denied</h2>
             <p className="muted">
