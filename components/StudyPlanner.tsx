@@ -904,25 +904,6 @@ export function StudyPlanner({
             <br />
             <span className="muted">{activeLibrary.name}</span>
           </p>
-          <div
-            className="card"
-            style={{
-              display: 'grid',
-              gap: 12,
-              gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-            }}
-          >
-            <p style={{ margin: 0 }}>
-              <strong>{resolvedConcepts.length}</strong>
-              <br />
-              <span className="muted">concepts selected</span>
-            </p>
-            <p style={{ margin: 0 }}>
-              <strong>{totalQuestions}</strong>
-              <br />
-              <span className="muted">questions available</span>
-            </p>
-          </div>
           {selectedNodeSummaries.length === 0 ? (
             <div
               className="card"
@@ -960,7 +941,8 @@ export function StudyPlanner({
                     <strong>{selection.label}</strong>
                     <br />
                     <span className="muted">
-                      {selection.conceptCount} concepts selected
+                      {selection.conceptCount} concepts · {selection.questionTotal}{' '}
+                      questions
                     </span>
                     <span
                       aria-hidden="true"
@@ -982,11 +964,22 @@ export function StudyPlanner({
                         }}
                       />
                     </span>
+                    <span className="muted" style={{ fontSize: 12 }}>
+                      Not reviewed yet
+                    </span>
                   </span>
-                  <span className="muted">{selection.questionTotal} q</span>
+                  <span className="muted" style={{ textAlign: 'right' }}>
+                    {selection.questionTotal} q
+                  </span>
                 </div>
               </div>
             ))
+          )}
+          {selectedNodeSummaries.length > 0 && (
+            <p className="muted" style={{ margin: 0 }}>
+              {resolvedConcepts.length} concepts selected · {totalQuestions} questions
+              available
+            </p>
           )}
           {selectedNodeSummaries.length > 4 && (
             <p className="muted">

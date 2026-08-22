@@ -239,9 +239,14 @@ export function Sidebar({
             className="btn primary"
             type="button"
             onClick={openDeckSetup}
-            style={{ justifyContent: 'center' }}
+            style={{
+              fontSize: 20,
+              justifyContent: 'center',
+              minHeight: 64,
+              textTransform: 'uppercase',
+            }}
           >
-            STUDY
+            &gt; STUDY
           </button>
           <button className="btn ghost" type="button" onClick={openDeckSetup}>
             Set Up Deck
