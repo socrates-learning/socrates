@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 
 type LibraryNode = {
@@ -187,6 +186,73 @@ export function Sidebar({
     ? rootNodes.filter((node) => nodeMatchesSearch(node))
     : rootNodes;
 
+  function openDeckSetup() {
+    window.location.hash = 'set-up-deck';
+    window.dispatchEvent(new Event('socrates-open-deck-setup'));
+  }
+
+  if (!activeId) {
+    return (
+      <aside
+        className="panel sidebar"
+        style={{
+          background: '#062b4f',
+          color: 'white',
+          display: 'flex',
+          flexDirection: 'column',
+          minHeight: 680,
+        }}
+      >
+        <p style={{ fontSize: 12, marginTop: 0, textTransform: 'uppercase' }}>
+          Current Subject
+        </p>
+        <h3 style={{ color: 'white' }}>{activeLibrary?.name || 'Knowledge Library'}</h3>
+
+        <div className="stack" style={{ margin: '16px 0' }}>
+          <button
+            className="btn primary"
+            type="button"
+            onClick={openDeckSetup}
+            style={{ justifyContent: 'center' }}
+          >
+            STUDY
+          </button>
+          <button className="btn ghost" type="button" onClick={openDeckSetup}>
+            Set Up Deck
+          </button>
+          <button className="btn ghost" type="button" disabled>
+            Make Cards
+          </button>
+          <button className="btn ghost" type="button" disabled>
+            Stats
+          </button>
+          <button className="btn ghost" type="button" disabled>
+            Menu
+          </button>
+        </div>
+
+        <div className="stack" style={{ marginTop: 'auto' }}>
+          <button className="btn ghost" type="button" disabled>
+            Account
+          </button>
+          <button className="btn ghost" type="button" disabled>
+            Settings
+          </button>
+          <button
+            className="btn ghost"
+            type="button"
+            onClick={async () => {
+              await supabase.auth.signOut();
+              window.location.href = '/login';
+            }}
+          >
+            Log out
+          </button>
+        </div>
+      </aside>
+    );
+  }
+
   return (
     <aside className="panel sidebar">
       <p className="muted" style={{ marginTop: 0, textTransform: 'uppercase' }}>
@@ -195,12 +261,12 @@ export function Sidebar({
       <h3>{activeLibrary?.name || 'Knowledge Library'}</h3>
 
       <div className="stack" style={{ marginBottom: 16 }}>
-        <button className="btn primary" type="button" disabled>
+        <button className="btn primary" type="button" onClick={openDeckSetup}>
           STUDY
         </button>
-        <Link className="btn ghost" href="/#set-up-deck">
+        <button className="btn ghost" type="button" onClick={openDeckSetup}>
           Set Up Deck
-        </Link>
+        </button>
       </div>
 
       <input

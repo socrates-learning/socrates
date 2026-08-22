@@ -79,6 +79,7 @@ export function StudyPlanner({
 }) {
   const [mode, setMode] = useState<PlannerMode>('dashboard');
   const [userId, setUserId] = useState<string | null>(null);
+  const [displayName, setDisplayName] = useState('there');
   const [deck, setDeck] = useState<StudyDeck | null>(null);
   const [nodes, setNodes] = useState<LibraryNode[]>([]);
   const [placements, setPlacements] = useState<Placement[]>([]);
@@ -213,6 +214,10 @@ export function StudyPlanner({
       const rootNode = loadedNodes.find((node) => node.parent_id === null);
 
       setUserId(user.id);
+      setDisplayName(
+        (user.user_metadata?.full_name as string | undefined) ||
+          (user.email ? user.email.split('@')[0] : 'there')
+      );
       setDeck(activeDeck);
       setNodes(loadedNodes);
       setPlacements(loadedPlacements);
@@ -250,9 +255,11 @@ export function StudyPlanner({
 
     openSetupFromHash();
     window.addEventListener('hashchange', openSetupFromHash);
+    window.addEventListener('socrates-open-deck-setup', openSetupFromHash);
 
     return () => {
       window.removeEventListener('hashchange', openSetupFromHash);
+      window.removeEventListener('socrates-open-deck-setup', openSetupFromHash);
     };
   }, []);
 
@@ -450,6 +457,36 @@ export function StudyPlanner({
     setMessage('Deck saved.');
   }
 
+  async function clearDeck() {
+    if (!deck) return;
+
+    setIsSaving(true);
+    setMessage('Clearing deck...');
+
+    const { error: nodeError } = await supabase
+      .from('user_study_node_selections')
+      .delete()
+      .eq('deck_id', deck.id);
+    const { error: overrideError } = await supabase
+      .from('user_study_concept_overrides')
+      .delete()
+      .eq('deck_id', deck.id);
+
+    if (nodeError || overrideError) {
+      setMessage(
+        `Unable to clear deck: ${nodeError?.message || overrideError?.message}`
+      );
+      setIsSaving(false);
+      return;
+    }
+
+    setSelectedNodeIds(new Set());
+    setConceptOverrides({});
+    await refreshResolvedDeck();
+    setMessage('Deck cleared.');
+    setIsSaving(false);
+  }
+
   function toggleExpandedNode(nodeId: string) {
     setExpandedNodeIds((current) => {
       const next = new Set(current);
@@ -558,12 +595,6 @@ export function StudyPlanner({
     (total, concept) => total + Number(concept.published_question_count || 0),
     0
   );
-  const includedOverrides = Object.values(conceptOverrides).filter(
-    (state) => state === 'included'
-  ).length;
-  const excludedOverrides = Object.values(conceptOverrides).filter(
-    (state) => state === 'excluded'
-  ).length;
 
   if (!activeLibrary?.id) {
     return (
@@ -595,20 +626,16 @@ export function StudyPlanner({
   if (mode === 'setup') {
     return (
       <div className="stack" id="set-up-deck">
-        <div className="panel hero">
-          <p className="muted" style={{ marginTop: 0 }}>
-            Current Subject: {activeLibrary.name}
-          </p>
+        <div className="panel">
           <h2>Set Up Deck</h2>
-          <p>
-            Build your deck from topic branches. Selecting a parent includes its
-            descendant topics, and you can fine-tune individual concepts when needed.
-          </p>
+          <p className="muted">Build your deck from topic branches</p>
         </div>
 
-        <div className="dashboard">
+        <div
+          className="dashboard"
+          style={{ gridTemplateColumns: 'minmax(0, 1.6fr) minmax(240px, 0.7fr)' }}
+        >
           <div className="panel">
-            <h3>Topic Branches</h3>
             {rootNodes.length === 0 ? (
               <p className="muted">No topics are available in this library yet.</p>
             ) : (
@@ -617,42 +644,42 @@ export function StudyPlanner({
           </div>
 
           <div className="panel">
-            <h3>Selected Deck</h3>
+            <h3>Selected</h3>
+            {selectedNodeSummaries.length === 0 ? (
+              <p className="muted">No topic branches selected.</p>
+            ) : (
+              <div className="stack">
+                {selectedNodeSummaries.map((selection) => (
+                  <p key={selection.id} style={{ margin: 0 }}>
+                    <strong>{selection.label}</strong>
+                    <br />
+                    <span className="muted">
+                      {selection.conceptCount} concepts · {selection.questionTotal}{' '}
+                      questions
+                    </span>
+                  </p>
+                ))}
+              </div>
+            )}
+            <hr />
             <p>
-              <strong>{resolvedConcepts.length}</strong>
+              <span className="muted">Total cards selected</span>
               <br />
-              <span className="muted">concepts selected</span>
+              <strong style={{ fontSize: 36 }}>{totalQuestions}</strong>
             </p>
-            <p>
-              <strong>{totalQuestions}</strong>
-              <br />
-              <span className="muted">published questions available</span>
-            </p>
-            <p className="muted">
-              {selectedNodeIds.size} selected branches · {includedOverrides} manual
-              includes · {excludedOverrides} manual exclusions
-            </p>
-            <button
-              className="btn primary"
-              type="button"
-              onClick={saveAndReturnToDashboard}
-              disabled={isSaving}
-            >
-              {isSaving ? 'Saving...' : 'Save / Update Deck'}
-            </button>
-            <button
-              className="btn ghost"
-              type="button"
-              onClick={() => setMode('dashboard')}
-              style={{ marginLeft: 8 }}
-            >
-              Back to Dashboard
-            </button>
           </div>
         </div>
 
         <div className="panel">
-          <h3>Customize Topic Concepts</h3>
+          <p className="muted" style={{ margin: 0 }}>
+            Selecting a parent includes all children.
+            <br />
+            Build your deck from topic branches, not individual random cards.
+          </p>
+        </div>
+
+        <div className="panel">
+          <h3>Customize Selected Topic</h3>
           {focusedNode ? (
             <>
               <p className="muted">
@@ -700,12 +727,23 @@ export function StudyPlanner({
           )}
         </div>
 
-        <div className="panel">
-          <h3>Setup Note</h3>
-          <p className="muted">
-            Deck changes are saved as you select topics. Use Save / Update Deck when
-            you are ready to return to the dashboard summary.
-          </p>
+        <div style={{ display: 'flex', gap: 12, justifyContent: 'space-between' }}>
+          <button
+            className="btn ghost"
+            type="button"
+            onClick={clearDeck}
+            disabled={isSaving}
+          >
+            Clear All
+          </button>
+          <button
+            className="btn primary"
+            type="button"
+            onClick={saveAndReturnToDashboard}
+            disabled={isSaving}
+          >
+            {isSaving ? 'Saving...' : 'Save / Update Deck'}
+          </button>
         </div>
 
         {message && <p className="muted">{message}</p>}
@@ -715,20 +753,45 @@ export function StudyPlanner({
 
   return (
     <div className="stack" id="deck-dashboard">
-      <div className="panel hero">
-        <p className="muted" style={{ marginTop: 0 }}>
-          Current Subject: {activeLibrary.name}
-        </p>
-        <h2>Deck Dashboard</h2>
-        <p>
-          Welcome back. Your current deck is the starting point for studying in{' '}
-          {activeLibrary.name}.
-        </p>
-      </div>
+      <div className="panel">
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
+          <h2 style={{ marginTop: 0 }}>Welcome back, {displayName}!</h2>
+          <span className="muted">Settings</span>
+        </div>
 
-      <div className="dashboard">
-        <div className="panel">
+        <div
+          className="dashboard"
+          style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }}
+        >
+          <div className="card">
+            <strong>0</strong>
+            <br />
+            <span className="muted">Day Streak</span>
+          </div>
+          <div className="card">
+            <strong>Not yet</strong>
+            <br />
+            <span className="muted">Last Study</span>
+          </div>
+          <div className="card">
+            <strong>0m</strong>
+            <br />
+            <span className="muted">This Week</span>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
           <h3>Current Deck</h3>
+          <button
+            className="btn ghost"
+            type="button"
+            onClick={() => setMode('setup')}
+          >
+            Edit Deck
+          </button>
+        </div>
+
+        <div className="stack">
           <p>
             <strong>{deck.name}</strong>
             <br />
@@ -757,13 +820,46 @@ export function StudyPlanner({
             <p className="muted">No branches selected yet.</p>
           ) : (
             selectedNodeSummaries.slice(0, 4).map((selection) => (
-              <p key={selection.id}>
-                <strong>{selection.label}</strong>
-                <br />
-                <span className="muted">
-                  {selection.conceptCount} concepts · {selection.questionTotal} questions
-                </span>
-              </p>
+              <div className="card" key={selection.id}>
+                <div
+                  style={{
+                    display: 'grid',
+                    gap: 12,
+                    gridTemplateColumns: '32px minmax(0, 1fr) auto',
+                    alignItems: 'center',
+                  }}
+                >
+                  <span aria-hidden="true">o</span>
+                  <span>
+                    <strong>{selection.label}</strong>
+                    <br />
+                    <span className="muted">
+                      {selection.conceptCount} concepts selected
+                    </span>
+                    <span
+                      aria-hidden="true"
+                      style={{
+                        background: '#dbe4f0',
+                        borderRadius: 999,
+                        display: 'block',
+                        height: 6,
+                        marginTop: 8,
+                        overflow: 'hidden',
+                      }}
+                    >
+                      <span
+                        style={{
+                          background: '#2563eb',
+                          display: 'block',
+                          height: '100%',
+                          width: selection.questionTotal ? '55%' : '0%',
+                        }}
+                      />
+                    </span>
+                  </span>
+                  <span className="muted">{selection.questionTotal} q</span>
+                </div>
+              </div>
             ))
           )}
           {selectedNodeSummaries.length > 4 && (
@@ -771,61 +867,15 @@ export function StudyPlanner({
               + {selectedNodeSummaries.length - 4} more selected branches
             </p>
           )}
-          <button
-            className="btn ghost"
-            type="button"
-            onClick={() => setMode('setup')}
-          >
-            {resolvedConcepts.length === 0 ? 'Set Up Deck' : 'Edit Deck'}
-          </button>
         </div>
 
-        <div className="panel">
-          <h3>Ready to Study?</h3>
-          <button
-            className="btn primary"
-            type="button"
-            disabled
-            style={{
-              fontSize: 18,
-              justifyContent: 'center',
-              minHeight: 56,
-              width: '100%',
-            }}
-          >
-            STUDY
-          </button>
-          <p className="muted">
-            {resolvedConcepts.length === 0
-              ? 'Set up your deck to begin studying.'
-              : 'Study Mode coming next.'}
-          </p>
+        <div className="card" style={{ marginTop: 24 }}>
+          <h3>Ready to study?</h3>
+          <p className="muted">Jump in now or adjust your deck.</p>
           <button className="btn ghost" type="button" onClick={() => setMode('setup')}>
-            {resolvedConcepts.length === 0 ? 'Set Up Deck' : 'Edit Deck'}
+            {resolvedConcepts.length === 0 ? 'Set Up Deck' : 'Adjust Deck'}
           </button>
         </div>
-      </div>
-
-      <div className="panel">
-        <h3>Deck Contents</h3>
-        {resolvedConcepts.length === 0 ? (
-          <p className="muted">No concepts selected yet.</p>
-        ) : (
-          <div className="stack">
-            {resolvedConcepts.slice(0, 8).map((concept) => (
-              <div className="card" key={concept.concept_id}>
-                <strong>{concept.concept_name}</strong>
-                <p className="muted" style={{ marginBottom: 0 }}>
-                  {concept.concept_type || 'Concept'} ·{' '}
-                  {concept.published_question_count || 0} published questions
-                </p>
-              </div>
-            ))}
-            {resolvedConcepts.length > 8 && (
-              <p className="muted">+ {resolvedConcepts.length - 8} more concepts</p>
-            )}
-          </div>
-        )}
       </div>
 
       {message && <p className="muted">{message}</p>}
