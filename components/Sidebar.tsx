@@ -26,6 +26,7 @@ export function Sidebar({
   const [expandedNodeIds, setExpandedNodeIds] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(Boolean(activeLibrary?.id));
+  const [isDeckSetupOpen, setIsDeckSetupOpen] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -91,6 +92,27 @@ export function Sidebar({
       isMounted = false;
     };
   }, [activeId, activeLibrary?.id]);
+
+  useEffect(() => {
+    function syncDeckSetupState() {
+      setIsDeckSetupOpen(window.location.hash === '#set-up-deck');
+    }
+
+    function markDashboardOpen() {
+      setIsDeckSetupOpen(false);
+    }
+
+    syncDeckSetupState();
+    window.addEventListener('hashchange', syncDeckSetupState);
+    window.addEventListener('socrates-open-deck-setup', syncDeckSetupState);
+    window.addEventListener('socrates-open-deck-dashboard', markDashboardOpen);
+
+    return () => {
+      window.removeEventListener('hashchange', syncDeckSetupState);
+      window.removeEventListener('socrates-open-deck-setup', syncDeckSetupState);
+      window.removeEventListener('socrates-open-deck-dashboard', markDashboardOpen);
+    };
+  }, []);
 
   useEffect(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -189,6 +211,10 @@ export function Sidebar({
   function openDeckSetup() {
     window.location.hash = 'set-up-deck';
     window.dispatchEvent(new Event('socrates-open-deck-setup'));
+  }
+
+  if (!activeId && isDeckSetupOpen) {
+    return null;
   }
 
   if (!activeId) {

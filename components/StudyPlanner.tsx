@@ -454,6 +454,8 @@ export function StudyPlanner({
     await refreshResolvedDeck();
     setIsSaving(false);
     setMode('dashboard');
+    window.history.replaceState(null, '', window.location.pathname);
+    window.dispatchEvent(new Event('socrates-open-deck-dashboard'));
     setMessage('Deck saved.');
   }
 
@@ -510,11 +512,11 @@ export function StudyPlanner({
 
     return (
       <div
-        className="card"
         key={node.id}
         style={{
-          marginLeft: depth ? 16 : 0,
-          borderColor: selected ? '#2563eb' : undefined,
+          borderBottom: '1px solid #e2e8f0',
+          marginLeft: depth ? 18 : 0,
+          padding: '8px 0',
         }}
       >
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
@@ -524,6 +526,7 @@ export function StudyPlanner({
             onClick={() => toggleExpandedNode(node.id)}
             disabled={children.length === 0}
             aria-label={isExpanded ? `Collapse ${node.name}` : `Expand ${node.name}`}
+            style={{ minWidth: 36, padding: '6px 8px' }}
           >
             {children.length === 0 ? '•' : isExpanded ? '▼' : '▶'}
           </button>
@@ -544,14 +547,27 @@ export function StudyPlanner({
               <strong>{node.name}</strong>
               <br />
               <span className="muted">
-                {branchConceptCount} concepts · {branchQuestionCount(node.id)} questions
+                {branchConceptCount} concepts
               </span>
             </span>
           </label>
+          <span
+            className="muted"
+            style={{
+              border: '1px solid #bfdbfe',
+              borderRadius: 8,
+              minWidth: 52,
+              padding: '3px 8px',
+              textAlign: 'right',
+            }}
+          >
+            {branchQuestionCount(node.id)}
+          </span>
           <button
             className="btn ghost"
             type="button"
             onClick={() => setFocusedNodeId(node.id)}
+            style={{ padding: '6px 10px' }}
           >
             Customize
           </button>
@@ -626,7 +642,10 @@ export function StudyPlanner({
   if (mode === 'setup') {
     return (
       <div className="stack" id="set-up-deck">
-        <div className="panel">
+        <div
+          className="panel"
+          style={{ border: '1px solid #bfdbfe', boxShadow: '0 8px 24px #0f172a12' }}
+        >
           <h2>Set Up Deck</h2>
           <p className="muted">Build your deck from topic branches</p>
         </div>
@@ -635,7 +654,14 @@ export function StudyPlanner({
           className="dashboard"
           style={{ gridTemplateColumns: 'minmax(0, 1.6fr) minmax(240px, 0.7fr)' }}
         >
-          <div className="panel">
+          <div
+            className="panel"
+            style={{
+              border: '1px solid #cbd5e1',
+              borderRadius: 16,
+              boxShadow: '0 8px 24px #0f172a0d',
+            }}
+          >
             {rootNodes.length === 0 ? (
               <p className="muted">No topics are available in this library yet.</p>
             ) : (
@@ -643,7 +669,14 @@ export function StudyPlanner({
             )}
           </div>
 
-          <div className="panel">
+          <div
+            className="panel"
+            style={{
+              border: '1px solid #cbd5e1',
+              borderRadius: 16,
+              boxShadow: '0 8px 24px #0f172a0d',
+            }}
+          >
             <h3>Selected</h3>
             {selectedNodeSummaries.length === 0 ? (
               <p className="muted">No topic branches selected.</p>
@@ -667,18 +700,24 @@ export function StudyPlanner({
               <br />
               <strong style={{ fontSize: 36 }}>{totalQuestions}</strong>
             </p>
+            <div
+              style={{
+                background: '#eff6ff',
+                border: '1px solid #bfdbfe',
+                borderRadius: 12,
+                padding: 12,
+              }}
+            >
+              <p className="muted" style={{ margin: 0 }}>
+                Selecting a parent includes all children.
+                <br />
+                Build your deck from topic branches, not individual random cards.
+              </p>
+            </div>
           </div>
         </div>
 
-        <div className="panel">
-          <p className="muted" style={{ margin: 0 }}>
-            Selecting a parent includes all children.
-            <br />
-            Build your deck from topic branches, not individual random cards.
-          </p>
-        </div>
-
-        <div className="panel">
+        <div className="panel" style={{ border: '1px solid #e2e8f0', borderRadius: 16 }}>
           <h3>Customize Selected Topic</h3>
           {focusedNode ? (
             <>
@@ -727,7 +766,16 @@ export function StudyPlanner({
           )}
         </div>
 
-        <div style={{ display: 'flex', gap: 12, justifyContent: 'space-between' }}>
+        <div
+          className="panel"
+          style={{
+            alignItems: 'center',
+            border: '1px solid #bfdbfe',
+            display: 'flex',
+            gap: 12,
+            justifyContent: 'space-between',
+          }}
+        >
           <button
             className="btn ghost"
             type="button"
@@ -744,6 +792,14 @@ export function StudyPlanner({
           >
             {isSaving ? 'Saving...' : 'Save / Update Deck'}
           </button>
+          <div style={{ textAlign: 'right' }}>
+            <button className="btn primary" type="button" disabled>
+              Start Study
+            </button>
+            <p className="muted" style={{ margin: '6px 0 0' }}>
+              Study Mode coming next.
+            </p>
+          </div>
         </div>
 
         {message && <p className="muted">{message}</p>}
@@ -753,7 +809,14 @@ export function StudyPlanner({
 
   return (
     <div className="stack" id="deck-dashboard">
-      <div className="panel">
+      <div
+        className="panel"
+        style={{
+          border: '1px solid #cbd5e1',
+          borderRadius: 18,
+          boxShadow: '0 12px 32px #0f172a12',
+        }}
+      >
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
           <h2 style={{ marginTop: 0 }}>Welcome back, {displayName}!</h2>
           <span className="muted">Settings</span>
@@ -763,17 +826,23 @@ export function StudyPlanner({
           className="dashboard"
           style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }}
         >
-          <div className="card">
+          <div className="card" style={{ textAlign: 'center' }}>
+            <span className="muted">DS</span>
+            <br />
             <strong>0</strong>
             <br />
             <span className="muted">Day Streak</span>
           </div>
-          <div className="card">
+          <div className="card" style={{ textAlign: 'center' }}>
+            <span className="muted">LS</span>
+            <br />
             <strong>Not yet</strong>
             <br />
             <span className="muted">Last Study</span>
           </div>
-          <div className="card">
+          <div className="card" style={{ textAlign: 'center' }}>
+            <span className="muted">TW</span>
+            <br />
             <strong>0m</strong>
             <br />
             <span className="muted">This Week</span>
@@ -817,10 +886,29 @@ export function StudyPlanner({
             </p>
           </div>
           {selectedNodeSummaries.length === 0 ? (
-            <p className="muted">No branches selected yet.</p>
+            <div
+              className="card"
+              style={{
+                background: '#f8fafc',
+                border: '1px dashed #93c5fd',
+                padding: 18,
+              }}
+            >
+              <strong>No branches selected yet.</strong>
+              <p className="muted" style={{ marginBottom: 0 }}>
+                Use Set Up Deck to choose topic branches for this subject.
+              </p>
+            </div>
           ) : (
             selectedNodeSummaries.slice(0, 4).map((selection) => (
-              <div className="card" key={selection.id}>
+              <div
+                className="card"
+                key={selection.id}
+                style={{
+                  border: '1px solid #dbeafe',
+                  boxShadow: '0 6px 16px #0f172a0a',
+                }}
+              >
                 <div
                   style={{
                     display: 'grid',
@@ -849,10 +937,10 @@ export function StudyPlanner({
                     >
                       <span
                         style={{
-                          background: '#2563eb',
+                          background: '#bfdbfe',
                           display: 'block',
                           height: '100%',
-                          width: selection.questionTotal ? '55%' : '0%',
+                          width: '0%',
                         }}
                       />
                     </span>
@@ -869,7 +957,14 @@ export function StudyPlanner({
           )}
         </div>
 
-        <div className="card" style={{ marginTop: 24 }}>
+        <div
+          className="card"
+          style={{
+            background: '#eff6ff',
+            border: '1px solid #bfdbfe',
+            marginTop: 24,
+          }}
+        >
           <h3>Ready to study?</h3>
           <p className="muted">Jump in now or adjust your deck.</p>
           <button className="btn ghost" type="button" onClick={() => setMode('setup')}>
