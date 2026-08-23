@@ -2,7 +2,6 @@ import { notFound } from 'next/navigation';
 import { ArticleEditorClient } from '@/components/ArticleEditorClient';
 import { Header } from '@/components/Header';
 import { LibrarySwitcher } from '@/components/LibrarySwitcher';
-import { Sidebar } from '@/components/Sidebar';
 import { resolveActiveLibraryContext } from '@/lib/library-context';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
 
@@ -103,8 +102,7 @@ export default async function EditArticlePage({
   return (
     <>
       <Header />
-      <main className="layout">
-        <Sidebar activeLibrary={activeLibrary} />
+      <main className="layout" style={{ gridTemplateColumns: '1fr' }}>
         <section className="stack">
           <div className="panel">
             <h2>Working Library: {activeLibrary?.name || 'No active library'}</h2>

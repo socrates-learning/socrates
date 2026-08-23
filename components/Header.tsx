@@ -66,6 +66,10 @@ export function Header() {
     window.dispatchEvent(new Event('socrates-open-deck-setup'));
   }
 
+  function handleCreatorClick() {
+    window.dispatchEvent(new Event('socrates-open-creator-dashboard'));
+  }
+
   const isEditor = role === 'editor' || role === 'admin';
   const isAdmin = role === 'admin';
   const accountLabel = email ? 'Account' : 'Login';
@@ -97,7 +101,7 @@ export function Header() {
         </button>
 
         {isEditor && (
-          <Link className="btn ghost" href="/creator">
+          <Link className="btn ghost" href="/creator" onClick={handleCreatorClick}>
             Creator Studio
           </Link>
         )}

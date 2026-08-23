@@ -126,6 +126,299 @@ function getCategoryPath(node: LibraryNode, nodes: LibraryNode[]) {
   return names.join(' / ');
 }
 
+function getDescendantIds(nodeId: string, nodes: LibraryNode[]) {
+  const descendants = new Set<string>();
+
+  function visit(parentId: string) {
+    const children = nodes.filter((node) => node.parent_id === parentId);
+
+    for (const child of children) {
+      if (descendants.has(child.id)) continue;
+
+      descendants.add(child.id);
+      visit(child.id);
+    }
+  }
+
+  visit(nodeId);
+  return descendants;
+}
+
+function renderKnowledgeTree(
+  nodes: LibraryNode[],
+  addingChildToId: string | null,
+  newChildName: string,
+  renamingTopicId: string | null,
+  renamedTopicName: string,
+  movingTopicId: string | null,
+  moveTargetId: string,
+  onStartAddChild: (nodeId: string) => void,
+  onCancelAddChild: () => void,
+  onChildNameChange: (value: string) => void,
+  onAddChild: (parentId: string) => void,
+  onStartRename: (node: LibraryNode) => void,
+  onCancelRename: () => void,
+  onRenameNameChange: (value: string) => void,
+  onRenameSave: (nodeId: string) => void,
+  onStartMove: (nodeId: string) => void,
+  onCancelMove: () => void,
+  onMoveTargetChange: (value: string) => void,
+  onMoveSave: (nodeId: string) => void,
+
+removingTopicId: string | null,
+onStartRemove: (nodeId: string) => void,
+onCancelRemove: () => void,
+onRemoveSave: (nodeId: string) => void,
+
+parentId: string | null = null,
+depth = 0
+): React.ReactNode {
+  const children = nodes
+    .filter((node) => node.parent_id === parentId)
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  if (children.length === 0) {
+    return null;
+  }
+
+  return (
+    <div>
+      {children.map((node) => (
+        <div key={node.id}>
+          <div
+            style={{
+              paddingLeft: `${depth * 20}px`,
+              paddingTop: '6px',
+              paddingBottom: '6px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+            }}
+          >
+            <span>{node.name}</span>
+
+<button
+  className="btn ghost"
+  type="button"
+  onClick={() => onStartAddChild(node.id)}
+>
+  + Add Subtopic
+</button>
+
+<button
+  className="btn ghost"
+  type="button"
+  onClick={() => onStartRename(node)}
+>
+  Rename
+</button>
+
+<button
+  className="btn ghost"
+  type="button"
+  onClick={() => onStartMove(node.id)}
+>
+  Move
+</button>
+
+<button
+  className="btn ghost"
+  type="button"
+  onClick={() => onStartRemove(node.id)}
+>
+  Remove
+</button>
+</div>
+
+{renamingTopicId === node.id && (
+  <div
+    style={{
+      paddingLeft: `${(depth + 1) * 20}px`,
+      display: 'flex',
+      gap: '8px',
+      alignItems: 'center',
+      marginBottom: '8px',
+    }}
+  >
+    <input
+      value={renamedTopicName}
+      onChange={(event) => onRenameNameChange(event.target.value)}
+      aria-label={`Rename topic ${node.name}`}
+    />
+
+    <button
+      className="btn primary"
+      type="button"
+      onClick={() => onRenameSave(node.id)}
+    >
+      Save
+    </button>
+
+    <button
+      className="btn ghost"
+      type="button"
+      onClick={onCancelRename}
+    >
+      Cancel
+    </button>
+  </div>
+)}
+
+          {movingTopicId === node.id && (
+  <div
+    style={{
+      paddingLeft: `${(depth + 1) * 20}px`,
+      display: 'flex',
+      gap: '8px',
+      alignItems: 'center',
+      marginBottom: '8px',
+    }}
+  >
+    <select
+      value={moveTargetId}
+      onChange={(event) => onMoveTargetChange(event.target.value)}
+      aria-label={`Move topic ${node.name}`}
+    >
+      <option value="">Choose new location</option>
+
+      {nodes
+        .filter((candidate) => {
+          if (candidate.id === node.id) return false;
+
+          const descendants = getDescendantIds(node.id, nodes);
+          if (descendants.has(candidate.id)) return false;
+
+          return true;
+        })
+        .sort((a, b) =>
+          getCategoryPath(a, nodes).localeCompare(
+            getCategoryPath(b, nodes)
+          )
+        )
+        .map((candidate) => (
+          <option key={candidate.id} value={candidate.id}>
+            {getCategoryPath(candidate, nodes)}
+          </option>
+        ))}
+    </select>
+
+    <button
+      className="btn primary"
+      type="button"
+      onClick={() => onMoveSave(node.id)}
+    >
+      Move Topic
+    </button>
+
+    <button
+      className="btn ghost"
+      type="button"
+      onClick={onCancelMove}
+    >
+      Cancel
+    </button>
+  </div>
+)}
+
+{removingTopicId === node.id && (
+  <div
+    style={{
+      paddingLeft: `${(depth + 1) * 20}px`,
+      display: 'flex',
+      gap: '8px',
+      alignItems: 'center',
+      marginBottom: '8px',
+    }}
+  >
+    <span>
+      Remove “{node.name}”? This only works if the topic is empty and unused.
+    </span>
+
+    <button
+      className="btn primary"
+      type="button"
+      onClick={() => onRemoveSave(node.id)}
+    >
+      Remove Topic
+    </button>
+
+    <button
+      className="btn ghost"
+      type="button"
+      onClick={onCancelRemove}
+    >
+      Cancel
+    </button>
+  </div>
+)}
+
+          {addingChildToId === node.id && (
+            <div
+              style={{
+                paddingLeft: `${(depth + 1) * 20}px`,
+                display: 'flex',
+                gap: '8px',
+                alignItems: 'center',
+                marginBottom: '8px',
+              }}
+            >
+              <input
+                value={newChildName}
+                onChange={(event) => onChildNameChange(event.target.value)}
+               placeholder="New subtopic"
+              />
+
+              <button
+                className="btn primary"
+                type="button"
+                onClick={() => onAddChild(node.id)}
+              >
+                Add
+              </button>
+
+              <button
+                className="btn ghost"
+                type="button"
+                onClick={onCancelAddChild}
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+
+         {renderKnowledgeTree(
+  nodes,
+  addingChildToId,
+  newChildName,
+  renamingTopicId,
+  renamedTopicName,
+  movingTopicId,
+  moveTargetId,
+  onStartAddChild,
+  onCancelAddChild,
+  onChildNameChange,
+  onAddChild,
+  onStartRename,
+  onCancelRename,
+  onRenameNameChange,
+  onRenameSave,
+  onStartMove,
+  onCancelMove,
+  onMoveTargetChange,
+  onMoveSave,
+  removingTopicId,
+  onStartRemove,
+  onCancelRemove,
+  onRemoveSave,
+  node.id,
+  depth + 1
+)}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function CreatorStudioClient({
   activeLibraryContext,
   initialConceptId,
@@ -148,6 +441,7 @@ export function CreatorStudioClient({
   const [status, setStatus] = useState('');
   const [assignStatus, setAssignStatus] = useState('');
   const [sourceStatus, setSourceStatus] = useState('');
+  const [removingSourceId, setRemovingSourceId] = useState<string | null>(null);
   const [attributionStatus, setAttributionStatus] = useState('');
   const [relationshipStatus, setRelationshipStatus] = useState('');
   const [loading, setLoading] = useState(true);
@@ -166,6 +460,28 @@ export function CreatorStudioClient({
   );
   const [managementStatus, setManagementStatus] = useState('');
   const [categoryStatus, setCategoryStatus] = useState('');
+  const [addingChildToId, setAddingChildToId] = useState<string | null>(null);
+  const [newChildName, setNewChildName] = useState('');
+  const [renamingTopicId, setRenamingTopicId] = useState<string | null>(null);
+  const [renamedTopicName, setRenamedTopicName] = useState('');
+  const [movingTopicId, setMovingTopicId] = useState<string | null>(null);
+  const [moveTargetId, setMoveTargetId] = useState('');
+  const [removingTopicId, setRemovingTopicId] = useState<string | null>(null);
+
+  useEffect(() => {
+    function openCreatorDashboard() {
+      setWorkflow('dashboard');
+    }
+
+    window.addEventListener('socrates-open-creator-dashboard', openCreatorDashboard);
+
+    return () => {
+      window.removeEventListener(
+        'socrates-open-creator-dashboard',
+        openCreatorDashboard
+      );
+    };
+  }, []);
 
   async function loadSources(userId: string) {
     const { data, error } = await supabase
@@ -484,47 +800,222 @@ export function CreatorStudioClient({
     setCategoryStatus('Category created successfully.');
   }
 
-  async function handleCategoryRename(
-    event: React.FormEvent<HTMLFormElement>
-  ) {
-    event.preventDefault();
+  async function handleInlineChildCreate(parentId: string) {
+  const name = newChildName.trim();
+  const parent = nodes.find((node) => node.id === parentId);
 
-    const formElement = event.currentTarget;
-    const form = new FormData(formElement);
-    const categoryId = String(form.get('rename_category_id') || '');
-    const name = String(form.get('renamed_category_name') || '').trim();
+  if (!name || !parent || !activeLibrary) {
+    setCategoryStatus('Error: Provide a name and choose a valid parent topic.');
+    return;
+  }
 
-    if (!categoryId || !name) {
-      setCategoryStatus('Error: Choose a category and provide its new name.');
+  if (parent.library_id !== activeLibrary.id) {
+    setCategoryStatus(
+      'Error: Choose a parent topic from the active working library.'
+    );
+    return;
+  }
+
+  setCategoryStatus('Creating child topic...');
+
+  const { data, error } = await supabase
+    .rpc('create_library_node_in_library', {
+      p_library_id: activeLibrary.id,
+      p_parent_id: parent.id,
+      p_name: name,
+      p_node_type: 'topic',
+      p_sort_order: 0,
+    })
+    .single();
+
+  if (error) {
+    setCategoryStatus(`Error creating child topic: ${error.message}`);
+    return;
+  }
+
+  const createdNode = data as LibraryNode;
+
+  setNodes((current) =>
+    current.some((node) => node.id === createdNode.id)
+      ? current
+      : [...current, createdNode].sort((a, b) =>
+          a.name.localeCompare(b.name)
+        )
+  );
+
+  setAddingChildToId(null);
+  setNewChildName('');
+  setCategoryStatus('Child topic created successfully.');
+}
+
+  function handleStartInlineRename(node: LibraryNode) {
+    setRenamingTopicId(node.id);
+    setRenamedTopicName(node.name);
+  }
+
+  function handleCancelInlineRename() {
+    setRenamingTopicId(null);
+    setRenamedTopicName('');
+  }
+
+  async function handleInlineTopicRename(nodeId: string) {
+    const name = renamedTopicName.trim();
+
+    if (!name) {
+      setCategoryStatus('Error: Provide a topic name.');
       return;
     }
 
-    setCategoryStatus('Renaming category...');
+    setCategoryStatus('Renaming topic...');
 
     const { data, error } = await supabase
       .from('library_nodes')
       .update({ name })
-      .eq('id', categoryId)
+      .eq('id', nodeId)
       .select('id')
       .maybeSingle();
 
     if (error || !data) {
       setCategoryStatus(
-        `Error renaming category: ${
-          error?.message || 'the update was not permitted'
-        }`
+        `Error renaming topic: ${error?.message || 'the update was not permitted'}`
       );
       return;
     }
 
     setNodes((current) =>
       current
-        .map((node) => (node.id === categoryId ? { ...node, name } : node))
+        .map((node) => (node.id === nodeId ? { ...node, name } : node))
         .sort((a, b) => a.name.localeCompare(b.name))
     );
-    formElement.reset();
-    setCategoryStatus('Category renamed successfully.');
+    handleCancelInlineRename();
+    setCategoryStatus('Topic renamed successfully.');
   }
+
+  function handleStartInlineMove(nodeId: string) {
+  setMovingTopicId(nodeId);
+  setMoveTargetId('');
+}
+
+function handleCancelInlineMove() {
+  setMovingTopicId(null);
+  setMoveTargetId('');
+}
+
+async function handleInlineTopicMove(nodeId: string) {
+  if (!moveTargetId || !activeLibrary) {
+    setCategoryStatus('Error: Choose where to move this topic.');
+    return;
+  }
+
+  setCategoryStatus('Moving topic...');
+
+  const { data, error } = await supabase
+    .rpc('move_library_node_in_library', {
+      p_library_id: activeLibrary.id,
+      p_node_id: nodeId,
+      p_new_parent_id: moveTargetId,
+    })
+    .single();
+
+  if (error) {
+    setCategoryStatus(`Error moving topic: ${error.message}`);
+    return;
+  }
+
+  const movedNode = data as LibraryNode;
+
+  setNodes((current) =>
+    current.map((node) =>
+      node.id === movedNode.id
+        ? { ...node, parent_id: movedNode.parent_id }
+        : node
+    )
+  );
+
+  handleCancelInlineMove();
+  setCategoryStatus('Topic moved successfully.');
+}
+
+function handleStartInlineRemove(nodeId: string) {
+  setRemovingTopicId(nodeId);
+}
+
+function handleCancelInlineRemove() {
+  setRemovingTopicId(null);
+}
+
+async function handleInlineTopicRemove(nodeId: string) {
+  if (!activeLibrary) {
+    setCategoryStatus('Error: No active library is selected.');
+    return;
+  }
+
+  setCategoryStatus('Removing topic...');
+
+  const { data, error } = await supabase
+    .rpc('delete_empty_library_node_in_library', {
+      p_library_id: activeLibrary.id,
+      p_node_id: nodeId,
+    })
+    .single();
+
+  if (error) {
+    setCategoryStatus(`Unable to remove topic: ${error.message}`);
+    return;
+  }
+
+  const deletedNode = data as LibraryNode;
+
+  setNodes((current) =>
+    current.filter((node) => node.id !== deletedNode.id)
+  );
+
+  handleCancelInlineRemove();
+  setCategoryStatus('Topic removed successfully.');
+}
+
+async function handleCategoryRename(
+  event: React.FormEvent<HTMLFormElement>
+) {
+  event.preventDefault();
+
+  const formElement = event.currentTarget;
+  const form = new FormData(formElement);
+  const categoryId = String(form.get('rename_category_id') || '');
+  const name = String(form.get('renamed_category_name') || '').trim();
+
+  if (!categoryId || !name) {
+    setCategoryStatus('Error: Choose a category and provide its new name.');
+    return;
+  }
+
+  setCategoryStatus('Renaming category...');
+
+  const { data, error } = await supabase
+    .from('library_nodes')
+    .update({ name })
+    .eq('id', categoryId)
+    .select('id')
+    .maybeSingle();
+
+  if (error || !data) {
+    setCategoryStatus(
+      `Error renaming category: ${
+        error?.message || 'the update was not permitted'
+      }`
+    );
+    return;
+  }
+
+  setNodes((current) =>
+    current
+      .map((node) => (node.id === categoryId ? { ...node, name } : node))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  );
+
+  formElement.reset();
+  setCategoryStatus('Category renamed successfully.');
+}
 
   async function handleSourceSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -569,6 +1060,38 @@ export function CreatorStudioClient({
     setSourceStatus('Source saved successfully.');
     await loadSources(userData.user.id);
   }
+
+  function handleStartSourceRemove(sourceId: string) {
+  setRemovingSourceId(sourceId);
+}
+
+function handleCancelSourceRemove() {
+  setRemovingSourceId(null);
+}
+
+async function handleSourceRemove(sourceId: string) {
+  setSourceStatus('Removing source...');
+
+  const { data, error } = await supabase
+    .rpc('delete_unused_source', {
+      p_source_id: sourceId,
+    })
+    .single();
+
+  if (error) {
+    setSourceStatus(`Unable to remove source: ${error.message}`);
+    return;
+  }
+
+  const deletedSource = data as Source;
+
+  setSources((current) =>
+    current.filter((source) => source.id !== deletedSource.id)
+  );
+
+  handleCancelSourceRemove();
+  setSourceStatus('Source removed successfully.');
+}
 
   async function handleAttributionSubmit(
     event: React.FormEvent<HTMLFormElement>
@@ -1333,6 +1856,48 @@ export function CreatorStudioClient({
                   Back to Creator Studio
                 </button>
 
+                <div className="panel">
+  <h2>Knowledge Tree</h2>
+  <p className="muted">
+    Current topic hierarchy for {activeLibrary?.name || 'the active library'}.
+  </p>
+
+  {nodes.length === 0 ? (
+  <p className="muted">No topics have been created yet.</p>
+) : (
+  renderKnowledgeTree(
+    nodes,
+    addingChildToId,
+    newChildName,
+    renamingTopicId,
+    renamedTopicName,
+    movingTopicId,
+    moveTargetId,
+    (nodeId: string) => {
+      setAddingChildToId(nodeId);
+      setNewChildName('');
+    },
+    () => {
+      setAddingChildToId(null);
+      setNewChildName('');
+    },
+    setNewChildName,
+    handleInlineChildCreate,
+    handleStartInlineRename,
+    handleCancelInlineRename,
+    setRenamedTopicName,
+    handleInlineTopicRename,
+    handleStartInlineMove,
+    handleCancelInlineMove,
+    setMoveTargetId,
+    handleInlineTopicMove,
+    removingTopicId,
+    handleStartInlineRemove,
+    handleCancelInlineRemove,
+    handleInlineTopicRemove
+  )
+)}
+</div>
                 <h2>Manage Categories</h2>
                 <p className="muted">
                   Nest categories to any depth by choosing an existing parent.
@@ -1561,25 +2126,69 @@ export function CreatorStudioClient({
                 </form>
 
                 <h3>Your Sources</h3>
-                {sources.length === 0 ? (
-                  <p className="muted">No sources added yet.</p>
-                ) : (
-                  sources.map((source) => (
-                    <div className="card" key={source.id}>
-                      <strong>{source.title}</strong>
-                      <p className="muted">
-                        {[source.author, source.source_type, source.license]
-                          .filter(Boolean)
-                          .join(' · ') || 'No additional details'}
-                      </p>
-                      {source.url && (
-                        <a href={source.url} target="_blank" rel="noreferrer">
-                          {source.url}
-                        </a>
-                      )}
-                    </div>
-                  ))
-                )}
+
+{sources.length === 0 ? (
+  <p className="muted">No sources added yet.</p>
+) : (
+  sources.map((source) => (
+    <div className="card" key={source.id}>
+      <strong>{source.title}</strong>
+
+      <p className="muted">
+        {[source.author, source.source_type, source.license]
+          .filter(Boolean)
+          .join(' · ') || 'No additional details'}
+      </p>
+
+      {source.url && (
+        <a href={source.url} target="_blank" rel="noreferrer">
+          {source.url}
+        </a>
+      )}
+
+      <button
+        className="btn ghost"
+        type="button"
+        onClick={() => handleStartSourceRemove(source.id)}
+      >
+        Remove
+      </button>
+
+      {removingSourceId === source.id && (
+        <div
+          style={{
+            marginTop: '10px',
+            display: 'flex',
+            gap: '8px',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+          }}
+        >
+          <span>
+            Remove “{source.title}”? This only works if the source is not
+            currently attached to any content.
+          </span>
+
+          <button
+            className="btn primary"
+            type="button"
+            onClick={() => handleSourceRemove(source.id)}
+          >
+            Remove Source
+          </button>
+
+          <button
+            className="btn ghost"
+            type="button"
+            onClick={handleCancelSourceRemove}
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+    </div>
+  ))
+)}
               </div>
 
               <div className="panel">
