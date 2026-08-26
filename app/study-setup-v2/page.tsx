@@ -152,7 +152,7 @@ export default function StudySetupV2Page() {
       <main className="study-setup-v2-page">
         <section className="study-setup-v2-card" aria-labelledby="study-setup-v2-title">
           <div className="study-setup-v2-title-block">
-            <h1 id="study-setup-v2-title">Study Mode</h1>
+            <h1 id="study-setup-v2-title">Set Up Deck</h1>
             <p>Adjust the slider to balance new material and mastery review.</p>
           </div>
 
