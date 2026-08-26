@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   ArrowUpDown,
@@ -283,6 +283,7 @@ export function CreatorStudioV2Client({
   const [isSaving, setIsSaving] = useState(false);
   const [isMutatingTopic, setIsMutatingTopic] = useState(false);
   const [isCreatorMenuOpen, setIsCreatorMenuOpen] = useState(false);
+  const creatorMenuRef = useRef<HTMLDivElement>(null);
   const [savedDraftFingerprint, setSavedDraftFingerprint] = useState(() =>
     draftFingerprint(
       resolvedConcept.bodyMarkdown,
@@ -325,6 +326,30 @@ export function CreatorStudioV2Client({
     window.addEventListener('beforeunload', warnBeforeUnload);
     return () => window.removeEventListener('beforeunload', warnBeforeUnload);
   }, [isDirty]);
+
+  useEffect(() => {
+    if (!isCreatorMenuOpen) return;
+
+    function closeOnOutsidePointer(event: PointerEvent) {
+      const target = event.target;
+      if (target instanceof Node && !creatorMenuRef.current?.contains(target)) {
+        setIsCreatorMenuOpen(false);
+      }
+    }
+
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setIsCreatorMenuOpen(false);
+      }
+    }
+
+    document.addEventListener('pointerdown', closeOnOutsidePointer);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsidePointer);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [isCreatorMenuOpen]);
 
   const rootTopicId = topics[0]?.id || ROOT_TOPIC_ID;
   const activeTopic = activeTopicId
@@ -816,8 +841,9 @@ export function CreatorStudioV2Client({
   }
 
   function navigateFromCreator(destination: string) {
+    setIsCreatorMenuOpen(false);
+
     if (window.location.pathname === destination) {
-      setIsCreatorMenuOpen(false);
       return;
     }
 
@@ -828,7 +854,6 @@ export function CreatorStudioV2Client({
       return;
     }
 
-    setIsCreatorMenuOpen(false);
     router.push(destination);
   }
 
@@ -1105,7 +1130,7 @@ export function CreatorStudioV2Client({
               >
                 {isSaving ? 'Saving…' : 'Save Concept'}
               </button>
-              <div className={styles.creatorMenu}>
+              <div className={styles.creatorMenu} ref={creatorMenuRef}>
                 <button
                   className={styles.menuButton}
                   type="button"
@@ -1123,20 +1148,20 @@ export function CreatorStudioV2Client({
                     role="menu"
                     aria-label="Creator Studio navigation"
                   >
-                    <p className={styles.creatorMenuHeading}>Concepts</p>
+                    <p className={styles.creatorMenuHeading}>Creator Studio</p>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => navigateFromCreator('/creator')}
+                    >
+                      Creator Studio
+                    </button>
                     <button
                       type="button"
                       role="menuitem"
                       onClick={() => navigateFromCreator('/creator/concepts')}
                     >
                       Browse Concepts
-                    </button>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      onClick={() => navigateFromCreator('/creator/concepts/new')}
-                    >
-                      New Concept
                     </button>
                     <p className={styles.creatorMenuHeading}>Articles</p>
                     <button
