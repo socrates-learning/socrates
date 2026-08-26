@@ -6,6 +6,7 @@ import { ConceptNotes } from '@/components/ConceptNotes';
 import { ConceptReview } from '@/components/ConceptReview';
 import { ConceptDistinctions } from '@/components/ConceptDistinctions';
 import { ConceptNetwork } from '@/components/ConceptNetwork';
+import { MarkdownContent } from '@/components/MarkdownContent';
 import { supabase } from '@/lib/supabase';
 
 export function ConceptTabs({
@@ -13,6 +14,7 @@ export function ConceptTabs({
   conceptName,
   summary,
   whyItMatters,
+  bodyMarkdown,
   status,
   sections,
   sources,
@@ -23,6 +25,7 @@ export function ConceptTabs({
   conceptName: string;
   summary: string | null;
   whyItMatters: string | null;
+  bodyMarkdown: string | null;
   status: string | null;
   sections: Array<{
     id: string;
@@ -63,6 +66,7 @@ export function ConceptTabs({
 }) {
   const [activeTab, setActiveTab] = useState('learn');
   const [canCreate, setCanCreate] = useState(false);
+  const hasMarkdownBody = Boolean(bodyMarkdown?.trim());
   const lifecycleStatus = status || 'draft';
   const lifecycleLabel =
     lifecycleStatus === 'archived'
@@ -141,50 +145,58 @@ export function ConceptTabs({
 
       {activeTab === 'learn' && (
         <div className="grid">
-          <div className="card">
-            <h3>Summary</h3>
-            <p>{summary || 'No summary added yet.'}</p>
-          </div>
-
-          <div className="card">
-            <h3>Why this matters</h3>
-            <p>{whyItMatters || 'No explanation added yet.'}</p>
-          </div>
-
-          <div className="card">
-            <h3>Needs Review</h3>
-            {needsReviewSections.length === 0 ? (
-              <p className="muted">
-                All reviewed sections are currently strong.
-              </p>
-            ) : (
-              needsReviewSections.map((section) => (
-                <div
-                  key={section.id}
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    gap: '16px',
-                    marginBottom: '10px',
-                  }}
-                >
-                  <strong>{section.title}</strong>
-                  <span className="muted">
-                    {section.attemptCount === 0
-                      ? 'Not reviewed yet'
-                      : `${section.mastery}% · ${getMasteryLabel(section.mastery)}`}
-                  </span>
-                </div>
-              ))
-            )}
-          </div>
-
-          {sections.map((section) => (
-            <div className="card" key={section.id}>
-              <h3>{section.title}</h3>
-              <p>{section.body}</p>
+          {hasMarkdownBody ? (
+            <div className="card" style={{ gridColumn: '1 / -1' }}>
+              <MarkdownContent markdown={bodyMarkdown || ''} />
             </div>
-          ))}
+          ) : (
+            <>
+              <div className="card">
+                <h3>Summary</h3>
+                <p>{summary || 'No summary added yet.'}</p>
+              </div>
+
+              <div className="card">
+                <h3>Why this matters</h3>
+                <p>{whyItMatters || 'No explanation added yet.'}</p>
+              </div>
+
+              <div className="card">
+                <h3>Needs Review</h3>
+                {needsReviewSections.length === 0 ? (
+                  <p className="muted">
+                    All reviewed sections are currently strong.
+                  </p>
+                ) : (
+                  needsReviewSections.map((section) => (
+                    <div
+                      key={section.id}
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        gap: '16px',
+                        marginBottom: '10px',
+                      }}
+                    >
+                      <strong>{section.title}</strong>
+                      <span className="muted">
+                        {section.attemptCount === 0
+                          ? 'Not reviewed yet'
+                          : `${section.mastery}% · ${getMasteryLabel(section.mastery)}`}
+                      </span>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {sections.map((section) => (
+                <div className="card" key={section.id}>
+                  <h3>{section.title}</h3>
+                  <p>{section.body}</p>
+                </div>
+              ))}
+            </>
+          )}
 
           <div className="card">
             <h3>Status</h3>

@@ -39,6 +39,17 @@
   gap: 12px;
 }
 
+.saveState {
+  color: #687386;
+  font-size: 0.84rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.saveState.unsaved {
+  color: #9a5b08;
+}
+
 .primaryButton,
 .secondaryButton,
 .toolButton,
@@ -455,6 +466,169 @@
   font-size: 0.9rem;
 }
 
+.sourcesPanel {
+  margin: 0 18px 18px;
+}
+
+.referenceForm {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 16px;
+  border-bottom: 1px solid #e2e6eb;
+  padding-bottom: 18px;
+}
+
+.referenceForm label {
+  display: grid;
+  gap: 7px;
+  color: #303746;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.referenceForm input,
+.referenceForm textarea {
+  width: 100%;
+  border: 1px solid #cfd5dd;
+  border-radius: 6px;
+  outline: none;
+  padding: 10px 11px;
+  background: #ffffff;
+  color: #17191e;
+  font: inherit;
+  font-weight: 400;
+}
+
+.referenceForm input {
+  min-height: 42px;
+}
+
+.referenceForm textarea {
+  min-height: 84px;
+  resize: vertical;
+  line-height: 1.45;
+}
+
+.referenceForm input:focus,
+.referenceForm textarea:focus {
+  border-color: #2f7de1;
+  box-shadow: 0 0 0 3px rgb(47 125 225 / 13%);
+}
+
+.fullWidthField {
+  grid-column: 1 / -1;
+}
+
+.referenceFormActions,
+.referenceActions,
+.removeConfirmation > div {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.referenceFormActions .primaryButton,
+.referenceFormActions .secondaryButton,
+.referenceActions .secondaryButton,
+.removeConfirmation .secondaryButton,
+.dangerButton {
+  min-height: 38px;
+  padding: 7px 13px;
+  font-size: 0.88rem;
+}
+
+.referenceStatus {
+  border: 1px solid;
+  border-radius: 6px;
+  padding: 9px 11px;
+  font-size: 0.86rem;
+}
+
+.referenceList {
+  margin-top: 18px;
+}
+
+.referenceList h3 {
+  margin: 0 0 10px;
+  color: #20242b;
+  font-size: 1rem;
+}
+
+.referenceCard {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  border-top: 1px solid #e2e6eb;
+  padding: 15px 0;
+}
+
+.referenceCard:last-child {
+  border-bottom: 1px solid #e2e6eb;
+}
+
+.referenceContent {
+  min-width: 0;
+}
+
+.referenceContent h4 {
+  margin: 0 0 5px;
+  color: #1c2027;
+  font-size: 0.98rem;
+}
+
+.referenceContent p {
+  margin: 4px 0 0;
+  color: #596271;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.referenceContent a {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  margin-top: 4px;
+  color: #1769cf;
+  font-size: 0.88rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.referenceActions {
+  flex: 0 0 auto;
+}
+
+.removeConfirmation {
+  display: grid;
+  flex: 0 0 auto;
+  gap: 9px;
+  color: #7f1d1d;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.dangerButton {
+  border: 1px solid #c93636;
+  border-radius: 6px;
+  background: #c93636;
+  color: #ffffff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.dangerButton:hover {
+  background: #ad2929;
+}
+
+.emptyReferences {
+  margin: 0;
+  color: #7b8492;
+  font-size: 0.9rem;
+}
+
 .bottomActions {
   display: flex;
   align-items: center;
@@ -569,6 +743,7 @@
   }
 
   .selectedPanel,
+  .sourcesPanel,
   .bottomActions,
   .status {
     margin-right: 12px;
@@ -588,6 +763,18 @@
 
   .inlineDialog {
     grid-template-columns: 1fr;
+  }
+
+  .referenceForm {
+    grid-template-columns: 1fr;
+  }
+
+  .referenceCard {
+    flex-direction: column;
+  }
+
+  .fullWidthField {
+    grid-column: auto;
   }
 
   .largeSaveButton {

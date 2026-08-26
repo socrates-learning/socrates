@@ -1846,7 +1846,7 @@ export function ArticleEditorClient({
             + Add Source
           </button>
           <p className="muted">
-            Need a new source? Use Creator Studio Manage Sources, then return here.
+            Need a new source? Add it to a concept in Concepts, then return here.
           </p>
         </div>
 
@@ -2110,7 +2110,10 @@ export function ArticleEditorClient({
                       {link.concept?.summary && <p>{link.concept.summary}</p>}
                     </div>
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                      <Link className="btn ghost" href={`/creator?concept=${link.concept_id}`}>
+                      <Link
+                        className="btn ghost"
+                        href={`/creator/concepts/${link.concept_id}`}
+                      >
                         Edit
                       </Link>
                       <button

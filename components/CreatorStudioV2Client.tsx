@@ -1,6 +1,7 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   ArrowUpDown,
   ChevronDown,
@@ -15,21 +16,51 @@ import {
   X,
 } from 'lucide-react';
 import { Header } from '@/components/Header';
+import {
+  buildConceptTopicTree,
+  type ConceptTopic as Topic,
+} from '@/lib/concept-topic-tree';
+import { supabase } from '@/lib/supabase';
 import styles from './CreatorStudioV2Client.module.css';
 
-type Topic = {
+type Reference = {
   id: string;
-  name: string;
-  children: Topic[];
+  sourceId: string | null;
+  attributionId: string | null;
+  title: string;
+  author: string;
+  url: string;
+  notes: string;
 };
+
+type ReferenceDraft = Pick<Reference, 'title' | 'author' | 'url' | 'notes'>;
 
 type DialogMode = 'add' | 'rename' | 'move' | null;
 type StatusTone = 'error' | 'success' | 'info';
 type Status = { tone: StatusTone; message: string } | null;
+type InitialConcept = {
+  id: string | null;
+  name: string;
+  bodyMarkdown: string;
+  placementIds: string[];
+};
+
+type CreatorStudioV2ClientProps = {
+  activeLibraryId?: string | null;
+  initialTopics?: Topic[];
+  initialConcept?: InitialConcept;
+  initialReferences?: Reference[];
+};
 
 const ROOT_TOPIC_ID = 'nursing';
+const emptyReferenceDraft: ReferenceDraft = {
+  title: '',
+  author: '',
+  url: '',
+  notes: '',
+};
 
-const initialTopics: Topic[] = [
+const prototypeTopics: Topic[] = [
   {
     id: ROOT_TOPIC_ID,
     name: 'Nursing',
@@ -156,22 +187,145 @@ function wordCount(value: string): number {
   return trimmed ? trimmed.split(/\s+/).length : 0;
 }
 
-export function CreatorStudioV2Client() {
-  const [concept, setConcept] = useState('');
-  const [topics, setTopics] = useState<Topic[]>(initialTopics);
-  const [activeTopicId, setActiveTopicId] = useState('fluids-electrolytes');
-  const [selectedTopicIds, setSelectedTopicIds] = useState<Set<string>>(
-    new Set(['fluids-electrolytes', 'fluid-overload'])
+function initialExpandedTopicIds(topics: Topic[], selectedIds: string[]) {
+  const expandedIds = new Set<string>();
+  const rootId = topics[0]?.id;
+  if (rootId) expandedIds.add(rootId);
+
+  selectedIds.forEach((id) => {
+    findTopicPath(topics, id)?.forEach((topic) => expandedIds.add(topic.id));
+  });
+
+  return expandedIds;
+}
+
+function conceptNameFromMarkdown(markdown: string) {
+  const firstLine = markdown
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find(Boolean) || '';
+  const cleaned = firstLine
+    .replace(/^#{1,6}\s+/, '')
+    .replace(/^[-*+]\s+/, '')
+    .trim();
+
+  return (cleaned || firstLine).slice(0, 160);
+}
+
+function draftFingerprint(
+  bodyMarkdown: string,
+  placementIds: Iterable<string>,
+  references: Reference[]
+) {
+  return JSON.stringify({
+    bodyMarkdown,
+    placementIds: Array.from(placementIds).sort(),
+    references: references
+      .map((reference) => ({
+        identity: reference.sourceId
+          ? `source:${reference.sourceId}`
+          : `draft:${reference.id}`,
+        title: reference.title,
+        author: reference.author,
+        url: reference.url,
+        notes: reference.notes,
+      }))
+      .sort((left, right) => left.identity.localeCompare(right.identity)),
+  });
+}
+
+export function CreatorStudioV2Client({
+  activeLibraryId = null,
+  initialTopics,
+  initialConcept,
+  initialReferences = [],
+}: CreatorStudioV2ClientProps = {}) {
+  const router = useRouter();
+  const resolvedTopics = initialTopics || prototypeTopics;
+  const resolvedConcept = initialConcept || {
+    id: null,
+    name: '',
+    bodyMarkdown: '',
+    placementIds: ['fluids-electrolytes', 'fluid-overload'],
+  };
+  const [conceptId, setConceptId] = useState<string | null>(resolvedConcept.id);
+  const [conceptName, setConceptName] = useState(resolvedConcept.name);
+  const [concept, setConcept] = useState(resolvedConcept.bodyMarkdown);
+  const [topics, setTopics] = useState<Topic[]>(resolvedTopics);
+  const [activeTopicId, setActiveTopicId] = useState(
+    resolvedConcept.placementIds[0] || resolvedTopics[0]?.id || ''
   );
-  const [expandedTopicIds, setExpandedTopicIds] = useState<Set<string>>(
-    new Set([ROOT_TOPIC_ID, 'adult-health', 'cardiovascular', 'fluids-electrolytes'])
+  const [selectedTopicIds, setSelectedTopicIds] = useState<Set<string>>(
+    new Set(resolvedConcept.placementIds)
+  );
+  const [expandedTopicIds, setExpandedTopicIds] = useState<Set<string>>(() =>
+    initialTopics
+      ? initialExpandedTopicIds(resolvedTopics, resolvedConcept.placementIds)
+      : new Set([
+          ROOT_TOPIC_ID,
+          'adult-health',
+          'cardiovascular',
+          'fluids-electrolytes',
+        ])
   );
   const [searchQuery, setSearchQuery] = useState('');
   const [dialogMode, setDialogMode] = useState<DialogMode>(null);
   const [nameDraft, setNameDraft] = useState('');
   const [moveDestinationId, setMoveDestinationId] = useState('');
   const [status, setStatus] = useState<Status>(null);
+  const [references, setReferences] = useState<Reference[]>(initialReferences);
+  const [referenceDraft, setReferenceDraft] = useState<ReferenceDraft>(
+    emptyReferenceDraft
+  );
+  const [editingReferenceId, setEditingReferenceId] = useState<string | null>(null);
+  const [pendingRemovalId, setPendingRemovalId] = useState<string | null>(null);
+  const [referenceStatus, setReferenceStatus] = useState<Status>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isMutatingTopic, setIsMutatingTopic] = useState(false);
+  const [savedDraftFingerprint, setSavedDraftFingerprint] = useState(() =>
+    draftFingerprint(
+      resolvedConcept.bodyMarkdown,
+      resolvedConcept.placementIds,
+      initialReferences
+    )
+  );
+  const editingReference = editingReferenceId
+    ? references.find((reference) => reference.id === editingReferenceId) || null
+    : null;
+  const isEditingPersistedReference = Boolean(editingReference?.sourceId);
+  const currentDraftFingerprint = useMemo(
+    () => draftFingerprint(concept, selectedTopicIds, references),
+    [concept, references, selectedTopicIds]
+  );
+  const hasPendingReferenceDraft = useMemo(() => {
+    if (editingReference) {
+      return (
+        referenceDraft.title !== editingReference.title ||
+        referenceDraft.author !== editingReference.author ||
+        referenceDraft.url !== editingReference.url ||
+        referenceDraft.notes !== editingReference.notes
+      );
+    }
 
+    return Object.values(referenceDraft).some((value) => value.trim());
+  }, [editingReference, referenceDraft]);
+  const isDirty =
+    currentDraftFingerprint !== savedDraftFingerprint ||
+    hasPendingReferenceDraft;
+
+  useEffect(() => {
+    if (!isDirty) return;
+
+    function warnBeforeUnload(event: BeforeUnloadEvent) {
+      event.preventDefault();
+      event.returnValue = '';
+    }
+
+    window.addEventListener('beforeunload', warnBeforeUnload);
+    return () => window.removeEventListener('beforeunload', warnBeforeUnload);
+  }, [isDirty]);
+
+  const rootTopicId = topics[0]?.id || ROOT_TOPIC_ID;
   const activeTopic = activeTopicId
     ? findTopic(topics, activeTopicId)
     : null;
@@ -201,6 +355,136 @@ export function CreatorStudioV2Client() {
 
   function showStatus(tone: StatusTone, message: string) {
     setStatus({ tone, message });
+  }
+
+  async function reloadRealTopicTree(preferredActiveTopicId?: string) {
+    if (!activeLibraryId) return;
+
+    const { data, error } = await supabase
+      .from('library_nodes')
+      .select('id, name, parent_id, sort_order')
+      .eq('library_id', activeLibraryId)
+      .order('sort_order')
+      .order('name');
+
+    if (error) throw error;
+
+    const nextTopics = buildConceptTopicTree(data || []);
+    const nextActiveId = preferredActiveTopicId || activeTopicId;
+    const nextActivePath = nextActiveId
+      ? findTopicPath(nextTopics, nextActiveId)
+      : null;
+
+    setTopics(nextTopics);
+    if (nextActivePath) {
+      setActiveTopicId(nextActiveId);
+      setExpandedTopicIds((current) => {
+        const next = new Set(current);
+        nextActivePath.forEach((topic) => next.add(topic.id));
+        return next;
+      });
+    } else {
+      setActiveTopicId(nextTopics[0]?.id || '');
+    }
+  }
+
+  function topicMutationErrorMessage(error: unknown) {
+    if (error && typeof error === 'object' && 'message' in error) {
+      return String(error.message);
+    }
+    return 'The Topic Tree could not be updated.';
+  }
+
+  function resetReferenceForm() {
+    setReferenceDraft(emptyReferenceDraft);
+    setEditingReferenceId(null);
+    setReferenceStatus(null);
+  }
+
+  function submitReference(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const title = referenceDraft.title.trim();
+    const author = referenceDraft.author.trim();
+    const url = referenceDraft.url.trim();
+    const notes = referenceDraft.notes.trim();
+
+    if (!isEditingPersistedReference && !title) {
+      setReferenceStatus({ tone: 'error', message: 'Source Title is required.' });
+      return;
+    }
+
+    if (!isEditingPersistedReference && url) {
+      try {
+        const parsedUrl = new URL(url);
+        if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+          throw new Error('Unsupported URL protocol');
+        }
+      } catch {
+        setReferenceStatus({
+          tone: 'error',
+          message: 'Enter a valid URL beginning with http:// or https://.',
+        });
+        return;
+      }
+    }
+
+    const nextReference = { title, author, url, notes };
+    if (editingReferenceId) {
+      setReferences((current) =>
+        current.map((reference) =>
+          reference.id === editingReferenceId
+            ? reference.sourceId
+              ? { ...reference, notes }
+              : { ...reference, ...nextReference }
+            : reference
+        )
+      );
+      setReferenceStatus({ tone: 'success', message: 'Reference updated.' });
+      setEditingReferenceId(null);
+      setReferenceDraft(emptyReferenceDraft);
+      return;
+    }
+
+    setReferences((current) => [
+      ...current,
+      {
+        id: globalThis.crypto.randomUUID(),
+        sourceId: null,
+        attributionId: null,
+        ...nextReference,
+      },
+    ]);
+    setReferenceDraft(emptyReferenceDraft);
+    setReferenceStatus({ tone: 'success', message: 'Reference added.' });
+  }
+
+  function editReference(reference: Reference) {
+    setEditingReferenceId(reference.id);
+    setReferenceDraft({
+      title: reference.title,
+      author: reference.author,
+      url: reference.url,
+      notes: reference.notes,
+    });
+    setPendingRemovalId(null);
+    setReferenceStatus(
+      reference.sourceId
+        ? {
+            tone: 'info',
+            message:
+              'Shared source details are read-only. You may update this concept’s citation or note.',
+          }
+        : null
+    );
+  }
+
+  function removeReference(referenceId: string) {
+    setReferences((current) =>
+      current.filter((reference) => reference.id !== referenceId)
+    );
+    if (editingReferenceId === referenceId) resetReferenceForm();
+    setPendingRemovalId(null);
+    setReferenceStatus({ tone: 'success', message: 'Reference removed.' });
   }
 
   function toggleExpanded(topicId: string) {
@@ -236,7 +520,7 @@ export function CreatorStudioV2Client() {
       showStatus('error', 'Select a topic to rename.');
       return;
     }
-    if (activeTopic.id === ROOT_TOPIC_ID) {
+    if (activeTopic.id === rootTopicId) {
       showStatus('error', 'The Nursing root cannot be renamed.');
       return;
     }
@@ -249,7 +533,7 @@ export function CreatorStudioV2Client() {
       showStatus('error', 'Select a topic to move.');
       return;
     }
-    if (activeTopic.id === ROOT_TOPIC_ID) {
+    if (activeTopic.id === rootTopicId) {
       showStatus('error', 'The Nursing root cannot be moved.');
       return;
     }
@@ -257,12 +541,99 @@ export function CreatorStudioV2Client() {
     setDialogMode('move');
   }
 
-  function saveNameDialog() {
+  async function saveNameDialog() {
     const name = nameDraft.trim();
     if (!activeTopic || !name) {
       showStatus('error', 'Enter a subtopic name.');
       return;
     }
+
+    if (activeLibraryId) {
+      setIsMutatingTopic(true);
+      setStatus(null);
+
+      if (dialogMode === 'add') {
+        const { data, error } = await supabase.rpc(
+          'create_library_node_in_library',
+          {
+            p_library_id: activeLibraryId,
+            p_parent_id: activeTopic.id,
+            p_name: name,
+            p_node_type: 'topic',
+            p_sort_order: activeTopic.children.length,
+          }
+        );
+
+        if (error) {
+          setIsMutatingTopic(false);
+          showStatus(
+            'error',
+            `Unable to create topic: ${topicMutationErrorMessage(error)}`
+          );
+          return;
+        }
+
+        try {
+          const createdTopicId = (data as { id?: string } | null)?.id;
+          await reloadRealTopicTree(createdTopicId || activeTopic.id);
+          setExpandedTopicIds((current) =>
+            new Set(current).add(activeTopic.id)
+          );
+          setSearchQuery('');
+          setDialogMode(null);
+          setNameDraft('');
+          showStatus('success', 'Topic created successfully.');
+        } catch (error) {
+          showStatus(
+            'error',
+            `Topic was created, but the tree could not be refreshed: ${topicMutationErrorMessage(error)}`
+          );
+        } finally {
+          setIsMutatingTopic(false);
+        }
+        return;
+      }
+
+      if (dialogMode === 'rename') {
+        const { error } = await supabase.rpc(
+          'rename_library_node_in_library',
+          {
+            p_library_id: activeLibraryId,
+            p_node_id: activeTopic.id,
+            p_name: name,
+          }
+        );
+
+        if (error) {
+          setIsMutatingTopic(false);
+          showStatus(
+            'error',
+            `Unable to rename topic: ${topicMutationErrorMessage(error)}`
+          );
+          return;
+        }
+
+        try {
+          await reloadRealTopicTree(activeTopic.id);
+          setSearchQuery('');
+          setDialogMode(null);
+          setNameDraft('');
+          showStatus('success', 'Topic renamed successfully.');
+        } catch (error) {
+          showStatus(
+            'error',
+            `Topic was renamed, but the tree could not be refreshed: ${topicMutationErrorMessage(error)}`
+          );
+        } finally {
+          setIsMutatingTopic(false);
+        }
+        return;
+      }
+
+      setIsMutatingTopic(false);
+      return;
+    }
+
     if (dialogMode === 'add') {
       const newTopic: Topic = {
         id: `topic-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -288,7 +659,7 @@ export function CreatorStudioV2Client() {
     setNameDraft('');
   }
 
-  function moveActiveTopic() {
+  async function moveActiveTopic() {
     if (!activeTopic || !moveDestinationId) {
       showStatus('error', 'Choose a destination topic.');
       return;
@@ -298,6 +669,44 @@ export function CreatorStudioV2Client() {
       showStatus('error', 'The selected destination is unavailable.');
       return;
     }
+
+    if (activeLibraryId) {
+      setIsMutatingTopic(true);
+      setStatus(null);
+      const { error } = await supabase.rpc('move_library_node_in_library', {
+        p_library_id: activeLibraryId,
+        p_node_id: activeTopic.id,
+        p_new_parent_id: moveDestinationId,
+      });
+
+      if (error) {
+        setIsMutatingTopic(false);
+        showStatus(
+          'error',
+          `Unable to move topic: ${topicMutationErrorMessage(error)}`
+        );
+        return;
+      }
+
+      try {
+        await reloadRealTopicTree(activeTopic.id);
+        setExpandedTopicIds((current) =>
+          new Set(current).add(moveDestinationId)
+        );
+        setSearchQuery('');
+        setDialogMode(null);
+        showStatus('success', 'Topic moved successfully.');
+      } catch (error) {
+        showStatus(
+          'error',
+          `Topic was moved, but the tree could not be refreshed: ${topicMutationErrorMessage(error)}`
+        );
+      } finally {
+        setIsMutatingTopic(false);
+      }
+      return;
+    }
+
     setTopics((current) => {
       const withoutActive = removeTopic(current, activeTopic.id);
       return updateTopic(withoutActive, moveDestinationId, (topic) => ({
@@ -310,20 +719,65 @@ export function CreatorStudioV2Client() {
     showStatus('success', `Moved “${activeTopic.name}” beneath ${destination.name}.`);
   }
 
-  function deleteActiveTopic() {
+  async function deleteActiveTopic() {
     if (!activeTopic) {
       showStatus('error', 'Select a topic to delete.');
       return;
     }
-    if (activeTopic.id === ROOT_TOPIC_ID) {
+    if (activeTopic.id === rootTopicId) {
       showStatus('error', 'The Nursing root cannot be deleted.');
       return;
     }
-    if (activeTopic.children.length) {
+    if (!activeLibraryId && activeTopic.children.length) {
       showStatus('error', 'Move or remove this topic’s subtopics first.');
       return;
     }
     if (!window.confirm(`Delete “${activeTopic.name}”?`)) return;
+
+    if (activeLibraryId) {
+      const activePath = findTopicPath(topics, activeTopic.id);
+      const parentTopicId = activePath?.at(-2)?.id;
+      setIsMutatingTopic(true);
+      setStatus(null);
+      const { error } = await supabase.rpc(
+        'delete_empty_library_node_in_library',
+        {
+          p_library_id: activeLibraryId,
+          p_node_id: activeTopic.id,
+        }
+      );
+
+      if (error) {
+        setIsMutatingTopic(false);
+        showStatus(
+          'error',
+          `Unable to remove topic: ${topicMutationErrorMessage(error)}`
+        );
+        return;
+      }
+
+      setSelectedTopicIds((current) => {
+        const next = new Set(current);
+        next.delete(activeTopic.id);
+        return next;
+      });
+
+      try {
+        await reloadRealTopicTree(parentTopicId);
+        setSearchQuery('');
+        setDialogMode(null);
+        showStatus('success', 'Topic removed successfully.');
+      } catch (error) {
+        showStatus(
+          'error',
+          `Topic was removed, but the tree could not be refreshed: ${topicMutationErrorMessage(error)}`
+        );
+      } finally {
+        setIsMutatingTopic(false);
+      }
+      return;
+    }
+
     setTopics((current) => removeTopic(current, activeTopic.id));
     setSelectedTopicIds((current) => {
       const next = new Set(current);
@@ -336,18 +790,42 @@ export function CreatorStudioV2Client() {
   }
 
   function clearDraft() {
+    const referenceDraftHasContent = Object.values(referenceDraft).some((value) =>
+      value.trim()
+    );
     if (
-      (concept.trim() || selectedTopicIds.size > 0) &&
-      !window.confirm('Clear the concept draft and its selected topics?')
+      (concept.trim() ||
+        selectedTopicIds.size > 0 ||
+        references.length > 0 ||
+        referenceDraftHasContent) &&
+      !window.confirm(
+        'Clear the concept draft, its selected topics, and its references?'
+      )
     ) {
       return;
     }
     setConcept('');
     setSelectedTopicIds(new Set());
+    setReferences([]);
+    setReferenceDraft(emptyReferenceDraft);
+    setEditingReferenceId(null);
+    setPendingRemovalId(null);
+    setReferenceStatus(null);
     setStatus(null);
   }
 
-  function saveConcept() {
+  function openConceptBrowser() {
+    if (
+      isDirty &&
+      !window.confirm('You have unsaved changes. Leave without saving?')
+    ) {
+      return;
+    }
+
+    router.push('/creator/concepts');
+  }
+
+  async function saveConcept() {
     if (!concept.trim()) {
       showStatus('error', 'Write a concept or explanation before saving.');
       return;
@@ -356,7 +834,161 @@ export function CreatorStudioV2Client() {
       showStatus('error', 'Select at least one topic before saving.');
       return;
     }
-    showStatus('success', 'Concept ready for future persistence.');
+    if (hasPendingReferenceDraft) {
+      showStatus(
+        'error',
+        'Add, save, or cancel the reference currently being edited before saving the concept.'
+      );
+      return;
+    }
+
+    if (!activeLibraryId) {
+      showStatus('success', 'Concept ready for future persistence.');
+      return;
+    }
+
+    const bodyMarkdownToSave = concept;
+    const placementIdsToSave = Array.from(selectedTopicIds);
+    const referencesToSave = references;
+    const name =
+      conceptName.trim() || conceptNameFromMarkdown(bodyMarkdownToSave);
+    setIsSaving(true);
+    setStatus(null);
+
+    const { data, error } = await supabase.rpc('save_concept_draft', {
+      p_concept_id: conceptId,
+      p_name: name,
+      p_body_markdown: bodyMarkdownToSave,
+      p_active_library_id: activeLibraryId,
+      p_library_node_ids: placementIdsToSave,
+    });
+
+    if (error) {
+      setIsSaving(false);
+      showStatus('error', error.message || 'Concept could not be saved.');
+      return;
+    }
+
+    const savedConceptId = (data as { concept_id?: string } | null)?.concept_id;
+    if (!savedConceptId) {
+      setIsSaving(false);
+      showStatus('error', 'Concept was saved without a returned identifier.');
+      return;
+    }
+
+    const wasNewConcept = conceptId === null;
+    setConceptId(savedConceptId);
+    setConceptName(name);
+
+    if (wasNewConcept) {
+      window.history.replaceState(
+        window.history.state,
+        '',
+        `/creator/concepts/${savedConceptId}`
+      );
+    }
+
+    const { data: referenceData, error: referenceError } = await supabase.rpc(
+      'sync_concept_references',
+      {
+        p_concept_id: savedConceptId,
+        p_references: referencesToSave.map((reference) => ({
+          client_id: reference.id,
+          source_id: reference.sourceId,
+          title: reference.title,
+          author: reference.author,
+          url: reference.url,
+          note: reference.notes,
+        })),
+      }
+    );
+
+    setIsSaving(false);
+
+    if (referenceError) {
+      showStatus(
+        'error',
+        `Concept draft saved, but references could not be saved: ${referenceError.message}`
+      );
+      return;
+    }
+
+    const synchronizedReferences = (
+      referenceData as {
+        references?: Array<{
+          client_id: string;
+          source_id: string;
+          attribution_id: string;
+        }>;
+      } | null
+    )?.references;
+
+    if (!Array.isArray(synchronizedReferences)) {
+      showStatus(
+        'error',
+        'Concept draft saved, but the reference save response was incomplete. Please retry.'
+      );
+      return;
+    }
+
+    const synchronizedByClientId = new Map(
+      synchronizedReferences.map((reference) => [
+        reference.client_id,
+        reference,
+      ])
+    );
+    const savedReferences = referencesToSave.map((reference) => {
+      const synchronized = synchronizedByClientId.get(reference.id);
+      return synchronized
+        ? {
+            ...reference,
+            sourceId: synchronized.source_id,
+            attributionId: synchronized.attribution_id,
+          }
+        : null;
+    });
+
+    if (savedReferences.some((reference) => reference === null)) {
+      showStatus(
+        'error',
+        'Concept draft saved, but one or more references were not confirmed. Please retry.'
+      );
+      return;
+    }
+
+    const confirmedReferences = savedReferences.filter(
+      (
+        reference
+      ): reference is NonNullable<(typeof savedReferences)[number]> =>
+        reference !== null
+    );
+    setReferences((current) =>
+      current.map((reference) => {
+        const synchronized = synchronizedByClientId.get(reference.id);
+        return synchronized
+          ? {
+              ...reference,
+              sourceId: synchronized.source_id,
+              attributionId: synchronized.attribution_id,
+            }
+          : reference;
+      })
+    );
+    setSavedDraftFingerprint(
+      draftFingerprint(
+        bodyMarkdownToSave,
+        placementIdsToSave,
+        confirmedReferences
+      )
+    );
+
+    showStatus('success', 'Concept draft and references saved.');
+
+    if (wasNewConcept) {
+      router.replace(`/creator/concepts/${savedConceptId}`);
+    } else {
+      router.refresh();
+    }
   }
 
   function renderTopic(topic: Topic, depth = 0) {
@@ -438,11 +1070,29 @@ export function CreatorStudioV2Client() {
           <header className={styles.localHeader}>
             <h1>Creator Studio</h1>
             <div className={styles.headerActions}>
+              <span
+                className={`${styles.saveState} ${isDirty ? styles.unsaved : ''}`}
+                aria-live="polite"
+              >
+                {isDirty ? 'Unsaved changes' : 'Saved'}
+              </span>
+              <button
+                className={styles.secondaryButton}
+                type="button"
+                onClick={openConceptBrowser}
+              >
+                Concepts
+              </button>
               <button className={styles.secondaryButton} type="button" onClick={clearDraft}>
                 Clear
               </button>
-              <button className={styles.primaryButton} type="button" onClick={saveConcept}>
-                Save Concept
+              <button
+                className={styles.primaryButton}
+                type="button"
+                onClick={saveConcept}
+                disabled={isSaving}
+              >
+                {isSaving ? 'Saving…' : 'Save Concept'}
               </button>
               <button
                 className={styles.menuButton}
@@ -490,16 +1140,16 @@ export function CreatorStudioV2Client() {
                   />
                   <Search size={20} />
                 </label>
-                <button className={styles.toolButton} type="button" onClick={openAddDialog}>
+                <button className={styles.toolButton} type="button" onClick={openAddDialog} disabled={isMutatingTopic}>
                   <Plus size={18} /> Add Subtopic
                 </button>
-                <button className={styles.toolButton} type="button" onClick={openRenameDialog}>
+                <button className={styles.toolButton} type="button" onClick={openRenameDialog} disabled={isMutatingTopic}>
                   <Pencil size={17} /> Rename
                 </button>
-                <button className={styles.toolButton} type="button" onClick={deleteActiveTopic}>
+                <button className={styles.toolButton} type="button" onClick={deleteActiveTopic} disabled={isMutatingTopic}>
                   <Trash2 size={17} /> Delete
                 </button>
-                <button className={styles.toolButton} type="button" onClick={openMoveDialog}>
+                <button className={styles.toolButton} type="button" onClick={openMoveDialog} disabled={isMutatingTopic}>
                   <ArrowUpDown size={17} /> Move
                 </button>
               </div>
@@ -525,8 +1175,8 @@ export function CreatorStudioV2Client() {
                         <button className={styles.secondaryButton} type="button" onClick={() => setDialogMode(null)}>
                           Cancel
                         </button>
-                        <button className={styles.primaryButton} type="button" onClick={moveActiveTopic}>
-                          Move
+                        <button className={styles.primaryButton} type="button" onClick={moveActiveTopic} disabled={isMutatingTopic}>
+                          {isMutatingTopic ? 'Moving…' : 'Move'}
                         </button>
                       </div>
                     </>
@@ -541,7 +1191,7 @@ export function CreatorStudioV2Client() {
                           value={nameDraft}
                           onChange={(event) => setNameDraft(event.target.value)}
                           onKeyDown={(event) => {
-                            if (event.key === 'Enter') saveNameDialog();
+                            if (event.key === 'Enter' && !isMutatingTopic) saveNameDialog();
                           }}
                           placeholder={dialogMode === 'add' ? 'Subtopic name' : 'Topic name'}
                         />
@@ -550,8 +1200,8 @@ export function CreatorStudioV2Client() {
                         <button className={styles.secondaryButton} type="button" onClick={() => setDialogMode(null)}>
                           Cancel
                         </button>
-                        <button className={styles.primaryButton} type="button" onClick={saveNameDialog}>
-                          Save
+                        <button className={styles.primaryButton} type="button" onClick={saveNameDialog} disabled={isMutatingTopic}>
+                          {isMutatingTopic ? 'Saving…' : 'Save'}
                         </button>
                       </div>
                     </>
@@ -614,13 +1264,189 @@ export function CreatorStudioV2Client() {
             </div>
           </section>
 
+          <section className={`${styles.panel} ${styles.sourcesPanel}`}>
+            <div>
+              <h2>4. Sources / References</h2>
+              <p>Add the references used to create or support this concept.</p>
+            </div>
+
+            <form className={styles.referenceForm} onSubmit={submitReference}>
+              <label>
+                Source Title
+                <input
+                  value={referenceDraft.title}
+                  disabled={isEditingPersistedReference}
+                  title={
+                    isEditingPersistedReference
+                      ? 'Shared source details cannot be changed here.'
+                      : undefined
+                  }
+                  onChange={(event) => {
+                    setReferenceDraft((current) => ({
+                      ...current,
+                      title: event.target.value,
+                    }));
+                    setReferenceStatus(null);
+                  }}
+                  aria-required="true"
+                />
+              </label>
+              <label>
+                Author / Organization
+                <input
+                  value={referenceDraft.author}
+                  disabled={isEditingPersistedReference}
+                  title={
+                    isEditingPersistedReference
+                      ? 'Shared source details cannot be changed here.'
+                      : undefined
+                  }
+                  onChange={(event) => {
+                    setReferenceDraft((current) => ({
+                      ...current,
+                      author: event.target.value,
+                    }));
+                    setReferenceStatus(null);
+                  }}
+                />
+              </label>
+              <label className={styles.fullWidthField}>
+                URL
+                <input
+                  type="url"
+                  value={referenceDraft.url}
+                  disabled={isEditingPersistedReference}
+                  title={
+                    isEditingPersistedReference
+                      ? 'Shared source details cannot be changed here.'
+                      : undefined
+                  }
+                  onChange={(event) => {
+                    setReferenceDraft((current) => ({
+                      ...current,
+                      url: event.target.value,
+                    }));
+                    setReferenceStatus(null);
+                  }}
+                  placeholder="https://example.org/reference"
+                />
+              </label>
+              <label className={styles.fullWidthField}>
+                Optional Citation / Notes
+                <textarea
+                  value={referenceDraft.notes}
+                  onChange={(event) => {
+                    setReferenceDraft((current) => ({
+                      ...current,
+                      notes: event.target.value,
+                    }));
+                    setReferenceStatus(null);
+                  }}
+                  rows={3}
+                />
+              </label>
+              <div className={`${styles.referenceFormActions} ${styles.fullWidthField}`}>
+                <button className={styles.primaryButton} type="submit">
+                  {editingReferenceId ? 'Save Changes' : (
+                    <>
+                      <Plus size={18} /> Add Reference
+                    </>
+                  )}
+                </button>
+                {editingReferenceId && (
+                  <button
+                    className={styles.secondaryButton}
+                    type="button"
+                    onClick={resetReferenceForm}
+                  >
+                    Cancel
+                  </button>
+                )}
+              </div>
+              {referenceStatus && (
+                <div
+                  className={`${styles.referenceStatus} ${styles[referenceStatus.tone]} ${styles.fullWidthField}`}
+                  role="status"
+                  aria-live="polite"
+                >
+                  {referenceStatus.message}
+                </div>
+              )}
+            </form>
+
+            <div className={styles.referenceList}>
+              <h3>References</h3>
+              {references.length ? (
+                references.map((reference) => (
+                  <article className={styles.referenceCard} key={reference.id}>
+                    <div className={styles.referenceContent}>
+                      <h4>{reference.title}</h4>
+                      {reference.author && <p>{reference.author}</p>}
+                      {reference.url && (
+                        <a href={reference.url} target="_blank" rel="noreferrer">
+                          {reference.url}
+                        </a>
+                      )}
+                      {reference.notes && <p>{reference.notes}</p>}
+                    </div>
+                    {pendingRemovalId === reference.id ? (
+                      <div className={styles.removeConfirmation}>
+                        <span>Remove “{reference.title}”?</span>
+                        <div>
+                          <button
+                            className={styles.dangerButton}
+                            type="button"
+                            onClick={() => removeReference(reference.id)}
+                          >
+                            Remove Reference
+                          </button>
+                          <button
+                            className={styles.secondaryButton}
+                            type="button"
+                            onClick={() => setPendingRemovalId(null)}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className={styles.referenceActions}>
+                        <button
+                          className={styles.secondaryButton}
+                          type="button"
+                          onClick={() => editReference(reference)}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          className={styles.secondaryButton}
+                          type="button"
+                          onClick={() => setPendingRemovalId(reference.id)}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    )}
+                  </article>
+                ))
+              ) : (
+                <p className={styles.emptyReferences}>No references added yet.</p>
+              )}
+            </div>
+          </section>
+
           <footer className={styles.bottomActions}>
             <div className={styles.infoMessage}>
               <Info size={22} />
               <span>Select multiple topics to assign this concept to more than one location.</span>
             </div>
-            <button className={`${styles.primaryButton} ${styles.largeSaveButton}`} type="button" onClick={saveConcept}>
-              Save Concept
+            <button
+              className={`${styles.primaryButton} ${styles.largeSaveButton}`}
+              type="button"
+              onClick={saveConcept}
+              disabled={isSaving}
+            >
+              {isSaving ? 'Saving…' : 'Save Concept'}
             </button>
           </footer>
 
