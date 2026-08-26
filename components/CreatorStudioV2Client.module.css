@@ -107,6 +107,51 @@
   background: #f3f4f6;
 }
 
+.creatorMenu {
+  position: relative;
+}
+
+.creatorMenuPanel {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 8px);
+  right: 0;
+  display: grid;
+  width: 230px;
+  overflow: hidden;
+  border: 1px solid #d2d7de;
+  border-radius: 7px;
+  padding: 7px;
+  background: #ffffff;
+  box-shadow: 0 12px 30px rgb(15 23 42 / 16%);
+}
+
+.creatorMenuPanel button {
+  width: 100%;
+  border: 0;
+  border-radius: 5px;
+  padding: 9px 10px;
+  background: transparent;
+  color: #20252d;
+  font: inherit;
+  text-align: left;
+}
+
+.creatorMenuPanel button:hover,
+.creatorMenuPanel button:focus-visible {
+  background: #edf5ff;
+  outline: none;
+}
+
+.creatorMenuHeading {
+  margin: 5px 10px 3px;
+  color: #6b7482;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
 .mainGrid {
   display: grid;
   grid-template-columns: minmax(330px, 0.82fr) minmax(560px, 1.18fr);

@@ -282,6 +282,7 @@ export function CreatorStudioV2Client({
   const [referenceStatus, setReferenceStatus] = useState<Status>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isMutatingTopic, setIsMutatingTopic] = useState(false);
+  const [isCreatorMenuOpen, setIsCreatorMenuOpen] = useState(false);
   const [savedDraftFingerprint, setSavedDraftFingerprint] = useState(() =>
     draftFingerprint(
       resolvedConcept.bodyMarkdown,
@@ -814,7 +815,12 @@ export function CreatorStudioV2Client({
     setStatus(null);
   }
 
-  function openConceptBrowser() {
+  function navigateFromCreator(destination: string) {
+    if (window.location.pathname === destination) {
+      setIsCreatorMenuOpen(false);
+      return;
+    }
+
     if (
       isDirty &&
       !window.confirm('You have unsaved changes. Leave without saving?')
@@ -822,7 +828,12 @@ export function CreatorStudioV2Client({
       return;
     }
 
-    router.push('/creator/concepts');
+    setIsCreatorMenuOpen(false);
+    router.push(destination);
+  }
+
+  function openConceptBrowser() {
+    navigateFromCreator('/creator/concepts');
   }
 
   async function saveConcept() {
@@ -1094,14 +1105,57 @@ export function CreatorStudioV2Client({
               >
                 {isSaving ? 'Saving…' : 'Save Concept'}
               </button>
-              <button
-                className={styles.menuButton}
-                type="button"
-                title="More Creator Studio options will be added later"
-                aria-label="Creator Studio menu placeholder"
-              >
-                <Menu size={27} />
-              </button>
+              <div className={styles.creatorMenu}>
+                <button
+                  className={styles.menuButton}
+                  type="button"
+                  title="Creator Studio navigation"
+                  aria-label="Open Creator Studio navigation"
+                  aria-expanded={isCreatorMenuOpen}
+                  aria-haspopup="menu"
+                  onClick={() => setIsCreatorMenuOpen((current) => !current)}
+                >
+                  <Menu size={27} />
+                </button>
+                {isCreatorMenuOpen && (
+                  <div
+                    className={styles.creatorMenuPanel}
+                    role="menu"
+                    aria-label="Creator Studio navigation"
+                  >
+                    <p className={styles.creatorMenuHeading}>Concepts</p>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => navigateFromCreator('/creator/concepts')}
+                    >
+                      Browse Concepts
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => navigateFromCreator('/creator/concepts/new')}
+                    >
+                      New Concept
+                    </button>
+                    <p className={styles.creatorMenuHeading}>Articles</p>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => navigateFromCreator('/creator/articles')}
+                    >
+                      Browse Articles
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => navigateFromCreator('/creator/articles/new')}
+                    >
+                      New Article
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </header>
 
