@@ -46,9 +46,17 @@ type StudyDeckConcept = {
 };
 
 type ConceptOverride = 'included' | 'excluded';
-type PlannerMode = 'dashboard' | 'setup' | 'study' | 'feedback';
+type PlannerMode = 'dashboard' | 'setup' | 'study';
 type DeckMode = 'Learn' | 'Study' | 'Cram';
 type StudyFeedback = 'up' | 'more' | 'down' | null;
+type StudyResponse =
+  | 'easy'
+  | 'average'
+  | 'hard'
+  | 'didnt_know'
+  | 'forgot'
+  | 'too_hard'
+  | null;
 
 type LearnerHeaderPrefix = 'home-v2' | 'study-setup-v2' | 'study-v2';
 type LearnerNavIcon =
@@ -309,7 +317,7 @@ export function StudyPlanner({
   const [isSetupCramMode, setIsSetupCramMode] = useState(false);
   const [isAnswerVisible, setIsAnswerVisible] = useState(true);
   const [studyFeedback, setStudyFeedback] = useState<StudyFeedback>(null);
-  const [isStudyCramMode, setIsStudyCramMode] = useState(false);
+  const [studyResponse, setStudyResponse] = useState<StudyResponse>(null);
 
   const nodesById = useMemo(
     () => new Map(nodes.map((node) => [node.id, node])),
@@ -500,7 +508,7 @@ export function StudyPlanner({
 
   if (!layout) return;
 
-  if (mode === 'setup' || mode === 'study' || mode === 'feedback') {
+  if (mode === 'setup' || mode === 'study') {
     // Page 2 and Page 3 use the focused full-width layout.
     layout.style.gridTemplateColumns = '1fr';
 
@@ -528,8 +536,10 @@ export function StudyPlanner({
   }
 
   function openStudyMode() {
-  setMode('study');
-}
+    setStudyFeedback(null);
+    setStudyResponse(null);
+    setMode('study');
+  }
 
   async function handleLogout() {
     await supabase.auth.signOut();
@@ -1735,37 +1745,94 @@ if (mode === 'study') {
                 </div>
               </div>
 
-              <div className="study-v2-feedback-row">
-                {[
-                  ['up', 'Thumbs Up'],
-                  ['more', 'More'],
-                  ['down', 'Thumbs Down'],
-                ].map(([type, label]) => (
+              {studyFeedback === null ? (
+                <div className="study-v2-feedback-row">
+                  {[
+                    ['up', 'Thumbs Up'],
+                    ['more', 'More'],
+                    ['down', 'Thumbs Down'],
+                  ].map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => {
+                        setStudyFeedback(value as StudyFeedback);
+                        setStudyResponse(null);
+                      }}
+                    >
+                      <StudyFeedbackIcon
+                        type={value as Exclude<StudyFeedback, null>}
+                      />
+                      <span>{label}</span>
+                    </button>
+                  ))}
+                </div>
+              ) : studyFeedback === 'more' ? (
+                <div className="study-v2-response-toolbar">
                   <button
-                    className={studyFeedback === type ? 'study-v2-feedback-active' : ''}
-                    key={type}
+                    className="study-v2-response-back"
                     type="button"
                     onClick={() => {
-                      setStudyFeedback(type as StudyFeedback);
-                      setMode('feedback');
+                      setStudyFeedback(null);
+                      setStudyResponse(null);
                     }}
                   >
-                    <StudyFeedbackIcon type={type as 'up' | 'more' | 'down'} />
-                    <span>{label}</span>
+                    ← Back
                   </button>
-                ))}
-              </div>
+                  <p>More options coming later</p>
+                </div>
+              ) : (
+                <div className="study-v2-response-stage">
+                  <div className="study-v2-response-toolbar">
+                    <button
+                      className="study-v2-response-back"
+                      type="button"
+                      onClick={() => {
+                        setStudyFeedback(null);
+                        setStudyResponse(null);
+                      }}
+                    >
+                      ← Back
+                    </button>
+                  </div>
+                  <div className="study-v2-rating-row">
+                    {(studyFeedback === 'up'
+                      ? [
+                          ['easy', 'Easy', 'I knew this well'],
+                          ['average', 'Average', 'I knew part of this'],
+                          ['hard', 'Hard', 'This was challenging'],
+                        ]
+                      : [
+                          ['didnt_know', "Didn't Know", 'I had no idea'],
+                          [
+                            'forgot',
+                            'Forgot / Got It Wrong',
+                            'I knew it before but missed it',
+                          ],
+                          ['too_hard', 'Too Hard', 'This was above my level'],
+                        ]
+                    ).map(([value, label, subtitle]) => (
+                      <button
+                        aria-pressed={studyResponse === value}
+                        className={`study-v2-rating-button study-v2-rating-${value}${
+                          studyResponse === value
+                            ? ' study-v2-rating-active'
+                            : ''
+                        }`}
+                        key={value}
+                        type="button"
+                        onClick={() => setStudyResponse(value as StudyResponse)}
+                      >
+                        <strong>{label}</strong>
+                        <span>{subtitle}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </article>
           )}
 
-          <label className="study-v2-cram">
-            <input
-              checked={isStudyCramMode}
-              type="checkbox"
-              onChange={() => setIsStudyCramMode((current) => !current)}
-            />
-            <span>Cram Mode</span>
-          </label>
         </section>
       </main>
 
@@ -2058,6 +2125,7 @@ if (mode === 'study') {
           border: 0;
           border-right: 1px solid #dbe2ee;
           color: #08143b;
+          cursor: pointer;
           display: flex;
           flex-direction: column;
           font: inherit;
@@ -2092,6 +2160,101 @@ if (mode === 'study') {
           font-weight: 900;
           letter-spacing: 0.12em;
           line-height: 0.8;
+        }
+
+        .study-v2-response-toolbar {
+          align-items: center;
+          border-top: 1px solid #dbe2ee;
+          display: flex;
+          gap: 18px;
+          min-height: 64px;
+          padding: 12px 20px;
+        }
+
+        .study-v2-response-toolbar p {
+          color: #475569;
+          flex: 1;
+          margin: 0;
+          text-align: center;
+        }
+
+        .study-v2-response-back {
+          background: transparent;
+          border: 0;
+          color: #0f5ee8;
+          cursor: pointer;
+          font: inherit;
+          font-weight: 700;
+        }
+
+        .study-v2-rating-row {
+          border-top: 1px solid #dbe2ee;
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          min-height: 174px;
+        }
+
+        .study-v2-rating-button {
+          align-items: center;
+          border: 0;
+          border-right: 1px solid #dbe2ee;
+          cursor: pointer;
+          display: flex;
+          flex-direction: column;
+          font: inherit;
+          font-family: Georgia, "Times New Roman", Times, serif;
+          gap: 12px;
+          justify-content: center;
+          padding: 24px;
+        }
+
+        .study-v2-rating-button:last-child {
+          border-right: 0;
+        }
+
+        .study-v2-rating-button strong {
+          font-size: 26px;
+        }
+
+        .study-v2-rating-button span {
+          color: #334155;
+          font-family: system-ui, sans-serif;
+          font-size: 16px;
+          font-weight: 600;
+        }
+
+        .study-v2-rating-easy {
+          background: #f0fdf4;
+          color: #2f8f46;
+        }
+
+        .study-v2-rating-average {
+          background: #fffbeb;
+          color: #9a6c00;
+        }
+
+        .study-v2-rating-hard {
+          background: #fff7ed;
+          color: #e3642a;
+        }
+
+        .study-v2-rating-didnt_know {
+          background: #fff1f2;
+          color: #be123c;
+        }
+
+        .study-v2-rating-forgot {
+          background: #fff7ed;
+          color: #c2410c;
+        }
+
+        .study-v2-rating-too_hard {
+          background: #fef2f2;
+          color: #b91c1c;
+        }
+
+        .study-v2-rating-active {
+          box-shadow: inset 0 0 0 3px currentColor;
         }
 
         .study-v2-cram {
@@ -2158,414 +2321,22 @@ if (mode === 'study') {
             border-right: 0;
             min-height: 140px;
           }
+
+          .study-v2-rating-row {
+            grid-template-columns: 1fr;
+          }
+
+          .study-v2-rating-button {
+            border-bottom: 1px solid #dbe2ee;
+            border-right: 0;
+            min-height: 140px;
+          }
         }
       `}</style>
     </>
   );
 }
 
-if (mode === 'feedback') {
-  const FaceIcon = ({
-    mood,
-    color,
-  }: {
-    mood: 'happy' | 'neutral' | 'sad';
-    color: string;
-  }) => (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 64 64"
-      style={{
-        height: 62,
-        width: 62,
-      }}
-    >
-      <circle
-        cx="32"
-        cy="32"
-        r="25"
-        fill="none"
-        stroke={color}
-        strokeWidth="4"
-      />
-
-      <circle cx="23" cy="26" r="2.8" fill={color} />
-      <circle cx="41" cy="26" r="2.8" fill={color} />
-
-      {mood === 'happy' && (
-        <path
-          d="M20 37 C25 46, 39 46, 44 37"
-          fill="none"
-          stroke={color}
-          strokeWidth="4"
-          strokeLinecap="round"
-        />
-      )}
-
-      {mood === 'neutral' && (
-        <path
-          d="M22 40 H42"
-          fill="none"
-          stroke={color}
-          strokeWidth="4"
-          strokeLinecap="round"
-        />
-      )}
-
-      {mood === 'sad' && (
-        <path
-          d="M20 43 C25 34, 39 34, 44 43"
-          fill="none"
-          stroke={color}
-          strokeWidth="4"
-          strokeLinecap="round"
-        />
-      )}
-    </svg>
-  );
-
-  const troubleCardStyle = {
-    background: '#fffafa',
-    border: '1.5px solid #fecaca',
-    borderRadius: 18,
-    color: '#991b1b',
-    cursor: 'pointer',
-    minHeight: 145,
-    padding: 20,
-    textAlign: 'center' as const,
-  };
-
-  return (
-    <div
-      id="feedback-mode"
-      style={{
-        margin: '0 auto',
-        maxWidth: 900,
-        width: '100%',
-      }}
-    >
-      {/* Header */}
-      <section
-        style={{
-          alignItems: 'center',
-          background: '#ffffff',
-          border: '1px solid #dbe3ee',
-          borderRadius: 18,
-          boxShadow: '0 10px 30px rgba(15, 23, 42, 0.07)',
-          display: 'flex',
-          justifyContent: 'space-between',
-          marginBottom: 18,
-          padding: '18px 24px',
-        }}
-      >
-        <div>
-          <p
-            style={{
-              color: '#64748b',
-              fontSize: 12,
-              fontWeight: 700,
-              letterSpacing: '0.08em',
-              margin: '0 0 4px',
-              textTransform: 'uppercase',
-            }}
-          >
-            Socrates
-          </p>
-
-          <h2 style={{ margin: 0 }}>Feedback & Mastery</h2>
-        </div>
-
-        <button
-          className="btn ghost"
-          type="button"
-          onClick={() => setMode('dashboard')}
-        >
-          × Exit Study
-        </button>
-      </section>
-
-      {/* Main feedback */}
-      <section
-        style={{
-          background: '#ffffff',
-          border: '1px solid #dbe3ee',
-          borderRadius: 20,
-          boxShadow: '0 10px 30px rgba(15, 23, 42, 0.07)',
-          marginBottom: 18,
-          padding: 28,
-        }}
-      >
-        <h2
-          style={{
-            color: '#1d4ed8',
-            margin: '0 0 22px',
-          }}
-        >
-          How well did you know this?
-        </h2>
-
-        {/* Easy / Average / Hard */}
-        <div
-          style={{
-            display: 'grid',
-            gap: 16,
-            gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
-            marginBottom: 32,
-          }}
-        >
-          {/* EASY */}
-          <button
-            type="button"
-            style={{
-              background: '#ffffff',
-              border: '2px solid #bbdfc5',
-              borderRadius: 20,
-              cursor: 'pointer',
-              minHeight: 230,
-              padding: 22,
-            }}
-          >
-            <FaceIcon mood="happy" color="#2f8f46" />
-
-            <strong
-              style={{
-                color: '#2f8f46',
-                display: 'block',
-                fontSize: 24,
-                margin: '8px 0 10px',
-              }}
-            >
-              Easy
-            </strong>
-
-            <span
-              style={{
-                color: '#334155',
-                fontSize: 16,
-                fontWeight: 600,
-                lineHeight: 1.4,
-              }}
-            >
-              I knew this well
-            </span>
-          </button>
-
-          {/* AVERAGE */}
-          <button
-            type="button"
-            style={{
-              background: '#ffffff',
-              border: '2px solid #ead69b',
-              borderRadius: 20,
-              cursor: 'pointer',
-              minHeight: 230,
-              padding: 22,
-            }}
-          >
-            <FaceIcon mood="neutral" color="#d69e17" />
-
-            <strong
-              style={{
-                color: '#334155',
-                display: 'block',
-                fontSize: 24,
-                margin: '8px 0 10px',
-              }}
-            >
-              Average
-            </strong>
-
-            <span
-              style={{
-                color: '#334155',
-                fontSize: 16,
-                fontWeight: 600,
-                lineHeight: 1.4,
-              }}
-            >
-              I knew part of this
-            </span>
-          </button>
-
-          {/* HARD */}
-          <button
-            type="button"
-            style={{
-              background: '#ffffff',
-              border: '2px solid #f3c2a7',
-              borderRadius: 20,
-              cursor: 'pointer',
-              minHeight: 230,
-              padding: 22,
-            }}
-          >
-            <FaceIcon mood="sad" color="#e3642a" />
-
-            <strong
-              style={{
-                color: '#e3642a',
-                display: 'block',
-                fontSize: 24,
-                margin: '8px 0 10px',
-              }}
-            >
-              Hard
-            </strong>
-
-            <span
-              style={{
-                color: '#334155',
-                fontSize: 16,
-                fontWeight: 600,
-                lineHeight: 1.4,
-              }}
-            >
-              This was challenging
-            </span>
-          </button>
-        </div>
-
-        {/* Trouble choices */}
-        <h2
-          style={{
-            color: '#1d4ed8',
-            margin: '0 0 18px',
-          }}
-        >
-          Having trouble?
-        </h2>
-
-        <div
-          style={{
-            display: 'grid',
-            gap: 14,
-            gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
-            marginBottom: 30,
-          }}
-        >
-          <button type="button" style={troubleCardStyle}>
-            <strong style={{ display: 'block', fontSize: 18, marginBottom: 8 }}>
-              Didn't know
-            </strong>
-            <span style={{ color: '#475569' }}>I had no idea</span>
-          </button>
-
-          <button type="button" style={troubleCardStyle}>
-            <strong style={{ display: 'block', fontSize: 18, marginBottom: 8 }}>
-              Forgot / Got it wrong
-            </strong>
-            <span style={{ color: '#475569' }}>
-              I knew it before but missed it
-            </span>
-          </button>
-
-          <button type="button" style={troubleCardStyle}>
-            <strong style={{ display: 'block', fontSize: 18, marginBottom: 8 }}>
-              Too hard
-            </strong>
-            <span style={{ color: '#475569' }}>Above my level</span>
-          </button>
-
-          <button type="button" style={troubleCardStyle}>
-            <strong style={{ display: 'block', fontSize: 18, marginBottom: 8 }}>
-              Unclear
-            </strong>
-            <span style={{ color: '#475569' }}>Question was unclear</span>
-          </button>
-
-          <button type="button" style={troubleCardStyle}>
-            <strong style={{ display: 'block', fontSize: 18, marginBottom: 8 }}>
-              Error
-            </strong>
-            <span style={{ color: '#475569' }}>Question has an error</span>
-          </button>
-
-          <button type="button" style={troubleCardStyle}>
-            <strong style={{ display: 'block', fontSize: 18, marginBottom: 8 }}>
-              Make suggestion
-            </strong>
-            <span style={{ color: '#475569' }}>Improve this card</span>
-          </button>
-        </div>
-
-        <div
-          style={{
-            borderTop: '1px solid #e2e8f0',
-            color: '#475569',
-            fontSize: 15,
-            paddingTop: 20,
-            textAlign: 'center',
-          }}
-        >
-          👆 <strong>Second tap advances to the next card</strong>
-        </div>
-      </section>
-
-      {/* Mastery */}
-      <section
-        style={{
-          background: '#f8fafc',
-          border: '1px solid #dbe3ee',
-          borderRadius: 18,
-          marginBottom: 18,
-          padding: 24,
-        }}
-      >
-        <h3
-          style={{
-            color: '#1d4ed8',
-            margin: '0 0 18px',
-          }}
-        >
-          📈 Mastery & Progress
-        </h3>
-
-        <div
-          style={{
-            display: 'grid',
-            gap: 20,
-            gridTemplateColumns: '1fr 1fr',
-          }}
-        >
-          <div>
-            <span className="muted">Mastery</span>
-            <h3 style={{ margin: '5px 0' }}>Not calculated yet</h3>
-            <p className="muted" style={{ margin: 0 }}>
-              Mastery will develop from real study history.
-            </p>
-          </div>
-
-          <div
-            style={{
-              borderLeft: '1px solid #cbd5e1',
-              paddingLeft: 20,
-            }}
-          >
-            <span className="muted">Next review</span>
-            <h3 style={{ margin: '5px 0' }}>Not scheduled yet</h3>
-            <p className="muted" style={{ margin: 0 }}>
-              Scheduling will update as study data develops.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* Review concept */}
-      <button
-        className="btn ghost"
-        type="button"
-        style={{
-          border: '1.5px solid #93c5fd',
-          fontSize: 16,
-          padding: '14px 18px',
-          width: '100%',
-        }}
-      >
-        ↗ 📖 Review concept / article if needed
-      </button>
-    </div>
-  );
-}
   return (
     <>
       {renderLearnerHeader('home-v2')}
