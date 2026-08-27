@@ -1626,10 +1626,20 @@ export function CreatorStudioV2Client({
               <button
                 className={styles.primaryButton}
                 type="button"
-                onClick={saveConcept}
-                disabled={isSaving}
+                onClick={activeCreatorTab === 'content' ? saveConcept : saveQuestion}
+                disabled={
+                  activeCreatorTab === 'content' ? isSaving : isSavingQuestion
+                }
               >
-                {isSaving ? 'Saving…' : 'Save Concept'}
+                {activeCreatorTab === 'content'
+                  ? isSaving
+                    ? 'Saving…'
+                    : 'Save Concept'
+                  : isSavingQuestion
+                    ? 'Saving…'
+                    : questionId
+                      ? 'Save Changes'
+                      : 'Save Question'}
               </button>
             </div>
           </header>
@@ -2333,14 +2343,6 @@ export function CreatorStudioV2Client({
                   <Info size={22} />
                   <span>Questions are saved as draft short-answer cards for the selected concept.</span>
                 </div>
-                <button
-                  className={`${styles.primaryButton} ${styles.largeSaveButton}`}
-                  type="button"
-                  onClick={saveQuestion}
-                  disabled={isSavingQuestion}
-                >
-                  {isSavingQuestion ? 'Saving…' : questionId ? 'Save Changes' : 'Save Question'}
-                </button>
               </footer>
 
               {questionStatus && (
