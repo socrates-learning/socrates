@@ -1,7 +1,4 @@
 import { notFound } from 'next/navigation';
-import { Header } from '@/components/Header';
-import { LibrarySwitcher } from '@/components/LibrarySwitcher';
-import { Sidebar } from '@/components/Sidebar';
 import { StudyPlanner } from '@/components/StudyPlanner';
 import { resolveActiveLibraryContext } from '@/lib/library-context';
 
@@ -17,17 +14,5 @@ export default async function LibraryLandingPage({
     notFound();
   }
 
-  return (
-    <>
-      <Header />
-      <main className="layout">
-        <Sidebar activeLibrary={context.library} />
-
-        <section className="stack">
-          <LibrarySwitcher context={context} returnTo={`/library/${context.library.slug}`} />
-          <StudyPlanner activeLibrary={context.library} />
-        </section>
-      </main>
-    </>
-  );
+  return <StudyPlanner activeLibrary={context.library} />;
 }

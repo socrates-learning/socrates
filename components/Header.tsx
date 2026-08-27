@@ -73,48 +73,113 @@ export function Header() {
   const isEditor = role === 'editor' || role === 'admin';
   const isAdmin = role === 'admin';
   const accountLabel = email ? 'Account' : 'Login';
+  const navButtonStyle = {
+    alignItems: 'center',
+    background: 'rgba(6, 24, 70, 0.72)',
+    border: '1px solid rgba(214, 224, 246, 0.36)',
+    borderRadius: 9,
+    color: '#ffffff',
+    display: 'inline-flex',
+    font: 'inherit',
+    fontSize: 16,
+    fontWeight: 800,
+    gap: 9,
+    minHeight: 58,
+    padding: '13px 16px',
+    textDecoration: 'none',
+    whiteSpace: 'nowrap' as const,
+  };
+  const activeNavButtonStyle = {
+    ...navButtonStyle,
+    background: '#155ee8',
+    borderColor: '#2b71ff',
+    boxShadow: '0 12px 26px rgba(21, 94, 232, 0.25)',
+  };
+  const disabledNavButtonStyle = {
+    ...navButtonStyle,
+    cursor: 'default',
+    opacity: 1,
+  };
 
   return (
-    <header className="header">
-      <div>
-        <h1 style={{ margin: 0 }}>Socrates</h1>
-        <p>
+    <header
+      style={{
+        alignItems: 'center',
+        background: 'linear-gradient(180deg, #061846, #041238)',
+        color: '#ffffff',
+        display: 'flex',
+        gap: 28,
+        justifyContent: 'space-between',
+        minHeight: 126,
+        padding: '34px 36px 28px',
+      }}
+    >
+      <div style={{ minWidth: 500 }}>
+        <h1
+          style={{
+            fontFamily: 'Georgia, "Times New Roman", Times, serif',
+            fontSize: 42,
+            fontWeight: 900,
+            letterSpacing: '-0.055em',
+            lineHeight: 0.95,
+            margin: 0,
+          }}
+        >
+          Socrates
+        </h1>
+        <p
+          style={{
+            color: '#edf4ff',
+            fontSize: 16,
+            fontWeight: 500,
+            letterSpacing: '-0.02em',
+            margin: '10px 0 0',
+          }}
+        >
           Real application foundation · concept-network learning platform
         </p>
       </div>
 
-      <nav style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-        <Link className="btn ghost" href="/" onClick={handleHomeClick}>
+      <nav
+        style={{
+          alignItems: 'center',
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: 10,
+          justifyContent: 'flex-end',
+        }}
+      >
+        <Link style={navButtonStyle} href="/" onClick={handleHomeClick}>
           Home
         </Link>
 
-        <button className="btn ghost" type="button" disabled>
+        <button style={disabledNavButtonStyle} type="button" disabled>
           Learn
         </button>
 
-        <button className="btn ghost" type="button" onClick={handleStudyClick}>
+        <button style={navButtonStyle} type="button" onClick={handleStudyClick}>
           Study
         </button>
 
-        <button className="btn ghost" type="button" disabled>
+        <button style={disabledNavButtonStyle} type="button" disabled>
           Progress
         </button>
 
         {isEditor && (
-          <Link className="btn ghost" href="/creator" onClick={handleCreatorClick}>
+          <Link style={navButtonStyle} href="/creator" onClick={handleCreatorClick}>
             Creator Studio
           </Link>
         )}
 
         {isAdmin && (
-          <Link className="btn ghost" href="/admin/users">
+          <Link style={navButtonStyle} href="/admin/users">
             Admin
           </Link>
         )}
 
         {email ? (
           <details style={{ position: 'relative' }}>
-            <summary className="btn primary" style={{ cursor: 'pointer' }}>
+            <summary style={{ ...activeNavButtonStyle, cursor: 'pointer' }}>
               {accountLabel}
             </summary>
             <div
@@ -142,7 +207,7 @@ export function Header() {
             </div>
           </details>
         ) : (
-          <Link className="btn primary" href="/login">
+          <Link style={activeNavButtonStyle} href="/login">
             Login
           </Link>
         )}

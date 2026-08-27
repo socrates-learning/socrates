@@ -47,6 +47,208 @@ type StudyDeckConcept = {
 
 type ConceptOverride = 'included' | 'excluded';
 type PlannerMode = 'dashboard' | 'setup' | 'study' | 'feedback';
+type DeckMode = 'Learn' | 'Study' | 'Cram';
+type StudyFeedback = 'up' | 'more' | 'down' | null;
+
+type LearnerHeaderPrefix = 'home-v2' | 'study-setup-v2' | 'study-v2';
+type LearnerNavIcon =
+  | 'home'
+  | 'learn'
+  | 'study'
+  | 'progress'
+  | 'creator'
+  | 'admin'
+  | 'account';
+
+const learnerNavItems: Array<{
+  icon: LearnerNavIcon;
+  label: string;
+  href?: string;
+}> = [
+  { href: '/', icon: 'home', label: 'Home' },
+  { icon: 'learn', label: 'Learn' },
+  { icon: 'study', label: 'Study' },
+  { icon: 'progress', label: 'Progress' },
+  { href: '/creator', icon: 'creator', label: 'Creator Studio' },
+  { href: '/admin/users', icon: 'admin', label: 'Admin' },
+  { icon: 'account', label: 'Account' },
+];
+
+const homeRailItems = [
+  { label: 'Deck Menu', icon: 'document' },
+  { label: 'Set Up Deck', icon: 'gear' },
+  { label: 'Make Cards', icon: 'edit' },
+  { label: 'Stats', icon: 'bars' },
+  { label: 'Menu', icon: 'people' },
+  { label: 'Buttons', icon: 'dots' },
+];
+
+const prototypeProgressRows = [
+  { id: 'clinical-practice', name: 'Clinical Practice', progress: 68, canExpand: true },
+  { id: 'mother-baby', name: 'Mother Baby', progress: 52, canExpand: true },
+  { id: 'cardiac', name: 'Cardiac', progress: 37, canExpand: true },
+  { id: 'ecg', name: 'ECG', progress: 74, canExpand: true },
+];
+
+type PrototypeTopicNode = {
+  id: string;
+  name: string;
+  progress: number;
+  children?: PrototypeTopicNode[];
+};
+
+const prototypeTopicTree: PrototypeTopicNode[] = [
+  {
+    id: 'nursing',
+    name: 'Nursing',
+    progress: 64,
+    children: [
+      {
+        id: 'clinical-practice-tree',
+        name: 'Clinical Practice',
+        progress: 68,
+        children: [
+          { id: 'monitors', name: 'Monitors', progress: 54 },
+          { id: 'invasive-lines', name: 'Invasive Lines', progress: 41 },
+        ],
+      },
+      {
+        id: 'mother-baby-tree',
+        name: 'Mother Baby',
+        progress: 52,
+        children: [{ id: 'newborn-care', name: 'Newborn Care', progress: 38 }],
+      },
+      { id: 'cardiac-tree', name: 'Cardiac', progress: 37 },
+      { id: 'ecg-tree', name: 'ECG', progress: 74 },
+    ],
+  },
+];
+
+function LearnerHeaderIcon({
+  icon,
+  classPrefix,
+}: {
+  icon: LearnerNavIcon;
+  classPrefix: LearnerHeaderPrefix;
+}) {
+  return (
+    <span className={`${classPrefix}-nav-icon`} aria-hidden="true">
+      {icon === 'home' && (
+        <svg viewBox="0 0 24 24">
+          <path d="M3 11l9-8 9 8" />
+          <path d="M5 10v10h5v-6h4v6h5V10" />
+        </svg>
+      )}
+      {icon === 'learn' && (
+        <svg viewBox="0 0 24 24">
+          <path d="M4 5c3 0 5 .8 8 3v12c-3-2.2-5-3-8-3zM20 5c-3 0-5 .8-8 3v12c3-2.2 5-3 8-3z" />
+        </svg>
+      )}
+      {icon === 'study' && (
+        <svg viewBox="0 0 24 24">
+          <path d="M3 8l9-4 9 4-9 4z" />
+          <path d="M7 10v5c3 2 7 2 10 0v-5" />
+        </svg>
+      )}
+      {icon === 'progress' && (
+        <svg viewBox="0 0 24 24">
+          <path d="M5 20V9M12 20V4M19 20v-8" />
+          <path d="M3 20h18" />
+        </svg>
+      )}
+      {icon === 'creator' && (
+        <svg viewBox="0 0 24 24">
+          <path d="M4 20l4-1 11-11-3-3L5 16z" />
+          <path d="M14 7l3 3" />
+        </svg>
+      )}
+      {icon === 'admin' && (
+        <svg viewBox="0 0 24 24">
+          <path d="M12 3l8 4v5c0 5-3 8-8 10-5-2-8-5-8-10V7z" />
+          <path d="M9 12l2 2 4-5" />
+        </svg>
+      )}
+      {icon === 'account' && (
+        <svg viewBox="0 0 24 24">
+          <circle cx="12" cy="8" r="4" />
+          <path d="M4 21c1.5-5 4-7 8-7s6.5 2 8 7" />
+        </svg>
+      )}
+    </span>
+  );
+}
+
+function RailIcon({ icon }: { icon: string }) {
+  return (
+    <span className="home-v2-rail-icon" aria-hidden="true">
+      {icon === 'document' && (
+        <svg viewBox="0 0 40 40">
+          <path d="M12 7h12l5 5v21H12z" />
+          <path d="M24 7v7h7M16 19h10M16 24h10M16 29h7" />
+        </svg>
+      )}
+      {icon === 'gear' && (
+        <svg viewBox="0 0 40 40">
+          <path d="M20 13a7 7 0 1 0 0 14 7 7 0 0 0 0-14z" />
+          <path d="M20 5v6M20 29v6M5 20h6M29 20h6M9 9l4 4M27 27l4 4M31 9l-4 4M13 27l-4 4" />
+        </svg>
+      )}
+      {icon === 'edit' && (
+        <svg viewBox="0 0 40 40">
+          <path d="M10 30h20M12 26l2-8 13-13 6 6-13 13zM25 7l6 6" />
+        </svg>
+      )}
+      {icon === 'bars' && (
+        <svg viewBox="0 0 40 40">
+          <path d="M9 31V19h6v12M17 31V11h6v20M25 31V5h6v26" />
+        </svg>
+      )}
+      {icon === 'people' && (
+        <svg viewBox="0 0 40 40">
+          <path d="M15 19a6 6 0 1 0 0-12 6 6 0 0 0 0 12zM5 33c1-7 5-10 10-10s9 3 10 10" />
+          <path d="M27 20a5 5 0 1 0-1-10M26 24c4 1 7 4 8 9" />
+        </svg>
+      )}
+      {icon === 'dots' && (
+        <svg viewBox="0 0 40 40">
+          <path d="M11 20h.1M20 20h.1M29 20h.1" />
+        </svg>
+      )}
+    </span>
+  );
+}
+
+function HomeProgressBar({ value }: { value: number }) {
+  return (
+    <div className="home-v2-progress" aria-label={`${value}% progress`}>
+      <span style={{ width: `${value}%` }} />
+    </div>
+  );
+}
+
+function StudyProgressBar() {
+  return (
+    <div className="study-v2-progress" aria-label="Study progress">
+      <span />
+    </div>
+  );
+}
+
+function StudyFeedbackIcon({ type }: { type: 'up' | 'more' | 'down' }) {
+  if (type === 'more') {
+    return <span className="study-v2-more-dots">•••</span>;
+  }
+
+  return (
+    <svg aria-hidden="true" className="study-v2-feedback-svg" viewBox="0 0 64 64">
+      {type === 'up' ? (
+        <path d="M23 54h-8c-4 0-7-3-7-7V30c0-4 3-7 7-7h8l8-15c2-4 8-2 8 3v12h10c5 0 8 4 7 9l-3 14c-1 5-5 8-10 8z" />
+      ) : (
+        <path d="M23 10h-8c-4 0-7 3-7 7v17c0 4 3 7 7 7h8l8 15c2 4 8 2 8-3V41h10c5 0 8-4 7-9l-3-14c-1-5-5-8-10-8z" />
+      )}
+    </svg>
+  );
+}
 
 function getConceptFromPlacement(placement: Placement) {
   return Array.isArray(placement.concepts)
@@ -79,6 +281,8 @@ export function StudyPlanner({
 }) {
   const [mode, setMode] = useState<PlannerMode>('dashboard');
   const [userId, setUserId] = useState<string | null>(null);
+  const [email, setEmail] = useState<string | null>(null);
+  const [role, setRole] = useState<string | null>(null);
   const [displayName, setDisplayName] = useState('there');
   const [deck, setDeck] = useState<StudyDeck | null>(null);
   const [nodes, setNodes] = useState<LibraryNode[]>([]);
@@ -94,6 +298,18 @@ export function StudyPlanner({
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(Boolean(activeLibrary?.id));
   const [isSaving, setIsSaving] = useState(false);
+  const [selectedDeckModes, setSelectedDeckModes] = useState<Set<DeckMode>>(
+    new Set(['Study'])
+  );
+  const [homeExpandedIds, setHomeExpandedIds] = useState<Set<string>>(
+    new Set(['nursing', 'clinical-practice-tree'])
+  );
+  const [homeSelectedIds, setHomeSelectedIds] = useState<Set<string>>(new Set());
+  const [studyBalance, setStudyBalance] = useState(50);
+  const [isSetupCramMode, setIsSetupCramMode] = useState(false);
+  const [isAnswerVisible, setIsAnswerVisible] = useState(true);
+  const [studyFeedback, setStudyFeedback] = useState<StudyFeedback>(null);
+  const [isStudyCramMode, setIsStudyCramMode] = useState(false);
 
   const nodesById = useMemo(
     () => new Map(nodes.map((node) => [node.id, node])),
@@ -119,10 +335,18 @@ export function StudyPlanner({
 
       if (!user) {
         setUserId(null);
+        setEmail(null);
+        setRole(null);
         setMessage('Sign in to set up your deck.');
         setIsLoading(false);
         return;
       }
+
+      const { data: roleData } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', user.id)
+        .maybeSingle();
 
       const { data: deckData, error: deckError } = await supabase.rpc(
         'get_or_create_active_study_deck',
@@ -214,6 +438,8 @@ export function StudyPlanner({
       const rootNode = loadedNodes.find((node) => node.parent_id === null);
 
       setUserId(user.id);
+      setEmail(user.email ?? 'Account');
+      setRole(roleData?.role ?? null);
       setDisplayName(
         (user.user_metadata?.full_name as string | undefined) ||
           (user.email ? user.email.split('@')[0] : 'there')
@@ -304,6 +530,199 @@ export function StudyPlanner({
   function openStudyMode() {
   setMode('study');
 }
+
+  async function handleLogout() {
+    await supabase.auth.signOut();
+    window.location.href = '/login';
+  }
+
+  function handleCreatorClick() {
+    window.dispatchEvent(new Event('socrates-open-creator-dashboard'));
+  }
+
+  function toggleDeckMode(deckMode: DeckMode) {
+    setSelectedDeckModes((current) => {
+      const next = new Set(current);
+
+      if (next.has(deckMode)) {
+        next.delete(deckMode);
+      } else {
+        next.add(deckMode);
+      }
+
+      return next;
+    });
+  }
+
+  function toggleHomeExpanded(id: string) {
+    setHomeExpandedIds((current) => {
+      const next = new Set(current);
+
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+
+      return next;
+    });
+  }
+
+  function toggleHomeSelected(id: string) {
+    setHomeSelectedIds((current) => {
+      const next = new Set(current);
+
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+
+      return next;
+    });
+  }
+
+  function renderLearnerHeader(classPrefix: LearnerHeaderPrefix) {
+    const isEditor = role === 'editor' || role === 'admin';
+    const isAdmin = role === 'admin';
+
+    return (
+      <header className={`${classPrefix}-header`}>
+        <Link
+          className={`${classPrefix}-brand`}
+          href="/"
+          onClick={() => setMode('dashboard')}
+        >
+          {classPrefix === 'home-v2' ? (
+            <span>
+              <strong>Socrates</strong>
+              <small>Real application foundation · concept-network learning platform</small>
+            </span>
+          ) : (
+            <>
+              <strong>Socrates</strong>
+              <span>Real application foundation · concept-network learning platform</span>
+            </>
+          )}
+        </Link>
+
+        <nav className={`${classPrefix}-nav`} aria-label="Socrates learner navigation">
+          {learnerNavItems.map((item) => {
+            if (item.icon === 'creator' && !isEditor) return null;
+            if (item.icon === 'admin' && !isAdmin) return null;
+
+            const isStudy = item.icon === 'study';
+            const isAccount = item.icon === 'account';
+            const className = [
+              `${classPrefix}-nav-item`,
+              classPrefix !== 'home-v2' && isStudy ? `${classPrefix}-nav-active` : '',
+              classPrefix !== 'home-v2' && isAccount ? `${classPrefix}-nav-account` : '',
+              classPrefix === 'home-v2' && isAccount ? 'home-v2-nav-account' : '',
+            ]
+              .filter(Boolean)
+              .join(' ');
+            const content = (
+              <>
+                <LearnerHeaderIcon icon={item.icon} classPrefix={classPrefix} />
+                {item.label}
+                {isAccount && <span aria-hidden="true">⌄</span>}
+              </>
+            );
+
+            if (item.href) {
+              return (
+                <Link
+                  className={className}
+                  href={item.href}
+                  key={item.label}
+                  onClick={
+                    item.icon === 'home'
+                      ? () => setMode('dashboard')
+                      : item.icon === 'creator'
+                        ? handleCreatorClick
+                        : undefined
+                  }
+                >
+                  {content}
+                </Link>
+              );
+            }
+
+            if (isStudy) {
+              return (
+                <button
+                  className={className}
+                  key={item.label}
+                  type="button"
+                  onClick={openSetupMode}
+                >
+                  {content}
+                </button>
+              );
+            }
+
+            if (isAccount) {
+              return (
+                <button
+                  className={className}
+                  key={item.label}
+                  type="button"
+                  onClick={handleLogout}
+                  title={email ? `Signed in as ${email}. Click to log out.` : 'Account'}
+                >
+                  {content}
+                </button>
+              );
+            }
+
+            return (
+              <button className={className} key={item.label} type="button" disabled>
+                {content}
+              </button>
+            );
+          })}
+        </nav>
+      </header>
+    );
+  }
+
+  function renderHomeTreeRow(node: PrototypeTopicNode, depth: number): ReactNode {
+    const hasChildren = Boolean(node.children?.length);
+    const isExpanded = homeExpandedIds.has(node.id);
+
+    return (
+      <div key={node.id}>
+        <div className="home-v2-tree-row" style={{ paddingLeft: 10 + depth * 34 }}>
+          <button
+            aria-label={
+              hasChildren
+                ? `${isExpanded ? 'Collapse' : 'Expand'} ${node.name}`
+                : undefined
+            }
+            className="home-v2-chevron"
+            disabled={!hasChildren}
+            type="button"
+            onClick={() => toggleHomeExpanded(node.id)}
+          >
+            {hasChildren ? (isExpanded ? '⌄' : '›') : ''}
+          </button>
+          <span className="home-v2-topic-name">{node.name}</span>
+          <HomeProgressBar value={node.progress} />
+          <span className="home-v2-percent">{node.progress}%</span>
+          <input
+            aria-label={`Select ${node.name}`}
+            checked={homeSelectedIds.has(node.id)}
+            className="home-v2-checkbox"
+            type="checkbox"
+            onChange={() => toggleHomeSelected(node.id)}
+          />
+        </div>
+        {hasChildren &&
+          isExpanded &&
+          node.children?.map((child) => renderHomeTreeRow(child, depth + 1))}
+      </div>
+    );
+  }
 
   function descendantNodeIds(nodeId: string) {
     const ids = new Set<string>([nodeId]);
@@ -761,762 +1180,987 @@ export function StudyPlanner({
   }
 
   if (mode === 'setup') {
-  return (
-    <div
-      id="set-up-deck"
-      style={{
-        margin: '0 auto',
-        maxWidth: 1180,
-        width: '100%',
-      }}
-    >
-      {/* Page heading */}
-      <section
-        style={{
-          background: '#ffffff',
-          border: '1px solid #dbe3ee',
-          borderRadius: 18,
-          boxShadow: '0 10px 30px rgba(15, 23, 42, 0.07)',
-          marginBottom: 18,
-          padding: '24px 28px',
-        }}
-      >
-        <p
-          style={{
-            color: '#64748b',
-            fontSize: 12,
-            fontWeight: 700,
-            letterSpacing: '0.08em',
-            margin: '0 0 6px',
-            textTransform: 'uppercase',
-          }}
-        >
-          Study Setup
-        </p>
-
-        <h1 style={{ margin: '0 0 6px' }}>Set Up Deck</h1>
-
-        <p className="muted" style={{ margin: 0 }}>
-          Choose what you want to study and how you want this session to behave.
-        </p>
-      </section>
-
-      {/* New ↔ Mastery balance */}
-      <section
-        style={{
-          background: '#ffffff',
-          border: '1px solid #dbe3ee',
-          borderRadius: 18,
-          boxShadow: '0 10px 30px rgba(15, 23, 42, 0.07)',
-          marginBottom: 18,
-          padding: 26,
-        }}
-      >
-        <div
-          style={{
-            alignItems: 'flex-start',
-            display: 'flex',
-            justifyContent: 'space-between',
-            marginBottom: 22,
-          }}
-        >
-          <div>
-            <h2 style={{ margin: '0 0 5px' }}>Content Balance</h2>
-            <p className="muted" style={{ margin: 0 }}>
-              Choose whether this session emphasizes new material or repetition for mastery.
-            </p>
-          </div>
-        </div>
-
-        <div
-          style={{
-            margin: '0 auto',
-            maxWidth: 820,
-          }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              marginBottom: 10,
-            }}
-          >
-            <div>
-              <strong>More New Content</strong>
-              <p className="muted" style={{ fontSize: 13, margin: '3px 0 0' }}>
-                Introduce more material
-              </p>
+    return (
+      <>
+        {renderLearnerHeader('study-setup-v2')}
+        <main className="study-setup-v2-page">
+          <section className="study-setup-v2-card" aria-labelledby="study-setup-v2-title">
+            <div className="study-setup-v2-title-block">
+              <h1 id="study-setup-v2-title">Set Up Deck</h1>
+              <p>Adjust the slider to balance new material and mastery review.</p>
             </div>
 
-            <div style={{ textAlign: 'right' }}>
-              <strong>More Repetition</strong>
-              <p className="muted" style={{ fontSize: 13, margin: '3px 0 0' }}>
-                Reinforce for mastery
-              </p>
-            </div>
-          </div>
-
-          <input
-            aria-label="New content versus mastery balance"
-            type="range"
-            min="0"
-            max="100"
-            defaultValue="50"
-            style={{
-              accentColor: '#2563eb',
-              cursor: 'pointer',
-              width: '100%',
-            }}
-          />
-
-          <div
-            style={{
-              color: '#64748b',
-              display: 'flex',
-              fontSize: 13,
-              fontWeight: 700,
-              justifyContent: 'space-between',
-              marginTop: 4,
-            }}
-          >
-            <span>NEW</span>
-            <span>BALANCED</span>
-            <span>MASTERY</span>
-          </div>
-
-          <p
-            className="muted"
-            style={{
-              fontSize: 12,
-              margin: '12px 0 0',
-              textAlign: 'center',
-            }}
-          >
-            Session balance is a design preview for now. Adaptive scheduling will use it later.
-          </p>
-        </div>
-      </section>
-
-      {/* Topic selection */}
-      <section
-        style={{
-          background: '#ffffff',
-          border: '1px solid #dbe3ee',
-          borderRadius: 18,
-          boxShadow: '0 10px 30px rgba(15, 23, 42, 0.07)',
-          marginBottom: 18,
-          padding: 26,
-        }}
-      >
-        <div style={{ marginBottom: 20 }}>
-          <h2 style={{ margin: '0 0 5px' }}>Select What to Study</h2>
-          <p className="muted" style={{ margin: 0 }}>
-            Build your deck from meaningful topic branches.
-          </p>
-        </div>
-
-        <div
-          style={{
-            alignItems: 'start',
-            display: 'grid',
-            gap: 20,
-            gridTemplateColumns: 'minmax(0, 2fr) minmax(260px, 0.8fr)',
-          }}
-        >
-          {/* Knowledge tree */}
-          <div
-            style={{
-              border: '1px solid #dbe3ee',
-              borderRadius: 16,
-              minWidth: 0,
-              padding: 18,
-            }}
-          >
-            <div
-              style={{
-                alignItems: 'center',
-                display: 'flex',
-                justifyContent: 'space-between',
-                marginBottom: 14,
-              }}
-            >
-              <h3 style={{ margin: 0 }}>Knowledge Tree</h3>
-
-              <span
-                style={{
-                  background: '#eff6ff',
-                  borderRadius: 999,
-                  color: '#1d4ed8',
-                  fontSize: 12,
-                  fontWeight: 700,
-                  padding: '5px 10px',
-                }}
-              >
-                {activeLibrary.name}
-              </span>
-            </div>
-
-            {rootNodes.length === 0 ? (
-              <p className="muted">
-                No topics are available in this library yet.
-              </p>
-            ) : (
-              <div className="stack">
-                {rootNodes.map((node) => renderNode(node))}
-              </div>
-            )}
-          </div>
-
-          {/* Selected summary */}
-          <aside
-            style={{
-              background: '#f8fafc',
-              border: '1px solid #cbd5e1',
-              borderRadius: 16,
-              padding: 20,
-              position: 'sticky',
-              top: 18,
-            }}
-          >
-            <h3 style={{ margin: '0 0 14px' }}>Selected Deck</h3>
-
-            {selectedNodeSummaries.length === 0 ? (
-              <p className="muted">
-                No topic branches selected yet.
-              </p>
-            ) : (
-              <div
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 12,
-                }}
-              >
-                {selectedNodeSummaries.map((selection) => (
-                  <div
-                    key={selection.id}
-                    style={{
-                      borderBottom: '1px solid #e2e8f0',
-                      paddingBottom: 10,
-                    }}
-                  >
-                    <strong
-                      style={{
-                        display: 'block',
-                        fontSize: 14,
-                        marginBottom: 3,
-                      }}
-                    >
-                      {selection.label}
-                    </strong>
-
-                    <span className="muted" style={{ fontSize: 12 }}>
-                      {selection.conceptCount} concepts ·{' '}
-                      {selection.questionTotal} questions
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <div
-              style={{
-                borderTop: '1px solid #cbd5e1',
-                marginTop: 18,
-                paddingTop: 18,
-              }}
-            >
-              <div style={{ marginBottom: 14 }}>
-                <span className="muted" style={{ fontSize: 12 }}>
-                  Concepts selected
-                </span>
-                <br />
-                <strong style={{ fontSize: 28 }}>
-                  {resolvedConcepts.length}
-                </strong>
-              </div>
-
+            <div className="study-setup-v2-copy-row">
               <div>
-                <span className="muted" style={{ fontSize: 12 }}>
-                  Questions available
-                </span>
-                <br />
-                <strong
-                  style={{
-                    color: '#1d4ed8',
-                    fontSize: 36,
-                  }}
-                >
-                  {totalQuestions}
-                </strong>
+                <h2>More New Evidence</h2>
+                <p>Focus on new concepts and building knowledge.</p>
+              </div>
+              <div>
+                <h2>More Repetition for Mastery</h2>
+                <p>Reinforce what you know and strengthen long-term mastery.</p>
               </div>
             </div>
-          </aside>
-        </div>
-      </section>
 
-      {/* Parent selection explanation */}
-      <section
-        style={{
-          alignItems: 'flex-start',
-          background: '#eff6ff',
-          border: '1px solid #bfdbfe',
-          borderRadius: 16,
-          display: 'flex',
-          gap: 14,
-          marginBottom: 18,
-          padding: '18px 20px',
-        }}
-      >
-        <div
-          aria-hidden="true"
-          style={{
-            alignItems: 'center',
-            background: '#ffffff',
-            borderRadius: 999,
-            color: '#2563eb',
-            display: 'flex',
-            flexShrink: 0,
-            fontSize: 18,
-            fontWeight: 700,
-            height: 34,
-            justifyContent: 'center',
-            width: 34,
-          }}
-        >
-          i
-        </div>
+            <section className="study-setup-v2-slider-area" aria-label="Study mode preference">
+              <div className="study-setup-v2-slider-wrap">
+                <div className="study-setup-v2-slider-track" aria-hidden="true">
+                  <span style={{ width: `${studyBalance}%` }} />
+                </div>
+                <input
+                  aria-label="Study mode balance"
+                  className="study-setup-v2-slider"
+                  max="100"
+                  min="0"
+                  type="range"
+                  value={studyBalance}
+                  onChange={(event) => setStudyBalance(Number(event.target.value))}
+                />
+              </div>
 
-        <div>
-          <strong>Selecting a parent includes all children.</strong>
-          <p className="muted" style={{ margin: '4px 0 0' }}>
-            Build your deck from topic branches. You can customize individual concepts when needed.
-          </p>
-        </div>
-      </section>
-
-      {/* Individual concept customization */}
-      <section
-        style={{
-          background: '#ffffff',
-          border: '1px solid #dbe3ee',
-          borderRadius: 18,
-          boxShadow: '0 10px 30px rgba(15, 23, 42, 0.07)',
-          marginBottom: 18,
-          padding: 24,
-        }}
-      >
-        <h3 style={{ margin: '0 0 5px' }}>Customize Selected Topic</h3>
-
-        {focusedNode ? (
-          <>
-            <p className="muted" style={{ marginTop: 0 }}>
-              {getNodePath(focusedNode, nodesById)} · concepts directly placed here
-            </p>
-
-            {focusedConcepts.length === 0 ? (
-              <p className="muted">
-                No concepts are directly placed in this topic. Selecting the branch
-                still includes concepts in descendant topics.
-              </p>
-            ) : (
-              <div
-                style={{
-                  display: 'grid',
-                  gap: 10,
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-                }}
-              >
-                {focusedConcepts.map((concept) => (
-                  <label
-                    key={concept.id}
-                    style={{
-                      alignItems: 'flex-start',
-                      border: '1px solid #e2e8f0',
-                      borderRadius: 12,
-                      display: 'flex',
-                      gap: 10,
-                      padding: 14,
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={effectiveConceptSelected(concept.id)}
-                      onChange={(event) =>
-                        setConceptSelection(concept.id, event.target.checked)
-                      }
-                    />
-
-                    <span>
-                      <strong>{concept.name}</strong>
-                      <br />
-
-                      <span className="muted" style={{ fontSize: 12 }}>
-                        {concept.concept_type || 'Concept'} ·{' '}
-                        {questionCounts[concept.id] || 0} published questions
-                      </span>
-                    </span>
-                  </label>
+              <div className="study-setup-v2-ticks" aria-hidden="true">
+                {Array.from({ length: 9 }).map((_, index) => (
+                  <span key={index} />
                 ))}
               </div>
-            )}
-          </>
-        ) : (
-          <p className="muted">
-            Choose a topic if you want to customize individual concepts.
-          </p>
-        )}
-      </section>
 
-      {/* Actions */}
-      <section
-        style={{
-          alignItems: 'center',
-          background: '#ffffff',
-          border: '1px solid #dbe3ee',
-          borderRadius: 18,
-          boxShadow: '0 10px 30px rgba(15, 23, 42, 0.07)',
-          display: 'flex',
-          gap: 14,
-          justifyContent: 'space-between',
-          padding: 20,
-        }}
-      >
-        <button
-          className="btn ghost"
-          type="button"
-          onClick={clearDeck}
-          disabled={isSaving}
-        >
-          Clear All
-        </button>
+              <div className="study-setup-v2-labels">
+                <span>Learn</span>
+                <strong>Study</strong>
+                <span>Cram</span>
+              </div>
+            </section>
 
-        <div
-          style={{
-            display: 'flex',
-            gap: 12,
-          }}
-        >
-          <button
-            className="btn ghost"
-            type="button"
-            onClick={saveAndReturnToDashboard}
-            disabled={isSaving}
-          >
-            {isSaving ? 'Saving...' : 'Save / Update Deck'}
-          </button>
+            <div className="study-setup-v2-rule" aria-hidden="true" />
 
-          <button
-            className="btn primary"
-            type="button"
-            onClick={openStudyMode}
-            style={{
-              fontSize: 16,
-              minWidth: 150,
-              padding: '12px 20px',
-            }}
-           >
-              ▶ START STUDY
-          </button>
-        </div>
-      </section>
+            <section className="study-setup-v2-info">
+              <span className="study-setup-v2-info-icon" aria-hidden="true">
+                i
+              </span>
+              <div>
+                <h2>How it works</h2>
+                <p>
+                  Questions are selected based on your chosen balance, your progress,
+                  and what will help you learn most effectively right now.
+                </p>
+              </div>
+            </section>
 
-      {message && <p className="muted">{message}</p>}
-    </div>
-  );
-}
+            <div className="study-setup-v2-footer-actions">
+              <label className="study-setup-v2-cram">
+                <input
+                  checked={isSetupCramMode}
+                  type="checkbox"
+                  onChange={() => setIsSetupCramMode((current) => !current)}
+                />
+                <span>
+                  <strong>Cram Mode</strong>
+                  <small>Maximize number of questions. Less variety, more volume.</small>
+                </span>
+              </label>
+
+              <button className="study-setup-v2-start" type="button" onClick={openStudyMode}>
+                START STUDY
+              </button>
+            </div>
+          </section>
+        </main>
+
+        <style jsx global>{`
+          .study-setup-v2-header {
+            align-items: center;
+            background: linear-gradient(180deg, #061846, #041238);
+            color: #ffffff;
+            display: flex;
+            gap: 28px;
+            justify-content: space-between;
+            min-height: 126px;
+            padding: 34px 36px 28px;
+          }
+
+          .study-setup-v2-brand {
+            color: #ffffff;
+            display: block;
+            min-width: 500px;
+          }
+
+          .study-setup-v2-brand strong {
+            display: block;
+            font-family: Georgia, "Times New Roman", Times, serif;
+            font-size: 42px;
+            font-weight: 900;
+            letter-spacing: -0.055em;
+            line-height: 0.95;
+          }
+
+          .study-setup-v2-brand span {
+            color: #edf4ff;
+            display: block;
+            font-size: 16px;
+            font-weight: 500;
+            letter-spacing: -0.02em;
+            margin-top: 10px;
+          }
+
+          .study-setup-v2-nav {
+            align-items: center;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: flex-end;
+          }
+
+          .study-setup-v2-nav-item {
+            align-items: center;
+            background: rgba(6, 24, 70, 0.72);
+            border: 1px solid rgba(214, 224, 246, 0.36);
+            border-radius: 9px;
+            color: #ffffff;
+            display: inline-flex;
+            font: inherit;
+            font-size: 16px;
+            font-weight: 800;
+            gap: 9px;
+            min-height: 58px;
+            padding: 13px 16px;
+            white-space: nowrap;
+          }
+
+          .study-setup-v2-nav-item:disabled {
+            cursor: default;
+            opacity: 1;
+          }
+
+          .study-setup-v2-nav-active,
+          .study-setup-v2-nav-account {
+            background: #155ee8;
+            border-color: #2b71ff;
+            box-shadow: 0 12px 26px rgba(21, 94, 232, 0.25);
+          }
+
+          .study-setup-v2-nav-icon {
+            display: inline-flex;
+            height: 23px;
+            width: 23px;
+          }
+
+          .study-setup-v2-nav-icon svg {
+            fill: none;
+            height: 100%;
+            stroke: currentColor;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            stroke-width: 2.1;
+            width: 100%;
+          }
+
+          .study-setup-v2-page {
+            background: #f8fafc;
+            display: flex;
+            justify-content: center;
+            min-height: calc(100vh - 126px);
+            padding: 52px 40px 64px;
+          }
+
+          .study-setup-v2-card {
+            background: #ffffff;
+            border: 1px solid #e5eaf2;
+            border-radius: 14px;
+            box-shadow: 0 18px 36px rgba(15, 23, 42, 0.14);
+            max-width: 1228px;
+            padding: 36px 62px 72px;
+            width: 100%;
+          }
+
+          .study-setup-v2-title-block {
+            text-align: center;
+          }
+
+          .study-setup-v2-title-block h1 {
+            color: #08143b;
+            font-family: Georgia, "Times New Roman", Times, serif;
+            font-size: 50px;
+            font-weight: 900;
+            letter-spacing: -0.055em;
+            line-height: 1;
+            margin: 0 0 18px;
+          }
+
+          .study-setup-v2-title-block p {
+            color: #384463;
+            font-size: 21px;
+            letter-spacing: -0.02em;
+            margin: 0;
+          }
+
+          .study-setup-v2-copy-row {
+            display: grid;
+            gap: 28px;
+            grid-template-columns: 1fr 1fr;
+            margin: 58px 0 44px;
+          }
+
+          .study-setup-v2-copy-row div:last-child {
+            justify-self: end;
+            max-width: 370px;
+          }
+
+          .study-setup-v2-copy-row h2 {
+            color: #0955e8;
+            font-size: 23px;
+            font-weight: 900;
+            letter-spacing: -0.045em;
+            line-height: 1.1;
+            margin: 0 0 12px;
+          }
+
+          .study-setup-v2-copy-row p {
+            color: #2c3654;
+            font-size: 19px;
+            line-height: 1.45;
+            margin: 0;
+            max-width: 310px;
+          }
+
+          .study-setup-v2-slider-area {
+            position: relative;
+          }
+
+          .study-setup-v2-slider-wrap {
+            height: 58px;
+            position: relative;
+          }
+
+          .study-setup-v2-slider-track {
+            background: #e5e8ee;
+            border-radius: 999px;
+            box-shadow: inset 0 1px 3px rgba(15, 23, 42, 0.14);
+            height: 14px;
+            left: 0;
+            overflow: hidden;
+            position: absolute;
+            right: 0;
+            top: 22px;
+          }
+
+          .study-setup-v2-slider-track span {
+            background: #0f5ee8;
+            border-radius: inherit;
+            display: block;
+            height: 100%;
+          }
+
+          .study-setup-v2-slider {
+            appearance: none;
+            background: transparent;
+            border: 0;
+            height: 58px;
+            margin: 0;
+            padding: 0;
+            position: relative;
+            width: 100%;
+            z-index: 2;
+          }
+
+          .study-setup-v2-slider::-webkit-slider-runnable-track {
+            background: transparent;
+            border: 0;
+            height: 14px;
+          }
+
+          .study-setup-v2-slider::-moz-range-track {
+            background: transparent;
+            border: 0;
+            height: 14px;
+          }
+
+          .study-setup-v2-slider::-webkit-slider-thumb {
+            appearance: none;
+            background: #ffffff;
+            border: 1px solid #e5e7eb;
+            border-radius: 999px;
+            box-shadow: 0 8px 18px rgba(15, 23, 42, 0.18);
+            height: 58px;
+            margin-top: -22px;
+            width: 58px;
+          }
+
+          .study-setup-v2-slider::-moz-range-thumb {
+            background: #ffffff;
+            border: 1px solid #e5e7eb;
+            border-radius: 999px;
+            box-shadow: 0 8px 18px rgba(15, 23, 42, 0.18);
+            height: 58px;
+            width: 58px;
+          }
+
+          .study-setup-v2-ticks {
+            display: grid;
+            grid-template-columns: repeat(9, 1fr);
+            margin: 0 84px;
+          }
+
+          .study-setup-v2-ticks span {
+            background: #c7ced8;
+            height: 13px;
+            justify-self: center;
+            width: 1px;
+          }
+
+          .study-setup-v2-labels {
+            color: #161f38;
+            display: flex;
+            font-size: 18px;
+            justify-content: space-between;
+            margin-top: 24px;
+            padding: 0 24px;
+          }
+
+          .study-setup-v2-labels strong {
+            font-weight: 900;
+          }
+
+          .study-setup-v2-rule {
+            border-top: 1px solid #d9dee8;
+            margin: 64px 0 54px;
+          }
+
+          .study-setup-v2-info {
+            align-items: flex-start;
+            background: #eff6ff;
+            border-radius: 10px;
+            display: flex;
+            gap: 26px;
+            margin: 0 14px;
+            padding: 34px 34px 32px;
+          }
+
+          .study-setup-v2-info-icon {
+            align-items: center;
+            border: 2px solid #0f5ee8;
+            border-radius: 999px;
+            color: #0f5ee8;
+            display: inline-flex;
+            flex: 0 0 30px;
+            font-family: Georgia, "Times New Roman", Times, serif;
+            font-size: 22px;
+            font-weight: 900;
+            height: 30px;
+            justify-content: center;
+            line-height: 1;
+            margin-top: 4px;
+            width: 30px;
+          }
+
+          .study-setup-v2-info h2 {
+            color: #0955e8;
+            font-size: 23px;
+            font-weight: 900;
+            letter-spacing: -0.04em;
+            margin: 0 0 12px;
+          }
+
+          .study-setup-v2-info p {
+            color: #2d3654;
+            font-size: 18px;
+            line-height: 1.45;
+            margin: 0;
+            max-width: 720px;
+          }
+
+          .study-setup-v2-footer-actions {
+            align-items: center;
+            display: flex;
+            gap: 28px;
+            justify-content: center;
+            margin: 50px auto 0;
+          }
+
+          .study-setup-v2-cram {
+            align-items: flex-start;
+            color: #101a36;
+            display: flex;
+            gap: 14px;
+            margin: 0;
+            max-width: 320px;
+          }
+
+          .study-setup-v2-cram input {
+            accent-color: #0f5ee8;
+            height: 24px;
+            margin-top: 3px;
+            width: 24px;
+          }
+
+          .study-setup-v2-cram strong {
+            display: block;
+            font-size: 22px;
+            font-weight: 900;
+            letter-spacing: -0.035em;
+            line-height: 1.1;
+            margin-bottom: 10px;
+          }
+
+          .study-setup-v2-cram small {
+            color: #2f3a59;
+            display: block;
+            font-size: 16px;
+            line-height: 1.45;
+          }
+
+          .study-setup-v2-start {
+            background: #155ee8;
+            border: 1px solid #0f4fc7;
+            border-radius: 9px;
+            box-shadow: 0 12px 26px rgba(21, 94, 232, 0.22);
+            color: #ffffff;
+            font: inherit;
+            font-size: 18px;
+            font-weight: 900;
+            min-height: 54px;
+            padding: 14px 24px;
+          }
+
+          @media (max-width: 1100px) {
+            .study-setup-v2-header {
+              align-items: flex-start;
+              flex-direction: column;
+              min-height: auto;
+            }
+
+            .study-setup-v2-brand {
+              min-width: 0;
+            }
+
+            .study-setup-v2-nav {
+              justify-content: flex-start;
+            }
+          }
+
+          @media (max-width: 900px) {
+            .study-setup-v2-page {
+              min-height: auto;
+              padding: 28px 18px 42px;
+            }
+
+            .study-setup-v2-card {
+              padding: 30px 24px 42px;
+            }
+
+            .study-setup-v2-title-block h1 {
+              font-size: 40px;
+            }
+
+            .study-setup-v2-copy-row {
+              grid-template-columns: 1fr;
+            }
+
+            .study-setup-v2-copy-row div:last-child {
+              justify-self: start;
+            }
+
+            .study-setup-v2-labels {
+              padding: 0;
+            }
+
+            .study-setup-v2-footer-actions {
+              align-items: stretch;
+              flex-direction: column;
+            }
+          }
+        `}</style>
+      </>
+    );
+  }
 
 if (mode === 'study') {
+  function StudyCardActions() {
+    return (
+      <div className="study-v2-card-actions" aria-label="Study card controls">
+        <button type="button" onClick={() => setMode('setup')}>
+          <span aria-hidden="true">←</span>
+          Go Back
+        </button>
+        <button aria-label="Close study mode" type="button" onClick={() => setMode('dashboard')}>
+          ×
+        </button>
+      </div>
+    );
+  }
+
   return (
-    <div
-      id="study-mode"
-      style={{
-        margin: '0 auto',
-        maxWidth: 820,
-        width: '100%',
-      }}
-    >
-      {/* Study header */}
-      <section
-        style={{
-          alignItems: 'center',
-          background: '#ffffff',
-          border: '1px solid #dbe3ee',
-          borderRadius: 18,
-          boxShadow: '0 10px 30px rgba(15, 23, 42, 0.07)',
-          display: 'flex',
-          justifyContent: 'space-between',
-          marginBottom: 18,
-          padding: '18px 22px',
-        }}
-      >
-        <div>
-          <p
-            style={{
-              color: '#64748b',
-              fontSize: 12,
-              fontWeight: 700,
-              letterSpacing: '0.08em',
-              margin: '0 0 4px',
-              textTransform: 'uppercase',
-            }}
+    <>
+      {renderLearnerHeader('study-v2')}
+      <main className="study-v2-page">
+        <section className="study-v2-shell" aria-label="Study Mode">
+          <article
+            className="study-v2-question-card"
+            aria-label="Question card"
+            onClick={() => setIsAnswerVisible(true)}
           >
-            Socrates
-          </p>
+            <div className="study-v2-card-topline">
+              <StudyProgressBar />
+              <StudyCardActions />
+            </div>
 
-          <h2 style={{ margin: 0 }}>Study Mode</h2>
-        </div>
+            <h1>
+              What is the primary purpose
+              <br />
+              of isolating a patient with
+              <br />
+              suspected MRSA?
+            </h1>
 
-        <button
-          className="btn ghost"
-          type="button"
-          onClick={() => setMode('dashboard')}
-        >
-          × Exit Study
-        </button>
-      </section>
+            <p>Tap to reveal answer</p>
+          </article>
 
-      {/* Progress */}
-      <section
-        style={{
-          background: '#ffffff',
-          border: '1px solid #dbe3ee',
-          borderRadius: 18,
-          boxShadow: '0 10px 30px rgba(15, 23, 42, 0.07)',
-          marginBottom: 18,
-          padding: 22,
-        }}
-      >
-        <div
-          style={{
-            alignItems: 'center',
-            display: 'flex',
-            justifyContent: 'space-between',
-            marginBottom: 10,
-          }}
-        >
-          <strong>Card 1 of 40</strong>
-          <span className="muted">2%</span>
-        </div>
+          {isAnswerVisible && (
+            <article className="study-v2-answer-card" aria-label="Answer card">
+              <div className="study-v2-card-topline">
+                <StudyProgressBar />
+                <StudyCardActions />
+              </div>
 
-        <div
-          style={{
-            background: '#e2e8f0',
-            borderRadius: 999,
-            height: 8,
-            overflow: 'hidden',
-            width: '100%',
-          }}
-        >
-          <div
-            style={{
-              background: '#2563eb',
-              height: '100%',
-              width: '2%',
-            }}
-          />
-        </div>
-      </section>
+              <div className="study-v2-answer-body">
+                <div className="study-v2-answer-lines">
+                  <div className="study-v2-rule" aria-hidden="true" />
+                  <p>Answer</p>
+                  <p>Answer</p>
+                  <p>Answer</p>
+                  <div className="study-v2-rule" aria-hidden="true" />
+                  <p>Explanation</p>
+                </div>
 
-      {/* Question card */}
-      <section
-        style={{
-          background: '#ffffff',
-          border: '1px solid #cbd5e1',
-          borderRadius: 20,
-          boxShadow: '0 12px 34px rgba(15, 23, 42, 0.08)',
-          marginBottom: 18,
-          minHeight: 320,
-          padding: 34,
-        }}
-      >
-        <p
-          style={{
-            color: '#64748b',
-            fontSize: 12,
-            fontWeight: 700,
-            letterSpacing: '0.08em',
-            margin: '0 0 18px',
-            textTransform: 'uppercase',
-          }}
-        >
-          Question
-        </p>
+                <div className="study-v2-scroll-indicator" aria-hidden="true">
+                  <span />
+                </div>
+              </div>
 
-        <h2
-          style={{
-            fontSize: 28,
-            lineHeight: 1.35,
-            margin: '0 0 80px',
-          }}
-        >
-          What is the most common cause of acute decompensated heart failure in adults?
-        </h2>
+              <div className="study-v2-feedback-row">
+                {[
+                  ['up', 'Thumbs Up'],
+                  ['more', 'More'],
+                  ['down', 'Thumbs Down'],
+                ].map(([type, label]) => (
+                  <button
+                    className={studyFeedback === type ? 'study-v2-feedback-active' : ''}
+                    key={type}
+                    type="button"
+                    onClick={() => {
+                      setStudyFeedback(type as StudyFeedback);
+                      setMode('feedback');
+                    }}
+                  >
+                    <StudyFeedbackIcon type={type as 'up' | 'more' | 'down'} />
+                    <span>{label}</span>
+                  </button>
+                ))}
+              </div>
+            </article>
+          )}
 
-        <button
-          className="btn ghost"
-          type="button"
-          style={{
-            display: 'block',
-            fontSize: 16,
-            margin: '0 auto',
-            padding: '12px 18px',
-          }}
-        >
-          👆 Tap to reveal answer
-        </button>
-      </section>
+          <label className="study-v2-cram">
+            <input
+              checked={isStudyCramMode}
+              type="checkbox"
+              onChange={() => setIsStudyCramMode((current) => !current)}
+            />
+            <span>Cram Mode</span>
+          </label>
+        </section>
+      </main>
 
-      {/* Answer preview */}
-      <section
-        style={{
-          background: '#ffffff',
-          border: '1px solid #dbe3ee',
-          borderRadius: 18,
-          boxShadow: '0 10px 30px rgba(15, 23, 42, 0.07)',
-          marginBottom: 18,
-          padding: 26,
-        }}
-      >
-        <p
-          style={{
-            color: '#2563eb',
-            fontSize: 14,
-            fontWeight: 800,
-            margin: '0 0 8px',
-            textTransform: 'uppercase',
-          }}
-        >
-          Answer
-        </p>
+      <style jsx global>{`
+        .study-v2-header {
+          align-items: center;
+          background: linear-gradient(180deg, #061846, #041238);
+          color: #ffffff;
+          display: flex;
+          gap: 28px;
+          justify-content: space-between;
+          min-height: 107px;
+          padding: 26px 22px 24px;
+        }
 
-        <p
-          style={{
-            fontSize: 18,
-            lineHeight: 1.6,
-            margin: '0 0 22px',
-          }}
-        >
-          Non-adherence to medications and/or dietary restrictions.
-        </p>
+        .study-v2-brand {
+          color: #ffffff;
+          display: block;
+          min-width: 320px;
+        }
 
-        <hr
-          style={{
-            border: 0,
-            borderTop: '1px solid #e2e8f0',
-            margin: '0 0 22px',
-          }}
-        />
+        .study-v2-brand strong {
+          display: block;
+          font-family: Georgia, "Times New Roman", Times, serif;
+          font-size: 40px;
+          font-weight: 900;
+          letter-spacing: -0.055em;
+          line-height: 0.95;
+        }
 
-        <p
-          style={{
-            color: '#2563eb',
-            fontSize: 14,
-            fontWeight: 800,
-            margin: '0 0 8px',
-            textTransform: 'uppercase',
-          }}
-        >
-          Explanation
-        </p>
+        .study-v2-brand span {
+          color: #edf4ff;
+          display: block;
+          font-size: 14px;
+          font-weight: 500;
+          letter-spacing: -0.03em;
+          margin-top: 9px;
+        }
 
-        <p
-          style={{
-            lineHeight: 1.7,
-            margin: '0 0 22px',
-          }}
-        >
-          Dietary indiscretion and medication non-compliance are leading precipitants
-          of acute decompensated heart failure.
-        </p>
+        .study-v2-nav {
+          align-items: center;
+          display: flex;
+          flex-wrap: wrap;
+          gap: 10px;
+          justify-content: flex-end;
+        }
 
-        <button
-          className="btn ghost"
-          type="button"
-        >
-          📖 Review Concept
-        </button>
-      </section>
+        .study-v2-nav-item {
+          align-items: center;
+          background: rgba(6, 24, 70, 0.72);
+          border: 1px solid rgba(214, 224, 246, 0.36);
+          border-radius: 7px;
+          color: #ffffff;
+          display: inline-flex;
+          font: inherit;
+          font-size: 14px;
+          font-weight: 800;
+          gap: 8px;
+          min-height: 54px;
+          padding: 13px 14px;
+          white-space: nowrap;
+        }
 
-      {/* Feedback */}
-      <section
-        style={{
-          display: 'grid',
-          gap: 14,
-          gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
-          marginBottom: 18,
-        }}
-      >
-        <button
-          type="button"
-          onClick={() => setMode('feedback')}
-          style={{
-            background: '#ffffff',
-            border: '1px solid #bbf7d0',
-            borderRadius: 18,
-            cursor: 'pointer',
-            fontSize: 16,
-            fontWeight: 700,
-            minHeight: 110,
-            padding: 18,
-          }}
-        >
-          <div style={{ fontSize: 34, marginBottom: 8 }}>👍</div>
-          Got it
-        </button>
+        .study-v2-nav-item:disabled {
+          cursor: default;
+          opacity: 1;
+        }
 
-        <button
-          type="button"
-          onClick={() => setMode('feedback')}
-          style={{
-            background: '#ffffff',
-            border: '1px solid #fecaca',
-            borderRadius: 18,
-            cursor: 'pointer',
-            fontSize: 16,
-            fontWeight: 700,
-            minHeight: 110,
-            padding: 18,
-          }}
-        >
-          <div style={{ fontSize: 34, marginBottom: 8 }}>👎</div>
-          Didn't get it
-        </button>
+        .study-v2-nav-active,
+        .study-v2-nav-account {
+          background: #155ee8;
+          border-color: #2b71ff;
+          box-shadow: 0 12px 26px rgba(21, 94, 232, 0.25);
+        }
 
-        <button
-          type="button"
-           onClick={() => setMode('feedback')}
-           style={{
-            background: '#ffffff',
-            border: '1px solid #dbe3ee',
-            borderRadius: 18,
-            cursor: 'pointer',
-            fontSize: 16,
-            fontWeight: 700,
-            minHeight: 110,
-            padding: 18,
-          }}
-        >
-          <div style={{ fontSize: 34, marginBottom: 8 }}>•••</div>
-          More
-        </button>
-      </section>
+        .study-v2-nav-icon {
+          display: inline-flex;
+          height: 22px;
+          width: 22px;
+        }
 
-      {/* Minimal distraction note */}
-      <section
-        style={{
-          background: '#eff6ff',
-          border: '1px solid #bfdbfe',
-          borderRadius: 16,
-          padding: '16px 18px',
-          textAlign: 'center',
-        }}
-      >
-        <span style={{ marginRight: 8 }}>💡</span>
-        <strong>Minimal distractions</strong>
-        <span className="muted"> — focus on one card at a time.</span>
-      </section>
-    </div>
+        .study-v2-nav-icon svg {
+          fill: none;
+          height: 100%;
+          stroke: currentColor;
+          stroke-linecap: round;
+          stroke-linejoin: round;
+          stroke-width: 2.1;
+          width: 100%;
+        }
+
+        .study-v2-page {
+          background: #f8fafc;
+          min-height: calc(100vh - 107px);
+          padding: 50px 24px 58px;
+        }
+
+        .study-v2-shell {
+          background: #ffffff;
+          border: 1px solid #e5eaf2;
+          border-radius: 8px;
+          box-shadow: 0 18px 36px rgba(15, 23, 42, 0.14);
+          margin: 0 auto;
+          max-width: 906px;
+          padding: 48px 28px 28px;
+        }
+
+        .study-v2-question-card,
+        .study-v2-answer-card {
+          background: #ffffff;
+          border: 1px solid #dbe2ee;
+          border-radius: 8px;
+          overflow: hidden;
+        }
+
+        .study-v2-question-card {
+          cursor: pointer;
+          min-height: 540px;
+          padding: 13px 22px 90px;
+        }
+
+        .study-v2-answer-card {
+          margin-top: 24px;
+          min-height: 620px;
+          padding-top: 13px;
+        }
+
+        .study-v2-card-topline {
+          align-items: center;
+          display: grid;
+          gap: 38px;
+          grid-template-columns: minmax(0, 1fr) auto;
+        }
+
+        .study-v2-progress {
+          background: #e5e8ee;
+          border-radius: 999px;
+          height: 13px;
+          overflow: hidden;
+        }
+
+        .study-v2-progress span {
+          background: #0f5ee8;
+          border-radius: inherit;
+          display: block;
+          height: 100%;
+          width: 56%;
+        }
+
+        .study-v2-card-actions {
+          align-items: center;
+          color: #06133c;
+          display: flex;
+          gap: 28px;
+        }
+
+        .study-v2-card-actions button {
+          align-items: center;
+          background: transparent;
+          border: 0;
+          color: inherit;
+          display: inline-flex;
+          font: inherit;
+          font-size: 23px;
+          font-weight: 650;
+          gap: 10px;
+          padding: 0;
+        }
+
+        .study-v2-card-actions button:last-child {
+          font-size: 48px;
+          font-weight: 300;
+          line-height: 0.8;
+        }
+
+        .study-v2-question-card h1 {
+          color: #08143b;
+          font-family: Georgia, "Times New Roman", Times, serif;
+          font-size: 43px;
+          font-weight: 650;
+          letter-spacing: -0.035em;
+          line-height: 1.45;
+          margin: 108px auto 0;
+          max-width: 620px;
+          text-align: center;
+        }
+
+        .study-v2-question-card p {
+          color: #77797e;
+          font-size: 25px;
+          font-weight: 650;
+          margin: 84px 0 0;
+          text-align: center;
+        }
+
+        .study-v2-answer-card .study-v2-card-topline {
+          padding: 0 22px;
+        }
+
+        .study-v2-answer-body {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) 84px;
+          min-height: 398px;
+          padding: 52px 0 0;
+        }
+
+        .study-v2-answer-lines {
+          color: #08143b;
+          font-family: Georgia, "Times New Roman", Times, serif;
+          font-size: 31px;
+          font-weight: 500;
+          justify-self: center;
+          letter-spacing: -0.035em;
+          line-height: 1.12;
+          max-width: 330px;
+          text-align: center;
+          width: 100%;
+        }
+
+        .study-v2-answer-lines p {
+          margin: 0 0 26px;
+        }
+
+        .study-v2-answer-lines p:nth-of-type(4) {
+          margin-top: 42px;
+        }
+
+        .study-v2-rule {
+          border-top: 2px solid #cfd3da;
+          margin: 0 0 30px;
+          width: 100%;
+        }
+
+        .study-v2-answer-lines .study-v2-rule:last-of-type {
+          margin: 10px 0 42px;
+        }
+
+        .study-v2-scroll-indicator {
+          align-self: center;
+          background: #c9ccd2;
+          border-radius: 999px;
+          height: 300px;
+          justify-self: center;
+          position: relative;
+          width: 6px;
+        }
+
+        .study-v2-scroll-indicator::before {
+          border: solid #c9ccd2;
+          border-width: 0 4px 4px 0;
+          content: '';
+          height: 11px;
+          left: -5px;
+          position: absolute;
+          top: -2px;
+          transform: rotate(-135deg);
+          width: 11px;
+        }
+
+        .study-v2-scroll-indicator::after {
+          background: #0f5ee8;
+          border-radius: 999px;
+          bottom: -3px;
+          content: '';
+          height: 15px;
+          left: -4px;
+          position: absolute;
+          width: 15px;
+        }
+
+        .study-v2-scroll-indicator span {
+          background: #0f5ee8;
+          border-radius: 999px;
+          display: block;
+          height: 108px;
+          margin-top: 43px;
+          width: 100%;
+        }
+
+        .study-v2-feedback-row {
+          border-top: 1px solid #dbe2ee;
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          min-height: 174px;
+        }
+
+        .study-v2-feedback-row button {
+          align-items: center;
+          background: transparent;
+          border: 0;
+          border-right: 1px solid #dbe2ee;
+          color: #08143b;
+          display: flex;
+          flex-direction: column;
+          font: inherit;
+          font-family: Georgia, "Times New Roman", Times, serif;
+          font-size: 24px;
+          gap: 18px;
+          justify-content: center;
+        }
+
+        .study-v2-feedback-row button:last-child {
+          border-right: 0;
+        }
+
+        .study-v2-feedback-active {
+          background: #eff6ff !important;
+        }
+
+        .study-v2-feedback-svg {
+          fill: none;
+          height: 58px;
+          stroke: #0f5ee8;
+          stroke-linecap: round;
+          stroke-linejoin: round;
+          stroke-width: 3;
+          width: 58px;
+        }
+
+        .study-v2-more-dots {
+          color: #0f5ee8;
+          font-family: system-ui, sans-serif;
+          font-size: 45px;
+          font-weight: 900;
+          letter-spacing: 0.12em;
+          line-height: 0.8;
+        }
+
+        .study-v2-cram {
+          align-items: center;
+          color: #08143b;
+          display: flex;
+          font-size: 24px;
+          gap: 16px;
+          justify-content: flex-end;
+          margin: 34px 16px 0 0;
+        }
+
+        .study-v2-cram input {
+          accent-color: #0f5ee8;
+          height: 25px;
+          width: 25px;
+        }
+
+        @media (max-width: 900px) {
+          .study-v2-header {
+            align-items: flex-start;
+            flex-direction: column;
+          }
+
+          .study-v2-nav {
+            justify-content: flex-start;
+          }
+
+          .study-v2-page {
+            padding: 24px 14px 36px;
+          }
+
+          .study-v2-shell {
+            padding: 24px 14px;
+          }
+
+          .study-v2-question-card h1 {
+            font-size: 33px;
+          }
+
+          .study-v2-card-topline {
+            gap: 18px;
+            grid-template-columns: 1fr;
+          }
+
+          .study-v2-card-actions {
+            justify-content: flex-end;
+          }
+
+          .study-v2-answer-body {
+            grid-template-columns: 1fr;
+          }
+
+          .study-v2-scroll-indicator {
+            display: none;
+          }
+
+          .study-v2-feedback-row {
+            grid-template-columns: 1fr;
+          }
+
+          .study-v2-feedback-row button {
+            border-bottom: 1px solid #dbe2ee;
+            border-right: 0;
+            min-height: 140px;
+          }
+        }
+      `}</style>
+    </>
   );
 }
 
@@ -1923,479 +2567,534 @@ if (mode === 'feedback') {
   );
 }
   return (
-  <div
-    id="deck-dashboard"
-    style={{
-      display: 'flex',
-      flexDirection: 'column',
-      gap: 22,
-      width: '100%',
-    }}
-  >
-    {/* Welcome + activity summary */}
-    <section
-      style={{
-        background: '#ffffff',
-        border: '1px solid #dbe3ee',
-        borderRadius: 18,
-        boxShadow: '0 10px 30px rgba(15, 23, 42, 0.07)',
-        padding: 24,
-      }}
-    >
-      <div
-        style={{
-          alignItems: 'center',
-          display: 'flex',
-          justifyContent: 'space-between',
-          marginBottom: 20,
-        }}
-      >
-        <div>
-          <p
-            className="muted"
-            style={{
-              fontSize: 13,
-              margin: '0 0 4px',
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-            }}
-          >
-            {activeLibrary.name}
-          </p>
+    <>
+      {renderLearnerHeader('home-v2')}
+      <main className="home-v2-shell">
+        <aside className="home-v2-rail" aria-label="Deck navigation">
+          <div className="home-v2-rail-list">
+            {homeRailItems.map((item) => (
+              <button
+                className="home-v2-rail-card"
+                key={item.label}
+                type="button"
+                onClick={item.label === 'Set Up Deck' ? openSetupMode : undefined}
+              >
+                <RailIcon icon={item.icon} />
+                <span>{item.label}</span>
+              </button>
+            ))}
+          </div>
+          <button className="home-v2-logout" type="button" onClick={handleLogout}>
+            <RailIcon icon="edit" />
+            <span>Log Out</span>
+          </button>
+        </aside>
 
-          <h2 style={{ margin: 0 }}>Welcome back, {displayName}!</h2>
-        </div>
-
-        <button
-          className="btn ghost"
-          type="button"
-          aria-label="Settings"
-          title="Settings"
-          style={{
-            borderRadius: 12,
-            fontSize: 20,
-            minHeight: 42,
-            minWidth: 42,
-            padding: 8,
-          }}
-        >
-          ⚙
-        </button>
-      </div>
-
-      <div
-  style={{
-    display: 'flex',
-    justifyContent: 'flex-end',
-    marginBottom: 16,
-  }}
->
-  <div
-    style={{
-      display: 'flex',
-      gap: 16,
-      alignItems: 'center',
-      flexWrap: 'wrap',
-    }}
-  >
-    {['Learn', 'Study', 'Custom'].map((modeLabel) => (
-      <label
-        key={modeLabel}
-        style={{
-          alignItems: 'center',
-          display: 'flex',
-          gap: 7,
-          fontSize: 14,
-          fontWeight: 600,
-          color: '#334155',
-        }}
-      >
-        <input
-          type="radio"
-          name="study-mode-preview"
-          value={modeLabel}
-          defaultChecked={modeLabel === 'Study'}
-        />
-        {modeLabel}
-      </label>
-    ))}
-  </div>
-</div>
-      <div
-        style={{
-          display: 'grid',
-          gap: 12,
-          gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
-        }}
-      >
-        <div
-          className="card"
-          style={{
-            border: '1px solid #e2e8f0',
-            borderRadius: 14,
-            padding: 16,
-            textAlign: 'center',
-          }}
-        >
-          <div style={{ fontSize: 22, marginBottom: 6 }}>🔥</div>
-          <strong style={{ display: 'block', fontSize: 22 }}>0</strong>
-          <span className="muted" style={{ fontSize: 13 }}>
-            Day Streak
-          </span>
-        </div>
-
-        <div
-          className="card"
-          style={{
-            border: '1px solid #e2e8f0',
-            borderRadius: 14,
-            padding: 16,
-            textAlign: 'center',
-          }}
-        >
-          <div style={{ fontSize: 22, marginBottom: 6 }}>▣</div>
-          <strong style={{ display: 'block', fontSize: 18 }}>Not yet</strong>
-          <span className="muted" style={{ fontSize: 13 }}>
-            Last Study
-          </span>
-        </div>
-
-        <div
-          className="card"
-          style={{
-            border: '1px solid #e2e8f0',
-            borderRadius: 14,
-            padding: 16,
-            textAlign: 'center',
-          }}
-        >
-          <div style={{ fontSize: 22, marginBottom: 6 }}>◷</div>
-          <strong style={{ display: 'block', fontSize: 22 }}>0m</strong>
-          <span className="muted" style={{ fontSize: 13 }}>
-            This Week
-          </span>
-        </div>
-      </div>
-    </section>
-
-    {/* Current Deck */}
-    <section
-      style={{
-        background: '#ffffff',
-        border: '1px solid #dbe3ee',
-        borderRadius: 18,
-        boxShadow: '0 10px 30px rgba(15, 23, 42, 0.07)',
-        padding: 24,
-      }}
-    >
-      <div
-        style={{
-          alignItems: 'center',
-          display: 'flex',
-          justifyContent: 'space-between',
-          marginBottom: 18,
-        }}
-      >
-        <div>
-          <h2 style={{ margin: 0 }}>Current Deck</h2>
-          <p className="muted" style={{ margin: '5px 0 0' }}>
-            {deck.name} · {activeLibrary.name}
-          </p>
-        </div>
-
-        <button
-          className="btn ghost"
-          type="button"
-          onClick={openSetupMode}
-        >
-          Edit Deck
-        </button>
-      </div>
-
-      {selectedNodeSummaries.length === 0 ? (
-       <div
-  style={{
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 12,
-  }}
->
-  {[
-  { name: 'Clinical Practice', icon: '♡', depth: 0 },
-  { name: 'Modules', icon: '▱', depth: 1 },
-  { name: 'Cardiac', icon: '♡', depth: 2 },
-  { name: 'ECG', icon: '⌁', depth: 3 },
-].map((item) => (
-    <div
-      key={item.name}
-      style={{
-        alignItems: 'center',
-        background: '#ffffff',
-        border: '1px solid #dbe3ee',
-        borderRadius: 14,
-        display: 'grid',
-        gap: 14,
-        gridTemplateColumns: '42px minmax(0, 1fr)',
-        padding: '16px 18px',
-        marginLeft: item.depth * 18,
-      }}
-    >
-      <div
-        aria-hidden="true"
-        style={{
-          alignItems: 'center',
-          background: '#eff6ff',
-          borderRadius: 12,
-          color: '#1d4ed8',
-          display: 'flex',
-          fontSize: 20,
-          height: 42,
-          justifyContent: 'center',
-          width: 42,
-        }}
-      >
-        {item.icon}
-      </div>
-
-      <div>
-        <div
-  style={{
-    display: 'flex',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 8,
-  }}
->
-  {item.depth > 0 && (
-    <span
-      aria-hidden="true"
-      style={{
-        color: '#94a3b8',
-        fontSize: 14,
-      }}
-    >
-      ↳
-    </span>
-  )}
-
-  <strong>{item.name}</strong>
-
-  <span
-    className="muted"
-    style={{
-      marginLeft: 'auto',
-      fontSize: 13,
-    }}
-  >
-    —
-  </span>
-</div>
-
-        <div
-          style={{
-            background: '#e2e8f0',
-            borderRadius: 999,
-            height: 7,
-            marginBottom: 7,
-            overflow: 'hidden',
-            width: '100%',
-          }}
-        >
-          <div
-            style={{
-              background: '#60a5fa',
-              height: '100%',
-              width: '0%',
-            }}
-          />
-        </div>
-
-        <span
-          className="muted"
-          style={{
-            fontSize: 13,
-          }}
-        >
-          Not reviewed yet
-        </span>
-      </div>
-    </div>
-  ))}
-
-  <button
-    className="btn ghost"
-    type="button"
-    onClick={openSetupMode}
-    style={{
-      alignSelf: 'flex-start',
-      marginTop: 4,
-    }}
-  >
-    Set Up / Edit Deck
-  </button>
-</div>
-      ) : (
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 12,
-          }}
-        >
-          {selectedNodeSummaries.slice(0, 6).map((selection, index) => (
-            <div
-              key={selection.id}
-              style={{
-                alignItems: 'center',
-                background: '#ffffff',
-                border: '1px solid #dbe3ee',
-                borderRadius: 14,
-                display: 'grid',
-                gap: 14,
-                gridTemplateColumns: '42px minmax(0, 1fr) auto',
-                padding: '16px 18px',
-
-              }}
+        <section className="home-v2-workspace">
+          <div className="home-v2-topline">
+            <h2>Welcome back, {displayName}!</h2>
+            <button
+              className="home-v2-account"
+              type="button"
+              title={email ? `Signed in as ${email}` : 'Account settings'}
             >
-              <div
-                aria-hidden="true"
-                style={{
-                  alignItems: 'center',
-                  background: '#eff6ff',
-                  borderRadius: 12,
-                  color: '#1d4ed8',
-                  display: 'flex',
-                  fontSize: 20,
-                  height: 42,
-                  justifyContent: 'center',
-                  width: 42,
-                }}
-              >
-                {index % 3 === 0 ? '♡' : index % 3 === 1 ? '▱' : '⌁'}
-              </div>
+              <RailIcon icon="gear" />
+              <span>Account Settings</span>
+              <span aria-hidden="true">⌄</span>
+            </button>
+          </div>
 
-              <div>
-                <strong style={{ display: 'block', marginBottom: 5 }}>
-                  {selection.label}
-                </strong>
+          <div className="home-v2-hero">
+            <button className="home-v2-study" type="button" onClick={openStudyMode}>
+              STUDY
+            </button>
 
-                <div
-                  aria-hidden="true"
-                  style={{
-                    background: '#e2e8f0',
-                    borderRadius: 999,
-                    height: 7,
-                    marginBottom: 7,
-                    overflow: 'hidden',
-                    width: '100%',
-                  }}
-                >
-                  <div
-                    style={{
-                      background: '#60a5fa',
-                      height: '100%',
-                      width: '0%',
-                    }}
+            <div className="home-v2-modes" aria-label="Study mode controls">
+              {(['Learn', 'Study', 'Cram'] as DeckMode[]).map((deckMode) => (
+                <label key={deckMode}>
+                  <input
+                    checked={selectedDeckModes.has(deckMode)}
+                    type="checkbox"
+                    onChange={() => toggleDeckMode(deckMode)}
                   />
-                </div>
-
-                <span className="muted" style={{ fontSize: 13 }}>
-                  {selection.conceptCount} concepts ·{' '}
-                  {selection.questionTotal} questions · Not reviewed yet
-                </span>
-              </div>
-
-              <div
-                style={{
-                  color: '#475569',
-                  fontSize: 13,
-                  textAlign: 'right',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {selection.questionTotal} cards
-              </div>
+                  <span>{deckMode}</span>
+                </label>
+              ))}
             </div>
-          ))}
+          </div>
 
-          {selectedNodeSummaries.length > 6 && (
-            <p className="muted" style={{ margin: 0 }}>
-              + {selectedNodeSummaries.length - 6} more selected topics
-            </p>
-          )}
-        </div>
-      )}
+          <section className="home-v2-deck-card" aria-labelledby="progress-summary-title">
+            <h3 id="progress-summary-title">
+              Current Deck: <span>{activeLibrary.name}</span>
+            </h3>
+            <div className="home-v2-progress-list">
+              {prototypeProgressRows.map((row) => (
+                <div className="home-v2-progress-row" key={row.id}>
+                  <span className="home-v2-chevron">{row.canExpand ? '›' : ''}</span>
+                  <span className="home-v2-topic-name">{row.name}</span>
+                  <HomeProgressBar value={row.progress} />
+                  <span className="home-v2-percent">{row.progress}%</span>
+                </div>
+              ))}
+            </div>
+          </section>
 
-      {selectedNodeSummaries.length > 0 && (
-        <div
-          style={{
-            borderTop: '1px solid #e2e8f0',
-            display: 'flex',
-            gap: 24,
-            marginTop: 18,
-            paddingTop: 16,
-          }}
-        >
-          <span>
-            <strong>{resolvedConcepts.length}</strong>
-            <br />
-            <span className="muted">concepts</span>
-          </span>
+          <section className="home-v2-deck-card" aria-labelledby="tree-title">
+            <h3 id="tree-title">
+              Current Deck: <span>{activeLibrary.name}</span>
+            </h3>
+            <div className="home-v2-tree">
+              {prototypeTopicTree.map((node) => renderHomeTreeRow(node, 0))}
+            </div>
+          </section>
+        </section>
+      </main>
 
-          <span>
-            <strong>{totalQuestions}</strong>
-            <br />
-            <span className="muted">questions available</span>
-          </span>
-        </div>
-      )}
-    </section>
+      <style jsx global>{`
+        .home-v2-header {
+          align-items: center;
+          background: linear-gradient(180deg, #061846, #041238);
+          box-shadow: 0 1px 0 rgba(255, 255, 255, 0.1);
+          color: #ffffff;
+          display: flex;
+          gap: 24px;
+          justify-content: space-between;
+          min-height: 88px;
+          padding: 16px 28px;
+        }
 
-    {/* Ready to study */}
-    <section
-      style={{
-        alignItems: 'center',
-        background: '#eff6ff',
-        border: '1px solid #bfdbfe',
-        borderRadius: 18,
-        display: 'flex',
-        gap: 18,
-        padding: 22,
-      }}
-    >
-      <div
-        aria-hidden="true"
-        style={{
-          alignItems: 'center',
-          background: '#ffffff',
-          borderRadius: 999,
-          display: 'flex',
-          fontSize: 28,
-          height: 54,
-          justifyContent: 'center',
-          width: 54,
-        }}
-      >
-        🚀
-      </div>
+        .home-v2-brand {
+          align-items: center;
+          color: #ffffff;
+          display: flex;
+          min-width: 360px;
+        }
 
-      <div style={{ flex: 1 }}>
-        <h3 style={{ margin: '0 0 4px' }}>Ready to study?</h3>
-        <p className="muted" style={{ margin: 0 }}>
-          Jump in now or adjust your deck.
-        </p>
-      </div>
+        .home-v2-brand strong {
+          display: block;
+          font-size: 31px;
+          font-weight: 900;
+          letter-spacing: -0.04em;
+          line-height: 1;
+        }
 
-      <button
-        className="btn ghost"
-        type="button"
-        onClick={openSetupMode}
-      >
-        {resolvedConcepts.length === 0 ? 'Set Up Deck' : 'Adjust Deck'}
-      </button>
-    </section>
+        .home-v2-brand small {
+          color: #c8d4ee;
+          display: block;
+          font-size: 11px;
+          font-weight: 500;
+          letter-spacing: 0.01em;
+          line-height: 1.15;
+          margin-top: 4px;
+        }
 
-        {message && <p className="muted">{message}</p>}
-  </div>
-);
+        .home-v2-nav {
+          align-items: center;
+          display: flex;
+          flex-wrap: wrap;
+          gap: 10px;
+          justify-content: flex-end;
+        }
+
+        .home-v2-nav-item {
+          align-items: center;
+          background: rgba(7, 25, 70, 0.72);
+          border: 1px solid rgba(198, 210, 236, 0.32);
+          border-radius: 8px;
+          color: #ffffff;
+          display: inline-flex;
+          font: inherit;
+          font-size: 16px;
+          font-weight: 650;
+          gap: 8px;
+          min-height: 46px;
+          padding: 10px 14px;
+          white-space: nowrap;
+        }
+
+        .home-v2-nav-item:disabled {
+          cursor: default;
+          opacity: 1;
+        }
+
+        .home-v2-nav-account {
+          background: rgba(19, 55, 129, 0.7);
+          border-color: rgba(219, 226, 242, 0.42);
+        }
+
+        .home-v2-nav-icon {
+          display: inline-flex;
+          height: 22px;
+          width: 22px;
+        }
+
+        .home-v2-nav-icon svg {
+          fill: none;
+          height: 100%;
+          stroke: currentColor;
+          stroke-linecap: round;
+          stroke-linejoin: round;
+          stroke-width: 2.1;
+          width: 100%;
+        }
+
+        .home-v2-shell {
+          background: #f8fafc;
+          display: grid;
+          grid-template-columns: 376px minmax(0, 1fr);
+          min-height: calc(100vh - 88px);
+        }
+
+        .home-v2-rail {
+          background: #ffffff;
+          border-right: 1px solid #dbe3ef;
+          display: flex;
+          flex-direction: column;
+          gap: 28px;
+          justify-content: space-between;
+          padding: 28px 32px;
+        }
+
+        .home-v2-rail-list {
+          display: grid;
+          gap: 22px;
+        }
+
+        .home-v2-rail-card,
+        .home-v2-logout,
+        .home-v2-account {
+          align-items: center;
+          background: #ffffff;
+          border: 1px solid #cbd5e1;
+          border-radius: 8px;
+          color: #08143b;
+          display: flex;
+          font: inherit;
+          font-size: 22px;
+          font-weight: 800;
+          gap: 28px;
+          min-height: 112px;
+          padding: 20px 34px;
+          text-align: left;
+          transition:
+            border-color 0.15s ease,
+            box-shadow 0.15s ease,
+            transform 0.15s ease;
+          width: 100%;
+        }
+
+        .home-v2-rail-card {
+          background: linear-gradient(180deg, #155ee8, #0f4fc7);
+          border-color: #0d47b7;
+          box-shadow: 0 14px 26px rgba(15, 79, 199, 0.18);
+          color: #ffffff;
+          font-size: 24px;
+          font-weight: 900;
+          letter-spacing: -0.04em;
+          line-height: 1;
+        }
+
+        .home-v2-rail-card:hover,
+        .home-v2-logout:hover,
+        .home-v2-account:hover {
+          border-color: #2563eb;
+          box-shadow: 0 12px 30px rgba(37, 99, 235, 0.12);
+          transform: translateY(-1px);
+        }
+
+        .home-v2-logout {
+          border: 0;
+          border-radius: 0;
+          border-top: 1px solid #dbe3ef;
+          font-size: 21px;
+          font-weight: 900;
+          letter-spacing: -0.035em;
+          min-height: 86px;
+          padding: 28px 34px 0;
+        }
+
+        .home-v2-rail-icon {
+          color: #0b5ee8;
+          display: inline-flex;
+          flex: 0 0 46px;
+          height: 46px;
+          width: 46px;
+        }
+
+        .home-v2-rail-card .home-v2-rail-icon {
+          color: #ffffff;
+        }
+
+        .home-v2-rail-icon svg {
+          fill: none;
+          height: 100%;
+          stroke: currentColor;
+          stroke-linecap: round;
+          stroke-linejoin: round;
+          stroke-width: 2.3;
+          width: 100%;
+        }
+
+        .home-v2-workspace {
+          padding: 38px 34px 54px 40px;
+        }
+
+        .home-v2-topline {
+          align-items: center;
+          display: flex;
+          gap: 24px;
+          justify-content: space-between;
+          margin: 0 auto 28px;
+          max-width: 1050px;
+        }
+
+        .home-v2-topline h2 {
+          color: #08143b;
+          font-size: 31px;
+          font-weight: 900;
+          letter-spacing: -0.045em;
+          line-height: 1.08;
+          margin: 0;
+        }
+
+        .home-v2-account {
+          border: 0;
+          color: #475569;
+          font-size: 16px;
+          font-weight: 600;
+          gap: 12px;
+          justify-content: flex-end;
+          min-height: auto;
+          padding: 8px 0;
+          width: auto;
+        }
+
+        .home-v2-account .home-v2-rail-icon {
+          color: #475569;
+          flex-basis: 26px;
+          height: 26px;
+          width: 26px;
+        }
+
+        .home-v2-hero {
+          align-items: center;
+          display: grid;
+          gap: 54px;
+          grid-template-columns: minmax(320px, 596px) 180px;
+          justify-content: center;
+          margin-bottom: 30px;
+        }
+
+        .home-v2-study {
+          background: linear-gradient(180deg, #2563eb, #1555d5);
+          border: 1px solid #0f4fc7;
+          border-radius: 8px;
+          box-shadow: 0 16px 30px rgba(37, 99, 235, 0.22);
+          color: #ffffff;
+          font-size: 58px;
+          font-weight: 900;
+          letter-spacing: 0.01em;
+          line-height: 0.95;
+          min-height: 144px;
+          text-shadow: 0 2px 6px rgba(8, 20, 59, 0.24);
+          width: 100%;
+        }
+
+        .home-v2-modes {
+          display: grid;
+          gap: 18px;
+        }
+
+        .home-v2-modes label {
+          align-items: center;
+          color: #0f172a;
+          display: flex;
+          font-size: 20px;
+          gap: 16px;
+        }
+
+        .home-v2-modes input,
+        .home-v2-checkbox {
+          accent-color: #2563eb;
+          height: 25px;
+          width: 25px;
+        }
+
+        .home-v2-deck-card {
+          background: #ffffff;
+          border: 1px solid #dbe3ef;
+          border-radius: 8px;
+          margin: 0 auto 18px;
+          max-width: 840px;
+          padding: 24px 28px;
+        }
+
+        .home-v2-deck-card h3 {
+          color: #08143b;
+          font-size: 24px;
+          font-weight: 900;
+          letter-spacing: -0.04em;
+          line-height: 1.12;
+          margin: 0 0 20px;
+        }
+
+        .home-v2-deck-card h3 span {
+          color: #0b5ee8;
+          font-weight: 900;
+          margin-left: 8px;
+        }
+
+        .home-v2-progress-list,
+        .home-v2-tree {
+          display: grid;
+          gap: 12px;
+        }
+
+        .home-v2-progress-row,
+        .home-v2-tree-row {
+          align-items: center;
+          color: #172554;
+          display: grid;
+          gap: 16px;
+          grid-template-columns: 22px minmax(170px, 1fr) minmax(220px, 382px) 48px;
+          min-height: 32px;
+        }
+
+        .home-v2-tree-row {
+          grid-template-columns: 22px minmax(150px, 1fr) minmax(170px, 326px) 54px 34px;
+          position: relative;
+        }
+
+        .home-v2-tree-row:not(:first-child)::before {
+          background: #e2e8f0;
+          content: '';
+          height: 1px;
+          left: 42px;
+          position: absolute;
+          top: -6px;
+          width: 44px;
+        }
+
+        .home-v2-chevron {
+          background: transparent;
+          border: 0;
+          color: #08143b;
+          font: inherit;
+          font-size: 24px;
+          line-height: 1;
+          padding: 0;
+          text-align: center;
+        }
+
+        .home-v2-chevron:disabled {
+          cursor: default;
+        }
+
+        .home-v2-topic-name {
+          color: #101b43;
+          font-size: 17px;
+          font-weight: 500;
+          letter-spacing: -0.01em;
+        }
+
+        .home-v2-progress {
+          background: #e8edf5;
+          border-radius: 999px;
+          box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.08);
+          height: 10px;
+          overflow: hidden;
+          width: 100%;
+        }
+
+        .home-v2-progress span {
+          background: linear-gradient(90deg, #0b5ee8, #155ee8);
+          border-radius: inherit;
+          display: block;
+          height: 100%;
+        }
+
+        .home-v2-percent {
+          color: #172554;
+          font-size: 17px;
+          font-weight: 650;
+          text-align: right;
+        }
+
+        @media (max-width: 1100px) {
+          .home-v2-header,
+          .home-v2-brand,
+          .home-v2-nav {
+            align-items: flex-start;
+          }
+
+          .home-v2-header {
+            flex-direction: column;
+          }
+
+          .home-v2-brand {
+            min-width: 0;
+          }
+
+          .home-v2-shell {
+            grid-template-columns: 1fr;
+          }
+
+          .home-v2-rail {
+            border-right: 0;
+            border-bottom: 1px solid #dbe3ef;
+          }
+
+          .home-v2-rail-list {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+
+          .home-v2-hero {
+            grid-template-columns: 1fr;
+            gap: 24px;
+          }
+
+          .home-v2-modes {
+            grid-template-columns: repeat(3, max-content);
+            justify-content: center;
+          }
+        }
+
+        @media (max-width: 720px) {
+          .home-v2-rail,
+          .home-v2-workspace {
+            padding: 20px;
+          }
+
+          .home-v2-rail-list {
+            grid-template-columns: 1fr;
+          }
+
+          .home-v2-topline {
+            align-items: flex-start;
+            flex-direction: column;
+          }
+
+          .home-v2-study {
+            font-size: 40px;
+            min-height: 112px;
+          }
+
+          .home-v2-progress-row,
+          .home-v2-tree-row {
+            grid-template-columns: 22px minmax(0, 1fr) 48px;
+          }
+
+          .home-v2-progress-row .home-v2-progress,
+          .home-v2-tree-row .home-v2-progress,
+          .home-v2-tree-row .home-v2-checkbox {
+            grid-column: 2 / -1;
+          }
+
+          .home-v2-tree-row .home-v2-checkbox {
+            justify-self: start;
+          }
+        }
+      `}</style>
+    </>
+  );
 }
