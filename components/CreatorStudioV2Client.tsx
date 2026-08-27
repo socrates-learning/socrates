@@ -43,6 +43,14 @@ type QuestionConceptOption = {
   id: string;
   name: string;
 };
+type ExistingQuestion = {
+  id: string;
+  prompt: string;
+  answer: string;
+  difficulty: QuestionDifficulty;
+  testingAngle: string;
+  status: string;
+};
 
 type CreatorTab = 'content' | 'questions';
 type EditorMode = 'write' | 'preview';
@@ -79,6 +87,17 @@ const emptyReferenceDraft: ReferenceDraft = {
   url: '',
   notes: '',
 };
+const testingAngleOptions = [
+  'General Understanding',
+  'Recognition / Definition',
+  'Mechanism / Pathophysiology',
+  'Clinical Manifestations',
+  'Assessment / Interpretation',
+  'Clinical Application',
+  'Intervention / Management',
+  'Complications / Outcomes',
+  'Differentiation / Comparison',
+];
 
 const prototypeTopics: Topic[] = [
   {
@@ -207,6 +226,10 @@ function wordCount(value: string): number {
   return trimmed ? trimmed.split(/\s+/).length : 0;
 }
 
+function questionCountLabel(count: number): string {
+  return `${count} ${count === 1 ? 'question' : 'questions'}`;
+}
+
 function normalizeTagName(value: string): string {
   return value.trim().replace(/\s+/g, ' ');
 }
@@ -269,7 +292,6 @@ function questionDraftFingerprint({
   conceptId,
   prompt,
   answer,
-  explanation,
   difficulty,
   testingAngle,
 }: {
@@ -277,7 +299,6 @@ function questionDraftFingerprint({
   conceptId: string | null;
   prompt: string;
   answer: string;
-  explanation: string;
   difficulty: QuestionDifficulty;
   testingAngle: string;
 }) {
@@ -286,7 +307,6 @@ function questionDraftFingerprint({
     conceptId,
     prompt,
     answer,
-    explanation,
     difficulty,
     testingAngle,
   });
@@ -328,6 +348,7 @@ export function CreatorStudioV2Client({
         ])
   );
   const [searchQuery, setSearchQuery] = useState('');
+  const [contentConceptSearch, setContentConceptSearch] = useState('');
   const [activeCreatorTab, setActiveCreatorTab] = useState<CreatorTab>('content');
   const [editorMode, setEditorMode] = useState<EditorMode>('write');
   const [dialogMode, setDialogMode] = useState<DialogMode>(null);
@@ -346,15 +367,27 @@ export function CreatorStudioV2Client({
   const [questionConceptOptions, setQuestionConceptOptions] = useState<
     QuestionConceptOption[]
   >([]);
-  const [isLoadingQuestionConcepts, setIsLoadingQuestionConcepts] = useState(false);
+  const [questionConceptsByTopicId, setQuestionConceptsByTopicId] = useState<
+    Record<string, QuestionConceptOption[]>
+  >({});
+  const [questionCountsByConceptId, setQuestionCountsByConceptId] = useState<
+    Record<string, number>
+  >({});
+  const [questionConceptSearch, setQuestionConceptSearch] = useState('');
+  const [needsQuestionsOnly, setNeedsQuestionsOnly] = useState(false);
   const [questionPrompt, setQuestionPrompt] = useState('');
   const [questionAnswer, setQuestionAnswer] = useState('');
-  const [questionExplanation, setQuestionExplanation] = useState('');
   const [questionDifficulty, setQuestionDifficulty] =
     useState<QuestionDifficulty>('medium');
   const [questionTestingAngle, setQuestionTestingAngle] = useState(
     'General Understanding'
   );
+  const [questionRecordStatus, setQuestionRecordStatus] = useState('draft');
+  const [existingQuestions, setExistingQuestions] = useState<
+    ExistingQuestion[]
+  >([]);
+  const [isLoadingExistingQuestions, setIsLoadingExistingQuestions] =
+    useState(false);
   const [questionStatus, setQuestionStatus] = useState<Status>(null);
   const [isSavingQuestion, setIsSavingQuestion] = useState(false);
   const [referenceDraft, setReferenceDraft] = useState<ReferenceDraft>(
@@ -394,7 +427,6 @@ export function CreatorStudioV2Client({
         conceptId: questionConceptId,
         prompt: questionPrompt,
         answer: questionAnswer,
-        explanation: questionExplanation,
         difficulty: questionDifficulty,
         testingAngle: questionTestingAngle,
       }),
@@ -402,7 +434,6 @@ export function CreatorStudioV2Client({
       questionAnswer,
       questionConceptId,
       questionDifficulty,
-      questionExplanation,
       questionId,
       questionPrompt,
       questionTestingAngle,
@@ -427,16 +458,15 @@ export function CreatorStudioV2Client({
     questionId ||
       questionPrompt.trim() ||
       questionAnswer.trim() ||
-      questionExplanation.trim() ||
       questionDifficulty !== 'medium' ||
       questionTestingAngle.trim() !== 'General Understanding'
   );
   const isQuestionDirty =
     hasQuestionDraft && currentQuestionFingerprint !== savedQuestionFingerprint;
+  const isContentDirty =
+    currentDraftFingerprint !== savedDraftFingerprint || hasPendingReferenceDraft;
   const isDirty =
-    currentDraftFingerprint !== savedDraftFingerprint ||
-    isQuestionDirty ||
-    hasPendingReferenceDraft;
+    isContentDirty || isQuestionDirty;
 
   useEffect(() => {
     if (!isDirty) return;
@@ -451,7 +481,13 @@ export function CreatorStudioV2Client({
   }, [isDirty]);
 
   useEffect(() => {
-    if (!resolvedConcept.id || !activeLibraryId) return;
+    if (
+      !resolvedConcept.id ||
+      !activeLibraryId ||
+      conceptId !== resolvedConcept.id
+    ) {
+      return;
+    }
 
     let isMounted = true;
 
@@ -494,6 +530,7 @@ export function CreatorStudioV2Client({
     };
   }, [
     activeLibraryId,
+    conceptId,
     initialReferences,
     resolvedConcept.bodyMarkdown,
     resolvedConcept.id,
@@ -509,7 +546,6 @@ export function CreatorStudioV2Client({
     let isMounted = true;
 
     async function loadQuestionConcepts() {
-      setIsLoadingQuestionConcepts(true);
       const { data, error } = await supabase
         .from('concept_placements')
         .select('concept_id, concepts!inner(id, name)')
@@ -523,7 +559,6 @@ export function CreatorStudioV2Client({
           tone: 'error',
           message: 'Concepts could not be loaded for this topic.',
         });
-        setIsLoadingQuestionConcepts(false);
         return;
       }
 
@@ -556,7 +591,6 @@ export function CreatorStudioV2Client({
         return options.length === 1 ? options[0].id : null;
       });
       setQuestionStatus(null);
-      setIsLoadingQuestionConcepts(false);
     }
 
     void loadQuestionConcepts();
@@ -566,11 +600,252 @@ export function CreatorStudioV2Client({
     };
   }, [activeLibraryId, questionTopicId, resolvedConcept.id]);
 
+  useEffect(() => {
+    if (!activeLibraryId) {
+      setQuestionConceptsByTopicId({});
+      return;
+    }
+
+    const topicIds = flattenTopics(topics).map((topic) => topic.id);
+    if (!topicIds.length) {
+      setQuestionConceptsByTopicId({});
+      return;
+    }
+
+    let isMounted = true;
+
+    async function loadQuestionConceptPlacements() {
+      const { data, error } = await supabase
+        .from('concept_placements')
+        .select('library_node_id, concept_id, concepts!inner(id, name)')
+        .in('library_node_id', topicIds);
+
+      if (!isMounted) return;
+
+      if (error) {
+        setQuestionConceptsByTopicId({});
+        return;
+      }
+
+      const conceptsByTopicId: Record<string, QuestionConceptOption[]> = {};
+
+      (data || []).forEach((placement) => {
+        const topicId = placement.library_node_id;
+        const related = placement.concepts as unknown as
+          | { id: string; name: string }
+          | { id: string; name: string }[]
+          | null;
+        const relatedConcept = Array.isArray(related) ? related[0] : related;
+        if (!topicId || !relatedConcept) return;
+
+        const topicConcepts = conceptsByTopicId[topicId] || [];
+        if (!topicConcepts.some((concept) => concept.id === relatedConcept.id)) {
+          topicConcepts.push({
+            id: relatedConcept.id,
+            name: relatedConcept.name,
+          });
+        }
+        conceptsByTopicId[topicId] = topicConcepts;
+      });
+
+      Object.values(conceptsByTopicId).forEach((concepts) =>
+        concepts.sort((left, right) => left.name.localeCompare(right.name))
+      );
+      setQuestionConceptsByTopicId(conceptsByTopicId);
+    }
+
+    void loadQuestionConceptPlacements();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [activeLibraryId, topics]);
+
+  useEffect(() => {
+    const conceptIds = Array.from(
+      new Set(
+        Object.values(questionConceptsByTopicId)
+          .flat()
+          .map((conceptOption) => conceptOption.id)
+      )
+    );
+
+    if (!activeLibraryId || !conceptIds.length) {
+      setQuestionCountsByConceptId({});
+      return;
+    }
+
+    let isMounted = true;
+
+    async function loadQuestionCounts() {
+      const { data, error } = await supabase
+        .from('questions')
+        .select('concept_id')
+        .in('concept_id', conceptIds);
+
+      if (!isMounted || error) return;
+
+      const counts = Object.fromEntries(
+        conceptIds.map((conceptId) => [conceptId, 0])
+      ) as Record<string, number>;
+
+      (data || []).forEach((question) => {
+        if (question.concept_id && question.concept_id in counts) {
+          counts[question.concept_id] += 1;
+        }
+      });
+
+      setQuestionCountsByConceptId(counts);
+    }
+
+    void loadQuestionCounts();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [activeLibraryId, questionConceptsByTopicId]);
+
+  const previousQuestionConceptIdRef = useRef(questionConceptId);
+  useEffect(() => {
+    if (previousQuestionConceptIdRef.current === questionConceptId) return;
+
+    previousQuestionConceptIdRef.current = questionConceptId;
+    setQuestionId(null);
+    setQuestionPrompt('');
+    setQuestionAnswer('');
+    setQuestionDifficulty('medium');
+    setQuestionTestingAngle('General Understanding');
+    setQuestionRecordStatus('draft');
+    setSavedQuestionFingerprint(
+      questionDraftFingerprint({
+        questionId: null,
+        conceptId: questionConceptId,
+        prompt: '',
+        answer: '',
+        difficulty: 'medium',
+        testingAngle: 'General Understanding',
+      })
+    );
+  }, [questionConceptId]);
+
   const rootTopicId = topics[0]?.id || ROOT_TOPIC_ID;
   const activeTopic = activeTopicId
     ? findTopic(topics, activeTopicId)
     : null;
+  const normalizedContentConceptSearch = contentConceptSearch
+    .trim()
+    .toLocaleLowerCase();
+  const contentConceptSearchResults = useMemo(() => {
+    if (!normalizedContentConceptSearch) return [];
+
+    const conceptsById = new Map<
+      string,
+      { id: string; name: string; paths: string[] }
+    >();
+
+    Object.entries(questionConceptsByTopicId).forEach(
+      ([topicId, conceptOptions]) => {
+        const path = findTopicPath(topics, topicId) || [];
+        const displayPath = path.length > 1 ? path.slice(1) : path;
+        const pathLabel = displayPath.map((topic) => topic.name).join(' > ');
+
+        conceptOptions.forEach((conceptOption) => {
+          const existing = conceptsById.get(conceptOption.id) || {
+            id: conceptOption.id,
+            name: conceptOption.name,
+            paths: [],
+          };
+
+          if (pathLabel && !existing.paths.includes(pathLabel)) {
+            existing.paths.push(pathLabel);
+          }
+          conceptsById.set(conceptOption.id, existing);
+        });
+      }
+    );
+
+    return Array.from(conceptsById.values())
+      .filter((conceptOption) =>
+        conceptOption.name
+          .toLocaleLowerCase()
+          .includes(normalizedContentConceptSearch)
+      )
+      .sort((left, right) => left.name.localeCompare(right.name))
+      .slice(0, 20);
+  }, [normalizedContentConceptSearch, questionConceptsByTopicId, topics]);
   const normalizedSearch = searchQuery.trim().toLocaleLowerCase();
+  const normalizedQuestionConceptSearch = questionConceptSearch
+    .trim()
+    .toLocaleLowerCase();
+  const questionConceptSearchResults = useMemo(
+    () =>
+      normalizedQuestionConceptSearch
+        ? questionConceptOptions
+            .filter((option) =>
+              option.name
+                .toLocaleLowerCase()
+                .includes(normalizedQuestionConceptSearch)
+            )
+            .filter(
+              (option) =>
+                !needsQuestionsOnly ||
+                (questionCountsByConceptId[option.id] || 0) === 0
+            )
+        : [],
+    [
+      needsQuestionsOnly,
+      normalizedQuestionConceptSearch,
+      questionConceptOptions,
+      questionCountsByConceptId,
+    ]
+  );
+  const questionConceptSearchPath = useMemo(() => {
+    const path = findTopicPath(topics, questionTopicId) || [];
+    const displayPath = path.length > 1 ? path.slice(1) : path;
+    return displayPath.map((topic) => topic.name).join(' > ');
+  }, [questionTopicId, topics]);
+  const questionConceptBranchTopicIds = useMemo(() => {
+    const topicIdsWithConcepts = new Set<string>();
+
+    function collectConceptBranches(topic: Topic): boolean {
+      const hasDirectConcepts =
+        (questionConceptsByTopicId[topic.id] || []).length > 0;
+      let hasConceptsBelow = false;
+
+      topic.children.forEach((child) => {
+        if (collectConceptBranches(child)) hasConceptsBelow = true;
+      });
+
+      if (hasDirectConcepts || hasConceptsBelow) {
+        topicIdsWithConcepts.add(topic.id);
+      }
+      return hasDirectConcepts || hasConceptsBelow;
+    }
+
+    topics.forEach((topic) => collectConceptBranches(topic));
+    return topicIdsWithConcepts;
+  }, [questionConceptsByTopicId, topics]);
+  const needsQuestionTopicIds = useMemo(() => {
+    const visibleTopicIds = new Set<string>();
+
+    function collectVisibleTopics(topic: Topic): boolean {
+      const hasDirectMatch = (questionConceptsByTopicId[topic.id] || []).some(
+        (conceptOption) =>
+          (questionCountsByConceptId[conceptOption.id] || 0) === 0
+      );
+      let hasChildMatch = false;
+
+      topic.children.forEach((child) => {
+        if (collectVisibleTopics(child)) hasChildMatch = true;
+      });
+
+      if (hasDirectMatch || hasChildMatch) visibleTopicIds.add(topic.id);
+      return hasDirectMatch || hasChildMatch;
+    }
+
+    topics.forEach((topic) => collectVisibleTopics(topic));
+    return visibleTopicIds;
+  }, [questionConceptsByTopicId, questionCountsByConceptId, topics]);
   const searchIds = useMemo(
     () =>
       normalizedSearch
@@ -595,8 +870,195 @@ export function CreatorStudioV2Client({
   }, [activeTopic, topics]);
 
   function showStatus(tone: StatusTone, message: string) {
+    if (activeCreatorTab === 'questions') {
+      setQuestionStatus({ tone, message });
+      return;
+    }
     setStatus({ tone, message });
   }
+
+  async function fetchExistingQuestions(
+    conceptId: string
+  ): Promise<ExistingQuestion[] | null> {
+    const { data, error } = await supabase
+      .from('questions')
+      .select(
+        'id, prompt, difficulty, testing_angle, status, sort_order, question_accepted_answers(answer_text, sort_order)'
+      )
+      .eq('concept_id', conceptId)
+      .order('sort_order', { ascending: true })
+      .order('id', { ascending: true });
+
+    if (error) return null;
+
+    type ExistingQuestionRow = {
+      id: string;
+      prompt: string | null;
+      difficulty: string | null;
+      testing_angle: string | null;
+      status: string | null;
+      question_accepted_answers:
+        | Array<{ answer_text: string | null; sort_order: number | null }>
+        | null;
+    };
+
+    return ((data || []) as unknown as ExistingQuestionRow[]).map((question) => {
+      const acceptedAnswers = [...(question.question_accepted_answers || [])].sort(
+        (left, right) => (left.sort_order || 0) - (right.sort_order || 0)
+      );
+      const difficulty: QuestionDifficulty =
+        question.difficulty === 'easy' ||
+        question.difficulty === 'medium' ||
+        question.difficulty === 'hard'
+          ? question.difficulty
+          : 'medium';
+
+      return {
+        id: question.id,
+        prompt: question.prompt || '',
+        answer: acceptedAnswers[0]?.answer_text || '',
+        difficulty,
+        testingAngle: question.testing_angle || 'General Understanding',
+        status: question.status || 'draft',
+      };
+    });
+  }
+
+  async function refreshExistingQuestionList(conceptId: string) {
+    const loadedQuestions = await fetchExistingQuestions(conceptId);
+    if (!loadedQuestions) return;
+
+    setExistingQuestions(loadedQuestions);
+    setQuestionCountsByConceptId((current) => ({
+      ...current,
+      [conceptId]: loadedQuestions.length,
+    }));
+  }
+
+  function resetQuestionEditor(conceptId: string | null) {
+    setQuestionId(null);
+    setQuestionPrompt('');
+    setQuestionAnswer('');
+    setQuestionDifficulty('medium');
+    setQuestionTestingAngle('General Understanding');
+    setQuestionRecordStatus('draft');
+    setSavedQuestionFingerprint(
+      questionDraftFingerprint({
+        questionId: null,
+        conceptId,
+        prompt: '',
+        answer: '',
+        difficulty: 'medium',
+        testingAngle: 'General Understanding',
+      })
+    );
+  }
+
+  function confirmDiscardQuestionChanges() {
+    return (
+      !isQuestionDirty ||
+      window.confirm('Discard the unsaved changes to this question?')
+    );
+  }
+
+  function selectQuestionConcept(
+    conceptId: string | null,
+    topicId?: string
+  ): boolean {
+    if (isSavingQuestion) return false;
+    if (conceptId !== questionConceptId && !confirmDiscardQuestionChanges()) {
+      return false;
+    }
+
+    if (topicId) {
+      setActiveTopicId(topicId);
+      setQuestionTopicId(topicId);
+    }
+
+    if (conceptId !== questionConceptId) {
+      setQuestionConceptId(conceptId);
+      setExistingQuestions([]);
+      resetQuestionEditor(conceptId);
+    }
+    setQuestionStatus(null);
+    return true;
+  }
+
+  function selectExistingQuestion(question: ExistingQuestion) {
+    if (isSavingQuestion) return;
+    if (question.id === questionId) return;
+    if (!confirmDiscardQuestionChanges()) return;
+
+    setQuestionId(question.id);
+    setQuestionPrompt(question.prompt);
+    setQuestionAnswer(question.answer);
+    setQuestionDifficulty(question.difficulty);
+    setQuestionTestingAngle(question.testingAngle);
+    setQuestionRecordStatus(question.status);
+    setSavedQuestionFingerprint(
+      questionDraftFingerprint({
+        questionId: question.id,
+        conceptId: questionConceptId,
+        prompt: question.prompt,
+        answer: question.answer,
+        difficulty: question.difficulty,
+        testingAngle: question.testingAngle,
+      })
+    );
+    setQuestionStatus(null);
+  }
+
+  function startNewQuestion() {
+    if (
+      isSavingQuestion ||
+      !questionConceptId ||
+      !confirmDiscardQuestionChanges()
+    ) {
+      return;
+    }
+    resetQuestionEditor(questionConceptId);
+    setQuestionStatus(null);
+  }
+
+  useEffect(() => {
+    if (!activeLibraryId || !questionConceptId) {
+      setExistingQuestions([]);
+      setIsLoadingExistingQuestions(false);
+      return;
+    }
+
+    const conceptId = questionConceptId;
+    let isMounted = true;
+    setIsLoadingExistingQuestions(true);
+
+    async function loadExistingQuestions() {
+      const loadedQuestions = await fetchExistingQuestions(conceptId);
+
+      if (!isMounted) return;
+
+      setIsLoadingExistingQuestions(false);
+      if (!loadedQuestions) {
+        setExistingQuestions([]);
+        setQuestionStatus({
+          tone: 'error',
+          message: 'Existing questions could not be loaded.',
+        });
+        return;
+      }
+
+      setExistingQuestions(loadedQuestions);
+      setQuestionCountsByConceptId((current) => ({
+        ...current,
+        [conceptId]: loadedQuestions.length,
+      }));
+    }
+
+    void loadExistingQuestions();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [activeLibraryId, questionConceptId]);
 
   async function reloadRealTopicTree(preferredActiveTopicId?: string) {
     if (!activeLibraryId) return;
@@ -916,6 +1378,13 @@ export function CreatorStudioV2Client({
         try {
           const createdTopicId = (data as { id?: string } | null)?.id;
           await reloadRealTopicTree(createdTopicId || activeTopic.id);
+          if (
+            activeCreatorTab === 'questions' &&
+            !questionId &&
+            !isSavingQuestion
+          ) {
+            setQuestionTopicId(createdTopicId || activeTopic.id);
+          }
           setExpandedTopicIds((current) =>
             new Set(current).add(activeTopic.id)
           );
@@ -988,6 +1457,13 @@ export function CreatorStudioV2Client({
       );
       setExpandedTopicIds((current) => new Set(current).add(activeTopic.id));
       setActiveTopicId(newTopic.id);
+      if (
+        activeCreatorTab === 'questions' &&
+        !questionId &&
+        !isSavingQuestion
+      ) {
+        setQuestionTopicId(newTopic.id);
+      }
       showStatus('success', `Added “${name}” beneath ${activeTopic.name}.`);
     } else if (dialogMode === 'rename') {
       setTopics((current) =>
@@ -1104,6 +1580,14 @@ export function CreatorStudioV2Client({
 
       try {
         await reloadRealTopicTree(parentTopicId);
+        if (
+          activeCreatorTab === 'questions' &&
+          !questionId &&
+          !isSavingQuestion &&
+          questionTopicId === activeTopic.id
+        ) {
+          setQuestionTopicId(parentTopicId || rootTopicId);
+        }
         setSearchQuery('');
         setDialogMode(null);
         showStatus('success', 'Topic removed successfully.');
@@ -1118,13 +1602,27 @@ export function CreatorStudioV2Client({
       return;
     }
 
+    const activePath = findTopicPath(topics, activeTopic.id);
+    const parentTopicId = activePath?.at(-2)?.id;
     setTopics((current) => removeTopic(current, activeTopic.id));
     setSelectedTopicIds((current) => {
       const next = new Set(current);
       next.delete(activeTopic.id);
       return next;
     });
-    setActiveTopicId('');
+    setActiveTopicId(
+      activeCreatorTab === 'questions'
+        ? parentTopicId || rootTopicId
+        : ''
+    );
+    if (
+      activeCreatorTab === 'questions' &&
+      !questionId &&
+      !isSavingQuestion &&
+      questionTopicId === activeTopic.id
+    ) {
+      setQuestionTopicId(parentTopicId || rootTopicId);
+    }
     setDialogMode(null);
     showStatus('success', `Deleted “${activeTopic.name}”.`);
   }
@@ -1174,6 +1672,38 @@ export function CreatorStudioV2Client({
 
   function openConceptBrowser() {
     navigateFromCreator('/creator/concepts');
+  }
+
+  function openConceptFromSearch(selectedConceptId: string) {
+    if (selectedConceptId === conceptId) return;
+    navigateFromCreator(`/creator/concepts/${selectedConceptId}`);
+  }
+
+  function startNewConcept() {
+    if (
+      isContentDirty &&
+      !window.confirm('Discard the unsaved changes to this concept?')
+    ) {
+      return;
+    }
+
+    setConceptId(null);
+    setConceptName('');
+    setConcept('');
+    setSelectedTopicIds(new Set());
+    setConceptTags([]);
+    setTagDraft('');
+    setTagStatus(null);
+    setReferences([]);
+    setReferenceDraft(emptyReferenceDraft);
+    setEditingReferenceId(null);
+    setPendingRemovalId(null);
+    setReferenceStatus(null);
+    setContentConceptSearch('');
+    setEditorMode('write');
+    setActiveCreatorTab('content');
+    setStatus(null);
+    setSavedDraftFingerprint(draftFingerprint('', [], [], []));
   }
 
   async function saveConcept() {
@@ -1348,7 +1878,6 @@ export function CreatorStudioV2Client({
   async function saveQuestion() {
     const prompt = questionPrompt.trim();
     const answer = questionAnswer.trim();
-    const explanation = questionExplanation.trim();
     const testingAngle = questionTestingAngle.trim() || 'General Understanding';
 
     if (!questionConceptId) {
@@ -1373,7 +1902,7 @@ export function CreatorStudioV2Client({
     const questionPayload = {
       p_question_type: 'short_answer',
       p_prompt: prompt,
-      p_explanation: explanation || null,
+      p_explanation: null,
       p_review_article_concept_id: null,
       p_sort_order: 0,
       p_difficulty: questionDifficulty,
@@ -1386,7 +1915,7 @@ export function CreatorStudioV2Client({
       const { data, error } = await supabase.rpc('update_question', {
         p_question_id: questionId,
         ...questionPayload,
-        p_status: 'draft',
+        p_status: questionRecordStatus,
       });
 
       if (error) {
@@ -1448,16 +1977,15 @@ export function CreatorStudioV2Client({
       conceptId: questionConceptId,
       prompt,
       answer,
-      explanation,
       difficulty: questionDifficulty,
       testingAngle,
     });
 
     setQuestionPrompt(prompt);
     setQuestionAnswer(answer);
-    setQuestionExplanation(explanation);
     setQuestionTestingAngle(testingAngle);
     setSavedQuestionFingerprint(nextFingerprint);
+    await refreshExistingQuestionList(questionConceptId);
     setIsSavingQuestion(false);
     setQuestionStatus({
       tone: 'success',
@@ -1468,27 +1996,52 @@ export function CreatorStudioV2Client({
   function renderQuestionTopic(topic: Topic, depth = 0) {
     const searching = Boolean(normalizedSearch);
     if (searching && !searchIds.has(topic.id)) return null;
+    if (needsQuestionsOnly && !needsQuestionTopicIds.has(topic.id)) return null;
     const hasChildren = topic.children.length > 0;
-    const hasVisibleChild = topic.children.some((child) => searchIds.has(child.id));
-    const isExpanded = searching ? hasVisibleChild : expandedTopicIds.has(topic.id);
-    const isActive = questionTopicId === topic.id;
+    const directConcepts = (questionConceptsByTopicId[topic.id] || []).filter(
+      (conceptOption) =>
+        !needsQuestionsOnly ||
+        (questionCountsByConceptId[conceptOption.id] || 0) === 0
+    );
+    const hasSearchVisibleChild = topic.children.some((child) =>
+      searchIds.has(child.id)
+    );
+    const hasNeedsQuestionsVisibleChild = topic.children.some((child) =>
+      needsQuestionTopicIds.has(child.id)
+    );
+    const isExpanded = needsQuestionsOnly
+      ? directConcepts.length > 0 || hasNeedsQuestionsVisibleChild
+      : searching
+        ? hasSearchVisibleChild
+        : expandedTopicIds.has(topic.id);
+    const isActive = activeTopicId === topic.id;
+    const hasConceptsInBranch = questionConceptBranchTopicIds.has(topic.id);
 
     return (
       <div className={styles.topicBranch} key={`question-${topic.id}`}>
         <div
           className={`${styles.topicRow} ${isActive ? styles.activeTopicRow : ''}`}
-          style={{ paddingLeft: `${12 + depth * 38}px` }}
+          style={{
+            background: hasConceptsInBranch ? undefined : '#f8fafc',
+            color: hasConceptsInBranch ? undefined : '#94a3b8',
+            paddingLeft: `${12 + depth * 38}px`,
+          }}
           onClick={() => {
-            if (questionId) return;
-            setQuestionTopicId(topic.id);
+            setActiveTopicId(topic.id);
+            if (!questionId && !isQuestionDirty && !isSavingQuestion) {
+              setQuestionTopicId(topic.id);
+            }
             setQuestionStatus(null);
           }}
           role="button"
           tabIndex={0}
           onKeyDown={(event) => {
-            if (!questionId && (event.key === 'Enter' || event.key === ' ')) {
+            if (event.key === 'Enter' || event.key === ' ') {
               event.preventDefault();
-              setQuestionTopicId(topic.id);
+              setActiveTopicId(topic.id);
+              if (!questionId && !isQuestionDirty && !isSavingQuestion) {
+                setQuestionTopicId(topic.id);
+              }
               setQuestionStatus(null);
             }
           }}
@@ -1518,7 +2071,67 @@ export function CreatorStudioV2Client({
           <span className={styles.topicName} title={topic.name}>
             {topic.name}
           </span>
+          {!hasConceptsInBranch && (
+            <span
+              style={{
+                color: '#94a3b8',
+                fontSize: 12,
+                marginLeft: 'auto',
+                paddingRight: 10,
+              }}
+            >
+              No concepts
+            </span>
+          )}
         </div>
+        {directConcepts.length > 0 && (!hasChildren || isExpanded) && (
+          <div style={{ display: 'grid', gap: 3 }}>
+            {directConcepts.map((conceptOption) => {
+              const isSelected = questionConceptId === conceptOption.id;
+
+              return (
+                <label
+                  key={`${topic.id}-${conceptOption.id}`}
+                  style={{
+                    alignItems: 'center',
+                    background: isSelected ? '#e8f0ff' : '#f7f9fc',
+                    border: isSelected
+                      ? '1px solid #8eb2f3'
+                      : '1px solid transparent',
+                    borderRadius: 8,
+                    color: isSelected ? '#0f4eb8' : '#475569',
+                    cursor: isSavingQuestion ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    fontSize: 14,
+                    gap: 8,
+                    margin: `2px 10px 2px ${50 + depth * 38}px`,
+                    padding: '7px 10px',
+                    textAlign: 'left',
+                  }}
+                >
+                  <input
+                    className={styles.topicCheckbox}
+                    type="checkbox"
+                    checked={isSelected}
+                    disabled={isSavingQuestion}
+                    onChange={(event) => {
+                      selectQuestionConcept(
+                        event.target.checked ? conceptOption.id : null,
+                        topic.id
+                      );
+                    }}
+                  />
+                  <span>
+                    {conceptOption.name} ·{' '}
+                    {questionCountLabel(
+                      questionCountsByConceptId[conceptOption.id] || 0
+                    )}
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+        )}
         {hasChildren && isExpanded && (
           <div className={depth > 0 ? styles.nestedTopics : undefined}>
             {topic.children.map((child) => renderQuestionTopic(child, depth + 1))}
@@ -1634,12 +2247,10 @@ export function CreatorStudioV2Client({
                 {activeCreatorTab === 'content'
                   ? isSaving
                     ? 'Saving…'
-                    : 'Save Concept'
+                    : 'Save'
                   : isSavingQuestion
                     ? 'Saving…'
-                    : questionId
-                      ? 'Save Changes'
-                      : 'Save Question'}
+                    : 'Save'}
               </button>
             </div>
           </header>
@@ -1664,7 +2275,12 @@ export function CreatorStudioV2Client({
                   type="button"
                   role="tab"
                   aria-selected={isActive}
-                  onClick={() => setActiveCreatorTab(tab)}
+                  onClick={() => {
+                    setActiveCreatorTab(tab);
+                    if (tab === 'questions') {
+                      setActiveTopicId(questionTopicId);
+                    }
+                  }}
                   style={{
                     position: 'relative',
                     zIndex: isActive ? 1 : 0,
@@ -1692,6 +2308,111 @@ export function CreatorStudioV2Client({
 
           {activeCreatorTab === 'content' ? (
             <>
+              <section
+                className={styles.panel}
+                style={{ marginBottom: 18 }}
+              >
+                <div
+                  style={{
+                    alignItems: 'center',
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: 10,
+                  }}
+                >
+                  <label
+                    className={styles.searchBox}
+                    style={{ flex: '1 1 260px' }}
+                  >
+                    <span className={styles.srOnly}>Search concepts</span>
+                    <input
+                      value={contentConceptSearch}
+                      onChange={(event) =>
+                        setContentConceptSearch(event.target.value)
+                      }
+                      placeholder="Search concepts"
+                    />
+                    <Search size={20} />
+                  </label>
+                  <button
+                    className={styles.secondaryButton}
+                    type="button"
+                    onClick={startNewConcept}
+                  >
+                    <Plus size={17} /> New Concept
+                  </button>
+                </div>
+
+                <div
+                  style={{
+                    color: '#687386',
+                    fontSize: 13,
+                    marginTop: 8,
+                  }}
+                >
+                  Editing:{' '}
+                  <strong style={{ color: '#334155' }}>
+                    {conceptId ? conceptName || 'Untitled concept' : 'New concept'}
+                  </strong>
+                </div>
+
+                {normalizedContentConceptSearch && (
+                  <div
+                    style={{
+                      border: '1px solid #d8e1ef',
+                      borderRadius: 12,
+                      display: 'grid',
+                      gap: 4,
+                      marginTop: 10,
+                      padding: 8,
+                    }}
+                  >
+                    {contentConceptSearchResults.length ? (
+                      contentConceptSearchResults.map((conceptOption) => {
+                        const isSelected = conceptOption.id === conceptId;
+                        const firstPath = conceptOption.paths[0];
+
+                        return (
+                          <button
+                            className={styles.secondaryButton}
+                            key={conceptOption.id}
+                            type="button"
+                            aria-pressed={isSelected}
+                            onClick={() =>
+                              openConceptFromSearch(conceptOption.id)
+                            }
+                            style={{
+                              alignItems: 'flex-start',
+                              background: isSelected ? '#e8f0ff' : undefined,
+                              borderColor: isSelected ? '#8eb2f3' : undefined,
+                              color: isSelected ? '#0f4eb8' : undefined,
+                              display: 'flex',
+                              flexDirection: 'column',
+                              justifyContent: 'flex-start',
+                              textAlign: 'left',
+                            }}
+                          >
+                            <span>{conceptOption.name}</span>
+                            {firstPath && (
+                              <small style={{ color: '#687386' }}>
+                                {firstPath}
+                                {conceptOption.paths.length > 1
+                                  ? ` +${conceptOption.paths.length - 1}`
+                                  : ''}
+                              </small>
+                            )}
+                          </button>
+                        );
+                      })
+                    ) : (
+                      <p className={styles.emptySelection}>
+                        No concepts match “{contentConceptSearch.trim()}”.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </section>
+
               <div className={styles.mainGrid}>
                 <section className={`${styles.panel} ${styles.conceptPanel}`}>
               <div>
@@ -2178,12 +2899,101 @@ export function CreatorStudioV2Client({
                     <p>Create the front and back of the study card.</p>
                   </div>
 
+                  <div
+                    style={{
+                      borderBottom: '1px solid #e2e8f0',
+                      marginBottom: 18,
+                      paddingBottom: 16,
+                    }}
+                  >
+                    <div
+                      style={{
+                        alignItems: 'center',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        gap: 12,
+                        marginBottom: 10,
+                      }}
+                    >
+                      <h3 style={{ margin: 0 }}>Existing Questions</h3>
+                      <button
+                        className={styles.secondaryButton}
+                        type="button"
+                        disabled={!questionConceptId || isSavingQuestion}
+                        onClick={startNewQuestion}
+                      >
+                        <Plus size={16} /> New Question
+                      </button>
+                    </div>
+
+                    {!questionConceptId ? (
+                      <p className={styles.emptySelection}>
+                        Select a concept to view its questions.
+                      </p>
+                    ) : isLoadingExistingQuestions ? (
+                      <p className={styles.emptySelection}>
+                        Loading questions…
+                      </p>
+                    ) : existingQuestions.length ? (
+                      <div style={{ display: 'grid', gap: 6 }}>
+                        {existingQuestions.map((question) => {
+                          const isSelected = question.id === questionId;
+
+                          return (
+                            <button
+                              key={question.id}
+                              type="button"
+                              disabled={isSavingQuestion}
+                              aria-pressed={isSelected}
+                              onClick={() => selectExistingQuestion(question)}
+                              style={{
+                                alignItems: 'stretch',
+                                background: isSelected ? '#e8f0ff' : '#f7f9fc',
+                                border: isSelected
+                                  ? '1px solid #8eb2f3'
+                                  : '1px solid #d8e1ef',
+                                borderRadius: 8,
+                                color: isSelected ? '#0f4eb8' : '#334155',
+                                cursor: isSavingQuestion
+                                  ? 'not-allowed'
+                                  : 'pointer',
+                                display: 'grid',
+                                gap: 3,
+                                padding: '8px 10px',
+                                textAlign: 'left',
+                              }}
+                            >
+                              <span
+                                title={question.prompt}
+                                style={{
+                                  fontWeight: 700,
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                }}
+                              >
+                                {question.prompt || 'Untitled question'}
+                              </span>
+                              <small style={{ color: '#687386' }}>
+                                {question.difficulty} · {question.testingAngle} ·{' '}
+                                {question.status}
+                              </small>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className={styles.emptySelection}>No questions yet.</p>
+                    )}
+                  </div>
+
                   <label style={{ display: 'grid', gap: 8 }}>
                     <strong>Question</strong>
                     <textarea
                       className={styles.conceptEditor}
                       style={{ minHeight: 180 }}
                       value={questionPrompt}
+                      disabled={isSavingQuestion}
                       onChange={(event) => {
                         setQuestionPrompt(event.target.value);
                         setQuestionStatus(null);
@@ -2199,6 +3009,7 @@ export function CreatorStudioV2Client({
                       className={styles.conceptEditor}
                       style={{ minHeight: 180 }}
                       value={questionAnswer}
+                      disabled={isSavingQuestion}
                       onChange={(event) => {
                         setQuestionAnswer(event.target.value);
                         setQuestionStatus(null);
@@ -2215,6 +3026,101 @@ export function CreatorStudioV2Client({
                     <p>Select the topic, then choose the concept this question tests.</p>
                   </div>
 
+                  <div style={{ display: 'grid', gap: 8, marginBottom: 12 }}>
+                    <div
+                      style={{
+                        alignItems: 'center',
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        gap: 8,
+                      }}
+                    >
+                      <label className={styles.searchBox} style={{ flex: '1 1 220px' }}>
+                        <span className={styles.srOnly}>Search concepts</span>
+                        <input
+                          value={questionConceptSearch}
+                          onChange={(event) =>
+                            setQuestionConceptSearch(event.target.value)
+                          }
+                          placeholder="Search concepts"
+                        />
+                        <Search size={20} />
+                      </label>
+                      <label
+                        style={{
+                          alignItems: 'center',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          fontSize: 14,
+                          gap: 6,
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={needsQuestionsOnly}
+                          onChange={(event) =>
+                            setNeedsQuestionsOnly(event.target.checked)
+                          }
+                        />
+                        <span>Needs Questions</span>
+                      </label>
+                    </div>
+                    {normalizedQuestionConceptSearch && (
+                      <div
+                        style={{
+                          border: '1px solid #d8e1ef',
+                          borderRadius: 12,
+                          display: 'grid',
+                          gap: 4,
+                          padding: 8,
+                        }}
+                      >
+                        {questionConceptSearchResults.length ? (
+                          questionConceptSearchResults.map((option) => (
+                            <button
+                              className={styles.secondaryButton}
+                              key={option.id}
+                              type="button"
+                              disabled={isSavingQuestion}
+                              onClick={() => {
+                                if (
+                                  selectQuestionConcept(
+                                    option.id,
+                                    questionTopicId
+                                  )
+                                ) {
+                                  setQuestionConceptSearch('');
+                                }
+                              }}
+                              style={{
+                                alignItems: 'flex-start',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                justifyContent: 'flex-start',
+                                textAlign: 'left',
+                              }}
+                            >
+                              <span>{option.name}</span>
+                              <small style={{ color: '#687386' }}>
+                                {questionConceptSearchPath
+                                  ? `${questionConceptSearchPath} · `
+                                  : ''}
+                                {questionCountLabel(
+                                  questionCountsByConceptId[option.id] || 0
+                                )}
+                              </small>
+                            </button>
+                          ))
+                        ) : (
+                          <p className={styles.emptySelection}>
+                            No concepts match “{questionConceptSearch.trim()}”.
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
                   <div className={styles.treeControls}>
                     <label className={styles.searchBox}>
                       <span className={styles.srOnly}>Search topics</span>
@@ -2225,7 +3131,132 @@ export function CreatorStudioV2Client({
                       />
                       <Search size={20} />
                     </label>
+                    <button
+                      className={styles.toolButton}
+                      type="button"
+                      onClick={openAddDialog}
+                      disabled={isMutatingTopic}
+                    >
+                      <Plus size={18} /> Add Subtopic
+                    </button>
+                    <button
+                      className={styles.toolButton}
+                      type="button"
+                      onClick={openRenameDialog}
+                      disabled={isMutatingTopic}
+                    >
+                      <Pencil size={17} /> Rename
+                    </button>
+                    <button
+                      className={styles.toolButton}
+                      type="button"
+                      onClick={deleteActiveTopic}
+                      disabled={isMutatingTopic}
+                    >
+                      <Trash2 size={17} /> Delete
+                    </button>
+                    <button
+                      className={styles.toolButton}
+                      type="button"
+                      onClick={openMoveDialog}
+                      disabled={isMutatingTopic}
+                    >
+                      <ArrowUpDown size={17} /> Move
+                    </button>
                   </div>
+
+                  {dialogMode && (
+                    <div
+                      className={styles.inlineDialog}
+                      role="dialog"
+                      aria-modal="false"
+                    >
+                      {dialogMode === 'move' ? (
+                        <>
+                          <label>
+                            Move “{activeTopic?.name}” beneath
+                            <select
+                              value={moveDestinationId}
+                              onChange={(event) =>
+                                setMoveDestinationId(event.target.value)
+                              }
+                            >
+                              {moveDestinations.map((destination) => (
+                                <option
+                                  key={destination.id}
+                                  value={destination.id}
+                                >
+                                  {destination.label}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <div className={styles.dialogActions}>
+                            <button
+                              className={styles.secondaryButton}
+                              type="button"
+                              onClick={() => setDialogMode(null)}
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              className={styles.primaryButton}
+                              type="button"
+                              onClick={moveActiveTopic}
+                              disabled={isMutatingTopic}
+                            >
+                              {isMutatingTopic ? 'Moving…' : 'Move'}
+                            </button>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <label>
+                            {dialogMode === 'add'
+                              ? `Add Subtopic beneath ${activeTopic?.name}`
+                              : `Rename “${activeTopic?.name}”`}
+                            <input
+                              autoFocus
+                              value={nameDraft}
+                              onChange={(event) =>
+                                setNameDraft(event.target.value)
+                              }
+                              onKeyDown={(event) => {
+                                if (
+                                  event.key === 'Enter' &&
+                                  !isMutatingTopic
+                                ) {
+                                  void saveNameDialog();
+                                }
+                              }}
+                              placeholder={
+                                dialogMode === 'add'
+                                  ? 'Subtopic name'
+                                  : 'Topic name'
+                              }
+                            />
+                          </label>
+                          <div className={styles.dialogActions}>
+                            <button
+                              className={styles.secondaryButton}
+                              type="button"
+                              onClick={() => setDialogMode(null)}
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              className={styles.primaryButton}
+                              type="button"
+                              onClick={saveNameDialog}
+                              disabled={isMutatingTopic}
+                            >
+                              {isMutatingTopic ? 'Saving…' : 'Save'}
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
 
                   <div className={styles.treeViewport} aria-label="Question Topic Tree">
                     {topics.map((topic) => renderQuestionTopic(topic))}
@@ -2234,43 +3265,13 @@ export function CreatorStudioV2Client({
                         No topics match “{searchQuery.trim()}”.
                       </div>
                     )}
+                    {needsQuestionsOnly && needsQuestionTopicIds.size === 0 && (
+                      <div className={styles.emptyTree}>
+                        Every concept has at least one question.
+                      </div>
+                    )}
                   </div>
 
-                  <div style={{ borderTop: '1px solid #e2e8f0', marginTop: 16, paddingTop: 16 }}>
-                    <label style={{ display: 'grid', gap: 8 }}>
-                      <strong>Concept</strong>
-                      <select
-                        value={questionConceptId || ''}
-                        disabled={
-                          Boolean(questionId) ||
-                          isLoadingQuestionConcepts ||
-                          !questionConceptOptions.length
-                        }
-                        onChange={(event) => {
-                          setQuestionConceptId(event.target.value || null);
-                          setQuestionStatus(null);
-                        }}
-                      >
-                        <option value="">
-                          {isLoadingQuestionConcepts
-                            ? 'Loading concepts…'
-                            : questionConceptOptions.length
-                              ? 'Choose a concept…'
-                              : 'No concepts in this topic'}
-                        </option>
-                        {questionConceptOptions.map((option) => (
-                          <option key={option.id} value={option.id}>
-                            {option.name}
-                          </option>
-                        ))}
-                      </select>
-                      {questionId && (
-                        <small style={{ color: '#687386' }}>
-                          The concept is fixed after the question&apos;s first save.
-                        </small>
-                      )}
-                    </label>
-                  </div>
                 </section>
               </div>
 
@@ -2292,6 +3293,7 @@ export function CreatorStudioV2Client({
                     <strong>Difficulty</strong>
                     <select
                       value={questionDifficulty}
+                      disabled={isSavingQuestion}
                       onChange={(event) => {
                         setQuestionDifficulty(event.target.value as QuestionDifficulty);
                         setQuestionStatus(null);
@@ -2305,29 +3307,22 @@ export function CreatorStudioV2Client({
 
                   <label style={{ display: 'grid', gap: 8 }}>
                     <strong>Testing Angle</strong>
-                    <input
+                    <select
                       value={questionTestingAngle}
+                      disabled={isSavingQuestion}
                       onChange={(event) => {
                         setQuestionTestingAngle(event.target.value);
                         setQuestionStatus(null);
                       }}
-                      placeholder="General Understanding"
-                    />
+                    >
+                      {testingAngleOptions.map((angle) => (
+                        <option key={angle} value={angle}>
+                          {angle}
+                        </option>
+                      ))}
+                    </select>
                   </label>
                 </div>
-
-                <label style={{ display: 'grid', gap: 8, marginTop: 18 }}>
-                  <strong>Explanation (optional)</strong>
-                  <textarea
-                    value={questionExplanation}
-                    onChange={(event) => {
-                      setQuestionExplanation(event.target.value);
-                      setQuestionStatus(null);
-                    }}
-                    rows={4}
-                    placeholder="Explain why the answer is correct..."
-                  />
-                </label>
               </section>
 
               <footer className={styles.bottomActions}>
