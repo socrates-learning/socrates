@@ -2161,14 +2161,6 @@ export function CreatorStudioV2Client({
               <Info size={22} />
               <span>Select multiple topics to assign this concept to more than one location.</span>
             </div>
-            <button
-              className={`${styles.primaryButton} ${styles.largeSaveButton}`}
-              type="button"
-              onClick={saveConcept}
-              disabled={isSaving}
-            >
-              {isSaving ? 'Saving…' : 'Save Concept'}
-            </button>
               </footer>
 
               {status && (
