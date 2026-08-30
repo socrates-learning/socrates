@@ -2240,6 +2240,13 @@ export function CreatorStudioV2Client({
               >
                 ← Back
               </button>
+              <button
+                className={styles.secondaryButton}
+                type="button"
+                onClick={() => navigateFromCreator('/creator/libraries')}
+              >
+                Library Organizer
+              </button>
               <span
                 className={`${styles.saveState} ${isDirty ? styles.unsaved : ''}`}
                 aria-live="polite"
