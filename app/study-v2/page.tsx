@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { navigateBackOrFallback } from '@/lib/safe-navigation';
@@ -90,8 +91,17 @@ function StudyPrototypeHeader() {
   return (
     <header className="study-v2-header">
       <Link className="study-v2-brand" href="/" onClick={handleHomeClick}>
-        <strong>Socrates</strong>
-        <span>Real application foundation · concept-network learning platform</span>
+        <Image
+          alt="Socrates owl mark"
+          className="study-v2-brand-mark"
+          height={66}
+          src="/brand/socrates-mark.png"
+          width={76}
+        />
+        <div>
+          <strong>Socrates</strong>
+          <span>Learn anything.</span>
+        </div>
       </Link>
 
       <nav className="study-v2-nav" aria-label="Socrates prototype navigation">
@@ -290,9 +300,18 @@ export default function StudyV2Page() {
         }
 
         .study-v2-brand {
+          align-items: center;
           color: #ffffff;
-          display: block;
+          display: flex;
+          gap: 12px;
           min-width: 320px;
+        }
+
+        .study-v2-brand-mark {
+          flex: 0 0 auto;
+          height: 66px;
+          object-fit: contain;
+          width: 76px;
         }
 
         .study-v2-brand strong {
@@ -622,6 +641,11 @@ export default function StudyV2Page() {
           .study-v2-header {
             align-items: flex-start;
             flex-direction: column;
+          }
+
+          .study-v2-brand-mark {
+            height: 48px;
+            width: 55px;
           }
 
           .study-v2-nav {

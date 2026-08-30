@@ -38,7 +38,7 @@ export default async function EditArticlePage({
     .order('created_at');
   const { data: articleTags } = await supabase
     .from('article_tags')
-    .select('tags(name)')
+    .select('tags(id, name, slug, status)')
     .eq('article_id', article.id);
   const { data: articleConcepts } = await supabase
     .from('article_concepts')
@@ -78,12 +78,24 @@ export default async function EditArticlePage({
     activeLibraryPlacements.find((placement) => placement.is_primary) ||
     activeLibraryPlacements[0] ||
     null;
-  const tagNames = (articleTags || []).flatMap((articleTag) => {
+  const tags = (articleTags || []).flatMap((articleTag) => {
     const tag = Array.isArray(articleTag.tags)
       ? articleTag.tags[0]
       : articleTag.tags;
 
-    return tag?.name ? [tag.name] : [];
+    return tag?.id && tag.name && tag.slug
+      ? [
+          {
+            id: tag.id,
+            name: tag.name,
+            slug: tag.slug,
+            status:
+              tag.status === 'archived'
+                ? ('archived' as const)
+                : ('active' as const),
+          },
+        ]
+      : [];
   });
   const coreConcepts = (articleConcepts || []).map((articleConcept) => {
     const concept = Array.isArray(articleConcept.concepts)
@@ -125,7 +137,7 @@ export default async function EditArticlePage({
                 body_markdown: version?.body_markdown || '',
                 placement_ids: placementIds,
                 primary_placement_id: primaryPlacement?.library_node_id || null,
-                tags: tagNames,
+                tags,
                 core_concepts: coreConcepts,
               }}
             />

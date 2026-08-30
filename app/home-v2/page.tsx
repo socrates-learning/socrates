@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 
 type DeckMode = 'Learn' | 'Study' | 'Cram';
@@ -127,10 +128,14 @@ function HomeV2Header() {
   return (
     <header className="home-v2-header">
       <Link className="home-v2-brand" href="/" onClick={handleHomeClick}>
-        <span>
-          <strong>Socrates</strong>
-          <small>Real application foundation · concept-network learning platform</small>
-        </span>
+        <Image
+          alt="Socrates — Learn anything."
+          className="home-v2-brand-logo"
+          height={152}
+          priority
+          src="/brand/socrates-logo-dark.png"
+          width={270}
+        />
       </Link>
 
       <nav className="home-v2-nav" aria-label="Socrates prototype navigation">
@@ -419,7 +424,15 @@ export default function HomeV2Page() {
           align-items: center;
           color: #ffffff;
           display: flex;
-          min-width: 360px;
+          min-width: 0;
+          width: fit-content;
+        }
+
+        .home-v2-brand-logo {
+          flex: 0 0 auto;
+          height: auto;
+          object-fit: contain;
+          width: clamp(220px, 20vw, 270px);
         }
 
         .home-v2-brand strong {

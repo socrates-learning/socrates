@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { useState } from 'react';
 
 type NavItem = {
@@ -83,8 +84,17 @@ function PrototypeHeader() {
   return (
     <header className="study-setup-v2-header">
       <Link className="study-setup-v2-brand" href="/" onClick={handleHomeClick}>
-        <strong>Socrates</strong>
-        <span>Real application foundation · concept-network learning platform</span>
+        <Image
+          alt="Socrates owl mark"
+          className="study-setup-v2-brand-mark"
+          height={66}
+          src="/brand/socrates-mark.png"
+          width={76}
+        />
+        <div>
+          <strong>Socrates</strong>
+          <span>Learn anything.</span>
+        </div>
       </Link>
 
       <nav className="study-setup-v2-nav" aria-label="Socrates prototype navigation">
@@ -238,9 +248,18 @@ export default function StudySetupV2Page() {
         }
 
         .study-setup-v2-brand {
+          align-items: center;
           color: #ffffff;
-          display: block;
+          display: flex;
+          gap: 12px;
           min-width: 500px;
+        }
+
+        .study-setup-v2-brand-mark {
+          flex: 0 0 auto;
+          height: 66px;
+          object-fit: contain;
+          width: 76px;
         }
 
         .study-setup-v2-brand strong {
@@ -568,6 +587,11 @@ export default function StudySetupV2Page() {
 
           .study-setup-v2-brand {
             min-width: 0;
+          }
+
+          .study-setup-v2-brand-mark {
+            height: 48px;
+            width: 55px;
           }
 
           .study-setup-v2-nav {

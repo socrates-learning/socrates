@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
@@ -120,7 +121,14 @@ function LoginForm() {
 
   return (
     <section className="panel" style={{ maxWidth: 480, margin: '4rem auto' }}>
-      <h1>Socrates</h1>
+      <Image
+        alt="Socrates — Learn anything."
+        height={213}
+        priority
+        src="/brand/socrates-logo-full.png"
+        style={{ display: 'block', height: 'auto', margin: '0 auto 24px', maxWidth: '100%' }}
+        width={320}
+      />
       <p className="muted">Sign in with your Socrates account.</p>
 
       <form onSubmit={handleLogin} className="stack">

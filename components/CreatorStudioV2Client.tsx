@@ -39,6 +39,12 @@ type ConceptTag = {
   id: string;
   name: string;
   slug: string;
+  status: 'active' | 'archived';
+};
+type CatalogTag = ConceptTag & {
+  conceptUsage: number;
+  questionUsage: number;
+  articleUsage: number;
 };
 type QuestionConceptOption = {
   id: string;
@@ -52,6 +58,7 @@ type ExistingQuestion = {
   difficulty: QuestionDifficulty;
   testingAngle: string;
   status: LifecycleStatus;
+  tags: ConceptTag[];
 };
 
 type CreatorTab = 'content' | 'questions';
@@ -269,7 +276,7 @@ function draftFingerprint(
   bodyMarkdown: string,
   placementIds: Iterable<string>,
   references: Reference[],
-  tagNames: Iterable<string>,
+  tagIds: Iterable<string>,
   recordStatus: LifecycleStatus
 ) {
   return JSON.stringify({
@@ -286,7 +293,7 @@ function draftFingerprint(
         notes: reference.notes,
       }))
       .sort((left, right) => left.identity.localeCompare(right.identity)),
-    tags: Array.from(tagNames).map(tagIdentity).sort(),
+    tagIds: Array.from(tagIds).sort(),
     recordStatus,
   });
 }
@@ -299,6 +306,7 @@ function questionDraftFingerprint({
   difficulty,
   testingAngle,
   recordStatus,
+  tagIds,
 }: {
   questionId: string | null;
   conceptId: string | null;
@@ -307,6 +315,7 @@ function questionDraftFingerprint({
   difficulty: QuestionDifficulty;
   testingAngle: string;
   recordStatus: LifecycleStatus;
+  tagIds: Iterable<string>;
 }) {
   return JSON.stringify({
     questionId,
@@ -316,6 +325,7 @@ function questionDraftFingerprint({
     difficulty,
     testingAngle,
     recordStatus,
+    tagIds: Array.from(tagIds).sort(),
   });
 }
 
@@ -368,6 +378,12 @@ export function CreatorStudioV2Client({
   const [conceptTags, setConceptTags] = useState<ConceptTag[]>([]);
   const [tagDraft, setTagDraft] = useState('');
   const [tagStatus, setTagStatus] = useState<Status>(null);
+  const [availableTags, setAvailableTags] = useState<CatalogTag[]>([]);
+  const [isTagManagerOpen, setIsTagManagerOpen] = useState(false);
+  const [tagCatalogSearch, setTagCatalogSearch] = useState('');
+  const [newCatalogTagName, setNewCatalogTagName] = useState('');
+  const [tagCatalogStatus, setTagCatalogStatus] = useState<Status>(null);
+  const [isMutatingTagCatalog, setIsMutatingTagCatalog] = useState(false);
   const [questionId, setQuestionId] = useState<string | null>(null);
   const [questionConceptId, setQuestionConceptId] = useState<string | null>(
     resolvedConcept.id
@@ -393,6 +409,9 @@ export function CreatorStudioV2Client({
   );
   const [questionRecordStatus, setQuestionRecordStatus] =
     useState<LifecycleStatus>('draft');
+  const [questionTags, setQuestionTags] = useState<ConceptTag[]>([]);
+  const [questionTagDraft, setQuestionTagDraft] = useState('');
+  const [questionTagStatus, setQuestionTagStatus] = useState<Status>(null);
   const [existingQuestions, setExistingQuestions] = useState<
     ExistingQuestion[]
   >([]);
@@ -427,7 +446,7 @@ export function CreatorStudioV2Client({
         concept,
         selectedTopicIds,
         references,
-        conceptTags.map((tag) => tag.name),
+        conceptTags.map((tag) => tag.id),
         conceptRecordStatus
       ),
     [concept, conceptRecordStatus, conceptTags, references, selectedTopicIds]
@@ -442,6 +461,7 @@ export function CreatorStudioV2Client({
         difficulty: questionDifficulty,
         testingAngle: questionTestingAngle,
         recordStatus: questionRecordStatus,
+        tagIds: questionTags.map((tag) => tag.id),
       }),
     [
       questionAnswer,
@@ -450,6 +470,7 @@ export function CreatorStudioV2Client({
       questionId,
       questionPrompt,
       questionRecordStatus,
+      questionTags,
       questionTestingAngle,
     ]
   );
@@ -473,7 +494,8 @@ export function CreatorStudioV2Client({
       questionPrompt.trim() ||
       questionAnswer.trim() ||
       questionDifficulty !== 'medium' ||
-      questionTestingAngle.trim() !== 'General Understanding'
+      questionTestingAngle.trim() !== 'General Understanding' ||
+      questionTags.length
   );
   const isQuestionDirty =
     hasQuestionDraft && currentQuestionFingerprint !== savedQuestionFingerprint;
@@ -493,6 +515,66 @@ export function CreatorStudioV2Client({
     window.addEventListener('beforeunload', warnBeforeUnload);
     return () => window.removeEventListener('beforeunload', warnBeforeUnload);
   }, [isDirty]);
+
+  async function loadTagCatalog() {
+    const [tagResult, conceptUsageResult, questionUsageResult, articleUsageResult] =
+      await Promise.all([
+        supabase
+          .from('tags')
+          .select('id, name, slug, status')
+          .order('name'),
+        supabase.from('concept_tags').select('tag_id'),
+        supabase.from('question_tags').select('tag_id'),
+        supabase.from('article_tags').select('tag_id'),
+      ]);
+
+    if (tagResult.error) {
+      setTagCatalogStatus({
+        tone: 'error',
+        message: 'Tags could not be loaded.',
+      });
+      return;
+    }
+
+    function usageCounts(rows: Array<{ tag_id: string | null }> | null) {
+      return (rows || []).reduce<Record<string, number>>((counts, row) => {
+        if (row.tag_id) counts[row.tag_id] = (counts[row.tag_id] || 0) + 1;
+        return counts;
+      }, {});
+    }
+
+    const conceptUsage = usageCounts(conceptUsageResult.data);
+    const questionUsage = usageCounts(questionUsageResult.data);
+    const articleUsage = usageCounts(articleUsageResult.data);
+    const catalog = (tagResult.data || []).map((tag) => ({
+      id: tag.id,
+      name: tag.name,
+      slug: tag.slug,
+      status: tag.status === 'archived' ? 'archived' : 'active',
+      conceptUsage: conceptUsage[tag.id] || 0,
+      questionUsage: questionUsage[tag.id] || 0,
+      articleUsage: articleUsage[tag.id] || 0,
+    })) satisfies CatalogTag[];
+    const catalogById = new Map(catalog.map((tag) => [tag.id, tag]));
+
+    setAvailableTags(catalog);
+    setConceptTags((current) =>
+      current.map((tag) => catalogById.get(tag.id) || tag)
+    );
+    setQuestionTags((current) =>
+      current.map((tag) => catalogById.get(tag.id) || tag)
+    );
+    setExistingQuestions((current) =>
+      current.map((question) => ({
+        ...question,
+        tags: question.tags.map((tag) => catalogById.get(tag.id) || tag),
+      }))
+    );
+  }
+
+  useEffect(() => {
+    void loadTagCatalog();
+  }, []);
 
   useEffect(() => {
     if (
@@ -541,10 +623,11 @@ export function CreatorStudioV2Client({
           ? statusResult.data.status
           : 'draft';
 
-      const loadedTags = ((tagResult.data || []) as ConceptTag[]).map((tag) => ({
+      const loadedTags: ConceptTag[] = ((tagResult.data || []) as ConceptTag[]).map((tag) => ({
         id: tag.id,
         name: tag.name,
         slug: tag.slug,
+        status: tag.status === 'archived' ? ('archived' as const) : ('active' as const),
       }));
 
       setConceptRecordStatus(loadedStatus);
@@ -554,7 +637,7 @@ export function CreatorStudioV2Client({
           resolvedConcept.bodyMarkdown,
           resolvedConcept.placementIds,
           initialReferences,
-          loadedTags.map((tag) => tag.name),
+          loadedTags.map((tag) => tag.id),
           loadedStatus
         )
       );
@@ -762,8 +845,12 @@ export function CreatorStudioV2Client({
         difficulty: 'medium',
         testingAngle: 'General Understanding',
         recordStatus: 'draft',
+        tagIds: [],
       })
     );
+    setQuestionTags([]);
+    setQuestionTagDraft('');
+    setQuestionTagStatus(null);
   }, [questionConceptId]);
 
   const rootTopicId = topics[0]?.id || ROOT_TOPIC_ID;
@@ -906,6 +993,19 @@ export function CreatorStudioV2Client({
     blocked.add(activeTopic.id);
     return flattenTopics(topics).filter((topic) => !blocked.has(topic.id));
   }, [activeTopic, topics]);
+  const activeCatalogTags = useMemo(
+    () => availableTags.filter((tag) => tag.status === 'active'),
+    [availableTags]
+  );
+  const filteredCatalogTags = useMemo(() => {
+    const query = tagCatalogSearch.trim().toLocaleLowerCase();
+    if (!query) return availableTags;
+    return availableTags.filter(
+      (tag) =>
+        tag.name.toLocaleLowerCase().includes(query) ||
+        tag.slug.toLocaleLowerCase().includes(query)
+    );
+  }, [availableTags, tagCatalogSearch]);
 
   function showStatus(tone: StatusTone, message: string) {
     if (activeCreatorTab === 'questions') {
@@ -915,13 +1015,100 @@ export function CreatorStudioV2Client({
     setStatus({ tone, message });
   }
 
+  async function createCatalogTag() {
+    const name = normalizeTagName(newCatalogTagName);
+    if (!name || isMutatingTagCatalog) return;
+
+    setIsMutatingTagCatalog(true);
+    setTagCatalogStatus(null);
+    const { error } = await supabase.rpc('create_catalog_tag', { p_name: name });
+    if (error) {
+      setTagCatalogStatus({
+        tone: 'error',
+        message: error.message || 'Tag could not be created.',
+      });
+      setIsMutatingTagCatalog(false);
+      return;
+    }
+
+    setNewCatalogTagName('');
+    await loadTagCatalog();
+    setIsMutatingTagCatalog(false);
+    setTagCatalogStatus({ tone: 'success', message: 'Tag created.' });
+  }
+
+  async function renameCatalogTag(tag: CatalogTag) {
+    if (isMutatingTagCatalog) return;
+    const proposedName = window.prompt('Rename tag', tag.name);
+    if (proposedName === null) return;
+    const name = normalizeTagName(proposedName);
+    if (!name || name === tag.name) return;
+
+    setIsMutatingTagCatalog(true);
+    setTagCatalogStatus(null);
+    const { error } = await supabase.rpc('rename_catalog_tag', {
+      p_tag_id: tag.id,
+      p_name: name,
+    });
+    if (error) {
+      setTagCatalogStatus({
+        tone: 'error',
+        message: error.message || 'Tag could not be renamed.',
+      });
+      setIsMutatingTagCatalog(false);
+      return;
+    }
+
+    await loadTagCatalog();
+    setIsMutatingTagCatalog(false);
+    setTagCatalogStatus({ tone: 'success', message: 'Tag renamed.' });
+  }
+
+  async function setCatalogTagStatus(
+    tag: CatalogTag,
+    nextStatus: 'active' | 'archived'
+  ) {
+    if (isMutatingTagCatalog) return;
+    if (
+      nextStatus === 'archived' &&
+      !window.confirm(
+        `Archive “${tag.name}”? Existing assignments will be preserved.`
+      )
+    ) {
+      return;
+    }
+
+    setIsMutatingTagCatalog(true);
+    setTagCatalogStatus(null);
+    const rpcName =
+      nextStatus === 'archived'
+        ? 'archive_catalog_tag'
+        : 'reactivate_catalog_tag';
+    const { error } = await supabase.rpc(rpcName, { p_tag_id: tag.id });
+    if (error) {
+      setTagCatalogStatus({
+        tone: 'error',
+        message: error.message || 'Tag status could not be changed.',
+      });
+      setIsMutatingTagCatalog(false);
+      return;
+    }
+
+    await loadTagCatalog();
+    setIsMutatingTagCatalog(false);
+    setTagCatalogStatus({
+      tone: 'success',
+      message: nextStatus === 'archived' ? 'Tag archived.' : 'Tag reactivated.',
+    });
+  }
+
   async function fetchExistingQuestions(
     conceptId: string
   ): Promise<ExistingQuestion[] | null> {
     const { data, error } = await supabase
       .from('questions')
       .select(
-        'id, prompt, difficulty, testing_angle, status, sort_order, question_accepted_answers(answer_text, sort_order)'
+        'id, prompt, difficulty, testing_angle, status, sort_order, question_accepted_answers(answer_text, sort_order), question_tags(tag_id, tags(id, name, slug, status))'
       )
       .eq('concept_id', conceptId)
       .order('sort_order', { ascending: true })
@@ -937,6 +1124,25 @@ export function CreatorStudioV2Client({
       status: string | null;
       question_accepted_answers:
         | Array<{ answer_text: string | null; sort_order: number | null }>
+        | null;
+      question_tags:
+        | Array<{
+            tag_id: string;
+            tags:
+              | {
+                  id: string;
+                  name: string;
+                  slug: string;
+                  status: string | null;
+                }
+              | Array<{
+                  id: string;
+                  name: string;
+                  slug: string;
+                  status: string | null;
+                }>
+              | null;
+          }>
         | null;
     };
 
@@ -954,6 +1160,24 @@ export function CreatorStudioV2Client({
         question.status === 'published' || question.status === 'archived'
           ? question.status
           : 'draft';
+      const tags = (question.question_tags || [])
+        .map((assignment) => {
+          const related = Array.isArray(assignment.tags)
+            ? assignment.tags[0]
+            : assignment.tags;
+          if (!related) return null;
+          return {
+            id: related.id,
+            name: related.name,
+            slug: related.slug,
+            status:
+              related.status === 'archived'
+                ? ('archived' as const)
+                : ('active' as const),
+          };
+        })
+        .filter((tag): tag is ConceptTag => tag !== null)
+        .sort((left, right) => left.name.localeCompare(right.name));
 
       return {
         id: question.id,
@@ -962,6 +1186,7 @@ export function CreatorStudioV2Client({
         difficulty,
         testingAngle: question.testing_angle || 'General Understanding',
         status: recordStatus,
+        tags,
       };
     });
   }
@@ -984,6 +1209,9 @@ export function CreatorStudioV2Client({
     setQuestionDifficulty('medium');
     setQuestionTestingAngle('General Understanding');
     setQuestionRecordStatus('draft');
+    setQuestionTags([]);
+    setQuestionTagDraft('');
+    setQuestionTagStatus(null);
     setSavedQuestionFingerprint(
       questionDraftFingerprint({
         questionId: null,
@@ -993,6 +1221,7 @@ export function CreatorStudioV2Client({
         difficulty: 'medium',
         testingAngle: 'General Understanding',
         recordStatus: 'draft',
+        tagIds: [],
       })
     );
   }
@@ -1038,6 +1267,9 @@ export function CreatorStudioV2Client({
     setQuestionDifficulty(question.difficulty);
     setQuestionTestingAngle(question.testingAngle);
     setQuestionRecordStatus(question.status);
+    setQuestionTags(question.tags);
+    setQuestionTagDraft('');
+    setQuestionTagStatus(null);
     setSavedQuestionFingerprint(
       questionDraftFingerprint({
         questionId: question.id,
@@ -1047,6 +1279,7 @@ export function CreatorStudioV2Client({
         difficulty: question.difficulty,
         testingAngle: question.testingAngle,
         recordStatus: question.status,
+        tagIds: question.tags.map((tag) => tag.id),
       })
     );
     setQuestionStatus(null);
@@ -1238,20 +1471,24 @@ export function CreatorStudioV2Client({
     const name = normalizeTagName(tagDraft);
     if (!name) return;
 
-    if (conceptTags.some((tag) => tagIdentity(tag.name) === tagIdentity(name))) {
+    const catalogTag = activeCatalogTags.find(
+      (tag) => tagIdentity(tag.name) === tagIdentity(name)
+    );
+    if (!catalogTag) {
+      setTagStatus({
+        tone: 'error',
+        message: 'Choose an active tag from the Tag Catalog.',
+      });
+      return;
+    }
+
+    if (conceptTags.some((tag) => tag.id === catalogTag.id)) {
       setTagStatus({ tone: 'info', message: 'That tag is already added.' });
       setTagDraft('');
       return;
     }
 
-    setConceptTags((current) => [
-      ...current,
-      {
-        id: `draft-tag-${globalThis.crypto.randomUUID()}`,
-        name,
-        slug: tagIdentity(name).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''),
-      },
-    ]);
+    setConceptTags((current) => [...current, catalogTag]);
     setTagDraft('');
     setTagStatus(null);
     setStatus(null);
@@ -1261,6 +1498,41 @@ export function CreatorStudioV2Client({
     setConceptTags((current) => current.filter((tag) => tag.id !== tagId));
     setTagStatus(null);
     setStatus(null);
+  }
+
+  function addQuestionTag() {
+    const name = normalizeTagName(questionTagDraft);
+    if (!name) return;
+
+    const catalogTag = activeCatalogTags.find(
+      (tag) => tagIdentity(tag.name) === tagIdentity(name)
+    );
+    if (!catalogTag) {
+      setQuestionTagStatus({
+        tone: 'error',
+        message: 'Choose an active tag from the Tag Catalog.',
+      });
+      return;
+    }
+    if (questionTags.some((tag) => tag.id === catalogTag.id)) {
+      setQuestionTagStatus({
+        tone: 'info',
+        message: 'That tag is already added.',
+      });
+      setQuestionTagDraft('');
+      return;
+    }
+
+    setQuestionTags((current) => [...current, catalogTag]);
+    setQuestionTagDraft('');
+    setQuestionTagStatus(null);
+    setQuestionStatus(null);
+  }
+
+  function removeQuestionTag(tagId: string) {
+    setQuestionTags((current) => current.filter((tag) => tag.id !== tagId));
+    setQuestionTagStatus(null);
+    setQuestionStatus(null);
   }
 
   function toggleExpanded(topicId: string) {
@@ -1788,7 +2060,7 @@ export function CreatorStudioV2Client({
     const bodyMarkdownToSave = concept;
     const placementIdsToSave = Array.from(selectedTopicIds);
     const referencesToSave = references;
-    const tagNamesToSave = conceptTags.map((tag) => tag.name);
+    const tagIdsToSave = conceptTags.map((tag) => tag.id);
     const name =
       conceptName.trim() || conceptNameFromMarkdown(bodyMarkdownToSave);
     setIsSaving(true);
@@ -1800,7 +2072,7 @@ export function CreatorStudioV2Client({
       p_body_markdown: bodyMarkdownToSave,
       p_active_library_id: activeLibraryId,
       p_library_node_ids: placementIdsToSave,
-      p_tag_names: tagNamesToSave,
+      p_tag_ids: tagIdsToSave,
       p_status: conceptRecordStatus,
       p_references: referencesToSave.map((reference) => ({
         client_id: reference.id,
@@ -1905,7 +2177,7 @@ export function CreatorStudioV2Client({
         bodyMarkdownToSave,
         placementIdsToSave,
         confirmedReferences,
-        tagNamesToSave,
+        tagIdsToSave,
         conceptRecordStatus
       )
     );
@@ -1961,6 +2233,7 @@ export function CreatorStudioV2Client({
       p_accepted_answers: [{ answer_text: answer, sort_order: 0 }],
       p_options: null,
       p_source_ids: null,
+      p_tag_ids: questionTags.map((tag) => tag.id),
     });
 
     if (error) {
@@ -1992,6 +2265,7 @@ export function CreatorStudioV2Client({
       difficulty: questionDifficulty,
       testingAngle,
       recordStatus: questionRecordStatus,
+      tagIds: questionTags.map((tag) => tag.id),
     });
 
     setQuestionPrompt(prompt);
@@ -2247,6 +2521,14 @@ export function CreatorStudioV2Client({
               >
                 Library Organizer
               </button>
+              <button
+                className={styles.secondaryButton}
+                type="button"
+                aria-expanded={isTagManagerOpen}
+                onClick={() => setIsTagManagerOpen((current) => !current)}
+              >
+                Tag Manager
+              </button>
               <span
                 className={`${styles.saveState} ${isDirty ? styles.unsaved : ''}`}
                 aria-live="polite"
@@ -2332,6 +2614,126 @@ export function CreatorStudioV2Client({
               );
             })}
           </nav>
+
+          {isTagManagerOpen && (
+            <section
+              className={`${styles.panel} ${styles.selectedPanel}`}
+              aria-label="Tag Manager"
+              style={{ margin: '18px 28px 0' }}
+            >
+              <div>
+                <h2>Tag Manager</h2>
+                <p>Create and maintain the shared tag vocabulary.</p>
+              </div>
+              <div
+                style={{
+                  alignItems: 'center',
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: 8,
+                  marginTop: 12,
+                }}
+              >
+                <label className={styles.searchBox} style={{ flex: '1 1 220px' }}>
+                  <span className={styles.srOnly}>Search tag catalog</span>
+                  <input
+                    value={tagCatalogSearch}
+                    onChange={(event) => setTagCatalogSearch(event.target.value)}
+                    placeholder="Search tags"
+                  />
+                  <Search size={20} />
+                </label>
+                <label className={styles.searchBox} style={{ flex: '1 1 220px' }}>
+                  <span className={styles.srOnly}>New tag name</span>
+                  <input
+                    value={newCatalogTagName}
+                    disabled={isMutatingTagCatalog}
+                    onChange={(event) => {
+                      setNewCatalogTagName(event.target.value);
+                      setTagCatalogStatus(null);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault();
+                        void createCatalogTag();
+                      }
+                    }}
+                    placeholder="New tag name"
+                  />
+                </label>
+                <button
+                  className={styles.toolButton}
+                  type="button"
+                  disabled={isMutatingTagCatalog || !newCatalogTagName.trim()}
+                  onClick={() => void createCatalogTag()}
+                >
+                  <Plus size={18} /> Create Tag
+                </button>
+              </div>
+              <div style={{ display: 'grid', gap: 6, marginTop: 12 }}>
+                {filteredCatalogTags.length ? (
+                  filteredCatalogTags.map((tag) => (
+                    <div
+                      key={tag.id}
+                      style={{
+                        alignItems: 'center',
+                        border: '1px solid #d8e1ef',
+                        borderRadius: 8,
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        gap: 8,
+                        justifyContent: 'space-between',
+                        padding: '8px 10px',
+                      }}
+                    >
+                      <span>
+                        <strong>{tag.name}</strong>{' '}
+                        <small style={{ color: '#687386' }}>
+                          {tag.status} · {tag.conceptUsage} concepts ·{' '}
+                          {tag.questionUsage} questions · {tag.articleUsage} articles
+                        </small>
+                      </span>
+                      <span style={{ display: 'flex', gap: 6 }}>
+                        <button
+                          className={styles.secondaryButton}
+                          type="button"
+                          disabled={isMutatingTagCatalog}
+                          onClick={() => void renameCatalogTag(tag)}
+                        >
+                          Rename
+                        </button>
+                        <button
+                          className={styles.secondaryButton}
+                          type="button"
+                          disabled={isMutatingTagCatalog}
+                          onClick={() =>
+                            void setCatalogTagStatus(
+                              tag,
+                              tag.status === 'active' ? 'archived' : 'active'
+                            )
+                          }
+                        >
+                          {tag.status === 'active' ? 'Archive' : 'Reactivate'}
+                        </button>
+                      </span>
+                    </div>
+                  ))
+                ) : (
+                  <p className={styles.emptySelection}>No tags found.</p>
+                )}
+              </div>
+              {tagCatalogStatus && (
+                <div
+                  className={`${styles.referenceStatus} ${styles[tagCatalogStatus.tone]}`}
+                  role="status"
+                  aria-live="polite"
+                  style={{ marginTop: 10 }}
+                >
+                  {tagCatalogStatus.message}
+                </div>
+              )}
+            </section>
+          )}
 
           {activeCreatorTab === 'content' ? (
             <>
@@ -2708,7 +3110,10 @@ export function CreatorStudioV2Client({
                 {conceptTags.length ? (
                   conceptTags.map((tag) => (
                     <div className={styles.topicChip} key={tag.id}>
-                      <span>{tag.name}</span>
+                      <span>
+                        {tag.name}
+                        {tag.status === 'archived' ? ' (Archived)' : ''}
+                      </span>
                       <button
                         type="button"
                         onClick={() => removeTag(tag.id)}
@@ -2734,6 +3139,7 @@ export function CreatorStudioV2Client({
                   <span className={styles.srOnly}>Add a tag</span>
                   <input
                     value={tagDraft}
+                    list="concept-tag-options"
                     onChange={(event) => {
                       setTagDraft(event.target.value);
                       setTagStatus(null);
@@ -2744,9 +3150,19 @@ export function CreatorStudioV2Client({
                         addTag();
                       }
                     }}
-                    placeholder="Add a tag..."
+                    placeholder="Search tags"
                   />
                 </label>
+                <datalist id="concept-tag-options">
+                  {activeCatalogTags
+                    .filter(
+                      (tag) =>
+                        !conceptTags.some((selected) => selected.id === tag.id)
+                    )
+                    .map((tag) => (
+                      <option key={tag.id} value={tag.name} />
+                    ))}
+                </datalist>
                 <button className={styles.toolButton} type="button" onClick={addTag}>
                   <Plus size={18} /> Add Tag
                 </button>
@@ -3399,6 +3815,103 @@ export function CreatorStudioV2Client({
                       <option value="archived">Archived</option>
                     </select>
                   </label>
+                </div>
+
+                <div
+                  style={{
+                    borderTop: '1px solid #e2e8f0',
+                    marginTop: 16,
+                    paddingTop: 16,
+                  }}
+                >
+                  <strong>Tags</strong>
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      gap: 8,
+                      margin: '10px 0',
+                    }}
+                  >
+                    {questionTags.length ? (
+                      questionTags.map((tag) => (
+                        <div className={styles.topicChip} key={tag.id}>
+                          <span>
+                            {tag.name}
+                            {tag.status === 'archived' ? ' (Archived)' : ''}
+                          </span>
+                          <button
+                            type="button"
+                            disabled={isSavingQuestion}
+                            onClick={() => removeQuestionTag(tag.id)}
+                            aria-label={`Remove ${tag.name} tag`}
+                          >
+                            <X size={16} />
+                          </button>
+                        </div>
+                      ))
+                    ) : (
+                      <p className={styles.emptySelection}>No tags added yet.</p>
+                    )}
+                  </div>
+                  <div
+                    style={{
+                      alignItems: 'center',
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      gap: 8,
+                    }}
+                  >
+                    <label className={styles.searchBox} style={{ maxWidth: 360 }}>
+                      <span className={styles.srOnly}>Add a question tag</span>
+                      <input
+                        value={questionTagDraft}
+                        list="question-tag-options"
+                        disabled={isSavingQuestion}
+                        onChange={(event) => {
+                          setQuestionTagDraft(event.target.value);
+                          setQuestionTagStatus(null);
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') {
+                            event.preventDefault();
+                            addQuestionTag();
+                          }
+                        }}
+                        placeholder="Search tags"
+                      />
+                    </label>
+                    <datalist id="question-tag-options">
+                      {activeCatalogTags
+                        .filter(
+                          (tag) =>
+                            !questionTags.some(
+                              (selected) => selected.id === tag.id
+                            )
+                        )
+                        .map((tag) => (
+                          <option key={tag.id} value={tag.name} />
+                        ))}
+                    </datalist>
+                    <button
+                      className={styles.toolButton}
+                      type="button"
+                      disabled={isSavingQuestion}
+                      onClick={addQuestionTag}
+                    >
+                      <Plus size={18} /> Add Tag
+                    </button>
+                  </div>
+                  {questionTagStatus && (
+                    <div
+                      className={`${styles.referenceStatus} ${styles[questionTagStatus.tone]}`}
+                      role="status"
+                      aria-live="polite"
+                      style={{ marginTop: 10 }}
+                    >
+                      {questionTagStatus.message}
+                    </div>
+                  )}
                 </div>
               </section>
 

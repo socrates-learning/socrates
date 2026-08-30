@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import type { ActiveLibrary } from '@/lib/library-context';
@@ -848,14 +849,27 @@ export function StudyPlanner({
           onClick={() => setMode('dashboard')}
         >
           {classPrefix === 'home-v2' ? (
-            <span>
-              <strong>Socrates</strong>
-              <small>Real application foundation · concept-network learning platform</small>
-            </span>
+            <Image
+              alt="Socrates — Learn anything."
+              className="home-v2-brand-logo"
+              height={152}
+              priority
+              src="/brand/socrates-logo-dark.png"
+              width={270}
+            />
           ) : (
             <>
-              <strong>Socrates</strong>
-              <span>Real application foundation · concept-network learning platform</span>
+              <Image
+                alt="Socrates owl mark"
+                className={`${classPrefix}-brand-mark`}
+                height={66}
+                src="/brand/socrates-mark.png"
+                width={76}
+              />
+              <div>
+                <strong>Socrates</strong>
+                <span>Learn anything.</span>
+              </div>
             </>
           )}
         </Link>
@@ -1632,9 +1646,18 @@ export function StudyPlanner({
           }
 
           .study-setup-v2-brand {
+            align-items: center;
             color: #ffffff;
-            display: block;
+            display: flex;
+            gap: 12px;
             min-width: 500px;
+          }
+
+          .study-setup-v2-brand-mark {
+            flex: 0 0 auto;
+            height: 66px;
+            object-fit: contain;
+            width: 76px;
           }
 
           .study-setup-v2-brand strong {
@@ -1985,6 +2008,11 @@ export function StudyPlanner({
               min-width: 0;
             }
 
+            .study-setup-v2-brand-mark {
+              height: 48px;
+              width: 55px;
+            }
+
             .study-setup-v2-nav {
               justify-content: flex-start;
             }
@@ -2210,9 +2238,18 @@ if (mode === 'study') {
         }
 
         .study-v2-brand {
+          align-items: center;
           color: #ffffff;
-          display: block;
+          display: flex;
+          gap: 12px;
           min-width: 320px;
+        }
+
+        .study-v2-brand-mark {
+          flex: 0 0 auto;
+          height: 66px;
+          object-fit: contain;
+          width: 76px;
         }
 
         .study-v2-brand strong {
@@ -2640,6 +2677,11 @@ if (mode === 'study') {
             flex-direction: column;
           }
 
+          .study-v2-brand-mark {
+            height: 48px;
+            width: 55px;
+          }
+
           .study-v2-nav {
             justify-content: flex-start;
           }
@@ -2799,7 +2841,15 @@ if (mode === 'study') {
           align-items: center;
           color: #ffffff;
           display: flex;
-          min-width: 360px;
+          min-width: 0;
+          width: fit-content;
+        }
+
+        .home-v2-brand-logo {
+          flex: 0 0 auto;
+          height: auto;
+          object-fit: contain;
+          width: clamp(220px, 20vw, 270px);
         }
 
         .home-v2-brand strong {

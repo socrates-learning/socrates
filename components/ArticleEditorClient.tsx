@@ -24,13 +24,15 @@ type ArticleDraft = {
   body_markdown: string;
   placement_ids: string[];
   primary_placement_id: string | null;
-  tags: string[];
+  tags: TagRecord[];
   core_concepts: LinkedCoreConcept[];
 };
 
 type TagRecord = {
   id: string;
   name: string;
+  slug: string;
+  status: 'active' | 'archived';
 };
 
 type LinkedCoreConcept = {
@@ -97,6 +99,7 @@ type QuestionRecord = {
   question_options: QuestionOption[];
   question_accepted_answers: QuestionAcceptedAnswer[];
   question_sources: QuestionSourceLink[];
+  question_tags: Array<{ tag_id: string }>;
 };
 
 type QuestionOptionForm = {
@@ -127,6 +130,7 @@ type QuestionForm = {
   options: QuestionOptionForm[];
   acceptedAnswers: QuestionAnswerForm[];
   sourceIds: string[];
+  tagIds: string[];
   sourceSelectId: string;
 };
 
@@ -403,6 +407,7 @@ function normalizeQuestion(row: {
       | SourceRecord[]
       | null;
   }> | null;
+  question_tags?: Array<{ tag_id: string }> | null;
 }): QuestionRecord {
   const options = (row.question_options || [])
     .map((option) => ({
@@ -444,6 +449,7 @@ function normalizeQuestion(row: {
     question_options: options,
     question_accepted_answers: acceptedAnswers,
     question_sources: sourceLinks,
+    question_tags: row.question_tags || [],
   };
 }
 
@@ -505,6 +511,7 @@ function createQuestionForm(
           }))
         : [createBlankAnswer(0)],
     sourceIds: question.question_sources.map((sourceLink) => sourceLink.source_id),
+    tagIds: question.question_tags.map((assignment) => assignment.tag_id),
     sourceSelectId: '',
   };
 }
@@ -575,8 +582,21 @@ export function ArticleEditorClient({
 
   useEffect(() => {
     async function loadTags() {
-      const { data } = await supabase.from('tags').select('id, name').order('name');
-      setAvailableTags((data || []) as TagRecord[]);
+      const { data } = await supabase
+        .from('tags')
+        .select('id, name, slug, status')
+        .order('name');
+      setAvailableTags(
+        ((data || []) as Array<{
+          id: string;
+          name: string;
+          slug: string;
+          status: string | null;
+        }>).map((tag) => ({
+          ...tag,
+          status: tag.status === 'archived' ? 'archived' : 'active',
+        }))
+      );
     }
 
     loadTags();
@@ -695,6 +715,9 @@ export function ArticleEditorClient({
               source_type,
               url
             )
+          ),
+          question_tags (
+            tag_id
           )
         `
         )
@@ -804,6 +827,9 @@ export function ArticleEditorClient({
             source_type,
             url
           )
+        ),
+        question_tags (
+          tag_id
         )
       `
       )
@@ -908,6 +934,7 @@ export function ArticleEditorClient({
           : [],
       question_accepted_answers: [],
       question_sources: [],
+      question_tags: [],
     };
 
     setQuestionBanks((current) => ({
@@ -1044,6 +1071,7 @@ export function ArticleEditorClient({
         p_accepted_answers: isShortAnswer ? acceptedAnswersPayload(form) : [],
         p_options: isShortAnswer ? [] : questionOptionsPayload(form),
         p_source_ids: form.sourceIds,
+        p_tag_ids: form.tagIds,
       });
 
       if (error) throw error;
@@ -1141,7 +1169,7 @@ export function ArticleEditorClient({
       p_active_library_id: activeLibrary.id,
       p_library_node_ids: placementIds,
       p_primary_library_node_id: primaryPlacementId,
-      p_tag_names: tags,
+      p_tag_ids: tags.map((tag) => tag.id),
       p_publish: nextStatus === 'published',
     });
 
@@ -1398,19 +1426,29 @@ export function ArticleEditorClient({
 
     if (!tagName) return;
 
-    if (tags.some((tag) => tag.toLowerCase() === tagName.toLowerCase())) {
+    const catalogTag = availableTags.find(
+      (tag) =>
+        tag.status === 'active' &&
+        tag.name.toLocaleLowerCase() === tagName.toLocaleLowerCase()
+    );
+    if (!catalogTag) {
+      setMessage('Choose an active tag from the shared Tag Catalog.');
+      return;
+    }
+
+    if (tags.some((tag) => tag.id === catalogTag.id)) {
       setMessage('That tag is already attached.');
       setTagInput('');
       return;
     }
 
-    setTags((current) => [...current, tagName]);
+    setTags((current) => [...current, catalogTag]);
     setTagInput('');
     setMessage('');
   }
 
-  function removeTag(tagName: string) {
-    setTags((current) => current.filter((tag) => tag !== tagName));
+  function removeTag(tagId: string) {
+    setTags((current) => current.filter((tag) => tag.id !== tagId));
   }
 
   function sourceTitle(sourceId: string) {
@@ -1926,10 +1964,11 @@ export function ArticleEditorClient({
             <button
               className="btn ghost"
               type="button"
-              key={tag}
-              onClick={() => removeTag(tag)}
+              key={tag.id}
+              onClick={() => removeTag(tag.id)}
             >
-              {tag} ×
+              {tag.name}
+              {tag.status === 'archived' ? ' (Archived)' : ''} ×
             </button>
           ))}
         </div>
@@ -1952,9 +1991,15 @@ export function ArticleEditorClient({
               placeholder="ABG"
             />
             <datalist id="article-tags">
-              {availableTags.map((tag) => (
-                <option key={tag.id} value={tag.name} />
-              ))}
+              {availableTags
+                .filter(
+                  (tag) =>
+                    tag.status === 'active' &&
+                    !tags.some((selected) => selected.id === tag.id)
+                )
+                .map((tag) => (
+                  <option key={tag.id} value={tag.name} />
+                ))}
             </datalist>
           </label>
         </div>

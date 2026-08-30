@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
@@ -108,36 +109,51 @@ export function Header() {
         background: 'linear-gradient(180deg, #061846, #041238)',
         color: '#ffffff',
         display: 'flex',
+        flexWrap: 'wrap',
         gap: 28,
         justifyContent: 'space-between',
         minHeight: 126,
         padding: '34px 36px 28px',
       }}
     >
-      <div style={{ minWidth: 500 }}>
-        <h1
+      <div style={{ alignItems: 'center', display: 'flex', flex: '1 1 300px', gap: 12 }}>
+        <Image
+          alt="Socrates owl mark"
+          height={66}
+          src="/brand/socrates-mark.png"
           style={{
-            fontFamily: 'Georgia, "Times New Roman", Times, serif',
-            fontSize: 42,
-            fontWeight: 900,
-            letterSpacing: '-0.055em',
-            lineHeight: 0.95,
-            margin: 0,
+            flex: '0 0 auto',
+            height: 'clamp(48px, 4.6vw, 66px)',
+            objectFit: 'contain',
+            width: 'auto',
           }}
-        >
-          Socrates
-        </h1>
-        <p
-          style={{
-            color: '#edf4ff',
-            fontSize: 16,
-            fontWeight: 500,
-            letterSpacing: '-0.02em',
-            margin: '10px 0 0',
-          }}
-        >
-          Real application foundation · concept-network learning platform
-        </p>
+          width={76}
+        />
+        <div>
+          <h1
+            style={{
+              fontFamily: 'Georgia, "Times New Roman", Times, serif',
+              fontSize: 42,
+              fontWeight: 900,
+              letterSpacing: '-0.055em',
+              lineHeight: 0.95,
+              margin: 0,
+            }}
+          >
+            Socrates
+          </h1>
+          <p
+            style={{
+              color: '#edf4ff',
+              fontSize: 16,
+              fontWeight: 500,
+              letterSpacing: '-0.02em',
+              margin: '10px 0 0',
+            }}
+          >
+            Learn anything.
+          </p>
+        </div>
       </div>
 
       <nav
