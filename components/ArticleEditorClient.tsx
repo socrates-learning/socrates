@@ -1118,7 +1118,7 @@ export function ArticleEditorClient({
       return;
     }
 
-    setQuestionMessage(question.concept_id, 'Draft question deleted.');
+    setQuestionMessage(question.concept_id, 'Draft question archived.');
     await loadQuestionBankForConcept(question.concept_id);
   }
 

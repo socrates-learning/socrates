@@ -32,8 +32,14 @@ type StudyDeck = {
   library_id: string;
   name: string;
   is_active: boolean;
+  cram_mode: boolean;
   created_at: string;
   updated_at: string;
+};
+
+type StudyDeckNodePreference = {
+  library_node_id: string;
+  new_mastery_balance: number;
 };
 
 type StudyDeckConcept = {
@@ -311,6 +317,9 @@ export function StudyPlanner({
   const [placements, setPlacements] = useState<Placement[]>([]);
   const [questionCounts, setQuestionCounts] = useState<Record<string, number>>({});
   const [selectedNodeIds, setSelectedNodeIds] = useState<Set<string>>(new Set());
+  const [nodePreferences, setNodePreferences] = useState<Record<string, number>>(
+    {}
+  );
   const [conceptOverrides, setConceptOverrides] = useState<
     Record<string, ConceptOverride>
   >({});
@@ -330,7 +339,6 @@ export function StudyPlanner({
   const [homeExpandedIds, setHomeExpandedIds] = useState<Set<string>>(
     new Set(['nursing', 'clinical-practice-tree'])
   );
-  const [studyBalance, setStudyBalance] = useState(50);
   const [isSetupCramMode, setIsSetupCramMode] = useState(false);
   const [isAnswerVisible, setIsAnswerVisible] = useState(false);
   const [studyFeedback, setStudyFeedback] = useState<StudyFeedback>(null);
@@ -357,7 +365,7 @@ export function StudyPlanner({
 
       setIsLoading(true);
       setMessage('');
-      setMode('dashboard');
+      setMode(window.location.hash === '#set-up-deck' ? 'setup' : 'dashboard');
 
       const {
         data: { user },
@@ -459,6 +467,17 @@ export function StudyPlanner({
         .from('user_study_concept_overrides')
         .select('concept_id, selection_state')
         .eq('deck_id', activeDeck.id);
+      const { data: preferenceData, error: preferenceError } = await supabase
+        .from('study_deck_node_preferences')
+        .select('library_node_id, new_mastery_balance')
+        .eq('deck_id', activeDeck.id);
+
+      if (preferenceError) {
+        setMessage(`Unable to load deck preferences: ${preferenceError.message}`);
+        setIsLoading(false);
+        return;
+      }
+
       const { data: resolvedData } = await supabase.rpc('resolve_study_deck', {
         p_deck_id: activeDeck.id,
       });
@@ -481,6 +500,15 @@ export function StudyPlanner({
       setSelectedNodeIds(
         new Set((selectedNodesData || []).map((selection) => selection.node_id))
       );
+      setNodePreferences(
+        Object.fromEntries(
+          ((preferenceData || []) as StudyDeckNodePreference[]).map((preference) => [
+            preference.library_node_id,
+            Number(preference.new_mastery_balance),
+          ])
+        )
+      );
+      setIsSetupCramMode(Boolean(activeDeck.cram_mode));
       setConceptOverrides(
         Object.fromEntries(
           (overridesData || []).map((override) => [
@@ -642,9 +670,18 @@ export function StudyPlanner({
     if (!deck || !userId || !authoredStudyQuestions.length) return null;
 
     const createPromise = (async () => {
+      const selectedBalances = [...selectedNodeIds].map(
+        (nodeId) => nodePreferences[nodeId] ?? 50
+      );
+      const sessionBalance = selectedBalances.length
+        ? Math.round(
+            selectedBalances.reduce((total, balance) => total + balance, 0) /
+              selectedBalances.length
+          )
+        : 50;
       const { data, error } = await supabase.rpc('start_study_session', {
         p_study_deck_id: deck.id,
-        p_new_mastery_balance: studyBalance,
+        p_new_mastery_balance: sessionBalance,
       });
 
       if (error || !data) {
@@ -1031,6 +1068,62 @@ export function StudyPlanner({
     setResolvedConcepts((data || []) as StudyDeckConcept[]);
   }
 
+  async function persistNodePreference(nodeId: string, balance: number) {
+    if (!activeLibrary?.id || !deck || !userId || !selectedNodeIds.has(nodeId)) {
+      return;
+    }
+
+    setIsSaving(true);
+    setMessage('Saving study preference...');
+
+    const { error } = await supabase.from('study_deck_node_preferences').upsert(
+      {
+        deck_id: deck.id,
+        user_id: userId,
+        library_id: activeLibrary.id,
+        library_node_id: nodeId,
+        new_mastery_balance: balance,
+      },
+      { onConflict: 'deck_id,library_node_id' }
+    );
+
+    if (error) {
+      setMessage(`Unable to save study preference: ${error.message}`);
+      setIsSaving(false);
+      return;
+    }
+
+    setMessage('Study preference saved.');
+    setIsSaving(false);
+  }
+
+  async function toggleSetupCramMode() {
+    if (!deck || !userId || isSaving) return;
+
+    const nextCramMode = !isSetupCramMode;
+    setIsSaving(true);
+    setMessage('Saving Cram Mode preference...');
+
+    const { error } = await supabase
+      .from('study_decks')
+      .update({ cram_mode: nextCramMode })
+      .eq('id', deck.id)
+      .eq('user_id', userId);
+
+    if (error) {
+      setMessage(`Unable to save Cram Mode preference: ${error.message}`);
+      setIsSaving(false);
+      return;
+    }
+
+    setIsSetupCramMode(nextCramMode);
+    setDeck((current) =>
+      current ? { ...current, cram_mode: nextCramMode } : current
+    );
+    setMessage('Cram Mode preference saved.');
+    setIsSaving(false);
+  }
+
   async function toggleNodeSelection(nodeId: string) {
     if (!activeLibrary?.id || !deck || !userId) return;
 
@@ -1071,6 +1164,9 @@ export function StudyPlanner({
       }
 
       setSelectedNodeIds((current) => new Set(current).add(nodeId));
+      setNodePreferences((current) =>
+        current[nodeId] === undefined ? { ...current, [nodeId]: 50 } : current
+      );
     }
 
     setMessage('Deck updated.');
@@ -1194,163 +1290,202 @@ export function StudyPlanner({
   }
 
   function renderNode(node: LibraryNode, depth = 0): ReactNode {
-  const children = nodes.filter((child) => child.parent_id === node.id);
-  const isExpanded = expandedNodeIds.has(node.id);
-  const branchConceptCount = branchConceptIds(node.id).length;
-  const selected = selectedNodeIds.has(node.id);
+    const children = nodes.filter((child) => child.parent_id === node.id);
+    const isExpanded = expandedNodeIds.has(node.id);
+    const branchConceptCount = branchConceptIds(node.id).length;
+    const selected = selectedNodeIds.has(node.id);
+    const preference = nodePreferences[node.id] ?? 50;
 
-  return (
-    <div
-      key={node.id}
-      style={{
-        marginLeft: depth ? 22 : 0,
-        position: 'relative',
-      }}
-    >
-      {depth > 0 && (
-        <div
-          aria-hidden="true"
-          style={{
-            borderLeft: '2px solid #dbeafe',
-            bottom: 0,
-            left: -12,
-            position: 'absolute',
-            top: -10,
-          }}
-        />
-      )}
-
+    return (
       <div
+        key={node.id}
         style={{
-          alignItems: 'center',
-          background: selected ? '#eff6ff' : '#ffffff',
-          border: selected ? '1px solid #93c5fd' : '1px solid #e2e8f0',
-          borderRadius: 14,
-          display: 'flex',
-          gap: 10,
-          marginBottom: 8,
-          minHeight: 62,
-          padding: '10px 12px',
-          transition: 'all 0.15s ease',
+          marginLeft: depth ? 22 : 0,
+          position: 'relative',
         }}
       >
-        <button
-          type="button"
-          onClick={() => toggleExpandedNode(node.id)}
-          disabled={children.length === 0}
-          aria-label={isExpanded ? `Collapse ${node.name}` : `Expand ${node.name}`}
-          style={{
-            alignItems: 'center',
-            background: children.length === 0 ? '#f8fafc' : '#e0f2fe',
-            border: 'none',
-            borderRadius: 10,
-            color: '#0369a1',
-            cursor: children.length === 0 ? 'default' : 'pointer',
-            display: 'flex',
-            flexShrink: 0,
-            fontSize: 13,
-            height: 34,
-            justifyContent: 'center',
-            width: 34,
-          }}
-        >
-          {children.length === 0 ? '•' : isExpanded ? '▼' : '▶'}
-        </button>
-
-        <label
-          style={{
-            alignItems: 'center',
-            cursor: 'pointer',
-            display: 'flex',
-            flex: 1,
-            gap: 10,
-            minWidth: 0,
-          }}
-        >
-          <input
-            type="checkbox"
-            checked={selected}
-            onChange={() => toggleNodeSelection(node.id)}
+        {depth > 0 && (
+          <div
+            aria-hidden="true"
             style={{
-              accentColor: '#2563eb',
-              cursor: 'pointer',
-              height: 18,
-              width: 18,
+              borderLeft: '2px solid #dbeafe',
+              bottom: 0,
+              left: -12,
+              position: 'absolute',
+              top: -10,
             }}
           />
+        )}
 
-          <span style={{ minWidth: 0 }}>
-            <strong
-              style={{
-                display: 'block',
-                fontSize: 15,
-                lineHeight: 1.2,
-              }}
-            >
-              {node.name}
-            </strong>
-
-            <span
-              className="muted"
-              style={{
-                fontSize: 12,
-              }}
-            >
-              {branchConceptCount}{' '}
-              {branchConceptCount === 1 ? 'concept' : 'concepts'}
-            </span>
-          </span>
-        </label>
-
-        <span
-          title="Published questions in this branch"
-          style={{
-            background: '#f8fafc',
-            border: '1px solid #dbe3ee',
-            borderRadius: 999,
-            color: '#475569',
-            flexShrink: 0,
-            fontSize: 12,
-            fontWeight: 700,
-            minWidth: 40,
-            padding: '5px 9px',
-            textAlign: 'center',
-          }}
-        >
-          {branchQuestionCount(node.id)}
-        </span>
-
-        <button
-          type="button"
-          onClick={() => setFocusedNodeId(node.id)}
-          style={{
-            background: '#f1f5f9',
-            border: '1px solid #dbe3ee',
-            borderRadius: 9,
-            color: '#334155',
-            cursor: 'pointer',
-            flexShrink: 0,
-            fontSize: 12,
-            fontWeight: 600,
-            padding: '7px 10px',
-          }}
-        >
-          Customize
-        </button>
-      </div>
-
-      {isExpanded && children.length > 0 && (
         <div
           style={{
-            marginTop: 4,
+            background: selected ? '#eff6ff' : '#ffffff',
+            border: selected ? '1px solid #93c5fd' : '1px solid #e2e8f0',
+            borderRadius: 14,
+            marginBottom: 8,
+            minHeight: 62,
+            padding: '10px 12px',
+            transition: 'all 0.15s ease',
           }}
         >
-          {children.map((child) => renderNode(child, depth + 1))}
+          <div
+            style={{
+              alignItems: 'center',
+              display: 'flex',
+              gap: 10,
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => toggleExpandedNode(node.id)}
+              disabled={children.length === 0}
+              aria-label={
+                isExpanded ? `Collapse ${node.name}` : `Expand ${node.name}`
+              }
+              style={{
+                alignItems: 'center',
+                background: children.length === 0 ? '#f8fafc' : '#e0f2fe',
+                border: 'none',
+                borderRadius: 10,
+                color: '#0369a1',
+                cursor: children.length === 0 ? 'default' : 'pointer',
+                display: 'flex',
+                flexShrink: 0,
+                fontSize: 13,
+                height: 34,
+                justifyContent: 'center',
+                width: 34,
+              }}
+            >
+              {children.length === 0 ? '•' : isExpanded ? '▼' : '▶'}
+            </button>
+
+            <label
+              style={{
+                alignItems: 'center',
+                cursor: 'pointer',
+                display: 'flex',
+                flex: 1,
+                gap: 10,
+                minWidth: 0,
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={selected}
+                onChange={() => void toggleNodeSelection(node.id)}
+                style={{
+                  accentColor: '#2563eb',
+                  cursor: 'pointer',
+                  height: 18,
+                  width: 18,
+                }}
+              />
+
+              <span style={{ minWidth: 0 }}>
+                <strong
+                  style={{
+                    display: 'block',
+                    fontSize: 15,
+                    lineHeight: 1.2,
+                  }}
+                >
+                  {node.name}
+                </strong>
+
+                <span className="muted" style={{ fontSize: 12 }}>
+                  {branchConceptCount}{' '}
+                  {branchConceptCount === 1 ? 'concept' : 'concepts'}
+                </span>
+              </span>
+            </label>
+
+            <span
+              title="Published questions in this branch"
+              style={{
+                background: '#f8fafc',
+                border: '1px solid #dbe3ee',
+                borderRadius: 999,
+                color: '#475569',
+                flexShrink: 0,
+                fontSize: 12,
+                fontWeight: 700,
+                minWidth: 40,
+                padding: '5px 9px',
+                textAlign: 'center',
+              }}
+            >
+              {branchQuestionCount(node.id)}
+            </span>
+          </div>
+
+          {selected && (
+            <div
+              style={{
+                borderTop: '1px solid #dbeafe',
+                marginTop: 10,
+                padding: '10px 2px 2px 44px',
+              }}
+            >
+              <div
+                style={{
+                  alignItems: 'center',
+                  display: 'flex',
+                  gap: 12,
+                }}
+              >
+                <span style={{ color: '#2563eb', fontSize: 12, fontWeight: 700 }}>
+                  New
+                </span>
+                <input
+                  aria-label={`${node.name} New to Mastery balance`}
+                  disabled={isSetupCramMode}
+                  max="100"
+                  min="0"
+                  type="range"
+                  value={preference}
+                  onChange={(event) => {
+                    const nextBalance = Number(event.target.value);
+                    setNodePreferences((current) => ({
+                      ...current,
+                      [node.id]: nextBalance,
+                    }));
+                  }}
+                  onBlur={(event) =>
+                    void persistNodePreference(node.id, Number(event.currentTarget.value))
+                  }
+                  onKeyUp={(event) =>
+                    void persistNodePreference(node.id, Number(event.currentTarget.value))
+                  }
+                  onPointerUp={(event) =>
+                    void persistNodePreference(node.id, Number(event.currentTarget.value))
+                  }
+                  style={{
+                    accentColor: '#2563eb',
+                    cursor: isSetupCramMode ? 'not-allowed' : 'pointer',
+                    flex: 1,
+                    opacity: isSetupCramMode ? 0.5 : 1,
+                  }}
+                />
+                <span style={{ color: '#1e3a8a', fontSize: 12, fontWeight: 700 }}>
+                  Mastery
+                </span>
+                <strong style={{ color: '#0f172a', minWidth: 30, textAlign: 'right' }}>
+                  {preference}
+                </strong>
+              </div>
+            </div>
+          )}
         </div>
-      )}
-    </div>
-  );
-}
+
+        {isExpanded && children.length > 0 && (
+          <div style={{ marginTop: 4 }}>
+            {children.map((child) => renderNode(child, depth + 1))}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   const rootNodes = nodes.filter((node) => node.parent_id === null);
   const focusedNode = focusedNodeId ? nodesById.get(focusedNodeId) : null;
@@ -1417,7 +1552,7 @@ export function StudyPlanner({
           <section className="study-setup-v2-card" aria-labelledby="study-setup-v2-title">
             <div className="study-setup-v2-title-block">
               <h1 id="study-setup-v2-title">Set Up Deck</h1>
-              <p>Adjust the slider to balance new material and mastery review.</p>
+              <p>Choose eligible areas and balance new material with mastery review.</p>
             </div>
 
             <div className="study-setup-v2-copy-row">
@@ -1431,32 +1566,20 @@ export function StudyPlanner({
               </div>
             </div>
 
-            <section className="study-setup-v2-slider-area" aria-label="Study mode preference">
-              <div className="study-setup-v2-slider-wrap">
-                <div className="study-setup-v2-slider-track" aria-hidden="true">
-                  <span style={{ width: `${studyBalance}%` }} />
-                </div>
-                <input
-                  aria-label="Study mode balance"
-                  className="study-setup-v2-slider"
-                  max="100"
-                  min="0"
-                  type="range"
-                  value={studyBalance}
-                  onChange={(event) => setStudyBalance(Number(event.target.value))}
-                />
+            <section
+              className="study-setup-v2-slider-area"
+              aria-label="Topic Tree eligibility and study preferences"
+            >
+              <div style={{ marginBottom: 14, textAlign: 'left' }}>
+                <h2 style={{ marginBottom: 4 }}>Eligible Topic Tree</h2>
+                <p className="muted" style={{ margin: 0 }}>
+                  Select each area that may contribute questions, then set its New to
+                  Mastery preference.
+                </p>
               </div>
 
-              <div className="study-setup-v2-ticks" aria-hidden="true">
-                {Array.from({ length: 9 }).map((_, index) => (
-                  <span key={index} />
-                ))}
-              </div>
-
-              <div className="study-setup-v2-labels">
-                <span>Learn</span>
-                <strong>Study</strong>
-                <span>Cram</span>
+              <div aria-label="Set Up Deck Topic Tree" style={{ textAlign: 'left' }}>
+                {rootNodes.map((node) => renderNode(node))}
               </div>
             </section>
 
@@ -1479,8 +1602,9 @@ export function StudyPlanner({
               <label className="study-setup-v2-cram">
                 <input
                   checked={isSetupCramMode}
+                  disabled={isSaving}
                   type="checkbox"
-                  onChange={() => setIsSetupCramMode((current) => !current)}
+                  onChange={() => void toggleSetupCramMode()}
                 />
                 <span>
                   <strong>Cram Mode</strong>
