@@ -1,7 +1,9 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { navigateBackOrFallback } from '@/lib/safe-navigation';
 
 type NavIconName =
   | 'home'
@@ -156,13 +158,19 @@ function ProgressBar() {
 }
 
 function BackAndClose() {
+  const router = useRouter();
+
   return (
     <div className="study-v2-card-actions" aria-label="Study card controls">
-      <button type="button">
+      <button type="button" onClick={() => navigateBackOrFallback(router)}>
         <span aria-hidden="true">←</span>
         Go Back
       </button>
-      <button aria-label="Close study mode" type="button">
+      <button
+        aria-label="Close study mode"
+        type="button"
+        onClick={() => router.replace('/')}
+      >
         ×
       </button>
     </div>

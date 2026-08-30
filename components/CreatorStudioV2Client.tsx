@@ -21,6 +21,7 @@ import {
 } from '@/lib/concept-topic-tree';
 import { MarkdownContent } from '@/components/MarkdownContent';
 import { supabase } from '@/lib/supabase';
+import { navigateBackOrFallback } from '@/lib/safe-navigation';
 import styles from './CreatorStudioV2Client.module.css';
 
 type Reference = {
@@ -43,13 +44,14 @@ type QuestionConceptOption = {
   id: string;
   name: string;
 };
+type LifecycleStatus = 'draft' | 'published' | 'archived';
 type ExistingQuestion = {
   id: string;
   prompt: string;
   answer: string;
   difficulty: QuestionDifficulty;
   testingAngle: string;
-  status: string;
+  status: LifecycleStatus;
 };
 
 type CreatorTab = 'content' | 'questions';
@@ -267,7 +269,8 @@ function draftFingerprint(
   bodyMarkdown: string,
   placementIds: Iterable<string>,
   references: Reference[],
-  tagNames: Iterable<string>
+  tagNames: Iterable<string>,
+  recordStatus: LifecycleStatus
 ) {
   return JSON.stringify({
     bodyMarkdown,
@@ -284,6 +287,7 @@ function draftFingerprint(
       }))
       .sort((left, right) => left.identity.localeCompare(right.identity)),
     tags: Array.from(tagNames).map(tagIdentity).sort(),
+    recordStatus,
   });
 }
 
@@ -294,6 +298,7 @@ function questionDraftFingerprint({
   answer,
   difficulty,
   testingAngle,
+  recordStatus,
 }: {
   questionId: string | null;
   conceptId: string | null;
@@ -301,6 +306,7 @@ function questionDraftFingerprint({
   answer: string;
   difficulty: QuestionDifficulty;
   testingAngle: string;
+  recordStatus: LifecycleStatus;
 }) {
   return JSON.stringify({
     questionId,
@@ -309,6 +315,7 @@ function questionDraftFingerprint({
     answer,
     difficulty,
     testingAngle,
+    recordStatus,
   });
 }
 
@@ -330,6 +337,8 @@ export function CreatorStudioV2Client({
   const [conceptId, setConceptId] = useState<string | null>(resolvedConcept.id);
   const [conceptName, setConceptName] = useState(resolvedConcept.name);
   const [concept, setConcept] = useState(resolvedConcept.bodyMarkdown);
+  const [conceptRecordStatus, setConceptRecordStatus] =
+    useState<LifecycleStatus>('draft');
   const [topics, setTopics] = useState<Topic[]>(resolvedTopics);
   const [activeTopicId, setActiveTopicId] = useState(
     resolvedConcept.placementIds[0] || resolvedTopics[0]?.id || ''
@@ -382,7 +391,8 @@ export function CreatorStudioV2Client({
   const [questionTestingAngle, setQuestionTestingAngle] = useState(
     'General Understanding'
   );
-  const [questionRecordStatus, setQuestionRecordStatus] = useState('draft');
+  const [questionRecordStatus, setQuestionRecordStatus] =
+    useState<LifecycleStatus>('draft');
   const [existingQuestions, setExistingQuestions] = useState<
     ExistingQuestion[]
   >([]);
@@ -403,7 +413,8 @@ export function CreatorStudioV2Client({
       resolvedConcept.bodyMarkdown,
       resolvedConcept.placementIds,
       initialReferences,
-      []
+      [],
+      'draft'
     )
   );
   const editingReference = editingReferenceId
@@ -416,9 +427,10 @@ export function CreatorStudioV2Client({
         concept,
         selectedTopicIds,
         references,
-        conceptTags.map((tag) => tag.name)
+        conceptTags.map((tag) => tag.name),
+        conceptRecordStatus
       ),
-    [concept, conceptTags, references, selectedTopicIds]
+    [concept, conceptRecordStatus, conceptTags, references, selectedTopicIds]
   );
   const currentQuestionFingerprint = useMemo(
     () =>
@@ -429,6 +441,7 @@ export function CreatorStudioV2Client({
         answer: questionAnswer,
         difficulty: questionDifficulty,
         testingAngle: questionTestingAngle,
+        recordStatus: questionRecordStatus,
       }),
     [
       questionAnswer,
@@ -436,6 +449,7 @@ export function CreatorStudioV2Client({
       questionDifficulty,
       questionId,
       questionPrompt,
+      questionRecordStatus,
       questionTestingAngle,
     ]
   );
@@ -491,14 +505,21 @@ export function CreatorStudioV2Client({
 
     let isMounted = true;
 
-    async function loadConceptTags() {
-      const { data, error } = await supabase.rpc('get_concept_tags', {
-        p_concept_id: resolvedConcept.id,
-      });
+    async function loadConceptMetadata() {
+      const [tagResult, statusResult] = await Promise.all([
+        supabase.rpc('get_concept_tags', {
+          p_concept_id: resolvedConcept.id,
+        }),
+        supabase
+          .from('concepts')
+          .select('status')
+          .eq('id', resolvedConcept.id)
+          .single(),
+      ]);
 
       if (!isMounted) return;
 
-      if (error) {
+      if (tagResult.error) {
         setTagStatus({
           tone: 'error',
           message: 'Tags could not be loaded for this concept.',
@@ -506,24 +527,40 @@ export function CreatorStudioV2Client({
         return;
       }
 
-      const loadedTags = ((data || []) as ConceptTag[]).map((tag) => ({
+      if (statusResult.error || !statusResult.data) {
+        setStatus({
+          tone: 'error',
+          message: 'Concept status could not be loaded.',
+        });
+        return;
+      }
+
+      const loadedStatus: LifecycleStatus =
+        statusResult.data.status === 'published' ||
+        statusResult.data.status === 'archived'
+          ? statusResult.data.status
+          : 'draft';
+
+      const loadedTags = ((tagResult.data || []) as ConceptTag[]).map((tag) => ({
         id: tag.id,
         name: tag.name,
         slug: tag.slug,
       }));
 
+      setConceptRecordStatus(loadedStatus);
       setConceptTags(loadedTags);
       setSavedDraftFingerprint(
         draftFingerprint(
           resolvedConcept.bodyMarkdown,
           resolvedConcept.placementIds,
           initialReferences,
-          loadedTags.map((tag) => tag.name)
+          loadedTags.map((tag) => tag.name),
+          loadedStatus
         )
       );
     }
 
-    loadConceptTags();
+    void loadConceptMetadata();
 
     return () => {
       isMounted = false;
@@ -724,6 +761,7 @@ export function CreatorStudioV2Client({
         answer: '',
         difficulty: 'medium',
         testingAngle: 'General Understanding',
+        recordStatus: 'draft',
       })
     );
   }, [questionConceptId]);
@@ -912,6 +950,10 @@ export function CreatorStudioV2Client({
         question.difficulty === 'hard'
           ? question.difficulty
           : 'medium';
+      const recordStatus: LifecycleStatus =
+        question.status === 'published' || question.status === 'archived'
+          ? question.status
+          : 'draft';
 
       return {
         id: question.id,
@@ -919,7 +961,7 @@ export function CreatorStudioV2Client({
         answer: acceptedAnswers[0]?.answer_text || '',
         difficulty,
         testingAngle: question.testing_angle || 'General Understanding',
-        status: question.status || 'draft',
+        status: recordStatus,
       };
     });
   }
@@ -950,6 +992,7 @@ export function CreatorStudioV2Client({
         answer: '',
         difficulty: 'medium',
         testingAngle: 'General Understanding',
+        recordStatus: 'draft',
       })
     );
   }
@@ -1003,6 +1046,7 @@ export function CreatorStudioV2Client({
         answer: question.answer,
         difficulty: question.difficulty,
         testingAngle: question.testingAngle,
+        recordStatus: question.status,
       })
     );
     setQuestionStatus(null);
@@ -1667,7 +1711,18 @@ export function CreatorStudioV2Client({
       return;
     }
 
-    router.push(destination);
+    window.location.assign(destination);
+  }
+
+  function goBackFromCreator() {
+    if (
+      isDirty &&
+      !window.confirm('You have unsaved changes. Leave without saving?')
+    ) {
+      return;
+    }
+
+    navigateBackOrFallback(router);
   }
 
   function openConceptBrowser() {
@@ -1690,6 +1745,7 @@ export function CreatorStudioV2Client({
     setConceptId(null);
     setConceptName('');
     setConcept('');
+    setConceptRecordStatus('draft');
     setSelectedTopicIds(new Set());
     setConceptTags([]);
     setTagDraft('');
@@ -1703,7 +1759,8 @@ export function CreatorStudioV2Client({
     setEditorMode('write');
     setActiveCreatorTab('content');
     setStatus(null);
-    setSavedDraftFingerprint(draftFingerprint('', [], [], []));
+    setSavedDraftFingerprint(draftFingerprint('', [], [], [], 'draft'));
+    window.location.assign('/creator/concepts/new');
   }
 
   async function saveConcept() {
@@ -1737,13 +1794,22 @@ export function CreatorStudioV2Client({
     setIsSaving(true);
     setStatus(null);
 
-    const { data, error } = await supabase.rpc('save_concept_draft', {
+    const { data, error } = await supabase.rpc('save_concept_with_version', {
       p_concept_id: conceptId,
       p_name: name,
       p_body_markdown: bodyMarkdownToSave,
       p_active_library_id: activeLibraryId,
       p_library_node_ids: placementIdsToSave,
       p_tag_names: tagNamesToSave,
+      p_status: conceptRecordStatus,
+      p_references: referencesToSave.map((reference) => ({
+        client_id: reference.id,
+        source_id: reference.sourceId,
+        title: reference.title,
+        author: reference.author,
+        url: reference.url,
+        note: reference.notes,
+      })),
     });
 
     if (error) {
@@ -1771,33 +1837,10 @@ export function CreatorStudioV2Client({
       );
     }
 
-    const { data: referenceData, error: referenceError } = await supabase.rpc(
-      'sync_concept_references',
-      {
-        p_concept_id: savedConceptId,
-        p_references: referencesToSave.map((reference) => ({
-          client_id: reference.id,
-          source_id: reference.sourceId,
-          title: reference.title,
-          author: reference.author,
-          url: reference.url,
-          note: reference.notes,
-        })),
-      }
-    );
-
     setIsSaving(false);
 
-    if (referenceError) {
-      showStatus(
-        'error',
-        `Concept draft saved, but references could not be saved: ${referenceError.message}`
-      );
-      return;
-    }
-
     const synchronizedReferences = (
-      referenceData as {
+      data as {
         references?: Array<{
           client_id: string;
           source_id: string;
@@ -1862,11 +1905,12 @@ export function CreatorStudioV2Client({
         bodyMarkdownToSave,
         placementIdsToSave,
         confirmedReferences,
-        tagNamesToSave
+        tagNamesToSave,
+        conceptRecordStatus
       )
     );
 
-    showStatus('success', 'Concept draft and references saved.');
+    showStatus('success', 'Concept and references saved.');
 
     if (wasNewConcept) {
       router.replace(`/creator/concepts/${savedConceptId}`);
@@ -1909,68 +1953,36 @@ export function CreatorStudioV2Client({
       p_testing_angle: testingAngle,
     };
 
-    let savedQuestionId = questionId;
+    const { data, error } = await supabase.rpc('save_question_with_version', {
+      p_question_id: questionId,
+      p_concept_id: questionConceptId,
+      ...questionPayload,
+      p_status: questionRecordStatus,
+      p_accepted_answers: [{ answer_text: answer, sort_order: 0 }],
+      p_options: null,
+      p_source_ids: null,
+    });
 
-    if (questionId) {
-      const { data, error } = await supabase.rpc('update_question', {
-        p_question_id: questionId,
-        ...questionPayload,
-        p_status: questionRecordStatus,
-      });
-
-      if (error) {
-        setIsSavingQuestion(false);
-        setQuestionStatus({
-          tone: 'error',
-          message: error.message || 'Question could not be updated.',
-        });
-        return;
-      }
-
-      savedQuestionId = (data as { id?: string } | null)?.id || questionId;
-    } else {
-      const { data, error } = await supabase.rpc('create_question', {
-        p_concept_id: questionConceptId,
-        ...questionPayload,
-      });
-
-      if (error) {
-        setIsSavingQuestion(false);
-        setQuestionStatus({
-          tone: 'error',
-          message: error.message || 'Question could not be created.',
-        });
-        return;
-      }
-
-      savedQuestionId = (data as { id?: string } | null)?.id || null;
-      if (!savedQuestionId) {
-        setIsSavingQuestion(false);
-        setQuestionStatus({
-          tone: 'error',
-          message: 'Question was saved without a returned identifier.',
-        });
-        return;
-      }
-      setQuestionId(savedQuestionId);
-    }
-
-    const { error: answerError } = await supabase.rpc(
-      'replace_question_accepted_answers',
-      {
-        p_question_id: savedQuestionId,
-        p_answers: [{ answer_text: answer, sort_order: 0 }],
-      }
-    );
-
-    if (answerError) {
+    if (error) {
       setIsSavingQuestion(false);
       setQuestionStatus({
         tone: 'error',
-        message: `Question saved, but the answer could not be saved: ${answerError.message}`,
+        message: error.message || 'Question could not be saved.',
       });
       return;
     }
+
+    const savedQuestionId = (data as { id?: string } | null)?.id || null;
+    if (!savedQuestionId) {
+      setIsSavingQuestion(false);
+      setQuestionStatus({
+        tone: 'error',
+        message: 'Question was saved without a returned identifier.',
+      });
+      return;
+    }
+
+    if (!questionId) setQuestionId(savedQuestionId);
 
     const nextFingerprint = questionDraftFingerprint({
       questionId: savedQuestionId,
@@ -1979,6 +1991,7 @@ export function CreatorStudioV2Client({
       answer,
       difficulty: questionDifficulty,
       testingAngle,
+      recordStatus: questionRecordStatus,
     });
 
     setQuestionPrompt(prompt);
@@ -2220,6 +2233,13 @@ export function CreatorStudioV2Client({
           <header className={styles.localHeader}>
             <h1>Creator Studio</h1>
             <div className={styles.headerActions}>
+              <button
+                className={styles.secondaryButton}
+                type="button"
+                onClick={goBackFromCreator}
+              >
+                ← Back
+              </button>
               <span
                 className={`${styles.saveState} ${isDirty ? styles.unsaved : ''}`}
                 aria-live="polite"
@@ -2345,15 +2365,46 @@ export function CreatorStudioV2Client({
 
                 <div
                   style={{
+                    alignItems: 'center',
                     color: '#687386',
+                    display: 'flex',
+                    flexWrap: 'wrap',
                     fontSize: 13,
+                    gap: 12,
+                    justifyContent: 'space-between',
                     marginTop: 8,
                   }}
                 >
-                  Editing:{' '}
-                  <strong style={{ color: '#334155' }}>
-                    {conceptId ? conceptName || 'Untitled concept' : 'New concept'}
-                  </strong>
+                  <span>
+                    Editing:{' '}
+                    <strong style={{ color: '#334155' }}>
+                      {conceptId ? conceptName || 'Untitled concept' : 'New concept'}
+                    </strong>
+                  </span>
+                  <label
+                    style={{
+                      alignItems: 'center',
+                      display: 'flex',
+                      gap: 6,
+                    }}
+                  >
+                    <strong style={{ color: '#334155' }}>Status</strong>
+                    <select
+                      aria-label="Concept status"
+                      value={conceptRecordStatus}
+                      disabled={!conceptId || isSaving}
+                      onChange={(event) => {
+                        setConceptRecordStatus(
+                          event.target.value as LifecycleStatus
+                        );
+                        setStatus(null);
+                      }}
+                    >
+                      <option value="draft">Draft</option>
+                      <option value="published">Published</option>
+                      <option value="archived">Archived</option>
+                    </select>
+                  </label>
                 </div>
 
                 {normalizedContentConceptSearch && (
@@ -3320,6 +3371,25 @@ export function CreatorStudioV2Client({
                           {angle}
                         </option>
                       ))}
+                    </select>
+                  </label>
+
+                  <label style={{ display: 'grid', gap: 8 }}>
+                    <strong>Status</strong>
+                    <select
+                      aria-label="Question status"
+                      value={questionRecordStatus}
+                      disabled={!questionId || isSavingQuestion}
+                      onChange={(event) => {
+                        setQuestionRecordStatus(
+                          event.target.value as LifecycleStatus
+                        );
+                        setQuestionStatus(null);
+                      }}
+                    >
+                      <option value="draft">Draft</option>
+                      <option value="published">Published</option>
+                      <option value="archived">Archived</option>
                     </select>
                   </label>
                 </div>

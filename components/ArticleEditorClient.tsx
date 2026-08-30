@@ -979,42 +979,6 @@ export function ArticleEditorClient({
     }));
   }
 
-  function questionSourceLinks(questionId: string, conceptId: string) {
-    return (
-      questionBanks[conceptId]?.find((question) => question.id === questionId)
-        ?.question_sources || []
-    );
-  }
-
-  async function reconcileQuestionSources(
-    questionId: string,
-    conceptId: string,
-    sourceIds: string[]
-  ) {
-    const existingLinks = questionSourceLinks(questionId, conceptId);
-    const existingSourceIds = existingLinks.map((sourceLink) => sourceLink.source_id);
-
-    for (const sourceId of sourceIds.filter((id) => !existingSourceIds.includes(id))) {
-      const { error } = await supabase.rpc('attach_question_source', {
-        p_question_id: questionId,
-        p_source_id: sourceId,
-        p_note: null,
-      });
-
-      if (error) throw error;
-    }
-
-    for (const sourceLink of existingLinks.filter(
-      (link) => !sourceIds.includes(link.source_id)
-    )) {
-      const { error } = await supabase.rpc('detach_question_source', {
-        p_question_source_id: sourceLink.id,
-      });
-
-      if (error) throw error;
-    }
-  }
-
   function questionOptionsPayload(form: QuestionForm) {
     if (form.question_type === 'true_false') {
       const trueOption = form.options.find((option) => option.option_text === 'True');
@@ -1065,85 +1029,27 @@ export function ArticleEditorClient({
     setQuestionMessage(form.concept_id, 'Saving question...');
 
     try {
-      let savedQuestionId = form.id;
-      const targetStatus = form.status;
-      const interimStatus = targetStatus === 'published' ? 'draft' : targetStatus;
+      const isShortAnswer = form.question_type === 'short_answer';
+      const { data, error } = await supabase.rpc('save_question_with_version', {
+        p_question_id: form.isNew ? null : form.id,
+        p_concept_id: form.concept_id,
+        p_question_type: form.question_type,
+        p_prompt: form.prompt.trim(),
+        p_explanation: form.explanation.trim() || null,
+        p_status: form.status,
+        p_review_article_concept_id: form.review_article_concept_id || null,
+        p_sort_order: form.sort_order,
+        p_difficulty: 'medium',
+        p_testing_angle: 'General Understanding',
+        p_accepted_answers: isShortAnswer ? acceptedAnswersPayload(form) : [],
+        p_options: isShortAnswer ? [] : questionOptionsPayload(form),
+        p_source_ids: form.sourceIds,
+      });
 
-      if (form.isNew) {
-        const { data, error } = await supabase.rpc('create_question', {
-          p_concept_id: form.concept_id,
-          p_question_type: form.question_type,
-          p_prompt: form.prompt.trim(),
-          p_explanation: form.explanation.trim() || null,
-          p_review_article_concept_id: form.review_article_concept_id || null,
-          p_sort_order: form.sort_order,
-        });
+      if (error) throw error;
 
-        if (error) throw error;
-
-        savedQuestionId = (data as { id: string }).id;
-      } else {
-        const { error } = await supabase.rpc('update_question', {
-          p_question_id: form.id,
-          p_question_type: form.question_type,
-          p_prompt: form.prompt.trim(),
-          p_explanation: form.explanation.trim() || null,
-          p_status: interimStatus,
-          p_review_article_concept_id: form.review_article_concept_id || null,
-          p_sort_order: form.sort_order,
-        });
-
-        if (error) throw error;
-      }
-
-      if (form.question_type === 'short_answer') {
-        const { error } = await supabase.rpc('replace_question_accepted_answers', {
-          p_question_id: savedQuestionId,
-          p_answers: acceptedAnswersPayload(form),
-        });
-
-        if (error) throw error;
-
-        const { error: optionError } = await supabase.rpc('replace_question_options', {
-          p_question_id: savedQuestionId,
-          p_options: [],
-        });
-
-        if (optionError) throw optionError;
-      } else {
-        const { error } = await supabase.rpc('replace_question_options', {
-          p_question_id: savedQuestionId,
-          p_options: questionOptionsPayload(form),
-        });
-
-        if (error) throw error;
-
-        const { error: answerError } = await supabase.rpc(
-          'replace_question_accepted_answers',
-          {
-            p_question_id: savedQuestionId,
-            p_answers: [],
-          }
-        );
-
-        if (answerError) throw answerError;
-      }
-
-      await reconcileQuestionSources(savedQuestionId, form.concept_id, form.sourceIds);
-
-      if (targetStatus === 'published') {
-        const { error } = await supabase.rpc('update_question', {
-          p_question_id: savedQuestionId,
-          p_question_type: form.question_type,
-          p_prompt: form.prompt.trim(),
-          p_explanation: form.explanation.trim() || null,
-          p_status: 'published',
-          p_review_article_concept_id: form.review_article_concept_id || null,
-          p_sort_order: form.sort_order,
-        });
-
-        if (error) throw error;
-      }
+      const savedQuestionId = (data as { id?: string } | null)?.id;
+      if (!savedQuestionId) throw new Error('Question saved without an identifier.');
 
       setQuestionMessage(form.concept_id, 'Question saved.');
       setQuestionForms((current) => {

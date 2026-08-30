@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import type { ActiveLibrary } from '@/lib/library-context';
@@ -43,6 +43,20 @@ type StudyDeckConcept = {
   summary: string | null;
   published_question_count: number;
   selection_source: string;
+};
+
+type AuthoredStudyQuestion = {
+  id: string;
+  concept_id: string;
+  prompt: string;
+  difficulty: string;
+  testing_angle: string;
+  sort_order: number;
+  created_at: string;
+  question_accepted_answers: Array<{
+    answer_text: string;
+    sort_order: number;
+  }>;
 };
 
 type ConceptOverride = 'included' | 'excluded';
@@ -301,6 +315,10 @@ export function StudyPlanner({
     Record<string, ConceptOverride>
   >({});
   const [resolvedConcepts, setResolvedConcepts] = useState<StudyDeckConcept[]>([]);
+  const [authoredStudyQuestions, setAuthoredStudyQuestions] = useState<
+    AuthoredStudyQuestion[]
+  >([]);
+  const [authoredStudyQuestionIndex, setAuthoredStudyQuestionIndex] = useState(0);
   const [expandedNodeIds, setExpandedNodeIds] = useState<Set<string>>(new Set());
   const [focusedNodeId, setFocusedNodeId] = useState<string | null>(null);
   const [message, setMessage] = useState('');
@@ -312,12 +330,16 @@ export function StudyPlanner({
   const [homeExpandedIds, setHomeExpandedIds] = useState<Set<string>>(
     new Set(['nursing', 'clinical-practice-tree'])
   );
-  const [homeSelectedIds, setHomeSelectedIds] = useState<Set<string>>(new Set());
   const [studyBalance, setStudyBalance] = useState(50);
   const [isSetupCramMode, setIsSetupCramMode] = useState(false);
-  const [isAnswerVisible, setIsAnswerVisible] = useState(true);
+  const [isAnswerVisible, setIsAnswerVisible] = useState(false);
   const [studyFeedback, setStudyFeedback] = useState<StudyFeedback>(null);
   const [studyResponse, setStudyResponse] = useState<StudyResponse>(null);
+  const studyResponseSaveLock = useRef(false);
+  const studySessionIdRef = useRef<string | null>(null);
+  const studySessionCreatePromiseRef = useRef<Promise<string | null> | null>(null);
+  const authoredStudyQuestion =
+    authoredStudyQuestions[authoredStudyQuestionIndex] || null;
 
   const nodesById = useMemo(
     () => new Map(nodes.map((node) => [node.id, node])),
@@ -481,6 +503,83 @@ export function StudyPlanner({
   }, [activeLibrary?.id]);
 
   useEffect(() => {
+    let isMounted = true;
+    const conceptIds = resolvedConcepts.map((concept) => concept.concept_id);
+
+    async function loadAuthoredStudyQuestions() {
+      if (!conceptIds.length) {
+        setAuthoredStudyQuestions([]);
+        setAuthoredStudyQuestionIndex(0);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('questions')
+        .select(
+          `
+          id,
+          concept_id,
+          prompt,
+          difficulty,
+          testing_angle,
+          sort_order,
+          created_at,
+          question_accepted_answers!inner (
+            answer_text,
+            sort_order
+          )
+        `
+        )
+        .eq('status', 'published')
+        .eq('question_type', 'short_answer')
+        .in('concept_id', conceptIds)
+        .order('sort_order', { ascending: true })
+        .order('created_at', { ascending: true })
+        .order('id', { ascending: true });
+
+      if (!isMounted) return;
+
+      if (error || !data?.length) {
+        setAuthoredStudyQuestions([]);
+        setAuthoredStudyQuestionIndex(0);
+        return;
+      }
+
+      const conceptOrder = new Map(
+        resolvedConcepts.map((concept, index) => [concept.concept_id, index])
+      );
+      const loadedQuestions = (data as unknown as AuthoredStudyQuestion[])
+        .map((question) => ({
+          ...question,
+          question_accepted_answers: [
+            ...(question.question_accepted_answers || []),
+          ].sort((a, b) => a.sort_order - b.sort_order),
+        }))
+        .sort((left, right) => {
+          const conceptDifference =
+            (conceptOrder.get(left.concept_id) ?? Number.MAX_SAFE_INTEGER) -
+            (conceptOrder.get(right.concept_id) ?? Number.MAX_SAFE_INTEGER);
+          if (conceptDifference !== 0) return conceptDifference;
+          if (left.sort_order !== right.sort_order) {
+            return left.sort_order - right.sort_order;
+          }
+          const createdDifference = left.created_at.localeCompare(right.created_at);
+          if (createdDifference !== 0) return createdDifference;
+          return left.id.localeCompare(right.id);
+        });
+
+      setAuthoredStudyQuestions(loadedQuestions);
+      setAuthoredStudyQuestionIndex(0);
+    }
+
+    void loadAuthoredStudyQuestions();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [resolvedConcepts]);
+
+  useEffect(() => {
     function openSetupFromHash() {
       if (window.location.hash === '#set-up-deck') {
         setMode('setup');
@@ -535,10 +634,112 @@ export function StudyPlanner({
     setMode('setup');
   }
 
+  async function ensureStudySession() {
+    if (studySessionIdRef.current) return studySessionIdRef.current;
+    if (studySessionCreatePromiseRef.current) {
+      return studySessionCreatePromiseRef.current;
+    }
+    if (!deck || !userId || !authoredStudyQuestions.length) return null;
+
+    const createPromise = (async () => {
+      const { data, error } = await supabase.rpc('start_study_session', {
+        p_study_deck_id: deck.id,
+        p_new_mastery_balance: studyBalance,
+      });
+
+      if (error || !data) {
+        console.error('Unable to start Study Mode session.', error);
+        return null;
+      }
+
+      const sessionId = data as string;
+      studySessionIdRef.current = sessionId;
+      return sessionId;
+    })();
+
+    studySessionCreatePromiseRef.current = createPromise;
+
+    try {
+      return await createPromise;
+    } finally {
+      studySessionCreatePromiseRef.current = null;
+    }
+  }
+
   function openStudyMode() {
+    setAuthoredStudyQuestionIndex(0);
+    setIsAnswerVisible(false);
     setStudyFeedback(null);
     setStudyResponse(null);
     setMode('study');
+    void ensureStudySession();
+  }
+
+  async function leaveStudyMode(nextMode: Exclude<PlannerMode, 'study'>) {
+    const pendingSession =
+      studySessionIdRef.current ||
+      (studySessionCreatePromiseRef.current
+        ? studySessionCreatePromiseRef.current
+        : null);
+
+    studySessionIdRef.current = null;
+    studySessionCreatePromiseRef.current = null;
+    setMode(nextMode);
+
+    const sessionId = await pendingSession;
+
+    if (!sessionId) return;
+
+    const { error } = await supabase.rpc('end_study_session', {
+      p_study_session_id: sessionId,
+    });
+
+    if (error) {
+      console.error('Unable to end Study Mode session.', error);
+    }
+  }
+
+  async function persistFinalStudyResponse(
+    response: Exclude<StudyResponse, null>
+  ) {
+    if (studyResponseSaveLock.current) return;
+
+    setStudyResponse(response);
+
+    if (!authoredStudyQuestion || !userId) return;
+
+    studyResponseSaveLock.current = true;
+
+    try {
+      const sessionId = await ensureStudySession();
+
+      if (!sessionId) return;
+
+      const { error } = await supabase.rpc('record_study_session_attempt', {
+        p_study_session_id: sessionId,
+        p_question_id: authoredStudyQuestion.id,
+        p_concept_id: authoredStudyQuestion.concept_id,
+        p_result: response,
+      });
+
+      if (error) {
+        console.error('Unable to record Study Mode response.', error);
+        return;
+      }
+
+      setAuthoredStudyQuestionIndex((currentIndex) =>
+        authoredStudyQuestions.length
+          ? (currentIndex + 1) % authoredStudyQuestions.length
+          : 0
+      );
+      setIsAnswerVisible(false);
+      setStudyFeedback(null);
+      setStudyResponse(null);
+    } catch (error) {
+      console.error('Unable to record Study Mode response.', error);
+    } finally {
+      studyResponseSaveLock.current = false;
+    }
   }
 
   async function handleLogout() {
@@ -578,18 +779,24 @@ export function StudyPlanner({
     });
   }
 
-  function toggleHomeSelected(id: string) {
-    setHomeSelectedIds((current) => {
-      const next = new Set(current);
+  function findPersistedHomeNode(
+    homeNode: PrototypeTopicNode,
+    parentNodeId: string | null | undefined
+  ) {
+    if (parentNodeId === undefined) return null;
 
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-
-      return next;
-    });
+    const siblings = nodes.filter(
+      (node) => node.parent_id === parentNodeId
+    );
+    return (
+      siblings.find((node) => node.id === homeNode.id) ||
+      siblings.find(
+        (node) =>
+          node.name.trim().toLocaleLowerCase() ===
+          homeNode.name.trim().toLocaleLowerCase()
+      ) ||
+      null
+    );
   }
 
   function renderLearnerHeader(classPrefix: LearnerHeaderPrefix) {
@@ -696,9 +903,14 @@ export function StudyPlanner({
     );
   }
 
-  function renderHomeTreeRow(node: PrototypeTopicNode, depth: number): ReactNode {
+  function renderHomeTreeRow(
+    node: PrototypeTopicNode,
+    depth: number,
+    parentNodeId: string | null | undefined = null
+  ): ReactNode {
     const hasChildren = Boolean(node.children?.length);
     const isExpanded = homeExpandedIds.has(node.id);
+    const persistedNode = findPersistedHomeNode(node, parentNodeId);
 
     return (
       <div key={node.id}>
@@ -721,15 +933,23 @@ export function StudyPlanner({
           <span className="home-v2-percent">{node.progress}%</span>
           <input
             aria-label={`Select ${node.name}`}
-            checked={homeSelectedIds.has(node.id)}
+            checked={Boolean(
+              persistedNode && selectedNodeIds.has(persistedNode.id)
+            )}
             className="home-v2-checkbox"
             type="checkbox"
-            onChange={() => toggleHomeSelected(node.id)}
+            onChange={() => {
+              if (persistedNode) {
+                void toggleNodeSelection(persistedNode.id);
+              }
+            }}
           />
         </div>
         {hasChildren &&
           isExpanded &&
-          node.children?.map((child) => renderHomeTreeRow(child, depth + 1))}
+          node.children?.map((child) =>
+            renderHomeTreeRow(child, depth + 1, persistedNode?.id)
+          )}
       </div>
     );
   }
@@ -1683,14 +1903,21 @@ export function StudyPlanner({
   }
 
 if (mode === 'study') {
+  const authoredStudyAnswer =
+    authoredStudyQuestion?.question_accepted_answers[0]?.answer_text || null;
+
   function StudyCardActions() {
     return (
       <div className="study-v2-card-actions" aria-label="Study card controls">
-        <button type="button" onClick={() => setMode('setup')}>
+        <button type="button" onClick={() => void leaveStudyMode('setup')}>
           <span aria-hidden="true">←</span>
           Go Back
         </button>
-        <button aria-label="Close study mode" type="button" onClick={() => setMode('dashboard')}>
+        <button
+          aria-label="Close study mode"
+          type="button"
+          onClick={() => void leaveStudyMode('dashboard')}
+        >
           ×
         </button>
       </div>
@@ -1713,11 +1940,17 @@ if (mode === 'study') {
             </div>
 
             <h1>
-              What is the primary purpose
-              <br />
-              of isolating a patient with
-              <br />
-              suspected MRSA?
+              {authoredStudyQuestion ? (
+                authoredStudyQuestion.prompt
+              ) : (
+                <>
+                  What is the primary purpose
+                  <br />
+                  of isolating a patient with
+                  <br />
+                  suspected MRSA?
+                </>
+              )}
             </h1>
 
             <p>Tap to reveal answer</p>
@@ -1734,7 +1967,7 @@ if (mode === 'study') {
                 <div className="study-v2-answer-lines">
                   <div className="study-v2-rule" aria-hidden="true" />
                   <p>Answer</p>
-                  <p>Answer</p>
+                  <p>{authoredStudyAnswer || 'Answer'}</p>
                   <p>Answer</p>
                   <div className="study-v2-rule" aria-hidden="true" />
                   <p>Explanation</p>
@@ -1821,7 +2054,11 @@ if (mode === 'study') {
                         }`}
                         key={value}
                         type="button"
-                        onClick={() => setStudyResponse(value as StudyResponse)}
+                        onClick={() =>
+                          void persistFinalStudyResponse(
+                            value as Exclude<StudyResponse, null>
+                          )
+                        }
                       >
                         <strong>{label}</strong>
                         <span>{subtitle}</span>
