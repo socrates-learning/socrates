@@ -128,6 +128,7 @@ type PriorityStudyQuestion = {
 type ConceptOverride = 'included' | 'excluded';
 type PlannerMode = 'dashboard' | 'setup' | 'stats' | 'study';
 type StudyFeedback = 'up' | 'more' | 'down' | null;
+type StudyCardFeedbackType = 'error' | 'suggestion';
 type StudyResponse =
   | 'easy'
   | 'average'
@@ -370,7 +371,16 @@ export function StudyPlanner({
   const [isAnswerVisible, setIsAnswerVisible] = useState(false);
   const [studyFeedback, setStudyFeedback] = useState<StudyFeedback>(null);
   const [studyResponse, setStudyResponse] = useState<StudyResponse>(null);
+  const [studyCardFeedbackType, setStudyCardFeedbackType] =
+    useState<StudyCardFeedbackType | null>(null);
+  const [studyCardFeedbackMessage, setStudyCardFeedbackMessage] = useState('');
+  const [studyCardFeedbackError, setStudyCardFeedbackError] = useState('');
+  const [isStudyCardFeedbackSubmitting, setIsStudyCardFeedbackSubmitting] =
+    useState(false);
+  const [isStudyCardFeedbackSent, setIsStudyCardFeedbackSent] = useState(false);
   const studyResponseSaveLock = useRef(false);
+  const studyCardFeedbackSaveLock = useRef(false);
+  const studyCardFeedbackConfirmationTimer = useRef<number | null>(null);
   const studyResponseRecordedForCard = useRef(false);
   const studyModeOpenLock = useRef(false);
   const studySessionIdRef = useRef<string | null>(null);
@@ -414,6 +424,14 @@ export function StudyPlanner({
       ),
     [learnerProgress.nodes]
   );
+
+  useEffect(() => {
+    return () => {
+      if (studyCardFeedbackConfirmationTimer.current !== null) {
+        window.clearTimeout(studyCardFeedbackConfirmationTimer.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -890,6 +908,92 @@ export function StudyPlanner({
     return selectedQuestion;
   }
 
+  function resetStudyCardFeedback() {
+    if (studyCardFeedbackConfirmationTimer.current !== null) {
+      window.clearTimeout(studyCardFeedbackConfirmationTimer.current);
+      studyCardFeedbackConfirmationTimer.current = null;
+    }
+
+    studyCardFeedbackSaveLock.current = false;
+    setStudyCardFeedbackType(null);
+    setStudyCardFeedbackMessage('');
+    setStudyCardFeedbackError('');
+    setIsStudyCardFeedbackSubmitting(false);
+    setIsStudyCardFeedbackSent(false);
+  }
+
+  function openStudyCardMorePanel() {
+    resetStudyCardFeedback();
+    setStudyFeedback('more');
+    setStudyResponse(null);
+  }
+
+  function closeStudyCardMorePanel() {
+    resetStudyCardFeedback();
+    setStudyFeedback(null);
+    setStudyResponse(null);
+  }
+
+  async function submitStudyCardFeedback() {
+    const normalizedMessage = studyCardFeedbackMessage.trim();
+
+    if (
+      studyCardFeedbackSaveLock.current ||
+      isStudyCardFeedbackSubmitting ||
+      !studyCardFeedbackType ||
+      !normalizedMessage
+    ) return;
+
+    if (!authoredStudyQuestion || !userId) {
+      setStudyCardFeedbackError(
+        'Feedback can only be sent for a real authored question.'
+      );
+      return;
+    }
+
+    studyCardFeedbackSaveLock.current = true;
+    setIsStudyCardFeedbackSubmitting(true);
+    setStudyCardFeedbackError('');
+
+    try {
+      const { error } = await supabase.rpc('submit_study_card_feedback', {
+        p_question_id: authoredStudyQuestion.id,
+        p_concept_id: authoredStudyQuestion.concept_id,
+        p_study_session_id: studySessionIdRef.current,
+        p_feedback_type: studyCardFeedbackType,
+        p_message: normalizedMessage,
+      });
+
+      if (error) {
+        setStudyCardFeedbackError(
+          error.message || 'Feedback could not be sent. Please try again.'
+        );
+        return;
+      }
+
+      setStudyCardFeedbackMessage('');
+      setIsStudyCardFeedbackSent(true);
+      studyCardFeedbackConfirmationTimer.current = window.setTimeout(() => {
+        studyCardFeedbackConfirmationTimer.current = null;
+        studyCardFeedbackSaveLock.current = false;
+        setStudyCardFeedbackType(null);
+        setStudyCardFeedbackError('');
+        setIsStudyCardFeedbackSubmitting(false);
+        setIsStudyCardFeedbackSent(false);
+        setStudyFeedback(null);
+        setStudyResponse(null);
+      }, 1400);
+    } catch (error) {
+      console.error('Unable to submit Study Mode card feedback.', error);
+      setStudyCardFeedbackError('Feedback could not be sent. Please try again.');
+    } finally {
+      setIsStudyCardFeedbackSubmitting(false);
+      if (studyCardFeedbackConfirmationTimer.current === null) {
+        studyCardFeedbackSaveLock.current = false;
+      }
+    }
+  }
+
   async function openStudyMode() {
     if (studyModeOpenLock.current) return;
 
@@ -899,6 +1003,7 @@ export function StudyPlanner({
     setIsAnswerVisible(false);
     setStudyFeedback(null);
     setStudyResponse(null);
+    resetStudyCardFeedback();
     studyResponseRecordedForCard.current = false;
 
     try {
@@ -924,6 +1029,7 @@ export function StudyPlanner({
     studySessionIdRef.current = null;
     studySessionCreatePromiseRef.current = null;
     studyResponseRecordedForCard.current = false;
+    resetStudyCardFeedback();
     setPriorityStudyQuestion(null);
     setMode(nextMode);
 
@@ -986,6 +1092,7 @@ export function StudyPlanner({
       setIsAnswerVisible(false);
       setStudyFeedback(null);
       setStudyResponse(null);
+      resetStudyCardFeedback();
       studyResponseRecordedForCard.current = false;
     } catch (error) {
       console.error('Unable to record Study Mode response.', error);
@@ -2473,8 +2580,13 @@ if (mode === 'study') {
                         key={value}
                         type="button"
                         onClick={() => {
-                          setStudyFeedback(value as StudyFeedback);
-                          setStudyResponse(null);
+                          if (value === 'more') {
+                            openStudyCardMorePanel();
+                          } else {
+                            resetStudyCardFeedback();
+                            setStudyFeedback(value as StudyFeedback);
+                            setStudyResponse(null);
+                          }
                         }}
                       >
                         <StudyFeedbackIcon
@@ -2485,18 +2597,94 @@ if (mode === 'study') {
                     ))}
                   </div>
                 ) : studyFeedback === 'more' ? (
-                  <div className="study-v2-response-toolbar">
-                    <button
-                      className="study-v2-response-back"
-                      type="button"
-                      onClick={() => {
-                        setStudyFeedback(null);
-                        setStudyResponse(null);
-                      }}
-                    >
-                      ← Back
-                    </button>
-                    <p>More options coming later</p>
+                  <div className="study-v2-more-panel">
+                    {isStudyCardFeedbackSent ? (
+                      <p
+                        aria-live="polite"
+                        className="study-v2-more-confirmation"
+                        role="status"
+                      >
+                        Thanks — feedback sent.
+                      </p>
+                    ) : studyCardFeedbackType === null ? (
+                      <div className="study-v2-more-choice-row">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setStudyCardFeedbackType('error');
+                            setStudyCardFeedbackError('');
+                          }}
+                        >
+                          Report an error
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setStudyCardFeedbackType('suggestion');
+                            setStudyCardFeedbackError('');
+                          }}
+                        >
+                          Suggest an improvement
+                        </button>
+                        <button type="button" onClick={closeStudyCardMorePanel}>
+                          ← Back
+                        </button>
+                      </div>
+                    ) : (
+                      <form
+                        className="study-v2-more-form"
+                        onSubmit={(event) => {
+                          event.preventDefault();
+                          void submitStudyCardFeedback();
+                        }}
+                      >
+                        <label>
+                          <span>
+                            {studyCardFeedbackType === 'error'
+                              ? 'What looks incorrect or misleading?'
+                              : 'How could this question or answer be improved?'}
+                          </span>
+                          <textarea
+                            autoFocus
+                            maxLength={4000}
+                            placeholder="Share a concise note"
+                            value={studyCardFeedbackMessage}
+                            onChange={(event) => {
+                              setStudyCardFeedbackMessage(event.target.value);
+                              if (studyCardFeedbackError) {
+                                setStudyCardFeedbackError('');
+                              }
+                            }}
+                          />
+                        </label>
+                        <div className="study-v2-more-form-footer">
+                          <p aria-live="polite" role="status">
+                            {studyCardFeedbackError}
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setStudyCardFeedbackType(null);
+                              setStudyCardFeedbackMessage('');
+                              setStudyCardFeedbackError('');
+                            }}
+                            disabled={isStudyCardFeedbackSubmitting}
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            className="study-v2-more-submit"
+                            disabled={
+                              isStudyCardFeedbackSubmitting ||
+                              !studyCardFeedbackMessage.trim()
+                            }
+                            type="submit"
+                          >
+                            {isStudyCardFeedbackSubmitting ? 'Sending…' : 'Submit'}
+                          </button>
+                        </div>
+                      </form>
+                    )}
                   </div>
                 ) : (
                   <div className="study-v2-response-stage">
@@ -2880,6 +3068,116 @@ if (mode === 'study') {
           line-height: 0.8;
         }
 
+        .study-v2-more-panel {
+          background: #f8fafc;
+          border-top: 1px solid #dbe2ee;
+          flex: 0 0 auto;
+          max-height: 270px;
+          overflow-y: auto;
+        }
+
+        .study-v2-more-choice-row {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          min-height: 96px;
+        }
+
+        .study-v2-more-choice-row button {
+          background: #ffffff;
+          border: 0;
+          border-right: 1px solid #dbe2ee;
+          color: #0f5ee8;
+          cursor: pointer;
+          font: inherit;
+          font-weight: 750;
+          padding: 18px;
+        }
+
+        .study-v2-more-choice-row button:last-child {
+          border-right: 0;
+        }
+
+        .study-v2-more-form {
+          display: grid;
+          gap: 10px;
+          padding: 14px 18px 16px;
+        }
+
+        .study-v2-more-form label {
+          color: #08143b;
+          display: grid;
+          font-size: 15px;
+          font-weight: 700;
+          gap: 7px;
+        }
+
+        .study-v2-more-form textarea {
+          border: 1px solid #b8c4d6;
+          border-radius: 7px;
+          color: #0f172a;
+          font: inherit;
+          line-height: 1.4;
+          min-height: 76px;
+          padding: 9px 11px;
+          resize: vertical;
+          width: 100%;
+        }
+
+        .study-v2-more-form textarea:focus {
+          border-color: #0f5ee8;
+          box-shadow: 0 0 0 3px rgba(15, 94, 232, 0.14);
+          outline: 0;
+        }
+
+        .study-v2-more-form-footer {
+          align-items: center;
+          display: flex;
+          gap: 10px;
+          justify-content: flex-end;
+        }
+
+        .study-v2-more-form-footer p {
+          color: #b91c1c;
+          flex: 1;
+          font-size: 14px;
+          margin: 0;
+        }
+
+        .study-v2-more-form-footer button {
+          background: #ffffff;
+          border: 1px solid #b8c4d6;
+          border-radius: 7px;
+          color: #0f5ee8;
+          cursor: pointer;
+          font: inherit;
+          font-weight: 750;
+          min-height: 38px;
+          padding: 8px 14px;
+        }
+
+        .study-v2-more-form-footer button:disabled {
+          cursor: not-allowed;
+          opacity: 0.55;
+        }
+
+        .study-v2-more-form-footer .study-v2-more-submit {
+          background: #0f5ee8;
+          border-color: #0f5ee8;
+          color: #ffffff;
+        }
+
+        .study-v2-more-confirmation {
+          align-items: center;
+          color: #166534;
+          display: flex;
+          font-weight: 750;
+          justify-content: center;
+          margin: 0;
+          min-height: 96px;
+          padding: 20px;
+          text-align: center;
+        }
+
         .study-v2-response-toolbar {
           align-items: center;
           border-top: 1px solid #dbe2ee;
@@ -3044,6 +3342,29 @@ if (mode === 'study') {
             border-bottom: 1px solid #dbe2ee;
             border-right: 0;
             min-height: 140px;
+          }
+
+          .study-v2-more-choice-row {
+            grid-template-columns: 1fr;
+          }
+
+          .study-v2-more-choice-row button {
+            border-bottom: 1px solid #dbe2ee;
+            border-right: 0;
+            min-height: 52px;
+            padding: 12px 16px;
+          }
+
+          .study-v2-more-choice-row button:last-child {
+            border-bottom: 0;
+          }
+
+          .study-v2-more-form-footer {
+            flex-wrap: wrap;
+          }
+
+          .study-v2-more-form-footer p {
+            flex-basis: 100%;
           }
 
           .study-v2-rating-row {

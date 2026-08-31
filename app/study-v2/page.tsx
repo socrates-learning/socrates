@@ -16,6 +16,7 @@ type NavIconName =
   | 'account';
 
 type Feedback = 'up' | 'more' | 'down' | null;
+type CardFeedbackType = 'error' | 'suggestion';
 type Response =
   | 'easy'
   | 'average'
@@ -215,6 +216,9 @@ export default function StudyV2Page() {
   const [isAnswerVisible, setIsAnswerVisible] = useState(false);
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [response, setResponse] = useState<Response>(null);
+  const [cardFeedbackType, setCardFeedbackType] =
+    useState<CardFeedbackType | null>(null);
+  const [cardFeedbackMessage, setCardFeedbackMessage] = useState('');
   const [isCramMode, setIsCramMode] = useState(false);
 
   return (
@@ -290,6 +294,8 @@ export default function StudyV2Page() {
                         onClick={() => {
                           setFeedback(type as Feedback);
                           setResponse(null);
+                          setCardFeedbackType(null);
+                          setCardFeedbackMessage('');
                         }}
                       >
                         <FeedbackIcon type={type as 'up' | 'more' | 'down'} />
@@ -298,18 +304,73 @@ export default function StudyV2Page() {
                     ))}
                   </div>
                 ) : feedback === 'more' ? (
-                  <div className="study-v2-response-toolbar">
-                    <button
-                      className="study-v2-response-back"
-                      type="button"
-                      onClick={() => {
-                        setFeedback(null);
-                        setResponse(null);
-                      }}
-                    >
-                      ← Back
-                    </button>
-                    <p>More options coming later</p>
+                  <div className="study-v2-more-panel">
+                    {cardFeedbackType === null ? (
+                      <div className="study-v2-more-choice-row">
+                        <button
+                          type="button"
+                          onClick={() => setCardFeedbackType('error')}
+                        >
+                          Report an error
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setCardFeedbackType('suggestion')}
+                        >
+                          Suggest an improvement
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFeedback(null);
+                            setResponse(null);
+                          }}
+                        >
+                          ← Back
+                        </button>
+                      </div>
+                    ) : (
+                      <form
+                        className="study-v2-more-form"
+                        onSubmit={(event) => event.preventDefault()}
+                      >
+                        <label>
+                          <span>
+                            {cardFeedbackType === 'error'
+                              ? 'What looks incorrect or misleading?'
+                              : 'How could this question or answer be improved?'}
+                          </span>
+                          <textarea
+                            autoFocus
+                            maxLength={4000}
+                            placeholder="Share a concise note"
+                            value={cardFeedbackMessage}
+                            onChange={(event) =>
+                              setCardFeedbackMessage(event.target.value)
+                            }
+                          />
+                        </label>
+                        <div className="study-v2-more-form-footer">
+                          <p>Demo card — feedback is not sent.</p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCardFeedbackType(null);
+                              setCardFeedbackMessage('');
+                            }}
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            className="study-v2-more-submit"
+                            disabled
+                            type="submit"
+                          >
+                            Submit
+                          </button>
+                        </div>
+                      </form>
+                    )}
                   </div>
                 ) : (
                   <div className="study-v2-response-stage">
@@ -705,6 +766,104 @@ export default function StudyV2Page() {
           line-height: 0.8;
         }
 
+        .study-v2-more-panel {
+          background: #f8fafc;
+          border-top: 1px solid #dbe2ee;
+          flex: 0 0 auto;
+          max-height: 270px;
+          overflow-y: auto;
+        }
+
+        .study-v2-more-choice-row {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          min-height: 96px;
+        }
+
+        .study-v2-more-choice-row button {
+          background: #ffffff;
+          border: 0;
+          border-right: 1px solid #dbe2ee;
+          color: #0f5ee8;
+          cursor: pointer;
+          font: inherit;
+          font-weight: 750;
+          padding: 18px;
+        }
+
+        .study-v2-more-choice-row button:last-child {
+          border-right: 0;
+        }
+
+        .study-v2-more-form {
+          display: grid;
+          gap: 10px;
+          padding: 14px 18px 16px;
+        }
+
+        .study-v2-more-form label {
+          color: #08143b;
+          display: grid;
+          font-size: 15px;
+          font-weight: 700;
+          gap: 7px;
+        }
+
+        .study-v2-more-form textarea {
+          border: 1px solid #b8c4d6;
+          border-radius: 7px;
+          color: #0f172a;
+          font: inherit;
+          line-height: 1.4;
+          min-height: 76px;
+          padding: 9px 11px;
+          resize: vertical;
+          width: 100%;
+        }
+
+        .study-v2-more-form textarea:focus {
+          border-color: #0f5ee8;
+          box-shadow: 0 0 0 3px rgba(15, 94, 232, 0.14);
+          outline: 0;
+        }
+
+        .study-v2-more-form-footer {
+          align-items: center;
+          display: flex;
+          gap: 10px;
+          justify-content: flex-end;
+        }
+
+        .study-v2-more-form-footer p {
+          color: #475569;
+          flex: 1;
+          font-size: 14px;
+          margin: 0;
+        }
+
+        .study-v2-more-form-footer button {
+          background: #ffffff;
+          border: 1px solid #b8c4d6;
+          border-radius: 7px;
+          color: #0f5ee8;
+          cursor: pointer;
+          font: inherit;
+          font-weight: 750;
+          min-height: 38px;
+          padding: 8px 14px;
+        }
+
+        .study-v2-more-form-footer button:disabled {
+          cursor: not-allowed;
+          opacity: 0.55;
+        }
+
+        .study-v2-more-form-footer .study-v2-more-submit {
+          background: #0f5ee8;
+          border-color: #0f5ee8;
+          color: #ffffff;
+        }
+
         .study-v2-response-toolbar {
           align-items: center;
           border-top: 1px solid #dbe2ee;
@@ -870,6 +1029,29 @@ export default function StudyV2Page() {
             border-bottom: 1px solid #dbe2ee;
             border-right: 0;
             min-height: 140px;
+          }
+
+          .study-v2-more-choice-row {
+            grid-template-columns: 1fr;
+          }
+
+          .study-v2-more-choice-row button {
+            border-bottom: 1px solid #dbe2ee;
+            border-right: 0;
+            min-height: 52px;
+            padding: 12px 16px;
+          }
+
+          .study-v2-more-choice-row button:last-child {
+            border-bottom: 0;
+          }
+
+          .study-v2-more-form-footer {
+            flex-wrap: wrap;
+          }
+
+          .study-v2-more-form-footer p {
+            flex-basis: 100%;
           }
 
           .study-v2-rating-row {
