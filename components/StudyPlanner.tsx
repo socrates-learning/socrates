@@ -320,6 +320,9 @@ export function StudyPlanner({
   const [email, setEmail] = useState<string | null>(null);
   const [role, setRole] = useState<string | null>(null);
   const [displayName, setDisplayName] = useState('there');
+  const [availableLibraries, setAvailableLibraries] = useState<ActiveLibrary[]>(
+    activeLibrary ? [activeLibrary] : []
+  );
   const [deck, setDeck] = useState<StudyDeck | null>(null);
   const [nodes, setNodes] = useState<LibraryNode[]>([]);
   const [placements, setPlacements] = useState<Placement[]>([]);
@@ -429,6 +432,22 @@ export function StudyPlanner({
         .eq('user_id', user.id)
         .maybeSingle();
 
+      let loadedAvailableLibraries: ActiveLibrary[] = activeLibrary
+        ? [activeLibrary]
+        : [];
+
+      if (roleData?.role === 'editor' || roleData?.role === 'admin') {
+        const { data: libraryData } = await supabase
+          .from('libraries')
+          .select('id, name, slug, description, status')
+          .eq('status', 'active')
+          .order('name');
+
+        if (libraryData?.length) {
+          loadedAvailableLibraries = libraryData as ActiveLibrary[];
+        }
+      }
+
       const { data: deckData, error: deckError } = await supabase.rpc(
         'get_or_create_active_study_deck',
         { p_library_id: activeLibrary.id }
@@ -536,6 +555,7 @@ export function StudyPlanner({
       setUserId(user.id);
       setEmail(user.email ?? 'Account');
       setRole(roleData?.role ?? null);
+      setAvailableLibraries(loadedAvailableLibraries);
       setDisplayName(
         (user.user_metadata?.full_name as string | undefined) ||
           (user.email ? user.email.split('@')[0] : 'there')
@@ -586,7 +606,7 @@ export function StudyPlanner({
     return () => {
       isMounted = false;
     };
-  }, [activeLibrary?.id]);
+  }, [activeLibrary]);
 
   useEffect(() => {
     let isMounted = true;
@@ -904,8 +924,12 @@ export function StudyPlanner({
   }
 
   async function handleLogout() {
-    await supabase.auth.signOut();
-    window.location.href = '/login';
+    try {
+      await fetch('/library/clear', { method: 'POST' });
+    } finally {
+      await supabase.auth.signOut();
+      window.location.href = '/login';
+    }
   }
 
   function handleCreatorClick() {
@@ -2883,10 +2907,40 @@ if (mode === 'study') {
                 aria-labelledby="home-v2-setup-title"
               >
                 <div className="home-v2-setup-heading">
-                  <h3 id="home-v2-setup-title">Set Up Deck</h3>
-                  <p>
-                    Choose eligible areas and balance new material with mastery review.
-                  </p>
+                  <div>
+                    <h3 id="home-v2-setup-title">Set Up Deck</h3>
+                    <p>
+                      Choose eligible areas and balance new material with mastery review.
+                    </p>
+                  </div>
+
+                  <form
+                    action="/library/switch"
+                    className="home-v2-library-switcher"
+                    method="post"
+                  >
+                    <label>
+                      <span>Current Subject</span>
+                      <select
+                        aria-label="Current Subject"
+                        defaultValue={activeLibrary.slug}
+                        name="library_slug"
+                      >
+                        {availableLibraries.map((library) => (
+                          <option key={library.id} value={library.slug}>
+                            {library.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <input name="return_to" type="hidden" value="/" />
+                    <button
+                      disabled={availableLibraries.length < 2}
+                      type="submit"
+                    >
+                      Switch
+                    </button>
+                  </form>
                 </div>
 
                 <div
@@ -3183,10 +3237,69 @@ if (mode === 'study') {
           margin-left: 8px;
         }
 
+        .home-v2-setup-heading {
+          align-items: end;
+          display: flex;
+          flex-wrap: wrap;
+          gap: 18px;
+          justify-content: space-between;
+        }
+
         .home-v2-setup-heading p {
           color: #64748b;
           font-size: 14px;
-          margin: -8px 0 18px;
+          margin: -8px 0 0;
+        }
+
+        .home-v2-library-switcher {
+          align-items: end;
+          display: flex;
+          flex: 0 1 360px;
+          gap: 10px;
+          justify-content: flex-end;
+          margin-bottom: 18px;
+        }
+
+        .home-v2-library-switcher label {
+          display: grid;
+          flex: 1 1 220px;
+          gap: 5px;
+        }
+
+        .home-v2-library-switcher label span {
+          color: #59687f;
+          font-size: 12px;
+          font-weight: 800;
+          letter-spacing: 0.04em;
+          text-transform: uppercase;
+        }
+
+        .home-v2-library-switcher select,
+        .home-v2-library-switcher button {
+          border: 1px solid #c7d1e0;
+          border-radius: 8px;
+          font: inherit;
+          min-height: 42px;
+        }
+
+        .home-v2-library-switcher select {
+          background: #ffffff;
+          color: #17233a;
+          padding: 8px 10px;
+          width: 100%;
+        }
+
+        .home-v2-library-switcher button {
+          background: #155ee8;
+          color: #ffffff;
+          cursor: pointer;
+          font-weight: 800;
+          padding: 8px 14px;
+        }
+
+        .home-v2-library-switcher button:disabled {
+          cursor: default;
+          opacity: 0.55;
         }
 
         .home-v2-setup-tree {
