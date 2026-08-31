@@ -1808,7 +1808,8 @@ export function ArticleEditorClient({
             + Add Source
           </button>
           <p className="muted">
-            Need a new source? Add it to a concept in Concepts, then return here.
+            Need a new source? Add it to a concept in the Creator Studio Content tab,
+            then return here.
           </p>
         </div>
 

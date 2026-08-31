@@ -153,13 +153,13 @@ const learnerNavItems: Array<{
 }> = [
   { href: '/', icon: 'home', label: 'Home' },
   { icon: 'learn', label: 'Learn' },
-  { href: '/creator', icon: 'creator', label: 'Creator Studio' },
+  { href: '/creator/concepts/new', icon: 'creator', label: 'Creator Studio' },
   { href: '/admin/users', icon: 'admin', label: 'Admin' },
 ];
 
 const homeRailItems: Array<{ label: string; icon: string; href?: string }> = [
   { label: 'Deck Menu', icon: 'document' },
-  { label: 'Make Cards', icon: 'edit', href: '/creator' },
+  { label: 'Make Cards', icon: 'edit', href: '/creator/concepts/new' },
   { label: 'Stats', icon: 'bars' },
   { label: 'Account Settings', icon: 'gear' },
   { label: 'Menu', icon: 'people' },
@@ -1122,13 +1122,6 @@ export function StudyPlanner({
           </span>
           <HomeProgressBar value={progress} />
           <span className="home-v2-percent">{progress}%</span>
-          <input
-            aria-label={`Select ${node.name}`}
-            checked={selectedNodeIds.has(node.id)}
-            className="home-v2-checkbox"
-            type="checkbox"
-            onChange={() => void toggleNodeSelection(node.id)}
-          />
         </div>
         {hasChildren &&
           isExpanded &&

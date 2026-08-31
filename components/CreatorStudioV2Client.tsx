@@ -2059,7 +2059,7 @@ export function CreatorStudioV2Client({
       return;
     }
 
-    window.location.assign(destination);
+    router.push(destination);
   }
 
   function goBackFromCreator() {
@@ -2071,10 +2071,6 @@ export function CreatorStudioV2Client({
     }
 
     navigateBackOrFallback(router);
-  }
-
-  function openConceptBrowser() {
-    navigateFromCreator('/creator/concepts');
   }
 
   function openConceptFromSearch(selectedConceptId: string) {
@@ -2108,7 +2104,7 @@ export function CreatorStudioV2Client({
     setActiveCreatorTab('content');
     setStatus(null);
     setSavedDraftFingerprint(draftFingerprint('', [], [], [], 'draft'));
-    window.location.assign('/creator/concepts/new');
+    router.push('/creator/concepts/new');
   }
 
   async function deleteCurrentConcept() {
@@ -2151,7 +2147,7 @@ export function CreatorStudioV2Client({
     await loadTagCatalog();
     broadcastTagCatalogUsageInvalidation();
     setIsSaving(false);
-    window.location.assign('/creator/concepts');
+    router.replace('/creator/concepts/new');
   }
 
   async function saveConcept() {
@@ -2699,13 +2695,6 @@ export function CreatorStudioV2Client({
                   {visibleSaveFeedback === 'saving' ? 'Saving…' : 'Saved'}
                 </span>
               )}
-              <button
-                className={styles.secondaryButton}
-                type="button"
-                onClick={openConceptBrowser}
-              >
-                Concepts
-              </button>
               <button className={styles.secondaryButton} type="button" onClick={clearDraft}>
                 Clear
               </button>

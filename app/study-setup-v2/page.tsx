@@ -15,7 +15,7 @@ const navItems: NavItem[] = [
   { icon: 'learn', label: 'Learn' },
   { icon: 'study', label: 'Study' },
   { icon: 'progress', label: 'Progress' },
-  { href: '/creator', icon: 'creator', label: 'Creator Studio' },
+  { href: '/creator/concepts/new', icon: 'creator', label: 'Creator Studio' },
   { href: '/admin/users', icon: 'admin', label: 'Admin' },
   { icon: 'account', label: 'Account' },
 ];

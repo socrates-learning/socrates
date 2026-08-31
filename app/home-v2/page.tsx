@@ -155,7 +155,11 @@ function HomeV2Header() {
           <NavIcon icon="progress" />
           Progress
         </button>
-        <Link className="home-v2-nav-item" href="/creator" onClick={handleCreatorClick}>
+        <Link
+          className="home-v2-nav-item"
+          href="/creator/concepts/new"
+          onClick={handleCreatorClick}
+        >
           <NavIcon icon="creator" />
           Creator Studio
         </Link>

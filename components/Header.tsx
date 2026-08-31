@@ -158,7 +158,11 @@ export function Header() {
         </button>
 
         {isEditor && (
-          <Link style={navButtonStyle} href="/creator" onClick={handleCreatorClick}>
+          <Link
+            style={navButtonStyle}
+            href="/creator/concepts/new"
+            onClick={handleCreatorClick}
+          >
             Creator Studio
           </Link>
         )}

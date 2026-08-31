@@ -137,7 +137,7 @@ export function ConceptTabs({
         ))}
 
         {canCreate && (
-          <Link className="tab" href="/creator">
+          <Link className="tab" href="/creator/concepts/new">
             Create
           </Link>
         )}
