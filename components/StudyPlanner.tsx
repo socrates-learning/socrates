@@ -52,6 +52,55 @@ type StudyDeckConcept = {
   selection_source: string;
 };
 
+type LearnerProgressMetric = {
+  total_concepts: number;
+  assessed_concepts: number;
+  unseen_concepts: number;
+  assessed_mastery_percent: number | null;
+  coverage_adjusted_progress_percent: number;
+  evidence_count: number;
+  questions_answered: number;
+};
+
+type LearnerProgressNode = LearnerProgressMetric & {
+  library_node_id: string;
+  name: string;
+  parent_id: string | null;
+  sort_order: number | null;
+};
+
+type LearnerProgressResponse = {
+  library_id: string;
+  summary: LearnerProgressMetric & {
+    recent_session_count: number;
+  };
+  nodes: LearnerProgressNode[];
+  recent_sessions: Array<{
+    id: string;
+    study_deck_id: string | null;
+    deck_name: string | null;
+    started_at: string;
+    ended_at: string | null;
+    answered_count: number;
+  }>;
+};
+
+const emptyLearnerProgress: LearnerProgressResponse = {
+  library_id: '',
+  summary: {
+    total_concepts: 0,
+    assessed_concepts: 0,
+    unseen_concepts: 0,
+    assessed_mastery_percent: null,
+    coverage_adjusted_progress_percent: 0,
+    evidence_count: 0,
+    questions_answered: 0,
+    recent_session_count: 0,
+  },
+  nodes: [],
+  recent_sessions: [],
+};
+
 type AuthoredStudyQuestion = {
   id: string;
   concept_id: string;
@@ -76,8 +125,7 @@ type PriorityStudyQuestion = {
 };
 
 type ConceptOverride = 'included' | 'excluded';
-type PlannerMode = 'dashboard' | 'setup' | 'study';
-type DeckMode = 'Learn' | 'Study' | 'Cram';
+type PlannerMode = 'dashboard' | 'setup' | 'stats' | 'study';
 type StudyFeedback = 'up' | 'more' | 'down' | null;
 type StudyResponse =
   | 'easy'
@@ -105,61 +153,16 @@ const learnerNavItems: Array<{
 }> = [
   { href: '/', icon: 'home', label: 'Home' },
   { icon: 'learn', label: 'Learn' },
-  { icon: 'study', label: 'Study' },
-  { icon: 'progress', label: 'Progress' },
   { href: '/creator', icon: 'creator', label: 'Creator Studio' },
   { href: '/admin/users', icon: 'admin', label: 'Admin' },
-  { icon: 'account', label: 'Account' },
 ];
 
-const homeRailItems = [
+const homeRailItems: Array<{ label: string; icon: string; href?: string }> = [
   { label: 'Deck Menu', icon: 'document' },
-  { label: 'Set Up Deck', icon: 'gear' },
-  { label: 'Make Cards', icon: 'edit' },
+  { label: 'Make Cards', icon: 'edit', href: '/creator' },
   { label: 'Stats', icon: 'bars' },
+  { label: 'Account Settings', icon: 'gear' },
   { label: 'Menu', icon: 'people' },
-  { label: 'Buttons', icon: 'dots' },
-];
-
-const prototypeProgressRows = [
-  { id: 'clinical-practice', name: 'Clinical Practice', progress: 68, canExpand: true },
-  { id: 'mother-baby', name: 'Mother Baby', progress: 52, canExpand: true },
-  { id: 'cardiac', name: 'Cardiac', progress: 37, canExpand: true },
-  { id: 'ecg', name: 'ECG', progress: 74, canExpand: true },
-];
-
-type PrototypeTopicNode = {
-  id: string;
-  name: string;
-  progress: number;
-  children?: PrototypeTopicNode[];
-};
-
-const prototypeTopicTree: PrototypeTopicNode[] = [
-  {
-    id: 'nursing',
-    name: 'Nursing',
-    progress: 64,
-    children: [
-      {
-        id: 'clinical-practice-tree',
-        name: 'Clinical Practice',
-        progress: 68,
-        children: [
-          { id: 'monitors', name: 'Monitors', progress: 54 },
-          { id: 'invasive-lines', name: 'Invasive Lines', progress: 41 },
-        ],
-      },
-      {
-        id: 'mother-baby-tree',
-        name: 'Mother Baby',
-        progress: 52,
-        children: [{ id: 'newborn-care', name: 'Newborn Care', progress: 38 }],
-      },
-      { id: 'cardiac-tree', name: 'Cardiac', progress: 37 },
-      { id: 'ecg-tree', name: 'ECG', progress: 74 },
-    ],
-  },
 ];
 
 function LearnerHeaderIcon({
@@ -258,7 +261,10 @@ function RailIcon({ icon }: { icon: string }) {
 
 function HomeProgressBar({ value }: { value: number }) {
   return (
-    <div className="home-v2-progress" aria-label={`${value}% progress`}>
+    <div
+      className="home-v2-progress"
+      aria-label={`${value}% coverage-adjusted progress`}
+    >
       <span style={{ width: `${value}%` }} />
     </div>
   );
@@ -326,6 +332,9 @@ export function StudyPlanner({
     Record<string, ConceptOverride>
   >({});
   const [resolvedConcepts, setResolvedConcepts] = useState<StudyDeckConcept[]>([]);
+  const [learnerProgress, setLearnerProgress] =
+    useState<LearnerProgressResponse>(emptyLearnerProgress);
+  const [learnerProgressError, setLearnerProgressError] = useState('');
   const [authoredStudyQuestions, setAuthoredStudyQuestions] = useState<
     AuthoredStudyQuestion[]
   >([]);
@@ -337,12 +346,7 @@ export function StudyPlanner({
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(Boolean(activeLibrary?.id));
   const [isSaving, setIsSaving] = useState(false);
-  const [selectedDeckModes, setSelectedDeckModes] = useState<Set<DeckMode>>(
-    new Set(['Study'])
-  );
-  const [homeExpandedIds, setHomeExpandedIds] = useState<Set<string>>(
-    new Set(['nursing', 'clinical-practice-tree'])
-  );
+  const [homeExpandedIds, setHomeExpandedIds] = useState<Set<string>>(new Set());
   const [isSetupCramMode, setIsSetupCramMode] = useState(false);
   const [isAnswerVisible, setIsAnswerVisible] = useState(false);
   const [studyFeedback, setStudyFeedback] = useState<StudyFeedback>(null);
@@ -375,6 +379,16 @@ export function StudyPlanner({
     () => new Map(nodes.map((node) => [node.id, node])),
     [nodes]
   );
+  const learnerProgressByNodeId = useMemo(
+    () =>
+      new Map(
+        learnerProgress.nodes.map((nodeProgress) => [
+          nodeProgress.library_node_id,
+          nodeProgress,
+        ])
+      ),
+    [learnerProgress.nodes]
+  );
 
   useEffect(() => {
     let isMounted = true;
@@ -387,7 +401,14 @@ export function StudyPlanner({
 
       setIsLoading(true);
       setMessage('');
-      setMode(window.location.hash === '#set-up-deck' ? 'setup' : 'dashboard');
+      setLearnerProgressError('');
+      setMode(
+        window.location.hash === '#set-up-deck'
+          ? 'setup'
+          : window.location.hash === '#stats'
+            ? 'stats'
+            : 'dashboard'
+      );
 
       const {
         data: { user },
@@ -503,6 +524,10 @@ export function StudyPlanner({
       const { data: resolvedData } = await supabase.rpc('resolve_study_deck', {
         p_deck_id: activeDeck.id,
       });
+      const { data: learnerProgressData, error: learnerProgressLoadError } =
+        await supabase.rpc('get_library_learner_progress', {
+          p_library_id: activeLibrary.id,
+        });
 
       if (!isMounted) return;
 
@@ -540,7 +565,18 @@ export function StudyPlanner({
         )
       );
       setResolvedConcepts((resolvedData || []) as StudyDeckConcept[]);
+      setLearnerProgress(
+        learnerProgressLoadError || !learnerProgressData
+          ? { ...emptyLearnerProgress, library_id: activeLibrary.id }
+          : (learnerProgressData as unknown as LearnerProgressResponse)
+      );
+      setLearnerProgressError(
+        learnerProgressLoadError
+          ? `Progress could not be loaded: ${learnerProgressLoadError.message}`
+          : ''
+      );
       setExpandedNodeIds(rootNode ? new Set([rootNode.id]) : new Set());
+      setHomeExpandedIds(rootNode ? new Set([rootNode.id]) : new Set());
       setFocusedNodeId(rootNode?.id || null);
       setIsLoading(false);
     }
@@ -630,9 +666,13 @@ export function StudyPlanner({
   }, [resolvedConcepts]);
 
   useEffect(() => {
-    function openSetupFromHash() {
+    function openModeFromHash() {
       if (window.location.hash === '#set-up-deck') {
         setMode('setup');
+      } else if (window.location.hash === '#stats') {
+        setMode('stats');
+      } else {
+        setMode('dashboard');
       }
     }
 
@@ -640,14 +680,14 @@ export function StudyPlanner({
       setMode('dashboard');
     }
 
-    openSetupFromHash();
-    window.addEventListener('hashchange', openSetupFromHash);
-    window.addEventListener('socrates-open-deck-setup', openSetupFromHash);
+    openModeFromHash();
+    window.addEventListener('hashchange', openModeFromHash);
+    window.addEventListener('socrates-open-deck-setup', openModeFromHash);
     window.addEventListener('socrates-open-deck-dashboard', openDashboard);
 
     return () => {
-      window.removeEventListener('hashchange', openSetupFromHash);
-      window.removeEventListener('socrates-open-deck-setup', openSetupFromHash);
+      window.removeEventListener('hashchange', openModeFromHash);
+      window.removeEventListener('socrates-open-deck-setup', openModeFromHash);
       window.removeEventListener('socrates-open-deck-dashboard', openDashboard);
     };
   }, []);
@@ -655,28 +695,31 @@ export function StudyPlanner({
   useEffect(() => {
   const layout = document.querySelector<HTMLElement>('main.layout');
 
+  if (mode === 'setup') {
+    window.history.replaceState(null, '', '#set-up-deck');
+  } else if (mode === 'stats') {
+    window.history.replaceState(null, '', '#stats');
+  } else if (
+    window.location.hash === '#set-up-deck' ||
+    window.location.hash === '#stats'
+  ) {
+    window.history.replaceState(null, '', window.location.pathname);
+  }
+
   if (!layout) return;
 
   if (mode === 'setup' || mode === 'study') {
     // Page 2 and Page 3 use the focused full-width layout.
     layout.style.gridTemplateColumns = '1fr';
 
-    if (mode === 'setup') {
-      window.history.replaceState(null, '', '#set-up-deck');
-    } else if (window.location.hash === '#set-up-deck') {
-      window.history.replaceState(null, '', window.location.pathname);
-    }
-
     window.dispatchEvent(new Event('socrates-open-deck-setup'));
   } else {
     // Page 1 returns to the normal dashboard layout.
     layout.style.gridTemplateColumns = '';
 
-    if (window.location.hash === '#set-up-deck') {
-      window.history.replaceState(null, '', window.location.pathname);
+    if (mode === 'dashboard') {
+      window.dispatchEvent(new Event('socrates-open-deck-dashboard'));
     }
-
-    window.dispatchEvent(new Event('socrates-open-deck-dashboard'));
   }
 }, [mode]);
 
@@ -803,7 +846,10 @@ export function StudyPlanner({
 
     if (error) {
       console.error('Unable to end Study Mode session.', error);
+      return;
     }
+
+    void refreshLearnerProgress();
   }
 
   async function persistFinalStudyResponse(
@@ -838,6 +884,7 @@ export function StudyPlanner({
       }
 
       studyResponseRecordedForCard.current = true;
+      void refreshLearnerProgress();
 
       const selectedQuestion = await selectPriorityStudyQuestion(sessionId);
 
@@ -865,20 +912,6 @@ export function StudyPlanner({
     window.dispatchEvent(new Event('socrates-open-creator-dashboard'));
   }
 
-  function toggleDeckMode(deckMode: DeckMode) {
-    setSelectedDeckModes((current) => {
-      const next = new Set(current);
-
-      if (next.has(deckMode)) {
-        next.delete(deckMode);
-      } else {
-        next.add(deckMode);
-      }
-
-      return next;
-    });
-  }
-
   function toggleHomeExpanded(id: string) {
     setHomeExpandedIds((current) => {
       const next = new Set(current);
@@ -893,24 +926,13 @@ export function StudyPlanner({
     });
   }
 
-  function findPersistedHomeNode(
-    homeNode: PrototypeTopicNode,
-    parentNodeId: string | null | undefined
-  ) {
-    if (parentNodeId === undefined) return null;
+  function formatProgressDetail(metric: LearnerProgressMetric) {
+    const assessedAverage =
+      metric.assessed_mastery_percent === null
+        ? 'no assessed mastery yet'
+        : `${Math.round(metric.assessed_mastery_percent)}% assessed average`;
 
-    const siblings = nodes.filter(
-      (node) => node.parent_id === parentNodeId
-    );
-    return (
-      siblings.find((node) => node.id === homeNode.id) ||
-      siblings.find(
-        (node) =>
-          node.name.trim().toLocaleLowerCase() ===
-          homeNode.name.trim().toLocaleLowerCase()
-      ) ||
-      null
-    );
+    return `${metric.assessed_concepts}/${metric.total_concepts} assessed · ${metric.unseen_concepts} unseen · ${assessedAverage}`;
   }
 
   function renderLearnerHeader(classPrefix: LearnerHeaderPrefix) {
@@ -1031,13 +1053,17 @@ export function StudyPlanner({
   }
 
   function renderHomeTreeRow(
-    node: PrototypeTopicNode,
-    depth: number,
-    parentNodeId: string | null | undefined = null
+    node: LibraryNode,
+    depth: number
   ): ReactNode {
-    const hasChildren = Boolean(node.children?.length);
+    const childNodes = nodes
+      .filter((candidate) => candidate.parent_id === node.id)
+      .sort((left, right) => left.name.localeCompare(right.name));
+    const hasChildren = childNodes.length > 0;
     const isExpanded = homeExpandedIds.has(node.id);
-    const persistedNode = findPersistedHomeNode(node, parentNodeId);
+    const metric =
+      learnerProgressByNodeId.get(node.id) || emptyLearnerProgress.summary;
+    const progress = Math.round(metric.coverage_adjusted_progress_percent);
 
     return (
       <div key={node.id}>
@@ -1055,28 +1081,23 @@ export function StudyPlanner({
           >
             {hasChildren ? (isExpanded ? '⌄' : '›') : ''}
           </button>
-          <span className="home-v2-topic-name">{node.name}</span>
-          <HomeProgressBar value={node.progress} />
-          <span className="home-v2-percent">{node.progress}%</span>
+          <span className="home-v2-topic-copy">
+            <span className="home-v2-topic-name">{node.name}</span>
+            <small>{formatProgressDetail(metric)}</small>
+          </span>
+          <HomeProgressBar value={progress} />
+          <span className="home-v2-percent">{progress}%</span>
           <input
             aria-label={`Select ${node.name}`}
-            checked={Boolean(
-              persistedNode && selectedNodeIds.has(persistedNode.id)
-            )}
+            checked={selectedNodeIds.has(node.id)}
             className="home-v2-checkbox"
             type="checkbox"
-            onChange={() => {
-              if (persistedNode) {
-                void toggleNodeSelection(persistedNode.id);
-              }
-            }}
+            onChange={() => void toggleNodeSelection(node.id)}
           />
         </div>
         {hasChildren &&
           isExpanded &&
-          node.children?.map((child) =>
-            renderHomeTreeRow(child, depth + 1, persistedNode?.id)
-          )}
+          childNodes.map((child) => renderHomeTreeRow(child, depth + 1))}
       </div>
     );
   }
@@ -1156,6 +1177,24 @@ export function StudyPlanner({
     }
 
     setResolvedConcepts((data || []) as StudyDeckConcept[]);
+  }
+
+  async function refreshLearnerProgress() {
+    if (!activeLibrary?.id) return;
+
+    const { data, error } = await supabase.rpc('get_library_learner_progress', {
+      p_library_id: activeLibrary.id,
+    });
+
+    if (error || !data) {
+      setLearnerProgressError(
+        `Progress could not be loaded: ${error?.message || 'No progress data returned.'}`
+      );
+      return;
+    }
+
+    setLearnerProgress(data as unknown as LearnerProgressResponse);
+    setLearnerProgressError('');
   }
 
   async function persistNodePreference(nodeId: string, balance: number) {
@@ -1577,7 +1616,9 @@ export function StudyPlanner({
     );
   }
 
-  const rootNodes = nodes.filter((node) => node.parent_id === null);
+  const rootNodes = nodes
+    .filter((node) => node.parent_id === null)
+    .sort((left, right) => left.name.localeCompare(right.name));
   const focusedNode = focusedNodeId ? nodesById.get(focusedNodeId) : null;
   const focusedConcepts = focusedNode ? directConceptsForNode(focusedNode.id) : [];
   const selectedNodeSummaries = [...selectedNodeIds].flatMap((nodeId) => {
@@ -2749,17 +2790,45 @@ if (mode === 'study') {
       <main className="home-v2-shell">
         <aside className="home-v2-rail" aria-label="Deck navigation">
           <div className="home-v2-rail-list">
-            {homeRailItems.map((item) => (
-              <button
-                className="home-v2-rail-card"
-                key={item.label}
-                type="button"
-                onClick={item.label === 'Set Up Deck' ? openSetupMode : undefined}
-              >
-                <RailIcon icon={item.icon} />
-                <span>{item.label}</span>
-              </button>
-            ))}
+            {homeRailItems.map((item) => {
+              const content = (
+                <>
+                  <RailIcon icon={item.icon} />
+                  <span>{item.label}</span>
+                </>
+              );
+
+              return item.href ? (
+                <Link
+                  className="home-v2-rail-card"
+                  href={item.href}
+                  key={item.label}
+                  onClick={handleCreatorClick}
+                >
+                  {content}
+                </Link>
+              ) : (
+                <button
+                  className="home-v2-rail-card"
+                  key={item.label}
+                  title={
+                    item.label === 'Account Settings' && email
+                      ? `Signed in as ${email}`
+                      : undefined
+                  }
+                  type="button"
+                  onClick={
+                    item.label === 'Deck Menu'
+                      ? () => setMode('dashboard')
+                      : item.label === 'Stats'
+                        ? () => setMode('stats')
+                        : undefined
+                  }
+                >
+                  {content}
+                </button>
+              );
+            })}
           </div>
           <button className="home-v2-logout" type="button" onClick={handleLogout}>
             <RailIcon icon="edit" />
@@ -2768,62 +2837,82 @@ if (mode === 'study') {
         </aside>
 
         <section className="home-v2-workspace">
-          <div className="home-v2-topline">
-            <h2>Welcome back, {displayName}!</h2>
-            <button
-              className="home-v2-account"
-              type="button"
-              title={email ? `Signed in as ${email}` : 'Account settings'}
-            >
-              <RailIcon icon="gear" />
-              <span>Account Settings</span>
-              <span aria-hidden="true">⌄</span>
-            </button>
-          </div>
+          {mode === 'stats' ? (
+            <>
+              <div className="home-v2-topline">
+                <h2>Learner Progress</h2>
+              </div>
 
-          <div className="home-v2-hero">
-            <button className="home-v2-study" type="button" onClick={openStudyMode}>
-              STUDY
-            </button>
-
-            <div className="home-v2-modes" aria-label="Study mode controls">
-              {(['Learn', 'Study', 'Cram'] as DeckMode[]).map((deckMode) => (
-                <label key={deckMode}>
-                  <input
-                    checked={selectedDeckModes.has(deckMode)}
-                    type="checkbox"
-                    onChange={() => toggleDeckMode(deckMode)}
-                  />
-                  <span>{deckMode}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-
-          <section className="home-v2-deck-card" aria-labelledby="progress-summary-title">
-            <h3 id="progress-summary-title">
-              Current Deck: <span>{activeLibrary.name}</span>
-            </h3>
-            <div className="home-v2-progress-list">
-              {prototypeProgressRows.map((row) => (
-                <div className="home-v2-progress-row" key={row.id}>
-                  <span className="home-v2-chevron">{row.canExpand ? '›' : ''}</span>
-                  <span className="home-v2-topic-name">{row.name}</span>
-                  <HomeProgressBar value={row.progress} />
-                  <span className="home-v2-percent">{row.progress}%</span>
+              <section className="home-v2-deck-card" aria-labelledby="tree-title">
+                <h3 id="tree-title">
+                  Current Deck: <span>{activeLibrary.name}</span>
+                </h3>
+                <p className="home-v2-progress-overview">
+                  {learnerProgress.summary.assessed_concepts}/
+                  {learnerProgress.summary.total_concepts} Concepts assessed ·{' '}
+                  {learnerProgress.summary.unseen_concepts} unseen ·{' '}
+                  {learnerProgress.summary.questions_answered} Questions answered ·{' '}
+                  {learnerProgress.summary.recent_session_count} recent sessions
+                </p>
+                {learnerProgressError && (
+                  <p className="home-v2-progress-overview">{learnerProgressError}</p>
+                )}
+                <div className="home-v2-tree">
+                  {rootNodes.map((node) => renderHomeTreeRow(node, 0))}
                 </div>
-              ))}
-            </div>
-          </section>
+              </section>
+            </>
+          ) : (
+            <>
+              <div className="home-v2-topline">
+                <h2>Welcome back, {displayName}!</h2>
+              </div>
 
-          <section className="home-v2-deck-card" aria-labelledby="tree-title">
-            <h3 id="tree-title">
-              Current Deck: <span>{activeLibrary.name}</span>
-            </h3>
-            <div className="home-v2-tree">
-              {prototypeTopicTree.map((node) => renderHomeTreeRow(node, 0))}
-            </div>
-          </section>
+              <div className="home-v2-hero">
+                <button
+                  className="home-v2-study"
+                  type="button"
+                  onClick={openStudyMode}
+                >
+                  STUDY
+                </button>
+              </div>
+
+              <section
+                className="home-v2-deck-card home-v2-setup-card"
+                aria-labelledby="home-v2-setup-title"
+              >
+                <div className="home-v2-setup-heading">
+                  <h3 id="home-v2-setup-title">Set Up Deck</h3>
+                  <p>
+                    Choose eligible areas and balance new material with mastery review.
+                  </p>
+                </div>
+
+                <div
+                  className="home-v2-setup-tree"
+                  aria-label="Set Up Deck Topic Tree"
+                >
+                  {rootNodes.map((node) => renderNode(node))}
+                </div>
+
+                <label className="home-v2-setup-cram">
+                  <input
+                    checked={isSetupCramMode}
+                    disabled={isSaving}
+                    type="checkbox"
+                    onChange={() => void toggleSetupCramMode()}
+                  />
+                  <span>
+                    <strong>Cram Mode</strong>
+                    <small>
+                      Maximize number of questions. Less variety, more volume.
+                    </small>
+                  </span>
+                </label>
+              </section>
+            </>
+          )}
         </section>
       </main>
 
@@ -2946,8 +3035,7 @@ if (mode === 'study') {
         }
 
         .home-v2-rail-card,
-        .home-v2-logout,
-        .home-v2-account {
+        .home-v2-logout {
           align-items: center;
           background: #ffffff;
           border: 1px solid #cbd5e1;
@@ -2977,11 +3065,11 @@ if (mode === 'study') {
           font-weight: 900;
           letter-spacing: -0.04em;
           line-height: 1;
+          text-decoration: none;
         }
 
         .home-v2-rail-card:hover,
-        .home-v2-logout:hover,
-        .home-v2-account:hover {
+        .home-v2-logout:hover {
           border-color: #2563eb;
           box-shadow: 0 12px 30px rgba(37, 99, 235, 0.12);
           transform: translateY(-1px);
@@ -3042,30 +3130,10 @@ if (mode === 'study') {
           margin: 0;
         }
 
-        .home-v2-account {
-          border: 0;
-          color: #475569;
-          font-size: 16px;
-          font-weight: 600;
-          gap: 12px;
-          justify-content: flex-end;
-          min-height: auto;
-          padding: 8px 0;
-          width: auto;
-        }
-
-        .home-v2-account .home-v2-rail-icon {
-          color: #475569;
-          flex-basis: 26px;
-          height: 26px;
-          width: 26px;
-        }
-
         .home-v2-hero {
           align-items: center;
           display: grid;
-          gap: 54px;
-          grid-template-columns: minmax(320px, 596px) 180px;
+          grid-template-columns: minmax(320px, 596px);
           justify-content: center;
           margin-bottom: 30px;
         }
@@ -3085,20 +3153,6 @@ if (mode === 'study') {
           width: 100%;
         }
 
-        .home-v2-modes {
-          display: grid;
-          gap: 18px;
-        }
-
-        .home-v2-modes label {
-          align-items: center;
-          color: #0f172a;
-          display: flex;
-          font-size: 20px;
-          gap: 16px;
-        }
-
-        .home-v2-modes input,
         .home-v2-checkbox {
           accent-color: #2563eb;
           height: 25px;
@@ -3129,10 +3183,53 @@ if (mode === 'study') {
           margin-left: 8px;
         }
 
+        .home-v2-setup-heading p {
+          color: #64748b;
+          font-size: 14px;
+          margin: -8px 0 18px;
+        }
+
+        .home-v2-setup-tree {
+          text-align: left;
+        }
+
+        .home-v2-setup-cram {
+          align-items: center;
+          border-top: 1px solid #dbe3ef;
+          color: #0f172a;
+          display: flex;
+          gap: 12px;
+          margin-top: 18px;
+          padding-top: 18px;
+        }
+
+        .home-v2-setup-cram input {
+          accent-color: #2563eb;
+          height: 22px;
+          width: 22px;
+        }
+
+        .home-v2-setup-cram span,
+        .home-v2-setup-cram small {
+          display: block;
+        }
+
+        .home-v2-setup-cram small {
+          color: #64748b;
+          font-size: 12px;
+          margin-top: 2px;
+        }
+
         .home-v2-progress-list,
         .home-v2-tree {
           display: grid;
           gap: 12px;
+        }
+
+        .home-v2-progress-overview {
+          color: #64748b;
+          font-size: 14px;
+          margin: -8px 0 18px;
         }
 
         .home-v2-progress-row,
@@ -3177,9 +3274,18 @@ if (mode === 'study') {
 
         .home-v2-topic-name {
           color: #101b43;
+          display: block;
           font-size: 17px;
           font-weight: 500;
           letter-spacing: -0.01em;
+        }
+
+        .home-v2-topic-copy small {
+          color: #64748b;
+          display: block;
+          font-size: 12px;
+          line-height: 1.35;
+          margin-top: 2px;
         }
 
         .home-v2-progress {
@@ -3235,12 +3341,6 @@ if (mode === 'study') {
 
           .home-v2-hero {
             grid-template-columns: 1fr;
-            gap: 24px;
-          }
-
-          .home-v2-modes {
-            grid-template-columns: repeat(3, max-content);
-            justify-content: center;
           }
         }
 

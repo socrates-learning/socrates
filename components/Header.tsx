@@ -3,11 +3,9 @@
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 
 export function Header() {
-  const router = useRouter();
   const [email, setEmail] = useState<string | null>(null);
   const [role, setRole] = useState<string | null>(null);
 
@@ -50,21 +48,8 @@ export function Header() {
     };
   }, []);
 
-  async function handleLogout() {
-    await supabase.auth.signOut();
-    setEmail(null);
-    setRole(null);
-    router.refresh();
-    router.push('/login');
-  }
-
   function handleHomeClick() {
     window.dispatchEvent(new Event('socrates-open-deck-dashboard'));
-  }
-
-  function handleStudyClick() {
-    window.history.replaceState(null, '', '#set-up-deck');
-    window.dispatchEvent(new Event('socrates-open-deck-setup'));
   }
 
   function handleCreatorClick() {
@@ -73,7 +58,6 @@ export function Header() {
 
   const isEditor = role === 'editor' || role === 'admin';
   const isAdmin = role === 'admin';
-  const accountLabel = email ? 'Account' : 'Login';
   const navButtonStyle = {
     alignItems: 'center',
     background: 'rgba(6, 24, 70, 0.72)',
@@ -173,14 +157,6 @@ export function Header() {
           Learn
         </button>
 
-        <button style={navButtonStyle} type="button" onClick={handleStudyClick}>
-          Study
-        </button>
-
-        <button style={disabledNavButtonStyle} type="button" disabled>
-          Progress
-        </button>
-
         {isEditor && (
           <Link style={navButtonStyle} href="/creator" onClick={handleCreatorClick}>
             Creator Studio
@@ -193,36 +169,7 @@ export function Header() {
           </Link>
         )}
 
-        {email ? (
-          <details style={{ position: 'relative' }}>
-            <summary style={{ ...activeNavButtonStyle, cursor: 'pointer' }}>
-              {accountLabel}
-            </summary>
-            <div
-              className="panel"
-              style={{
-                minWidth: 180,
-                position: 'absolute',
-                right: 0,
-                top: 'calc(100% + 8px)',
-                zIndex: 10,
-              }}
-            >
-              <p className="muted" style={{ marginTop: 0 }}>
-                Signed in
-              </p>
-              <button className="btn ghost" type="button" disabled>
-                Account
-              </button>
-              <button className="btn ghost" type="button" disabled>
-                Settings
-              </button>
-              <button className="btn primary" type="button" onClick={handleLogout}>
-                Logout
-              </button>
-            </div>
-          </details>
-        ) : (
+        {!email && (
           <Link style={activeNavButtonStyle} href="/login">
             Login
           </Link>

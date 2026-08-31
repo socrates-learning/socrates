@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { MarkdownContent } from '@/components/MarkdownContent';
 import { supabase } from '@/lib/supabase';
 import type { ActiveLibrary } from '@/lib/library-context';
+import { broadcastTagCatalogUsageInvalidation } from '@/lib/tag-catalog-invalidation';
 
 type LibraryNode = {
   id: string;
@@ -1080,6 +1081,7 @@ export function ArticleEditorClient({
       if (!savedQuestionId) throw new Error('Question saved without an identifier.');
 
       setQuestionMessage(form.concept_id, 'Question saved.');
+      broadcastTagCatalogUsageInvalidation();
       setQuestionForms((current) => {
         const next = { ...current };
         delete next[questionId];
@@ -1192,6 +1194,7 @@ export function ArticleEditorClient({
     setPreviewMarkdown(markdown);
     setArticleSections(extractArticleSections(markdown));
     setMessage(nextStatus === 'published' ? 'Article published.' : 'Draft saved.');
+    broadcastTagCatalogUsageInvalidation();
     router.refresh();
   }
 

@@ -22,6 +22,10 @@ import {
 import { MarkdownContent } from '@/components/MarkdownContent';
 import { supabase } from '@/lib/supabase';
 import { navigateBackOrFallback } from '@/lib/safe-navigation';
+import {
+  broadcastTagCatalogUsageInvalidation,
+  TAG_CATALOG_USAGE_INVALIDATION_KEY,
+} from '@/lib/tag-catalog-invalidation';
 import styles from './CreatorStudioV2Client.module.css';
 
 type Reference = {
@@ -61,7 +65,7 @@ type ExistingQuestion = {
   tags: ConceptTag[];
 };
 
-type CreatorTab = 'content' | 'questions';
+type CreatorTab = 'content' | 'questions' | 'tags';
 type EditorMode = 'write' | 'preview';
 type QuestionDifficulty = 'easy' | 'medium' | 'hard';
 type MarkdownFormat =
@@ -379,7 +383,6 @@ export function CreatorStudioV2Client({
   const [tagDraft, setTagDraft] = useState('');
   const [tagStatus, setTagStatus] = useState<Status>(null);
   const [availableTags, setAvailableTags] = useState<CatalogTag[]>([]);
-  const [isTagManagerOpen, setIsTagManagerOpen] = useState(false);
   const [tagCatalogSearch, setTagCatalogSearch] = useState('');
   const [newCatalogTagName, setNewCatalogTagName] = useState('');
   const [tagCatalogStatus, setTagCatalogStatus] = useState<Status>(null);
@@ -574,6 +577,17 @@ export function CreatorStudioV2Client({
 
   useEffect(() => {
     void loadTagCatalog();
+  }, []);
+
+  useEffect(() => {
+    function refreshTagCatalogUsage(event: StorageEvent) {
+      if (event.key === TAG_CATALOG_USAGE_INVALIDATION_KEY) {
+        void loadTagCatalog();
+      }
+    }
+
+    window.addEventListener('storage', refreshTagCatalogUsage);
+    return () => window.removeEventListener('storage', refreshTagCatalogUsage);
   }, []);
 
   useEffect(() => {
@@ -1100,6 +1114,35 @@ export function CreatorStudioV2Client({
       tone: 'success',
       message: nextStatus === 'archived' ? 'Tag archived.' : 'Tag reactivated.',
     });
+  }
+
+  async function deleteCatalogTag(tag: CatalogTag) {
+    if (isMutatingTagCatalog) return;
+    if (
+      !window.confirm(
+        `Permanently delete “${tag.name}”? This cannot be undone.`
+      )
+    ) {
+      return;
+    }
+
+    setIsMutatingTagCatalog(true);
+    setTagCatalogStatus(null);
+    const { error } = await supabase.rpc('delete_empty_tag', {
+      p_tag_id: tag.id,
+    });
+    if (error) {
+      setTagCatalogStatus({
+        tone: 'error',
+        message: error.message || 'Tag could not be deleted.',
+      });
+      setIsMutatingTagCatalog(false);
+      return;
+    }
+
+    await loadTagCatalog();
+    setIsMutatingTagCatalog(false);
+    setTagCatalogStatus({ tone: 'success', message: 'Tag deleted.' });
   }
 
   async function fetchExistingQuestions(
@@ -2182,6 +2225,9 @@ export function CreatorStudioV2Client({
       )
     );
 
+    await loadTagCatalog();
+    broadcastTagCatalogUsageInvalidation();
+
     showStatus('success', 'Concept and references saved.');
 
     if (wasNewConcept) {
@@ -2272,7 +2318,11 @@ export function CreatorStudioV2Client({
     setQuestionAnswer(answer);
     setQuestionTestingAngle(testingAngle);
     setSavedQuestionFingerprint(nextFingerprint);
-    await refreshExistingQuestionList(questionConceptId);
+    await Promise.all([
+      refreshExistingQuestionList(questionConceptId),
+      loadTagCatalog(),
+    ]);
+    broadcastTagCatalogUsageInvalidation();
     setIsSavingQuestion(false);
     setQuestionStatus({
       tone: 'success',
@@ -2521,14 +2571,6 @@ export function CreatorStudioV2Client({
               >
                 Library Organizer
               </button>
-              <button
-                className={styles.secondaryButton}
-                type="button"
-                aria-expanded={isTagManagerOpen}
-                onClick={() => setIsTagManagerOpen((current) => !current)}
-              >
-                Tag Manager
-              </button>
               <span
                 className={`${styles.saveState} ${isDirty ? styles.unsaved : ''}`}
                 aria-live="polite"
@@ -2545,22 +2587,26 @@ export function CreatorStudioV2Client({
               <button className={styles.secondaryButton} type="button" onClick={clearDraft}>
                 Clear
               </button>
-              <button
-                className={styles.primaryButton}
-                type="button"
-                onClick={activeCreatorTab === 'content' ? saveConcept : saveQuestion}
-                disabled={
-                  activeCreatorTab === 'content' ? isSaving : isSavingQuestion
-                }
-              >
-                {activeCreatorTab === 'content'
-                  ? isSaving
-                    ? 'Saving…'
-                    : 'Save'
-                  : isSavingQuestion
-                    ? 'Saving…'
-                    : 'Save'}
-              </button>
+              {activeCreatorTab !== 'tags' && (
+                <button
+                  className={styles.primaryButton}
+                  type="button"
+                  onClick={
+                    activeCreatorTab === 'content' ? saveConcept : saveQuestion
+                  }
+                  disabled={
+                    activeCreatorTab === 'content' ? isSaving : isSavingQuestion
+                  }
+                >
+                  {activeCreatorTab === 'content'
+                    ? isSaving
+                      ? 'Saving…'
+                      : 'Save'
+                    : isSavingQuestion
+                      ? 'Saving…'
+                      : 'Save'}
+                </button>
+              )}
             </div>
           </header>
 
@@ -2576,7 +2622,7 @@ export function CreatorStudioV2Client({
               background: 'linear-gradient(180deg, #f8fbff, #eef4fc)',
             }}
           >
-            {(['content', 'questions'] as const).map((tab) => {
+            {(['content', 'questions', 'tags'] as const).map((tab) => {
               const isActive = activeCreatorTab === tab;
               return (
                 <button
@@ -2609,13 +2655,17 @@ export function CreatorStudioV2Client({
                       'polygon(0 0, calc(100% - 14px) 0, 100% 100%, 0 100%)',
                   }}
                 >
-                  {tab === 'content' ? 'Content' : 'Questions'}
+                  {tab === 'content'
+                    ? 'Content'
+                    : tab === 'questions'
+                      ? 'Questions'
+                      : 'Tags'}
                 </button>
               );
             })}
           </nav>
 
-          {isTagManagerOpen && (
+          {activeCreatorTab === 'tags' && (
             <section
               className={`${styles.panel} ${styles.selectedPanel}`}
               aria-label="Tag Manager"
@@ -2624,6 +2674,10 @@ export function CreatorStudioV2Client({
               <div>
                 <h2>Tag Manager</h2>
                 <p>Create and maintain the shared tag vocabulary.</p>
+                <p style={{ color: '#687386', marginTop: 6 }}>
+                  Archived tags remain on existing content and in history, but are
+                  unavailable for new assignments.
+                </p>
               </div>
               <div
                 style={{
@@ -2714,6 +2768,14 @@ export function CreatorStudioV2Client({
                           }
                         >
                           {tag.status === 'active' ? 'Archive' : 'Reactivate'}
+                        </button>
+                        <button
+                          className={styles.secondaryButton}
+                          type="button"
+                          disabled={isMutatingTagCatalog}
+                          onClick={() => void deleteCatalogTag(tag)}
+                        >
+                          Delete Tag
                         </button>
                       </span>
                     </div>
@@ -3364,7 +3426,7 @@ export function CreatorStudioV2Client({
                 </div>
               )}
             </>
-          ) : (
+          ) : activeCreatorTab === 'questions' ? (
             <>
               <div className={styles.mainGrid}>
                 <section className={`${styles.panel} ${styles.conceptPanel}`}>
@@ -3932,7 +3994,7 @@ export function CreatorStudioV2Client({
                 </div>
               )}
             </>
-          )}
+          ) : null}
         </section>
       </main>
     </>

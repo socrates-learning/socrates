@@ -36,6 +36,18 @@ type LibraryNode = {
   name: string;
 };
 
+type DeleteEligibilityRow = {
+  record_type: 'group' | 'library';
+  record_id: string;
+  can_delete: boolean;
+  reason: string | null;
+};
+
+type DeleteEligibility = {
+  canDelete: boolean;
+  reason: string | null;
+};
+
 type StatusMessage = {
   tone: 'error' | 'success' | 'info';
   text: string;
@@ -80,6 +92,18 @@ export function LibraryOrganizerClient() {
   const [pendingArchiveGroupId, setPendingArchiveGroupId] = useState<
     string | null
   >(null);
+  const [pendingDeleteGroupId, setPendingDeleteGroupId] = useState<string | null>(
+    null
+  );
+  const [pendingDeleteLibraryId, setPendingDeleteLibraryId] = useState<
+    string | null
+  >(null);
+  const [groupDeleteEligibility, setGroupDeleteEligibility] = useState<
+    Record<string, DeleteEligibility>
+  >({});
+  const [libraryDeleteEligibility, setLibraryDeleteEligibility] = useState<
+    Record<string, DeleteEligibility>
+  >({});
   const [status, setStatus] = useState<StatusMessage>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isMutating, setIsMutating] = useState(false);
@@ -111,7 +135,13 @@ export function LibraryOrganizerClient() {
   }, [nodes]);
 
   async function loadOrganization(preferredGroupId?: string | null) {
-    const [groupResult, placementResult, libraryResult, nodeResult] =
+    const [
+      groupResult,
+      placementResult,
+      libraryResult,
+      nodeResult,
+      deleteEligibilityResult,
+    ] =
       await Promise.all([
         supabase
           .from('library_groups')
@@ -129,13 +159,15 @@ export function LibraryOrganizerClient() {
         supabase
           .from('library_nodes')
           .select('id, library_id, parent_id, name'),
+        supabase.rpc('get_library_organizer_delete_eligibility'),
       ]);
 
     const error =
       groupResult.error ||
       placementResult.error ||
       libraryResult.error ||
-      nodeResult.error;
+      nodeResult.error ||
+      deleteEligibilityResult.error;
 
     if (error) {
       setStatus({ tone: 'error', text: error.message });
@@ -148,6 +180,23 @@ export function LibraryOrganizerClient() {
     setPlacements((placementResult.data || []) as LibraryPlacement[]);
     setLibraries((libraryResult.data || []) as LibraryRecord[]);
     setNodes((nodeResult.data || []) as LibraryNode[]);
+    const nextGroupDeleteEligibility: Record<string, DeleteEligibility> = {};
+    const nextLibraryDeleteEligibility: Record<string, DeleteEligibility> = {};
+    ((deleteEligibilityResult.data || []) as DeleteEligibilityRow[]).forEach(
+      (entry) => {
+        const value = {
+          canDelete: entry.can_delete,
+          reason: entry.reason,
+        };
+        if (entry.record_type === 'group') {
+          nextGroupDeleteEligibility[entry.record_id] = value;
+        } else {
+          nextLibraryDeleteEligibility[entry.record_id] = value;
+        }
+      }
+    );
+    setGroupDeleteEligibility(nextGroupDeleteEligibility);
+    setLibraryDeleteEligibility(nextLibraryDeleteEligibility);
     setSelectedGroupId((current) => {
       const preferred = preferredGroupId || current;
       if (preferred && nextGroups.some((group) => group.id === preferred)) {
@@ -291,6 +340,34 @@ export function LibraryOrganizerClient() {
     if (archived) setPendingArchiveGroupId(null);
   }
 
+  async function deleteSelectedGroup() {
+    if (!selectedGroup) return;
+    if (pendingDeleteGroupId !== selectedGroup.id) {
+      setPendingDeleteGroupId(selectedGroup.id);
+      setStatus({
+        tone: 'info',
+        text: `Confirm permanent deletion of “${selectedGroup.name}”. The database will block deletion if the Group is not empty.`,
+      });
+      return;
+    }
+
+    const deletedGroupId = selectedGroup.id;
+    const deleted = await runMutation(
+      () =>
+        supabase.rpc('delete_empty_library_group', {
+          p_group_id: deletedGroupId,
+        }),
+      'Empty Library Group permanently deleted.',
+      selectedGroup.parent_id
+    );
+    setPendingDeleteGroupId(null);
+    if (deleted) {
+      setSelectedGroupId((current) =>
+        current === deletedGroupId ? selectedGroup.parent_id : current
+      );
+    }
+  }
+
   async function createLibrary() {
     const name = newLibraryName.trim();
     if (!name || !newLibraryGroupId) {
@@ -367,6 +444,34 @@ export function LibraryOrganizerClient() {
     );
   }
 
+  async function deleteSelectedLibrary() {
+    if (!selectedLibrary) return;
+    if (pendingDeleteLibraryId !== selectedLibrary.id) {
+      setPendingDeleteLibraryId(selectedLibrary.id);
+      setStatus({
+        tone: 'info',
+        text: `Confirm permanent deletion of “${selectedLibrary.name}”. The database will block deletion if the Library is not truly empty.`,
+      });
+      return;
+    }
+
+    const deletedLibraryId = selectedLibrary.id;
+    const deleted = await runMutation(
+      () =>
+        supabase.rpc('delete_empty_library', {
+          p_library_id: deletedLibraryId,
+        }),
+      'Empty Library permanently deleted.',
+      placementByLibraryId.get(deletedLibraryId)?.group_id
+    );
+    setPendingDeleteLibraryId(null);
+    if (deleted) {
+      setSelectedLibraryId((current) =>
+        current === deletedLibraryId ? null : current
+      );
+    }
+  }
+
   const descendantGroupIds = useMemo(() => {
     if (!selectedGroup) return new Set<string>();
     const descendants = new Set<string>();
@@ -412,6 +517,8 @@ export function LibraryOrganizerClient() {
             setSelectedGroupId(group.id);
             setSelectedLibraryId(null);
             setPendingArchiveGroupId(null);
+            setPendingDeleteGroupId(null);
+            setPendingDeleteLibraryId(null);
           }}
           style={{
             alignItems: 'center',
@@ -445,6 +552,8 @@ export function LibraryOrganizerClient() {
                 setSelectedGroupId(group.id);
                 setSelectedLibraryId(library.id);
                 setPendingArchiveGroupId(null);
+                setPendingDeleteGroupId(null);
+                setPendingDeleteLibraryId(null);
               }}
               style={{
                 alignItems: 'center',
@@ -557,6 +666,8 @@ export function LibraryOrganizerClient() {
                           onClick={() => {
                             setSelectedGroupId(null);
                             setSelectedLibraryId(library.id);
+                            setPendingDeleteGroupId(null);
+                            setPendingDeleteLibraryId(null);
                           }}
                           style={{
                             alignItems: 'center',
@@ -701,6 +812,21 @@ export function LibraryOrganizerClient() {
                           ? 'Confirm archive'
                           : 'Archive Group'}
                       </button>
+                      <button
+                        className="btn ghost"
+                        type="button"
+                        disabled={isMutating}
+                        title={
+                          groupDeleteEligibility[selectedGroup.id]?.canDelete
+                            ? 'This Group is currently eligible for permanent deletion.'
+                            : 'Attempt deletion to see the database protection reason.'
+                        }
+                        onClick={() => void deleteSelectedGroup()}
+                      >
+                        {pendingDeleteGroupId === selectedGroup.id
+                          ? 'Confirm permanent delete'
+                          : 'Delete Group'}
+                      </button>
                     </div>
                   </div>
                 )}
@@ -843,6 +969,21 @@ export function LibraryOrganizerClient() {
                       onClick={() => void saveSelectedLibraryStatus()}
                     >
                       Save Library status
+                    </button>
+                    <button
+                      className="btn ghost"
+                      type="button"
+                      disabled={isMutating}
+                      title={
+                        libraryDeleteEligibility[selectedLibrary.id]?.canDelete
+                          ? 'This Library is currently eligible for permanent deletion.'
+                          : 'Attempt deletion to see the database protection reason.'
+                      }
+                      onClick={() => void deleteSelectedLibrary()}
+                    >
+                      {pendingDeleteLibraryId === selectedLibrary.id
+                        ? 'Confirm permanent delete'
+                        : 'Delete Library'}
                     </button>
                   </div>
                 </section>
