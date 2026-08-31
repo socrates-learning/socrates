@@ -836,7 +836,8 @@ export function CreatorStudioV2Client({
       const { data, error } = await supabase
         .from('questions')
         .select('concept_id')
-        .in('concept_id', conceptIds);
+        .in('concept_id', conceptIds)
+        .in('status', ['draft', 'published']);
 
       if (!isMounted || error) return;
 
@@ -964,26 +965,28 @@ export function CreatorStudioV2Client({
     const displayPath = path.length > 1 ? path.slice(1) : path;
     return displayPath.map((topic) => topic.name).join(' > ');
   }, [questionTopicId, topics]);
-  const questionConceptBranchTopicIds = useMemo(() => {
-    const topicIdsWithConcepts = new Set<string>();
+  const questionConceptCountByTopicId = useMemo(() => {
+    const counts = new Map<string, number>();
 
-    function collectConceptBranches(topic: Topic): boolean {
-      const hasDirectConcepts =
-        (questionConceptsByTopicId[topic.id] || []).length > 0;
-      let hasConceptsBelow = false;
+    function collectConceptIds(topic: Topic): Set<string> {
+      const conceptIds = new Set(
+        (questionConceptsByTopicId[topic.id] || []).map(
+          (conceptOption) => conceptOption.id
+        )
+      );
 
       topic.children.forEach((child) => {
-        if (collectConceptBranches(child)) hasConceptsBelow = true;
+        collectConceptIds(child).forEach((conceptId) =>
+          conceptIds.add(conceptId)
+        );
       });
 
-      if (hasDirectConcepts || hasConceptsBelow) {
-        topicIdsWithConcepts.add(topic.id);
-      }
-      return hasDirectConcepts || hasConceptsBelow;
+      counts.set(topic.id, conceptIds.size);
+      return conceptIds;
     }
 
-    topics.forEach((topic) => collectConceptBranches(topic));
-    return topicIdsWithConcepts;
+    topics.forEach((topic) => collectConceptIds(topic));
+    return counts;
   }, [questionConceptsByTopicId, topics]);
   const needsQuestionTopicIds = useMemo(() => {
     const visibleTopicIds = new Set<string>();
@@ -2479,7 +2482,9 @@ export function CreatorStudioV2Client({
         ? hasSearchVisibleChild
         : expandedTopicIds.has(topic.id);
     const isActive = activeTopicId === topic.id;
-    const hasConceptsInBranch = questionConceptBranchTopicIds.has(topic.id);
+    const conceptCountInBranch =
+      questionConceptCountByTopicId.get(topic.id) || 0;
+    const hasConceptsInBranch = conceptCountInBranch > 0;
 
     return (
       <div className={styles.topicBranch} key={`question-${topic.id}`}>
@@ -2535,18 +2540,19 @@ export function CreatorStudioV2Client({
           <span className={styles.topicName} title={topic.name}>
             {topic.name}
           </span>
-          {!hasConceptsInBranch && (
-            <span
-              style={{
-                color: '#94a3b8',
-                fontSize: 12,
-                marginLeft: 'auto',
-                paddingRight: 10,
-              }}
-            >
-              No concepts
-            </span>
-          )}
+          <span
+            style={{
+              color: hasConceptsInBranch ? '#52647a' : '#94a3b8',
+              fontSize: 12,
+              marginLeft: 'auto',
+              paddingRight: 10,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {hasConceptsInBranch
+              ? `${conceptCountInBranch} ${conceptCountInBranch === 1 ? 'concept' : 'concepts'}`
+              : 'No concepts'}
+          </span>
         </div>
         {directConcepts.length > 0 && (!hasChildren || isExpanded) && (
           <div style={{ display: 'grid', gap: 3 }}>
