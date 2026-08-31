@@ -79,8 +79,20 @@ export async function resolveActiveLibraryContext({
     return normalizeLibrary(data as ActiveLibrary | null);
   }
 
-  async function findPharmacologyFallback() {
-    return findActiveLibraryBySlug('pharmacology');
+  async function findDefaultActiveLibrary() {
+    const pharmacologyLibrary = await findActiveLibraryBySlug('pharmacology');
+
+    if (pharmacologyLibrary) return pharmacologyLibrary;
+
+    const { data } = await supabase
+      .from('libraries')
+      .select('id, name, slug, description, status')
+      .eq('status', 'active')
+      .order('name')
+      .limit(1)
+      .maybeSingle();
+
+    return normalizeLibrary(data as ActiveLibrary | null);
   }
 
   if (!user) {
@@ -89,7 +101,7 @@ export async function resolveActiveLibraryContext({
       : null;
     const fallbackLibrary = requestedSlug
       ? null
-      : await findPharmacologyFallback();
+      : await findDefaultActiveLibrary();
 
     return {
       library: requestedLibrary || fallbackLibrary,
@@ -181,13 +193,11 @@ export async function resolveActiveLibraryContext({
       };
     }
 
-    const fallbackLibrary = await findPharmacologyFallback();
-
     return {
-      library: fallbackLibrary,
+      library: null,
       role,
       user: { id: user.id, email: user.email ?? null },
-      source: fallbackLibrary ? 'fallback' : 'none',
+      source: 'none',
       canSwitch: true,
       hasMembership,
       needsSelection: false,

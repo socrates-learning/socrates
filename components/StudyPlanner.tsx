@@ -347,7 +347,7 @@ export function StudyPlanner({
   const [expandedNodeIds, setExpandedNodeIds] = useState<Set<string>>(new Set());
   const [focusedNodeId, setFocusedNodeId] = useState<string | null>(null);
   const [message, setMessage] = useState('');
-  const [isLoading, setIsLoading] = useState(Boolean(activeLibrary?.id));
+  const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [homeExpandedIds, setHomeExpandedIds] = useState<Set<string>>(new Set());
   const [isSetupCramMode, setIsSetupCramMode] = useState(false);
@@ -397,11 +397,6 @@ export function StudyPlanner({
     let isMounted = true;
 
     async function loadDeck() {
-      if (!activeLibrary?.id) {
-        setIsLoading(false);
-        return;
-      }
-
       setIsLoading(true);
       setMessage('');
       setLearnerProgressError('');
@@ -446,6 +441,30 @@ export function StudyPlanner({
         if (libraryData?.length) {
           loadedAvailableLibraries = libraryData as ActiveLibrary[];
         }
+      }
+
+      if (!isMounted) return;
+
+      setUserId(user.id);
+      setEmail(user.email ?? 'Account');
+      setRole(roleData?.role ?? null);
+      setAvailableLibraries(loadedAvailableLibraries);
+      setDisplayName(
+        (user.user_metadata?.full_name as string | undefined) ||
+          (user.email ? user.email.split('@')[0] : 'there')
+      );
+
+      if (!activeLibrary?.id) {
+        setDeck(null);
+        setNodes([]);
+        setPlacements([]);
+        setSelectedNodeIds(new Set());
+        setNodePreferences({});
+        setConceptOverrides({});
+        setResolvedConcepts([]);
+        setLearnerProgress(emptyLearnerProgress);
+        setIsLoading(false);
+        return;
       }
 
       const { data: deckData, error: deckError } = await supabase.rpc(
@@ -552,14 +571,6 @@ export function StudyPlanner({
 
       const rootNode = loadedNodes.find((node) => node.parent_id === null);
 
-      setUserId(user.id);
-      setEmail(user.email ?? 'Account');
-      setRole(roleData?.role ?? null);
-      setAvailableLibraries(loadedAvailableLibraries);
-      setDisplayName(
-        (user.user_metadata?.full_name as string | undefined) ||
-          (user.email ? user.email.split('@')[0] : 'there')
-      );
       setDeck(activeDeck);
       setNodes(loadedNodes);
       setPlacements(loadedPlacements);
@@ -1672,12 +1683,106 @@ export function StudyPlanner({
     0
   );
 
-  if (!activeLibrary?.id) {
+  function renderLibrarySubjectSwitcher(
+    currentSlug: string | null,
+    standalone = false
+  ) {
+    if (
+      (role !== 'admin' && role !== 'editor') ||
+      !availableLibraries.length
+    ) {
+      return null;
+    }
+
     return (
-      <div className="panel">
-        <h2>Deck Dashboard</h2>
-        <p className="muted">Choose an active library before setting up a deck.</p>
-      </div>
+      <form
+        action="/library/switch"
+        className="home-v2-library-switcher"
+        method="post"
+        style={
+          standalone
+            ? {
+                alignItems: 'end',
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: 10,
+                marginTop: 18,
+                maxWidth: 420,
+              }
+            : undefined
+        }
+      >
+        <label
+          style={
+            standalone
+              ? { display: 'grid', flex: '1 1 240px', gap: 5 }
+              : undefined
+          }
+        >
+          <span
+            style={
+              standalone
+                ? {
+                    color: '#59687f',
+                    fontSize: 12,
+                    fontWeight: 800,
+                    letterSpacing: '0.04em',
+                    textTransform: 'uppercase',
+                  }
+                : undefined
+            }
+          >
+            Current Subject
+          </span>
+          <select
+            aria-label="Current Subject"
+            defaultValue={currentSlug || availableLibraries[0].slug}
+            name="library_slug"
+            style={
+              standalone
+                ? {
+                    background: '#ffffff',
+                    border: '1px solid #c7d1e0',
+                    borderRadius: 8,
+                    color: '#17233a',
+                    font: 'inherit',
+                    minHeight: 42,
+                    padding: '8px 10px',
+                    width: '100%',
+                  }
+                : undefined
+            }
+          >
+            {availableLibraries.map((library) => (
+              <option key={library.id} value={library.slug}>
+                {library.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <input name="return_to" type="hidden" value="/" />
+        <button
+          disabled={Boolean(currentSlug) && availableLibraries.length < 2}
+          type="submit"
+          style={
+            standalone
+              ? {
+                  background: '#155ee8',
+                  border: '1px solid #0f4fc7',
+                  borderRadius: 8,
+                  color: '#ffffff',
+                  cursor: 'pointer',
+                  font: 'inherit',
+                  fontWeight: 800,
+                  minHeight: 42,
+                  padding: '8px 14px',
+                }
+              : undefined
+          }
+        >
+          Switch
+        </button>
+      </form>
     );
   }
 
@@ -1686,6 +1791,20 @@ export function StudyPlanner({
       <div className="panel">
         <h2>Deck Dashboard</h2>
         <p className="muted">Loading your deck...</p>
+      </div>
+    );
+  }
+
+  if (!activeLibrary?.id) {
+    return (
+      <div className="panel">
+        <h2>Deck Dashboard</h2>
+        <p className="muted">Choose an active library before setting up a deck.</p>
+        {renderLibrarySubjectSwitcher(null, true)}
+        {(role === 'admin' || role === 'editor') &&
+          !availableLibraries.length && (
+            <p className="muted">No active Libraries are available.</p>
+          )}
       </div>
     );
   }
@@ -2914,33 +3033,7 @@ if (mode === 'study') {
                     </p>
                   </div>
 
-                  <form
-                    action="/library/switch"
-                    className="home-v2-library-switcher"
-                    method="post"
-                  >
-                    <label>
-                      <span>Current Subject</span>
-                      <select
-                        aria-label="Current Subject"
-                        defaultValue={activeLibrary.slug}
-                        name="library_slug"
-                      >
-                        {availableLibraries.map((library) => (
-                          <option key={library.id} value={library.slug}>
-                            {library.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <input name="return_to" type="hidden" value="/" />
-                    <button
-                      disabled={availableLibraries.length < 2}
-                      type="submit"
-                    >
-                      Switch
-                    </button>
-                  </form>
+                  {renderLibrarySubjectSwitcher(activeLibrary.slug)}
                 </div>
 
                 <div
