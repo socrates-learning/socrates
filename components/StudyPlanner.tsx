@@ -105,6 +105,7 @@ type AuthoredStudyQuestion = {
   id: string;
   concept_id: string;
   prompt: string;
+  explanation: string | null;
   difficulty: string;
   testing_angle: string;
   sort_order: number;
@@ -376,12 +377,18 @@ export function StudyPlanner({
   const studySessionCreatePromiseRef = useRef<Promise<string | null> | null>(null);
   const sequentialAuthoredStudyQuestion =
     authoredStudyQuestions[authoredStudyQuestionIndex] || null;
+  const priorityAuthoredStudyQuestion = priorityStudyQuestion
+    ? authoredStudyQuestions.find(
+        (question) => question.id === priorityStudyQuestion.question_id
+      ) || null
+    : null;
   const authoredStudyQuestion =
     priorityStudyQuestion
       ? {
           id: priorityStudyQuestion.question_id,
           concept_id: priorityStudyQuestion.concept_id,
           prompt: priorityStudyQuestion.prompt,
+          explanation: priorityAuthoredStudyQuestion?.explanation || null,
           difficulty: priorityStudyQuestion.difficulty,
           testing_angle: priorityStudyQuestion.testing_angle,
           question_accepted_answers: [
@@ -689,6 +696,7 @@ export function StudyPlanner({
           id,
           concept_id,
           prompt,
+          explanation,
           difficulty,
           testing_angle,
           sort_order,
@@ -2362,6 +2370,12 @@ export function StudyPlanner({
 if (mode === 'study') {
   const authoredStudyAnswer =
     authoredStudyQuestion?.question_accepted_answers[0]?.answer_text || null;
+  const authoredStudyExplanation =
+    authoredStudyQuestion?.explanation?.trim() || null;
+  const studyAnswer = authoredStudyAnswer || 'Answer';
+  const studyExplanation = authoredStudyQuestion
+    ? authoredStudyExplanation
+    : 'Explanation';
 
   function StudyCardActions() {
     return (
@@ -2387,86 +2401,90 @@ if (mode === 'study') {
       <main className="study-v2-page">
         <section className="study-v2-shell" aria-label="Study Mode">
           <article
-            className="study-v2-question-card"
-            aria-label="Question card"
-            onClick={() => setIsAnswerVisible(true)}
+            aria-label={isAnswerVisible ? 'Revealed study card' : 'Question card'}
+            className={`study-v2-card ${
+              isAnswerVisible ? 'study-v2-card-revealed' : 'study-v2-card-front'
+            }`}
+            onClick={
+              isAnswerVisible ? undefined : () => setIsAnswerVisible(true)
+            }
+            onKeyDown={(event) => {
+              if (
+                !isAnswerVisible &&
+                (event.key === 'Enter' || event.key === ' ')
+              ) {
+                event.preventDefault();
+                setIsAnswerVisible(true);
+              }
+            }}
+            role={isAnswerVisible ? undefined : 'button'}
+            tabIndex={isAnswerVisible ? undefined : 0}
           >
             <div className="study-v2-card-topline">
               <StudyCardActions />
             </div>
 
-            <h1>
-              {authoredStudyQuestion ? (
-                authoredStudyQuestion.prompt
-              ) : (
-                <>
-                  What is the primary purpose
-                  <br />
-                  of isolating a patient with
-                  <br />
-                  suspected MRSA?
-                </>
-              )}
-            </h1>
-
-            <p>Tap to reveal answer</p>
-          </article>
-
-          {isAnswerVisible && (
-            <article className="study-v2-answer-card" aria-label="Answer card">
-              <div className="study-v2-card-topline">
-                <StudyCardActions />
+            {!isAnswerVisible ? (
+              <div className="study-v2-question-content">
+                <h1>
+                  {authoredStudyQuestion ? (
+                    authoredStudyQuestion.prompt
+                  ) : (
+                    <>
+                      What is the primary purpose
+                      <br />
+                      of isolating a patient with
+                      <br />
+                      suspected MRSA?
+                    </>
+                  )}
+                </h1>
+                <p>Tap to reveal answer</p>
               </div>
-
-              <div className="study-v2-answer-body">
-                <div className="study-v2-answer-lines">
-                  <div className="study-v2-rule" aria-hidden="true" />
-                  <p>Answer</p>
-                  <p>{authoredStudyAnswer || 'Answer'}</p>
-                  <p>Answer</p>
-                  <div className="study-v2-rule" aria-hidden="true" />
-                  <p>Explanation</p>
-                </div>
-              </div>
-
-              {studyFeedback === null ? (
-                <div className="study-v2-feedback-row">
-                  {[
-                    ['up', 'Thumbs Up'],
-                    ['more', 'More'],
-                    ['down', 'Thumbs Down'],
-                  ].map(([value, label]) => (
-                    <button
-                      key={value}
-                      type="button"
-                      onClick={() => {
-                        setStudyFeedback(value as StudyFeedback);
-                        setStudyResponse(null);
-                      }}
-                    >
-                      <StudyFeedbackIcon
-                        type={value as Exclude<StudyFeedback, null>}
-                      />
-                      <span>{label}</span>
-                    </button>
-                  ))}
-                </div>
-              ) : studyFeedback === 'more' ? (
-                <div className="study-v2-response-toolbar">
-                  <button
-                    className="study-v2-response-back"
-                    type="button"
-                    onClick={() => {
-                      setStudyFeedback(null);
-                      setStudyResponse(null);
-                    }}
+            ) : (
+              <>
+                <div className="study-v2-answer-body">
+                  <section
+                    className="study-v2-answer-section"
+                    aria-labelledby="study-answer-heading"
                   >
-                    ← Back
-                  </button>
-                  <p>More options coming later</p>
+                    <h1 id="study-answer-heading">Answer</h1>
+                    <p>{studyAnswer}</p>
+                  </section>
+                  {studyExplanation && (
+                    <section
+                      className="study-v2-explanation-section"
+                      aria-labelledby="study-explanation-heading"
+                    >
+                      <h2 id="study-explanation-heading">Explanation</h2>
+                      <p>{studyExplanation}</p>
+                    </section>
+                  )}
                 </div>
-              ) : (
-                <div className="study-v2-response-stage">
+
+                {studyFeedback === null ? (
+                  <div className="study-v2-feedback-row">
+                    {[
+                      ['up', 'Thumbs Up'],
+                      ['more', 'More'],
+                      ['down', 'Thumbs Down'],
+                    ].map(([value, label]) => (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => {
+                          setStudyFeedback(value as StudyFeedback);
+                          setStudyResponse(null);
+                        }}
+                      >
+                        <StudyFeedbackIcon
+                          type={value as Exclude<StudyFeedback, null>}
+                        />
+                        <span>{label}</span>
+                      </button>
+                    ))}
+                  </div>
+                ) : studyFeedback === 'more' ? (
                   <div className="study-v2-response-toolbar">
                     <button
                       className="study-v2-response-back"
@@ -2478,49 +2496,64 @@ if (mode === 'study') {
                     >
                       ← Back
                     </button>
+                    <p>More options coming later</p>
                   </div>
-                  <div className="study-v2-rating-row">
-                    {(studyFeedback === 'up'
-                      ? [
-                          ['easy', 'Easy', 'I knew this well'],
-                          ['average', 'Average', 'I knew part of this'],
-                          ['hard', 'Hard', 'This was challenging'],
-                        ]
-                      : [
-                          ['didnt_know', "Didn't Know", 'I had no idea'],
-                          [
-                            'forgot',
-                            'Forgot / Got It Wrong',
-                            'I knew it before but missed it',
-                          ],
-                          ['too_hard', 'Too Hard', 'This was above my level'],
-                        ]
-                    ).map(([value, label, subtitle]) => (
+                ) : (
+                  <div className="study-v2-response-stage">
+                    <div className="study-v2-response-toolbar">
                       <button
-                        aria-pressed={studyResponse === value}
-                        className={`study-v2-rating-button study-v2-rating-${value}${
-                          studyResponse === value
-                            ? ' study-v2-rating-active'
-                            : ''
-                        }`}
-                        key={value}
+                        className="study-v2-response-back"
                         type="button"
-                        onClick={() =>
-                          void persistFinalStudyResponse(
-                            value as Exclude<StudyResponse, null>
-                          )
-                        }
+                        onClick={() => {
+                          setStudyFeedback(null);
+                          setStudyResponse(null);
+                        }}
                       >
-                        <strong>{label}</strong>
-                        <span>{subtitle}</span>
+                        ← Back
                       </button>
-                    ))}
+                    </div>
+                    <div className="study-v2-rating-row">
+                      {(studyFeedback === 'up'
+                        ? [
+                            ['easy', 'Easy', 'I knew this well'],
+                            ['average', 'Average', 'I knew part of this'],
+                            ['hard', 'Hard', 'This was challenging'],
+                          ]
+                        : [
+                            ['didnt_know', "Didn't Know", 'I had no idea'],
+                            [
+                              'forgot',
+                              'Forgot / Got It Wrong',
+                              'I knew it before but missed it',
+                            ],
+                            ['too_hard', 'Too Hard', 'This was above my level'],
+                          ]
+                      ).map(([value, label, subtitle]) => (
+                        <button
+                          aria-pressed={studyResponse === value}
+                          className={`study-v2-rating-button study-v2-rating-${value}${
+                            studyResponse === value
+                              ? ' study-v2-rating-active'
+                              : ''
+                          }`}
+                          key={value}
+                          type="button"
+                          onClick={() =>
+                            void persistFinalStudyResponse(
+                              value as Exclude<StudyResponse, null>
+                            )
+                          }
+                        >
+                          <strong>{label}</strong>
+                          <span>{subtitle}</span>
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
-            </article>
-          )}
-
+                )}
+              </>
+            )}
+          </article>
         </section>
       </main>
 
@@ -2624,7 +2657,7 @@ if (mode === 'study') {
         .study-v2-page {
           background: #f8fafc;
           min-height: calc(100vh - 107px);
-          padding: 50px 24px 58px;
+          padding: 28px 24px;
         }
 
         .study-v2-shell {
@@ -2634,27 +2667,31 @@ if (mode === 'study') {
           box-shadow: 0 18px 36px rgba(15, 23, 42, 0.14);
           margin: 0 auto;
           max-width: 906px;
-          padding: 48px 28px 28px;
+          padding: 24px 28px;
         }
 
-        .study-v2-question-card,
-        .study-v2-answer-card {
+        .study-v2-card {
           background: #ffffff;
           border: 1px solid #dbe2ee;
           border-radius: 8px;
+          display: flex;
+          flex-direction: column;
+          height: clamp(480px, calc(100vh - 235px), 640px);
           overflow: hidden;
-        }
-
-        .study-v2-question-card {
-          cursor: pointer;
-          min-height: 540px;
-          padding: 13px 22px 90px;
-        }
-
-        .study-v2-answer-card {
-          margin-top: 24px;
-          min-height: 620px;
           padding-top: 13px;
+          transition:
+            border-color 200ms ease,
+            box-shadow 200ms ease;
+        }
+
+        .study-v2-card-front {
+          cursor: pointer;
+        }
+
+        .study-v2-card-front:focus-visible {
+          border-color: #0f5ee8;
+          box-shadow: 0 0 0 3px rgba(15, 94, 232, 0.2);
+          outline: 0;
         }
 
         .study-v2-card-topline {
@@ -2689,73 +2726,115 @@ if (mode === 'study') {
           line-height: 0.8;
         }
 
-        .study-v2-question-card h1 {
+        .study-v2-card-topline {
+          flex: 0 0 auto;
+          padding: 0 22px;
+        }
+
+        .study-v2-question-content {
+          animation: study-v2-content-in 200ms ease-out;
+          display: flex;
+          flex: 1;
+          flex-direction: column;
+          justify-content: center;
+          padding: 24px 22px 64px;
+        }
+
+        .study-v2-question-content h1 {
           color: #08143b;
           font-family: Georgia, "Times New Roman", Times, serif;
           font-size: 43px;
           font-weight: 650;
           letter-spacing: -0.035em;
           line-height: 1.45;
-          margin: 108px auto 0;
+          margin: auto auto 0;
           max-width: 620px;
           text-align: center;
         }
 
-        .study-v2-question-card p {
+        .study-v2-question-content > p {
           color: #77797e;
           font-size: 25px;
           font-weight: 650;
-          margin: 84px 0 0;
+          margin: auto 0 0;
           text-align: center;
         }
 
-        .study-v2-answer-card .study-v2-card-topline {
-          padding: 0 22px;
+        @keyframes study-v2-content-in {
+          from {
+            opacity: 0;
+            transform: translateY(4px);
+          }
+
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
         }
 
         .study-v2-answer-body {
-          display: grid;
-          grid-template-columns: minmax(0, 1fr);
-          min-height: 398px;
-          padding: 52px 0 0;
-        }
-
-        .study-v2-answer-lines {
+          animation: study-v2-content-in 200ms ease-out;
           color: #08143b;
+          flex: 1 1 auto;
+          min-height: 0;
+          overflow-y: auto;
+          overscroll-behavior: contain;
+          padding: 28px clamp(28px, 8vw, 88px) 32px;
+          scrollbar-gutter: stable;
+        }
+
+        .study-v2-answer-section,
+        .study-v2-explanation-section {
+          margin: 0 auto;
+          max-width: 680px;
+        }
+
+        .study-v2-answer-section h1,
+        .study-v2-explanation-section h2 {
           font-family: Georgia, "Times New Roman", Times, serif;
-          font-size: 31px;
-          font-weight: 500;
-          justify-self: center;
           letter-spacing: -0.035em;
-          line-height: 1.12;
-          max-width: 330px;
-          text-align: center;
-          width: 100%;
+          margin: 0 0 14px;
         }
 
-        .study-v2-answer-lines p {
-          margin: 0 0 26px;
+        .study-v2-answer-section h1 {
+          color: #0f5ee8;
+          font-size: 24px;
+          font-weight: 750;
         }
 
-        .study-v2-answer-lines p:nth-of-type(4) {
-          margin-top: 42px;
+        .study-v2-answer-section p {
+          font-family: Georgia, "Times New Roman", Times, serif;
+          font-size: clamp(25px, 3vw, 34px);
+          font-weight: 600;
+          letter-spacing: -0.025em;
+          line-height: 1.3;
+          margin: 0;
         }
 
-        .study-v2-rule {
-          border-top: 2px solid #cfd3da;
-          margin: 0 0 30px;
-          width: 100%;
+        .study-v2-explanation-section {
+          border-top: 1px solid #dbe2ee;
+          margin-top: 28px;
+          padding-top: 24px;
         }
 
-        .study-v2-answer-lines .study-v2-rule:last-of-type {
-          margin: 10px 0 42px;
+        .study-v2-explanation-section h2 {
+          font-size: 21px;
+          font-weight: 700;
+        }
+
+        .study-v2-explanation-section p {
+          color: #334155;
+          font-size: 18px;
+          line-height: 1.65;
+          margin: 0;
         }
 
         .study-v2-feedback-row {
           border-top: 1px solid #dbe2ee;
           display: grid;
+          flex: 0 0 auto;
           grid-template-columns: repeat(3, 1fr);
-          min-height: 174px;
+          min-height: 148px;
         }
 
         .study-v2-feedback-row button {
@@ -2805,6 +2884,7 @@ if (mode === 'study') {
           align-items: center;
           border-top: 1px solid #dbe2ee;
           display: flex;
+          flex: 0 0 auto;
           gap: 18px;
           min-height: 64px;
           padding: 12px 20px;
@@ -2830,7 +2910,7 @@ if (mode === 'study') {
           border-top: 1px solid #dbe2ee;
           display: grid;
           grid-template-columns: repeat(3, 1fr);
-          min-height: 174px;
+          min-height: 148px;
         }
 
         .study-v2-rating-button {
@@ -2935,8 +3015,17 @@ if (mode === 'study') {
             padding: 24px 14px;
           }
 
-          .study-v2-question-card h1 {
+          .study-v2-card {
+            height: min(620px, 72dvh);
+            min-height: 500px;
+          }
+
+          .study-v2-question-content h1 {
             font-size: 33px;
+          }
+
+          .study-v2-answer-body {
+            padding: 24px 22px 28px;
           }
 
           .study-v2-card-topline {

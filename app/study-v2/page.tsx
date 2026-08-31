@@ -16,6 +16,14 @@ type NavIconName =
   | 'account';
 
 type Feedback = 'up' | 'more' | 'down' | null;
+type Response =
+  | 'easy'
+  | 'average'
+  | 'hard'
+  | 'didnt_know'
+  | 'forgot'
+  | 'too_hard'
+  | null;
 
 const navItems: Array<{ href?: string; icon: NavIconName; label: string }> = [
   { href: '/', icon: 'home', label: 'Home' },
@@ -204,8 +212,9 @@ function FeedbackIcon({ type }: { type: 'up' | 'more' | 'down' }) {
 }
 
 export default function StudyV2Page() {
-  const [isAnswerVisible, setIsAnswerVisible] = useState(true);
+  const [isAnswerVisible, setIsAnswerVisible] = useState(false);
   const [feedback, setFeedback] = useState<Feedback>(null);
+  const [response, setResponse] = useState<Response>(null);
   const [isCramMode, setIsCramMode] = useState(false);
 
   return (
@@ -214,67 +223,144 @@ export default function StudyV2Page() {
       <main className="study-v2-page">
         <section className="study-v2-shell" aria-label="Study Mode prototype">
           <article
-            className="study-v2-question-card"
-            aria-label="Question card"
-            onClick={() => setIsAnswerVisible(true)}
+            aria-label={isAnswerVisible ? 'Revealed study card' : 'Question card'}
+            className={`study-v2-card ${
+              isAnswerVisible ? 'study-v2-card-revealed' : 'study-v2-card-front'
+            }`}
+            onClick={
+              isAnswerVisible ? undefined : () => setIsAnswerVisible(true)
+            }
+            onKeyDown={(event) => {
+              if (
+                !isAnswerVisible &&
+                (event.key === 'Enter' || event.key === ' ')
+              ) {
+                event.preventDefault();
+                setIsAnswerVisible(true);
+              }
+            }}
+            role={isAnswerVisible ? undefined : 'button'}
+            tabIndex={isAnswerVisible ? undefined : 0}
           >
             <div className="study-v2-card-topline">
               <ProgressBar />
               <BackAndClose />
             </div>
 
-            <h1>
-              What is the primary purpose
-              <br />
-              of isolating a patient with
-              <br />
-              suspected MRSA?
-            </h1>
-
-            <p>Tap to reveal answer</p>
-          </article>
-
-          {isAnswerVisible && (
-            <article className="study-v2-answer-card" aria-label="Answer card">
-              <div className="study-v2-card-topline">
-                <ProgressBar />
-                <BackAndClose />
+            {!isAnswerVisible ? (
+              <div className="study-v2-question-content">
+                <h1>
+                  What is the primary purpose
+                  <br />
+                  of isolating a patient with
+                  <br />
+                  suspected MRSA?
+                </h1>
+                <p>Tap to reveal answer</p>
               </div>
-
-              <div className="study-v2-answer-body">
-                <div className="study-v2-answer-lines">
-                  <div className="study-v2-rule" aria-hidden="true" />
-                  <p>Answer</p>
-                  <p>Answer</p>
-                  <p>Answer</p>
-                  <div className="study-v2-rule" aria-hidden="true" />
-                  <p>Explanation</p>
-                </div>
-
-                <div className="study-v2-scroll-indicator" aria-hidden="true">
-                  <span />
-                </div>
-              </div>
-
-              <div className="study-v2-feedback-row">
-                {[
-                  ['up', 'Thumbs Up'],
-                  ['more', 'More'],
-                  ['down', 'Thumbs Down'],
-                ].map(([type, label]) => (
-                  <button
-                    className={feedback === type ? 'study-v2-feedback-active' : ''}
-                    key={type}
-                    type="button"
-                    onClick={() => setFeedback(type as Feedback)}
+            ) : (
+              <>
+                <div className="study-v2-answer-body">
+                  <section
+                    className="study-v2-answer-section"
+                    aria-labelledby="prototype-answer-heading"
                   >
-                    <FeedbackIcon type={type as 'up' | 'more' | 'down'} />
-                    <span>{label}</span>
-                  </button>
-                ))}
-              </div>
-            </article>
-          )}
+                    <h1 id="prototype-answer-heading">Answer</h1>
+                    <p>Answer</p>
+                  </section>
+                  <section
+                    className="study-v2-explanation-section"
+                    aria-labelledby="prototype-explanation-heading"
+                  >
+                    <h2 id="prototype-explanation-heading">Explanation</h2>
+                    <p>Explanation</p>
+                  </section>
+                </div>
+
+                {feedback === null ? (
+                  <div className="study-v2-feedback-row">
+                    {[
+                      ['up', 'Thumbs Up'],
+                      ['more', 'More'],
+                      ['down', 'Thumbs Down'],
+                    ].map(([type, label]) => (
+                      <button
+                        key={type}
+                        type="button"
+                        onClick={() => {
+                          setFeedback(type as Feedback);
+                          setResponse(null);
+                        }}
+                      >
+                        <FeedbackIcon type={type as 'up' | 'more' | 'down'} />
+                        <span>{label}</span>
+                      </button>
+                    ))}
+                  </div>
+                ) : feedback === 'more' ? (
+                  <div className="study-v2-response-toolbar">
+                    <button
+                      className="study-v2-response-back"
+                      type="button"
+                      onClick={() => {
+                        setFeedback(null);
+                        setResponse(null);
+                      }}
+                    >
+                      ← Back
+                    </button>
+                    <p>More options coming later</p>
+                  </div>
+                ) : (
+                  <div className="study-v2-response-stage">
+                    <div className="study-v2-response-toolbar">
+                      <button
+                        className="study-v2-response-back"
+                        type="button"
+                        onClick={() => {
+                          setFeedback(null);
+                          setResponse(null);
+                        }}
+                      >
+                        ← Back
+                      </button>
+                    </div>
+                    <div className="study-v2-rating-row">
+                      {(feedback === 'up'
+                        ? [
+                            ['easy', 'Easy', 'I knew this well'],
+                            ['average', 'Average', 'I knew part of this'],
+                            ['hard', 'Hard', 'This was challenging'],
+                          ]
+                        : [
+                            ['didnt_know', "Didn't Know", 'I had no idea'],
+                            [
+                              'forgot',
+                              'Forgot / Got It Wrong',
+                              'I knew it before but missed it',
+                            ],
+                            ['too_hard', 'Too Hard', 'This was above my level'],
+                          ]
+                      ).map(([value, label, subtitle]) => (
+                        <button
+                          aria-pressed={response === value}
+                          className={`study-v2-rating-button study-v2-rating-${value}${
+                            response === value ? ' study-v2-rating-active' : ''
+                          }`}
+                          key={value}
+                          type="button"
+                          onClick={() => setResponse(value as Response)}
+                        >
+                          <strong>{label}</strong>
+                          <span>{subtitle}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </article>
 
           <label className="study-v2-cram">
             <input
@@ -387,7 +473,7 @@ export default function StudyV2Page() {
         .study-v2-page {
           background: #f8fafc;
           min-height: calc(100vh - 107px);
-          padding: 50px 24px 58px;
+          padding: 28px 24px;
         }
 
         .study-v2-shell {
@@ -397,27 +483,31 @@ export default function StudyV2Page() {
           box-shadow: 0 18px 36px rgba(15, 23, 42, 0.14);
           margin: 0 auto;
           max-width: 906px;
-          padding: 48px 28px 28px;
+          padding: 24px 28px;
         }
 
-        .study-v2-question-card,
-        .study-v2-answer-card {
+        .study-v2-card {
           background: #ffffff;
           border: 1px solid #dbe2ee;
           border-radius: 8px;
+          display: flex;
+          flex-direction: column;
+          height: clamp(480px, calc(100vh - 290px), 640px);
           overflow: hidden;
-        }
-
-        .study-v2-question-card {
-          cursor: pointer;
-          min-height: 540px;
-          padding: 13px 22px 90px;
-        }
-
-        .study-v2-answer-card {
-          margin-top: 24px;
-          min-height: 620px;
           padding-top: 13px;
+          transition:
+            border-color 200ms ease,
+            box-shadow 200ms ease;
+        }
+
+        .study-v2-card-front {
+          cursor: pointer;
+        }
+
+        .study-v2-card-front:focus-visible {
+          border-color: #0f5ee8;
+          box-shadow: 0 0 0 3px rgba(15, 94, 232, 0.2);
+          outline: 0;
         }
 
         .study-v2-card-topline {
@@ -425,6 +515,8 @@ export default function StudyV2Page() {
           display: grid;
           gap: 38px;
           grid-template-columns: minmax(0, 1fr) auto;
+          flex: 0 0 auto;
+          padding: 0 22px;
         }
 
         .study-v2-progress {
@@ -468,115 +560,110 @@ export default function StudyV2Page() {
           line-height: 0.8;
         }
 
-        .study-v2-question-card h1 {
+        .study-v2-question-content {
+          animation: study-v2-content-in 200ms ease-out;
+          display: flex;
+          flex: 1;
+          flex-direction: column;
+          justify-content: center;
+          padding: 24px 22px 64px;
+        }
+
+        .study-v2-question-content h1 {
           color: #08143b;
           font-family: Georgia, "Times New Roman", Times, serif;
           font-size: 43px;
           font-weight: 650;
           letter-spacing: -0.035em;
           line-height: 1.45;
-          margin: 108px auto 0;
+          margin: auto auto 0;
           max-width: 620px;
           text-align: center;
         }
 
-        .study-v2-question-card p {
+        .study-v2-question-content > p {
           color: #77797e;
           font-size: 25px;
           font-weight: 650;
-          margin: 84px 0 0;
+          margin: auto 0 0;
           text-align: center;
         }
 
-        .study-v2-answer-card .study-v2-card-topline {
-          padding: 0 22px;
+        @keyframes study-v2-content-in {
+          from {
+            opacity: 0;
+            transform: translateY(4px);
+          }
+
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
         }
 
         .study-v2-answer-body {
-          display: grid;
-          grid-template-columns: minmax(0, 1fr) 84px;
-          min-height: 398px;
-          padding: 52px 0 0;
-        }
-
-        .study-v2-answer-lines {
+          animation: study-v2-content-in 200ms ease-out;
           color: #08143b;
+          flex: 1 1 auto;
+          min-height: 0;
+          overflow-y: auto;
+          overscroll-behavior: contain;
+          padding: 28px clamp(28px, 8vw, 88px) 32px;
+          scrollbar-gutter: stable;
+        }
+
+        .study-v2-answer-section,
+        .study-v2-explanation-section {
+          margin: 0 auto;
+          max-width: 680px;
+        }
+
+        .study-v2-answer-section h1,
+        .study-v2-explanation-section h2 {
           font-family: Georgia, "Times New Roman", Times, serif;
-          font-size: 31px;
-          font-weight: 500;
-          justify-self: center;
           letter-spacing: -0.035em;
-          line-height: 1.12;
-          max-width: 330px;
-          text-align: center;
-          width: 100%;
+          margin: 0 0 14px;
         }
 
-        .study-v2-answer-lines p {
-          margin: 0 0 26px;
+        .study-v2-answer-section h1 {
+          color: #0f5ee8;
+          font-size: 24px;
+          font-weight: 750;
         }
 
-        .study-v2-answer-lines p:nth-of-type(4) {
-          margin-top: 42px;
+        .study-v2-answer-section p {
+          font-family: Georgia, "Times New Roman", Times, serif;
+          font-size: clamp(25px, 3vw, 34px);
+          font-weight: 600;
+          letter-spacing: -0.025em;
+          line-height: 1.3;
+          margin: 0;
         }
 
-        .study-v2-rule {
-          border-top: 2px solid #cfd3da;
-          margin: 0 0 30px;
-          width: 100%;
+        .study-v2-explanation-section {
+          border-top: 1px solid #dbe2ee;
+          margin-top: 28px;
+          padding-top: 24px;
         }
 
-        .study-v2-answer-lines .study-v2-rule:last-of-type {
-          margin: 10px 0 42px;
+        .study-v2-explanation-section h2 {
+          font-size: 21px;
+          font-weight: 700;
         }
 
-        .study-v2-scroll-indicator {
-          align-self: center;
-          background: #c9ccd2;
-          border-radius: 999px;
-          height: 300px;
-          justify-self: center;
-          position: relative;
-          width: 6px;
-        }
-
-        .study-v2-scroll-indicator::before {
-          border: solid #c9ccd2;
-          border-width: 0 4px 4px 0;
-          content: '';
-          height: 11px;
-          left: -5px;
-          position: absolute;
-          top: -2px;
-          transform: rotate(-135deg);
-          width: 11px;
-        }
-
-        .study-v2-scroll-indicator::after {
-          background: #0f5ee8;
-          border-radius: 999px;
-          bottom: -3px;
-          content: '';
-          height: 15px;
-          left: -4px;
-          position: absolute;
-          width: 15px;
-        }
-
-        .study-v2-scroll-indicator span {
-          background: #0f5ee8;
-          border-radius: 999px;
-          display: block;
-          height: 108px;
-          margin-top: 43px;
-          width: 100%;
+        .study-v2-explanation-section p {
+          color: #334155;
+          font-size: 18px;
+          line-height: 1.65;
+          margin: 0;
         }
 
         .study-v2-feedback-row {
           border-top: 1px solid #dbe2ee;
           display: grid;
+          flex: 0 0 auto;
           grid-template-columns: repeat(3, 1fr);
-          min-height: 174px;
+          min-height: 148px;
         }
 
         .study-v2-feedback-row button {
@@ -585,6 +672,7 @@ export default function StudyV2Page() {
           border: 0;
           border-right: 1px solid #dbe2ee;
           color: #08143b;
+          cursor: pointer;
           display: flex;
           flex-direction: column;
           font: inherit;
@@ -596,10 +684,6 @@ export default function StudyV2Page() {
 
         .study-v2-feedback-row button:last-child {
           border-right: 0;
-        }
-
-        .study-v2-feedback-active {
-          background: #eff6ff !important;
         }
 
         .study-v2-feedback-svg {
@@ -619,6 +703,102 @@ export default function StudyV2Page() {
           font-weight: 900;
           letter-spacing: 0.12em;
           line-height: 0.8;
+        }
+
+        .study-v2-response-toolbar {
+          align-items: center;
+          border-top: 1px solid #dbe2ee;
+          display: flex;
+          flex: 0 0 auto;
+          gap: 18px;
+          min-height: 64px;
+          padding: 12px 20px;
+        }
+
+        .study-v2-response-toolbar p {
+          color: #475569;
+          flex: 1;
+          margin: 0;
+          text-align: center;
+        }
+
+        .study-v2-response-back {
+          background: transparent;
+          border: 0;
+          color: #0f5ee8;
+          cursor: pointer;
+          font: inherit;
+          font-weight: 700;
+        }
+
+        .study-v2-rating-row {
+          border-top: 1px solid #dbe2ee;
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          min-height: 148px;
+        }
+
+        .study-v2-rating-button {
+          align-items: center;
+          border: 0;
+          border-right: 1px solid #dbe2ee;
+          cursor: pointer;
+          display: flex;
+          flex-direction: column;
+          font: inherit;
+          font-family: Georgia, "Times New Roman", Times, serif;
+          gap: 12px;
+          justify-content: center;
+          padding: 24px;
+        }
+
+        .study-v2-rating-button:last-child {
+          border-right: 0;
+        }
+
+        .study-v2-rating-button strong {
+          font-size: 26px;
+        }
+
+        .study-v2-rating-button span {
+          color: #334155;
+          font-family: system-ui, sans-serif;
+          font-size: 16px;
+          font-weight: 600;
+        }
+
+        .study-v2-rating-easy {
+          background: #f0fdf4;
+          color: #2f8f46;
+        }
+
+        .study-v2-rating-average {
+          background: #fffbeb;
+          color: #9a6c00;
+        }
+
+        .study-v2-rating-hard {
+          background: #fff7ed;
+          color: #e3642a;
+        }
+
+        .study-v2-rating-didnt_know {
+          background: #fff1f2;
+          color: #be123c;
+        }
+
+        .study-v2-rating-forgot {
+          background: #fff7ed;
+          color: #c2410c;
+        }
+
+        .study-v2-rating-too_hard {
+          background: #fef2f2;
+          color: #b91c1c;
+        }
+
+        .study-v2-rating-active {
+          box-shadow: inset 0 0 0 3px currentColor;
         }
 
         .study-v2-cram {
@@ -660,7 +840,12 @@ export default function StudyV2Page() {
             padding: 24px 14px;
           }
 
-          .study-v2-question-card h1 {
+          .study-v2-card {
+            height: min(620px, 72dvh);
+            min-height: 500px;
+          }
+
+          .study-v2-question-content h1 {
             font-size: 33px;
           }
 
@@ -674,11 +859,7 @@ export default function StudyV2Page() {
           }
 
           .study-v2-answer-body {
-            grid-template-columns: 1fr;
-          }
-
-          .study-v2-scroll-indicator {
-            display: none;
+            padding: 24px 22px 28px;
           }
 
           .study-v2-feedback-row {
@@ -686,6 +867,16 @@ export default function StudyV2Page() {
           }
 
           .study-v2-feedback-row button {
+            border-bottom: 1px solid #dbe2ee;
+            border-right: 0;
+            min-height: 140px;
+          }
+
+          .study-v2-rating-row {
+            grid-template-columns: 1fr;
+          }
+
+          .study-v2-rating-button {
             border-bottom: 1px solid #dbe2ee;
             border-right: 0;
             min-height: 140px;
