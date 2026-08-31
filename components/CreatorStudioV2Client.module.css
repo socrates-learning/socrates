@@ -46,10 +46,6 @@
   white-space: nowrap;
 }
 
-.saveState.unsaved {
-  color: #9a5b08;
-}
-
 .primaryButton,
 .secondaryButton,
 .toolButton,

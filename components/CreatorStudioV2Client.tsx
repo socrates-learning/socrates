@@ -79,6 +79,7 @@ type MarkdownFormat =
 type DialogMode = 'add' | 'rename' | 'move' | null;
 type StatusTone = 'error' | 'success' | 'info';
 type Status = { tone: StatusTone; message: string } | null;
+type SaveFeedback = 'saving' | 'saved' | null;
 type InitialConcept = {
   id: string | null;
   name: string;
@@ -429,6 +430,7 @@ export function CreatorStudioV2Client({
   const [pendingRemovalId, setPendingRemovalId] = useState<string | null>(null);
   const [referenceStatus, setReferenceStatus] = useState<Status>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [saveFeedback, setSaveFeedback] = useState<SaveFeedback>(null);
   const [isMutatingTopic, setIsMutatingTopic] = useState(false);
   const [savedDraftFingerprint, setSavedDraftFingerprint] = useState(() =>
     draftFingerprint(
@@ -506,6 +508,10 @@ export function CreatorStudioV2Client({
     currentDraftFingerprint !== savedDraftFingerprint || hasPendingReferenceDraft;
   const isDirty =
     isContentDirty || isQuestionDirty;
+  const visibleSaveFeedback =
+    saveFeedback === 'saving' || (saveFeedback === 'saved' && !isDirty)
+      ? saveFeedback
+      : null;
 
   useEffect(() => {
     if (!isDirty) return;
@@ -518,6 +524,13 @@ export function CreatorStudioV2Client({
     window.addEventListener('beforeunload', warnBeforeUnload);
     return () => window.removeEventListener('beforeunload', warnBeforeUnload);
   }, [isDirty]);
+
+  useEffect(() => {
+    if (saveFeedback !== 'saved') return;
+
+    const timeoutId = window.setTimeout(() => setSaveFeedback(null), 1600);
+    return () => window.clearTimeout(timeoutId);
+  }, [saveFeedback]);
 
   async function loadTagCatalog() {
     const [tagResult, conceptUsageResult, questionUsageResult, articleUsageResult] =
@@ -2138,8 +2151,7 @@ export function CreatorStudioV2Client({
     await loadTagCatalog();
     broadcastTagCatalogUsageInvalidation();
     setIsSaving(false);
-    router.replace('/creator/concepts/new');
-    router.refresh();
+    window.location.assign('/creator/concepts');
   }
 
   async function saveConcept() {
@@ -2171,6 +2183,7 @@ export function CreatorStudioV2Client({
     const name =
       conceptName.trim() || conceptNameFromMarkdown(bodyMarkdownToSave);
     setIsSaving(true);
+    setSaveFeedback('saving');
     setStatus(null);
 
     const { data, error } = await supabase.rpc('save_concept_with_version', {
@@ -2193,6 +2206,7 @@ export function CreatorStudioV2Client({
 
     if (error) {
       setIsSaving(false);
+      setSaveFeedback(null);
       showStatus('error', error.message || 'Concept could not be saved.');
       return;
     }
@@ -2200,6 +2214,7 @@ export function CreatorStudioV2Client({
     const savedConceptId = (data as { concept_id?: string } | null)?.concept_id;
     if (!savedConceptId) {
       setIsSaving(false);
+      setSaveFeedback(null);
       showStatus('error', 'Concept was saved without a returned identifier.');
       return;
     }
@@ -2216,8 +2231,6 @@ export function CreatorStudioV2Client({
       );
     }
 
-    setIsSaving(false);
-
     const synchronizedReferences = (
       data as {
         references?: Array<{
@@ -2229,6 +2242,8 @@ export function CreatorStudioV2Client({
     )?.references;
 
     if (!Array.isArray(synchronizedReferences)) {
+      setIsSaving(false);
+      setSaveFeedback(null);
       showStatus(
         'error',
         'Concept draft saved, but the reference save response was incomplete. Please retry.'
@@ -2254,6 +2269,8 @@ export function CreatorStudioV2Client({
     });
 
     if (savedReferences.some((reference) => reference === null)) {
+      setIsSaving(false);
+      setSaveFeedback(null);
       showStatus(
         'error',
         'Concept draft saved, but one or more references were not confirmed. Please retry.'
@@ -2292,7 +2309,8 @@ export function CreatorStudioV2Client({
     await loadTagCatalog();
     broadcastTagCatalogUsageInvalidation();
 
-    showStatus('success', 'Concept and references saved.');
+    setIsSaving(false);
+    setSaveFeedback('saved');
 
     if (wasNewConcept) {
       router.replace(`/creator/concepts/${savedConceptId}`);
@@ -2323,6 +2341,7 @@ export function CreatorStudioV2Client({
     }
 
     setIsSavingQuestion(true);
+    setSaveFeedback('saving');
     setQuestionStatus(null);
 
     const questionPayload = {
@@ -2348,6 +2367,7 @@ export function CreatorStudioV2Client({
 
     if (error) {
       setIsSavingQuestion(false);
+      setSaveFeedback(null);
       setQuestionStatus({
         tone: 'error',
         message: error.message || 'Question could not be saved.',
@@ -2358,6 +2378,7 @@ export function CreatorStudioV2Client({
     const savedQuestionId = (data as { id?: string } | null)?.id || null;
     if (!savedQuestionId) {
       setIsSavingQuestion(false);
+      setSaveFeedback(null);
       setQuestionStatus({
         tone: 'error',
         message: 'Question was saved without a returned identifier.',
@@ -2388,10 +2409,7 @@ export function CreatorStudioV2Client({
     ]);
     broadcastTagCatalogUsageInvalidation();
     setIsSavingQuestion(false);
-    setQuestionStatus({
-      tone: 'success',
-      message: questionId ? 'Question updated.' : 'Question saved.',
-    });
+    setSaveFeedback('saved');
   }
 
   async function deleteCurrentQuestion() {
@@ -2676,12 +2694,11 @@ export function CreatorStudioV2Client({
               >
                 Library Organizer
               </button>
-              <span
-                className={`${styles.saveState} ${isDirty ? styles.unsaved : ''}`}
-                aria-live="polite"
-              >
-                {isDirty ? 'Unsaved changes' : 'Saved'}
-              </span>
+              {visibleSaveFeedback && (
+                <span className={styles.saveState} role="status" aria-live="polite">
+                  {visibleSaveFeedback === 'saving' ? 'Saving…' : 'Saved'}
+                </span>
+              )}
               <button
                 className={styles.secondaryButton}
                 type="button"
@@ -2966,6 +2983,11 @@ export function CreatorStudioV2Client({
                     <strong style={{ color: '#334155' }}>
                       {conceptId ? conceptName || 'Untitled concept' : 'New concept'}
                     </strong>
+                    {conceptId && (
+                      <span style={{ display: 'block', marginTop: 4 }}>
+                        Concept ID: <code>{conceptId}</code>
+                      </span>
+                    )}
                   </span>
                   <label
                     style={{
@@ -3030,6 +3052,9 @@ export function CreatorStudioV2Client({
                             }}
                           >
                             <span>{conceptOption.name}</span>
+                            <small style={{ color: '#687386' }}>
+                              Concept ID: {conceptOption.id}
+                            </small>
                             {firstPath && (
                               <small style={{ color: '#687386' }}>
                                 {firstPath}

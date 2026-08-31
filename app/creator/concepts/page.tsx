@@ -192,6 +192,9 @@ export default async function ManageConceptsPage({
                       <h3 style={{ marginTop: 0 }}>{concept.name}</h3>
                       <p className="muted" style={{ marginBottom: 0 }}>
                         Status: {concept.status}
+                        <span style={{ display: 'block', marginTop: 5 }}>
+                          Concept ID: <code>{concept.id}</code>
+                        </span>
                         {[...concept.topicPaths].map((path) => (
                           <span key={path} style={{ display: 'block', marginTop: 5 }}>
                             {path}
