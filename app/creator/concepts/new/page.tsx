@@ -7,19 +7,22 @@ export default async function NewConceptPage() {
   const supabase = await createSupabaseServerClient();
   const { data: nursingLibrary } = await supabase
     .from('libraries')
-    .select('id')
+    .select('id, library_nodes(id, name, parent_id, sort_order)')
     .eq('slug', 'nursing')
     .eq('status', 'active')
     .maybeSingle();
 
   if (!nursingLibrary) notFound();
-
-  const { data: nodes } = await supabase
-    .from('library_nodes')
-    .select('id, name, parent_id, sort_order')
-    .eq('library_id', nursingLibrary.id)
-    .order('sort_order')
-    .order('name');
+  const nodes = [...(nursingLibrary.library_nodes || [])].sort(
+    (left, right) => {
+      if (left.sort_order === null && right.sort_order !== null) return 1;
+      if (left.sort_order !== null && right.sort_order === null) return -1;
+      return (
+        (left.sort_order ?? 0) - (right.sort_order ?? 0) ||
+        left.name.localeCompare(right.name)
+      );
+    }
+  );
 
   return (
     <CreatorStudioV2Client

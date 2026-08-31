@@ -1,4 +1,4 @@
-import { Header } from '@/components/Header';
+import { Header, HeaderSessionProvider } from '@/components/Header';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
 import { redirect } from 'next/navigation';
 
@@ -22,7 +22,10 @@ export default async function CreatorLayout({
 
   if (roleData?.role !== 'admin' && roleData?.role !== 'editor') {
     return (
-      <>
+      <HeaderSessionProvider
+        email={user.email ?? 'Account'}
+        role={roleData?.role ?? null}
+      >
         <Header />
         <main className="layout" style={{ gridTemplateColumns: '1fr' }}>
           <section className="panel">
@@ -32,9 +35,16 @@ export default async function CreatorLayout({
             </p>
           </section>
         </main>
-      </>
+      </HeaderSessionProvider>
     );
   }
 
-  return children;
+  return (
+    <HeaderSessionProvider
+      email={user.email ?? 'Account'}
+      role={roleData.role}
+    >
+      {children}
+    </HeaderSessionProvider>
+  );
 }

@@ -342,6 +342,8 @@ export function CreatorStudioV2Client({
 }: CreatorStudioV2ClientProps = {}) {
   const router = useRouter();
   const conceptEditorRef = useRef<HTMLTextAreaElement | null>(null);
+  const loadedConceptPlacementKeyRef = useRef<string | null>(null);
+  const availableTagsRef = useRef<CatalogTag[]>([]);
   const resolvedTopics = initialTopics || prototypeTopics;
   const resolvedConcept = initialConcept || {
     id: null,
@@ -532,16 +534,22 @@ export function CreatorStudioV2Client({
     return () => window.clearTimeout(timeoutId);
   }, [saveFeedback]);
 
-  async function loadTagCatalog() {
+  async function loadTagCatalog(includeUsage = false) {
     const [tagResult, conceptUsageResult, questionUsageResult, articleUsageResult] =
       await Promise.all([
         supabase
           .from('tags')
           .select('id, name, slug, status')
           .order('name'),
-        supabase.from('concept_tags').select('tag_id'),
-        supabase.from('question_tags').select('tag_id'),
-        supabase.from('article_tags').select('tag_id'),
+        includeUsage
+          ? supabase.from('concept_tags').select('tag_id')
+          : Promise.resolve({ data: [] }),
+        includeUsage
+          ? supabase.from('question_tags').select('tag_id')
+          : Promise.resolve({ data: [] }),
+        includeUsage
+          ? supabase.from('article_tags').select('tag_id')
+          : Promise.resolve({ data: [] }),
       ]);
 
     if (tagResult.error) {
@@ -562,17 +570,31 @@ export function CreatorStudioV2Client({
     const conceptUsage = usageCounts(conceptUsageResult.data);
     const questionUsage = usageCounts(questionUsageResult.data);
     const articleUsage = usageCounts(articleUsageResult.data);
-    const catalog = (tagResult.data || []).map((tag) => ({
-      id: tag.id,
-      name: tag.name,
-      slug: tag.slug,
-      status: tag.status === 'archived' ? 'archived' : 'active',
-      conceptUsage: conceptUsage[tag.id] || 0,
-      questionUsage: questionUsage[tag.id] || 0,
-      articleUsage: articleUsage[tag.id] || 0,
-    })) satisfies CatalogTag[];
+    const existingCatalogById = new Map(
+      availableTagsRef.current.map((tag) => [tag.id, tag])
+    );
+    const catalog = (tagResult.data || []).map((tag) => {
+      const existingTag = existingCatalogById.get(tag.id);
+
+      return {
+        id: tag.id,
+        name: tag.name,
+        slug: tag.slug,
+        status: tag.status === 'archived' ? 'archived' : 'active',
+        conceptUsage: includeUsage
+          ? conceptUsage[tag.id] || 0
+          : existingTag?.conceptUsage || 0,
+        questionUsage: includeUsage
+          ? questionUsage[tag.id] || 0
+          : existingTag?.questionUsage || 0,
+        articleUsage: includeUsage
+          ? articleUsage[tag.id] || 0
+          : existingTag?.articleUsage || 0,
+      };
+    }) satisfies CatalogTag[];
     const catalogById = new Map(catalog.map((tag) => [tag.id, tag]));
 
+    availableTagsRef.current = catalog;
     setAvailableTags(catalog);
     setConceptTags((current) =>
       current.map((tag) => catalogById.get(tag.id) || tag)
@@ -593,9 +615,15 @@ export function CreatorStudioV2Client({
   }, []);
 
   useEffect(() => {
+    if (activeCreatorTab === 'tags') {
+      void loadTagCatalog(true);
+    }
+  }, [activeCreatorTab]);
+
+  useEffect(() => {
     function refreshTagCatalogUsage(event: StorageEvent) {
       if (event.key === TAG_CATALOG_USAGE_INVALIDATION_KEY) {
-        void loadTagCatalog();
+        void loadTagCatalog(true);
       }
     }
 
@@ -689,67 +717,36 @@ export function CreatorStudioV2Client({
       setQuestionConceptOptions([]);
       return;
     }
+    if (!(questionTopicId in questionConceptsByTopicId)) return;
 
-    let isMounted = true;
-
-    async function loadQuestionConcepts() {
-      const { data, error } = await supabase
-        .from('concept_placements')
-        .select('concept_id, concepts!inner(id, name)')
-        .eq('library_node_id', questionTopicId);
-
-      if (!isMounted) return;
-
-      if (error) {
-        setQuestionConceptOptions([]);
-        setQuestionStatus({
-          tone: 'error',
-          message: 'Concepts could not be loaded for this topic.',
-        });
-        return;
+    const options = questionConceptsByTopicId[questionTopicId] || [];
+    setQuestionConceptOptions(options);
+    setQuestionConceptId((current) => {
+      if (current && options.some((option) => option.id === current)) return current;
+      if (
+        resolvedConcept.id &&
+        options.some((option) => option.id === resolvedConcept.id)
+      ) {
+        return resolvedConcept.id;
       }
-
-      const options = (data || [])
-        .map((placement) => {
-          const related = placement.concepts as unknown as
-            | { id: string; name: string }
-            | { id: string; name: string }[]
-            | null;
-          const relatedConcept = Array.isArray(related) ? related[0] : related;
-          return relatedConcept
-            ? { id: relatedConcept.id, name: relatedConcept.name }
-            : null;
-        })
-        .filter(
-          (option): option is QuestionConceptOption => option !== null
-        )
-        .filter(
-          (option, index, all) =>
-            all.findIndex((candidate) => candidate.id === option.id) === index
-        )
-        .sort((left, right) => left.name.localeCompare(right.name));
-
-      setQuestionConceptOptions(options);
-      setQuestionConceptId((current) => {
-        if (current && options.some((option) => option.id === current)) return current;
-        if (resolvedConcept.id && options.some((option) => option.id === resolvedConcept.id)) {
-          return resolvedConcept.id;
-        }
-        return options.length === 1 ? options[0].id : null;
-      });
-      setQuestionStatus(null);
-    }
-
-    void loadQuestionConcepts();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [activeLibraryId, questionTopicId, resolvedConcept.id]);
+      return options.length === 1 ? options[0].id : null;
+    });
+  }, [
+    activeLibraryId,
+    questionConceptsByTopicId,
+    questionTopicId,
+    resolvedConcept.id,
+  ]);
 
   useEffect(() => {
     if (!activeLibraryId) {
       setQuestionConceptsByTopicId({});
+      return;
+    }
+    if (
+      activeCreatorTab !== 'questions' &&
+      !contentConceptSearch.trim()
+    ) {
       return;
     }
 
@@ -758,6 +755,9 @@ export function CreatorStudioV2Client({
       setQuestionConceptsByTopicId({});
       return;
     }
+    const placementKey = `${activeLibraryId}:${topicIds.join(',')}`;
+    if (loadedConceptPlacementKeyRef.current === placementKey) return;
+    loadedConceptPlacementKeyRef.current = placementKey;
 
     let isMounted = true;
 
@@ -770,11 +770,17 @@ export function CreatorStudioV2Client({
       if (!isMounted) return;
 
       if (error) {
+        loadedConceptPlacementKeyRef.current = null;
         setQuestionConceptsByTopicId({});
+        setQuestionStatus({
+          tone: 'error',
+          message: 'Concepts could not be loaded for the Topic Tree.',
+        });
         return;
       }
 
-      const conceptsByTopicId: Record<string, QuestionConceptOption[]> = {};
+      const conceptsByTopicId: Record<string, QuestionConceptOption[]> =
+        Object.fromEntries(topicIds.map((topicId) => [topicId, []]));
 
       (data || []).forEach((placement) => {
         const topicId = placement.library_node_id;
@@ -806,9 +812,11 @@ export function CreatorStudioV2Client({
     return () => {
       isMounted = false;
     };
-  }, [activeLibraryId, topics]);
+  }, [activeCreatorTab, activeLibraryId, contentConceptSearch, topics]);
 
   useEffect(() => {
+    if (activeCreatorTab !== 'questions') return;
+
     const conceptIds = Array.from(
       new Set(
         Object.values(questionConceptsByTopicId)
@@ -850,7 +858,7 @@ export function CreatorStudioV2Client({
     return () => {
       isMounted = false;
     };
-  }, [activeLibraryId, questionConceptsByTopicId]);
+  }, [activeCreatorTab, activeLibraryId, questionConceptsByTopicId]);
 
   const previousQuestionConceptIdRef = useRef(questionConceptId);
   useEffect(() => {
@@ -1059,7 +1067,7 @@ export function CreatorStudioV2Client({
     }
 
     setNewCatalogTagName('');
-    await loadTagCatalog();
+    await loadTagCatalog(true);
     setIsMutatingTagCatalog(false);
     setTagCatalogStatus({ tone: 'success', message: 'Tag created.' });
   }
@@ -1086,7 +1094,7 @@ export function CreatorStudioV2Client({
       return;
     }
 
-    await loadTagCatalog();
+    await loadTagCatalog(true);
     setIsMutatingTagCatalog(false);
     setTagCatalogStatus({ tone: 'success', message: 'Tag renamed.' });
   }
@@ -1121,7 +1129,7 @@ export function CreatorStudioV2Client({
       return;
     }
 
-    await loadTagCatalog();
+    await loadTagCatalog(true);
     setIsMutatingTagCatalog(false);
     setTagCatalogStatus({
       tone: 'success',
@@ -1160,7 +1168,7 @@ export function CreatorStudioV2Client({
       return;
     }
 
-    await loadTagCatalog();
+    await loadTagCatalog(true);
     setIsMutatingTagCatalog(false);
     setTagCatalogStatus({ tone: 'success', message: 'Tag deleted.' });
   }

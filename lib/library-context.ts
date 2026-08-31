@@ -22,7 +22,7 @@ export type ActiveLibrary = {
 export type ActiveLibraryContext = {
   library: ActiveLibrary | null;
   role: ActiveLibraryRole;
-  user: { id: string; email: string | null } | null;
+  user: { id: string; email: string | null; displayName: string } | null;
   source: ActiveLibrarySource;
   canSwitch: boolean;
   hasMembership: boolean;
@@ -115,19 +115,29 @@ export async function resolveActiveLibraryContext({
     };
   }
 
-  const { data: roleData } = await supabase
-    .from('user_roles')
-    .select('role')
-    .eq('user_id', user.id)
-    .maybeSingle();
+  const [roleResult, membershipResult] = await Promise.all([
+    supabase
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', user.id)
+      .maybeSingle(),
+    supabase
+      .from('user_libraries')
+      .select('library_id, is_primary, libraries(id, name, slug, description, status)')
+      .eq('user_id', user.id),
+  ]);
+  const roleData = roleResult.data;
   const roleValue = roleData?.role;
   const role: ActiveLibraryRole =
     roleValue === 'admin' || roleValue === 'editor' ? roleValue : 'learner';
-
-  const { data: membershipRows } = await supabase
-    .from('user_libraries')
-    .select('library_id, is_primary, libraries(id, name, slug, description, status)')
-    .eq('user_id', user.id);
+  const membershipRows = membershipResult.data;
+  const resolvedUser = {
+    id: user.id,
+    email: user.email ?? null,
+    displayName:
+      (user.user_metadata?.full_name as string | undefined) ||
+      (user.email ? user.email.split('@')[0] : 'there'),
+  };
 
   const memberships = (membershipRows || []).flatMap((membership) => {
     const libraryValue = Array.isArray(membership.libraries)
@@ -155,7 +165,7 @@ export async function resolveActiveLibraryContext({
       return {
         library: requestedLibrary,
         role,
-        user: { id: user.id, email: user.email ?? null },
+        user: resolvedUser,
         source: 'url',
         canSwitch: true,
         hasMembership,
@@ -171,7 +181,7 @@ export async function resolveActiveLibraryContext({
       return {
         library: cookieLibrary,
         role,
-        user: { id: user.id, email: user.email ?? null },
+        user: resolvedUser,
         source: 'cookie',
         canSwitch: true,
         hasMembership,
@@ -184,7 +194,7 @@ export async function resolveActiveLibraryContext({
       return {
         library: primaryMembership.library,
         role,
-        user: { id: user.id, email: user.email ?? null },
+        user: resolvedUser,
         source: 'primary',
         canSwitch: true,
         hasMembership,
@@ -196,7 +206,7 @@ export async function resolveActiveLibraryContext({
     return {
       library: null,
       role,
-      user: { id: user.id, email: user.email ?? null },
+      user: resolvedUser,
       source: 'none',
       canSwitch: true,
       hasMembership,
@@ -218,7 +228,7 @@ export async function resolveActiveLibraryContext({
     return {
       library: requestedMembership?.library || null,
       role,
-      user: { id: user.id, email: user.email ?? null },
+      user: resolvedUser,
       source: requestedMembership ? 'url' : 'none',
       canSwitch: false,
       hasMembership,
@@ -230,7 +240,7 @@ export async function resolveActiveLibraryContext({
   return {
     library: primaryMembership?.library || null,
     role,
-    user: { id: user.id, email: user.email ?? null },
+    user: resolvedUser,
     source: primaryMembership ? 'primary' : 'none',
     canSwitch: false,
     hasMembership,

@@ -1,15 +1,43 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  type ReactNode,
+} from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 
+type HeaderSession = {
+  email: string | null;
+  role: string | null;
+};
+
+const HeaderSessionContext = createContext<HeaderSession | null>(null);
+
+export function HeaderSessionProvider({
+  children,
+  email,
+  role,
+}: HeaderSession & { children: ReactNode }) {
+  return (
+    <HeaderSessionContext.Provider value={{ email, role }}>
+      {children}
+    </HeaderSessionContext.Provider>
+  );
+}
+
 export function Header() {
-  const [email, setEmail] = useState<string | null>(null);
-  const [role, setRole] = useState<string | null>(null);
+  const serverSession = useContext(HeaderSessionContext);
+  const [email, setEmail] = useState<string | null>(serverSession?.email ?? null);
+  const [role, setRole] = useState<string | null>(serverSession?.role ?? null);
 
   useEffect(() => {
+    if (serverSession) return;
+
     let isMounted = true;
 
     async function loadSession() {
@@ -46,7 +74,7 @@ export function Header() {
       isMounted = false;
       subscription.unsubscribe();
     };
-  }, []);
+  }, [serverSession]);
 
   function handleHomeClick() {
     window.dispatchEvent(new Event('socrates-open-deck-dashboard'));

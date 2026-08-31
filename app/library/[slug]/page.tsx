@@ -14,5 +14,19 @@ export default async function LibraryLandingPage({
     notFound();
   }
 
-  return <StudyPlanner activeLibrary={context.library} />;
+  return (
+    <StudyPlanner
+      activeLibrary={context.library}
+      initialSession={
+        context.user
+          ? {
+              userId: context.user.id,
+              email: context.user.email,
+              displayName: context.user.displayName,
+              role: context.role,
+            }
+          : null
+      }
+    />
+  );
 }

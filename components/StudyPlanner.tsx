@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
-import type { ActiveLibrary } from '@/lib/library-context';
+import type { ActiveLibrary, ActiveLibraryRole } from '@/lib/library-context';
 import type { ReactNode } from 'react';
 
 type LibraryNode = {
@@ -312,14 +312,29 @@ function getNodePath(node: LibraryNode, nodesById: Map<string, LibraryNode>) {
 
 export function StudyPlanner({
   activeLibrary,
+  initialSession,
 }: {
   activeLibrary: ActiveLibrary | null;
+  initialSession?: {
+    userId: string;
+    email: string | null;
+    displayName: string;
+    role: ActiveLibraryRole;
+  } | null;
 }) {
   const [mode, setMode] = useState<PlannerMode>('dashboard');
-  const [userId, setUserId] = useState<string | null>(null);
-  const [email, setEmail] = useState<string | null>(null);
-  const [role, setRole] = useState<string | null>(null);
-  const [displayName, setDisplayName] = useState('there');
+  const [userId, setUserId] = useState<string | null>(
+    initialSession?.userId ?? null
+  );
+  const [email, setEmail] = useState<string | null>(
+    initialSession?.email ?? null
+  );
+  const [role, setRole] = useState<string | null>(
+    initialSession?.role ?? null
+  );
+  const [displayName, setDisplayName] = useState(
+    initialSession?.displayName ?? 'there'
+  );
   const [availableLibraries, setAvailableLibraries] = useState<ActiveLibrary[]>(
     activeLibrary ? [activeLibrary] : []
   );
@@ -408,11 +423,38 @@ export function StudyPlanner({
             : 'dashboard'
       );
 
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      let loadedUserId: string | null = null;
+      let loadedEmail: string | null = null;
+      let loadedRole: string | null = null;
+      let loadedDisplayName = 'there';
 
-      if (!user) {
+      if (initialSession !== undefined) {
+        loadedUserId = initialSession?.userId ?? null;
+        loadedEmail = initialSession?.email ?? null;
+        loadedRole = initialSession?.role ?? null;
+        loadedDisplayName = initialSession?.displayName ?? 'there';
+      } else {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+
+        if (user) {
+          const { data: roleData } = await supabase
+            .from('user_roles')
+            .select('role')
+            .eq('user_id', user.id)
+            .maybeSingle();
+
+          loadedUserId = user.id;
+          loadedEmail = user.email ?? 'Account';
+          loadedRole = roleData?.role ?? null;
+          loadedDisplayName =
+            (user.user_metadata?.full_name as string | undefined) ||
+            (user.email ? user.email.split('@')[0] : 'there');
+        }
+      }
+
+      if (!loadedUserId) {
         setUserId(null);
         setEmail(null);
         setRole(null);
@@ -421,40 +463,28 @@ export function StudyPlanner({
         return;
       }
 
-      const { data: roleData } = await supabase
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', user.id)
-        .maybeSingle();
-
-      let loadedAvailableLibraries: ActiveLibrary[] = activeLibrary
-        ? [activeLibrary]
-        : [];
-
-      if (roleData?.role === 'editor' || roleData?.role === 'admin') {
-        const { data: libraryData } = await supabase
-          .from('libraries')
-          .select('id, name, slug, description, status')
-          .eq('status', 'active')
-          .order('name');
-
-        if (libraryData?.length) {
-          loadedAvailableLibraries = libraryData as ActiveLibrary[];
-        }
-      }
+      const availableLibrariesPromise =
+        loadedRole === 'editor' || loadedRole === 'admin'
+          ? supabase
+              .from('libraries')
+              .select('id, name, slug, description, status')
+              .eq('status', 'active')
+              .order('name')
+          : Promise.resolve({ data: activeLibrary ? [activeLibrary] : [] });
 
       if (!isMounted) return;
 
-      setUserId(user.id);
-      setEmail(user.email ?? 'Account');
-      setRole(roleData?.role ?? null);
-      setAvailableLibraries(loadedAvailableLibraries);
-      setDisplayName(
-        (user.user_metadata?.full_name as string | undefined) ||
-          (user.email ? user.email.split('@')[0] : 'there')
-      );
+      setUserId(loadedUserId);
+      setEmail(loadedEmail ?? 'Account');
+      setRole(loadedRole);
+      setDisplayName(loadedDisplayName);
 
       if (!activeLibrary?.id) {
+        const { data: libraryData } = await availableLibrariesPromise;
+
+        if (!isMounted) return;
+
+        setAvailableLibraries((libraryData || []) as ActiveLibrary[]);
         setDeck(null);
         setNodes([]);
         setPlacements([]);
@@ -467,10 +497,13 @@ export function StudyPlanner({
         return;
       }
 
-      const { data: deckData, error: deckError } = await supabase.rpc(
-        'get_or_create_active_study_deck',
-        { p_library_id: activeLibrary.id }
-      );
+      const [availableLibrariesResult, deckResult] = await Promise.all([
+        availableLibrariesPromise,
+        supabase.rpc('get_or_create_active_study_deck', {
+          p_library_id: activeLibrary.id,
+        }),
+      ]);
+      const { data: deckData, error: deckError } = deckResult;
 
       if (deckError || !deckData) {
         setMessage(
@@ -481,11 +514,47 @@ export function StudyPlanner({
       }
 
       const activeDeck = deckData as StudyDeck;
-      const { data: nodeData, error: nodeError } = await supabase
-        .from('library_nodes')
-        .select('id, name, node_type, parent_id')
-        .eq('library_id', activeLibrary.id)
-        .order('name');
+      const [
+        nodeResult,
+        selectedNodesResult,
+        overridesResult,
+        preferenceResult,
+        resolvedResult,
+        learnerProgressResult,
+      ] = await Promise.all([
+        supabase
+          .from('library_nodes')
+          .select('id, name, node_type, parent_id')
+          .eq('library_id', activeLibrary.id)
+          .order('name'),
+        supabase
+          .from('user_study_node_selections')
+          .select('node_id')
+          .eq('deck_id', activeDeck.id),
+        supabase
+          .from('user_study_concept_overrides')
+          .select('concept_id, selection_state')
+          .eq('deck_id', activeDeck.id),
+        supabase
+          .from('study_deck_node_preferences')
+          .select('library_node_id, new_mastery_balance')
+          .eq('deck_id', activeDeck.id),
+        supabase.rpc('resolve_study_deck', {
+          p_deck_id: activeDeck.id,
+        }),
+        supabase.rpc('get_library_learner_progress', {
+          p_library_id: activeLibrary.id,
+        }),
+      ]);
+      const { data: nodeData, error: nodeError } = nodeResult;
+      const { data: selectedNodesData } = selectedNodesResult;
+      const { data: overridesData } = overridesResult;
+      const { data: preferenceData, error: preferenceError } = preferenceResult;
+      const { data: resolvedData } = resolvedResult;
+      const {
+        data: learnerProgressData,
+        error: learnerProgressLoadError,
+      } = learnerProgressResult;
 
       if (nodeError) {
         setMessage(`Unable to load topics: ${nodeError.message}`);
@@ -540,38 +609,21 @@ export function StudyPlanner({
           (nextQuestionCounts[question.concept_id] || 0) + 1;
       });
 
-      const { data: selectedNodesData } = await supabase
-        .from('user_study_node_selections')
-        .select('node_id')
-        .eq('deck_id', activeDeck.id);
-      const { data: overridesData } = await supabase
-        .from('user_study_concept_overrides')
-        .select('concept_id, selection_state')
-        .eq('deck_id', activeDeck.id);
-      const { data: preferenceData, error: preferenceError } = await supabase
-        .from('study_deck_node_preferences')
-        .select('library_node_id, new_mastery_balance')
-        .eq('deck_id', activeDeck.id);
-
       if (preferenceError) {
         setMessage(`Unable to load deck preferences: ${preferenceError.message}`);
         setIsLoading(false);
         return;
       }
 
-      const { data: resolvedData } = await supabase.rpc('resolve_study_deck', {
-        p_deck_id: activeDeck.id,
-      });
-      const { data: learnerProgressData, error: learnerProgressLoadError } =
-        await supabase.rpc('get_library_learner_progress', {
-          p_library_id: activeLibrary.id,
-        });
-
       if (!isMounted) return;
 
       const rootNode = loadedNodes.find((node) => node.parent_id === null);
+      const loadedAvailableLibraries = availableLibrariesResult.data?.length
+        ? (availableLibrariesResult.data as ActiveLibrary[])
+        : [activeLibrary];
 
       setDeck(activeDeck);
+      setAvailableLibraries(loadedAvailableLibraries);
       setNodes(loadedNodes);
       setPlacements(loadedPlacements);
       setQuestionCounts(nextQuestionCounts);
@@ -617,7 +669,7 @@ export function StudyPlanner({
     return () => {
       isMounted = false;
     };
-  }, [activeLibrary]);
+  }, [activeLibrary, initialSession]);
 
   useEffect(() => {
     let isMounted = true;

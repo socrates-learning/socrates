@@ -17,7 +17,19 @@ export default async function Home() {
         </div>
       </main>
     ) : (
-      <StudyPlanner activeLibrary={activeLibrary} />
+      <StudyPlanner
+        activeLibrary={activeLibrary}
+        initialSession={
+          activeLibraryContext.user
+            ? {
+                userId: activeLibraryContext.user.id,
+                email: activeLibraryContext.user.email,
+                displayName: activeLibraryContext.user.displayName,
+                role: activeLibraryContext.role,
+              }
+            : null
+        }
+      />
     )
   );
 }

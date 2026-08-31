@@ -13,7 +13,7 @@ export default async function EditConceptPage({
   const [{ data: nursingLibrary }, { data: concept }] = await Promise.all([
     supabase
       .from('libraries')
-      .select('id')
+      .select('id, library_nodes(id, name, parent_id, sort_order)')
       .eq('slug', 'nursing')
       .eq('status', 'active')
       .maybeSingle(),
@@ -25,27 +25,34 @@ export default async function EditConceptPage({
   ]);
 
   if (!nursingLibrary || !concept) notFound();
-
-  const { data: nodes } = await supabase
-    .from('library_nodes')
-    .select('id, name, parent_id, sort_order')
-    .eq('library_id', nursingLibrary.id)
-    .order('sort_order')
-    .order('name');
+  const nodes = [...(nursingLibrary.library_nodes || [])].sort(
+    (left, right) => {
+      if (left.sort_order === null && right.sort_order !== null) return 1;
+      if (left.sort_order !== null && right.sort_order === null) return -1;
+      return (
+        (left.sort_order ?? 0) - (right.sort_order ?? 0) ||
+        left.name.localeCompare(right.name)
+      );
+    }
+  );
   const nodeIds = (nodes || []).map((node) => node.id);
-  const { data: placements } = nodeIds.length
-    ? await supabase
-        .from('concept_placements')
-        .select('library_node_id')
-        .eq('concept_id', concept.id)
-        .in('library_node_id', nodeIds)
-    : { data: [] };
-  const { data: referenceRows, error: referenceError } = await supabase
-    .from('content_source_notes')
-    .select('id, source_id, note, created_at, sources(id, title, author, url)')
-    .eq('concept_id', concept.id)
-    .is('learn_section_id', null)
-    .order('created_at');
+  const [placementResult, referenceResult] = await Promise.all([
+    nodeIds.length
+      ? supabase
+          .from('concept_placements')
+          .select('library_node_id')
+          .eq('concept_id', concept.id)
+          .in('library_node_id', nodeIds)
+      : Promise.resolve({ data: [] }),
+    supabase
+      .from('content_source_notes')
+      .select('id, source_id, note, created_at, sources(id, title, author, url)')
+      .eq('concept_id', concept.id)
+      .is('learn_section_id', null)
+      .order('created_at'),
+  ]);
+  const { data: placements } = placementResult;
+  const { data: referenceRows, error: referenceError } = referenceResult;
 
   if (referenceError) throw referenceError;
 
