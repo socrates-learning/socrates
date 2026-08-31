@@ -1118,18 +1118,25 @@ export function CreatorStudioV2Client({
 
   async function deleteCatalogTag(tag: CatalogTag) {
     if (isMutatingTagCatalog) return;
-    if (
-      !window.confirm(
-        `Permanently delete “${tag.name}”? This cannot be undone.`
-      )
-    ) {
-      return;
-    }
-
     setIsMutatingTagCatalog(true);
     setTagCatalogStatus(null);
-    const { error } = await supabase.rpc('delete_empty_tag', {
-      p_tag_id: tag.id,
+    const { data: summary, error: summaryError } = await supabase.rpc(
+      'get_development_delete_summary',
+      { p_record_type: 'tag', p_record_id: tag.id }
+    );
+    if (summaryError) {
+      setTagCatalogStatus({ tone: 'error', message: summaryError.message });
+      setIsMutatingTagCatalog(false);
+      return;
+    }
+    const warning = (summary as { warning?: string } | null)?.warning;
+    if (!warning || !window.confirm(warning)) {
+      setIsMutatingTagCatalog(false);
+      return;
+    }
+    const { error } = await supabase.rpc('delete_development_content', {
+      p_record_type: 'tag',
+      p_record_id: tag.id,
     });
     if (error) {
       setTagCatalogStatus({
@@ -1903,25 +1910,32 @@ export function CreatorStudioV2Client({
       showStatus('error', 'The Nursing root cannot be deleted.');
       return;
     }
-    if (!activeLibraryId && activeTopic.children.length) {
-      showStatus('error', 'Move or remove this topic’s subtopics first.');
-      return;
-    }
-    if (!window.confirm(`Delete “${activeTopic.name}”?`)) return;
-
     if (activeLibraryId) {
       const activePath = findTopicPath(topics, activeTopic.id);
       const parentTopicId = activePath?.at(-2)?.id;
       setIsMutatingTopic(true);
       setStatus(null);
-      const { error } = await supabase.rpc(
-        'delete_empty_library_node_in_library',
-        {
-          p_library_id: activeLibraryId,
-          p_node_id: activeTopic.id,
-        }
+      const { data: summary, error: summaryError } = await supabase.rpc(
+        'get_development_delete_summary',
+        { p_record_type: 'library_node', p_record_id: activeTopic.id }
       );
-
+      if (summaryError) {
+        setIsMutatingTopic(false);
+        showStatus(
+          'error',
+          `Unable to inspect topic: ${topicMutationErrorMessage(summaryError)}`
+        );
+        return;
+      }
+      const warning = (summary as { warning?: string } | null)?.warning;
+      if (!warning || !window.confirm(warning)) {
+        setIsMutatingTopic(false);
+        return;
+      }
+      const { error } = await supabase.rpc('delete_development_content', {
+        p_record_type: 'library_node',
+        p_record_id: activeTopic.id,
+      });
       if (error) {
         setIsMutatingTopic(false);
         showStatus(
@@ -1960,6 +1974,12 @@ export function CreatorStudioV2Client({
       }
       return;
     }
+
+    if (activeTopic.children.length) {
+      showStatus('error', 'Move or remove this topic’s subtopics first.');
+      return;
+    }
+    if (!window.confirm(`Delete “${activeTopic.name}”?`)) return;
 
     const activePath = findTopicPath(topics, activeTopic.id);
     const parentTopicId = activePath?.at(-2)?.id;
@@ -2076,6 +2096,50 @@ export function CreatorStudioV2Client({
     setStatus(null);
     setSavedDraftFingerprint(draftFingerprint('', [], [], [], 'draft'));
     window.location.assign('/creator/concepts/new');
+  }
+
+  async function deleteCurrentConcept() {
+    if (!conceptId || isSaving) return;
+    setIsSaving(true);
+    setStatus(null);
+    const { data: summary, error: summaryError } = await supabase.rpc(
+      'get_development_delete_summary',
+      { p_record_type: 'concept', p_record_id: conceptId }
+    );
+    if (summaryError) {
+      setIsSaving(false);
+      showStatus('error', summaryError.message);
+      return;
+    }
+    const warning = (summary as { warning?: string } | null)?.warning;
+    if (!warning || !window.confirm(warning)) {
+      setIsSaving(false);
+      return;
+    }
+    const { error } = await supabase.rpc('delete_development_content', {
+      p_record_type: 'concept',
+      p_record_id: conceptId,
+    });
+    if (error) {
+      setIsSaving(false);
+      showStatus('error', error.message || 'Concept could not be deleted.');
+      return;
+    }
+
+    setConceptId(null);
+    setConceptName('');
+    setConcept('');
+    setConceptRecordStatus('draft');
+    setSelectedTopicIds(new Set());
+    setConceptTags([]);
+    setReferences([]);
+    setContentConceptSearch('');
+    setSavedDraftFingerprint(draftFingerprint('', [], [], [], 'draft'));
+    await loadTagCatalog();
+    broadcastTagCatalogUsageInvalidation();
+    setIsSaving(false);
+    router.replace('/creator/concepts/new');
+    router.refresh();
   }
 
   async function saveConcept() {
@@ -2328,6 +2392,47 @@ export function CreatorStudioV2Client({
       tone: 'success',
       message: questionId ? 'Question updated.' : 'Question saved.',
     });
+  }
+
+  async function deleteCurrentQuestion() {
+    if (!questionId || !questionConceptId || isSavingQuestion) return;
+    setIsSavingQuestion(true);
+    setQuestionStatus(null);
+    const { data: summary, error: summaryError } = await supabase.rpc(
+      'get_development_delete_summary',
+      { p_record_type: 'question', p_record_id: questionId }
+    );
+    if (summaryError) {
+      setIsSavingQuestion(false);
+      setQuestionStatus({ tone: 'error', message: summaryError.message });
+      return;
+    }
+    const warning = (summary as { warning?: string } | null)?.warning;
+    if (!warning || !window.confirm(warning)) {
+      setIsSavingQuestion(false);
+      return;
+    }
+    const { error } = await supabase.rpc('delete_development_content', {
+      p_record_type: 'question',
+      p_record_id: questionId,
+    });
+    if (error) {
+      setIsSavingQuestion(false);
+      setQuestionStatus({
+        tone: 'error',
+        message: error.message || 'Question could not be deleted.',
+      });
+      return;
+    }
+
+    resetQuestionEditor(questionConceptId);
+    await Promise.all([
+      refreshExistingQuestionList(questionConceptId),
+      loadTagCatalog(),
+    ]);
+    broadcastTagCatalogUsageInvalidation();
+    setIsSavingQuestion(false);
+    setQuestionStatus({ tone: 'success', message: 'Question deleted.' });
   }
 
   function renderQuestionTopic(topic: Topic, depth = 0) {
@@ -2832,6 +2937,16 @@ export function CreatorStudioV2Client({
                   >
                     <Plus size={17} /> New Concept
                   </button>
+                  {conceptId && (
+                    <button
+                      className={styles.dangerButton}
+                      type="button"
+                      disabled={isSaving}
+                      onClick={() => void deleteCurrentConcept()}
+                    >
+                      <Trash2 size={17} /> Delete Concept
+                    </button>
+                  )}
                 </div>
 
                 <div
@@ -3452,14 +3567,26 @@ export function CreatorStudioV2Client({
                       }}
                     >
                       <h3 style={{ margin: 0 }}>Existing Questions</h3>
-                      <button
-                        className={styles.secondaryButton}
-                        type="button"
-                        disabled={!questionConceptId || isSavingQuestion}
-                        onClick={startNewQuestion}
-                      >
-                        <Plus size={16} /> New Question
-                      </button>
+                      <span style={{ display: 'flex', gap: 8 }}>
+                        <button
+                          className={styles.secondaryButton}
+                          type="button"
+                          disabled={!questionConceptId || isSavingQuestion}
+                          onClick={startNewQuestion}
+                        >
+                          <Plus size={16} /> New Question
+                        </button>
+                        {questionId && (
+                          <button
+                            className={styles.dangerButton}
+                            type="button"
+                            disabled={isSavingQuestion}
+                            onClick={() => void deleteCurrentQuestion()}
+                          >
+                            <Trash2 size={16} /> Delete Question
+                          </button>
+                        )}
+                      </span>
                     </div>
 
                     {!questionConceptId ? (

@@ -1119,11 +1119,9 @@ export function ArticleEditorClient({
   }
 
   async function deleteDraftQuestion(question: QuestionRecord) {
-    if (!window.confirm('Delete this draft question?')) return;
-
-    setQuestionMessage(question.concept_id, 'Deleting draft question...');
-
     if (question.id.startsWith('new-')) {
+      if (!window.confirm('Delete this draft question?')) return;
+      setQuestionMessage(question.concept_id, 'Deleting draft question...');
       setQuestionBanks((current) => ({
         ...current,
         [question.concept_id]: (current[question.concept_id] || []).filter(
@@ -1139,8 +1137,25 @@ export function ArticleEditorClient({
       return;
     }
 
-    const { error } = await supabase.rpc('delete_draft_question', {
-      p_question_id: question.id,
+    setQuestionMessage(question.concept_id, 'Inspecting question history...');
+    const { data: summary, error: summaryError } = await supabase.rpc(
+      'get_development_delete_summary',
+      { p_record_type: 'question', p_record_id: question.id }
+    );
+    if (summaryError) {
+      setQuestionMessage(question.concept_id, `Error: ${summaryError.message}`);
+      return;
+    }
+    const warning = (summary as { warning?: string } | null)?.warning;
+    if (!warning || !window.confirm(warning)) {
+      setQuestionMessage(question.concept_id, 'Question deletion canceled.');
+      return;
+    }
+
+    setQuestionMessage(question.concept_id, 'Deleting draft question...');
+    const { error } = await supabase.rpc('delete_development_content', {
+      p_record_type: 'question',
+      p_record_id: question.id,
     });
 
     if (error) {
@@ -1148,7 +1163,7 @@ export function ArticleEditorClient({
       return;
     }
 
-    setQuestionMessage(question.concept_id, 'Draft question archived.');
+    setQuestionMessage(question.concept_id, 'Draft question deleted.');
     await loadQuestionBankForConcept(question.concept_id);
   }
 
