@@ -66,6 +66,15 @@ type AuthoredStudyQuestion = {
   }>;
 };
 
+type PriorityStudyQuestion = {
+  question_id: string;
+  concept_id: string;
+  prompt: string;
+  difficulty: string;
+  testing_angle: string;
+  accepted_answer: string;
+};
+
 type ConceptOverride = 'included' | 'excluded';
 type PlannerMode = 'dashboard' | 'setup' | 'study';
 type DeckMode = 'Learn' | 'Study' | 'Cram';
@@ -255,14 +264,6 @@ function HomeProgressBar({ value }: { value: number }) {
   );
 }
 
-function StudyProgressBar() {
-  return (
-    <div className="study-v2-progress" aria-label="Study progress">
-      <span />
-    </div>
-  );
-}
-
 function StudyFeedbackIcon({ type }: { type: 'up' | 'more' | 'down' }) {
   if (type === 'more') {
     return <span className="study-v2-more-dots">•••</span>;
@@ -329,6 +330,8 @@ export function StudyPlanner({
     AuthoredStudyQuestion[]
   >([]);
   const [authoredStudyQuestionIndex, setAuthoredStudyQuestionIndex] = useState(0);
+  const [priorityStudyQuestion, setPriorityStudyQuestion] =
+    useState<PriorityStudyQuestion | null>(null);
   const [expandedNodeIds, setExpandedNodeIds] = useState<Set<string>>(new Set());
   const [focusedNodeId, setFocusedNodeId] = useState<string | null>(null);
   const [message, setMessage] = useState('');
@@ -345,10 +348,28 @@ export function StudyPlanner({
   const [studyFeedback, setStudyFeedback] = useState<StudyFeedback>(null);
   const [studyResponse, setStudyResponse] = useState<StudyResponse>(null);
   const studyResponseSaveLock = useRef(false);
+  const studyResponseRecordedForCard = useRef(false);
+  const studyModeOpenLock = useRef(false);
   const studySessionIdRef = useRef<string | null>(null);
   const studySessionCreatePromiseRef = useRef<Promise<string | null> | null>(null);
-  const authoredStudyQuestion =
+  const sequentialAuthoredStudyQuestion =
     authoredStudyQuestions[authoredStudyQuestionIndex] || null;
+  const authoredStudyQuestion =
+    priorityStudyQuestion
+      ? {
+          id: priorityStudyQuestion.question_id,
+          concept_id: priorityStudyQuestion.concept_id,
+          prompt: priorityStudyQuestion.prompt,
+          difficulty: priorityStudyQuestion.difficulty,
+          testing_angle: priorityStudyQuestion.testing_angle,
+          question_accepted_answers: [
+            {
+              answer_text: priorityStudyQuestion.accepted_answer,
+              sort_order: 0,
+            },
+          ],
+        }
+      : sequentialAuthoredStudyQuestion;
 
   const nodesById = useMemo(
     () => new Map(nodes.map((node) => [node.id, node])),
@@ -704,13 +725,59 @@ export function StudyPlanner({
     }
   }
 
-  function openStudyMode() {
+  async function selectPriorityStudyQuestion(sessionId: string) {
+    const { data, error } = await supabase.rpc('select_next_study_question', {
+      p_study_session_id: sessionId,
+      p_include_debug: false,
+    });
+
+    if (error) {
+      console.error('Unable to select the next Study Mode question.', error);
+      return null;
+    }
+
+    if (!data) {
+      console.error('Study Mode selector found no eligible question.');
+      return null;
+    }
+
+    const selectedQuestion = data as PriorityStudyQuestion;
+
+    if (
+      !selectedQuestion.question_id ||
+      !selectedQuestion.concept_id ||
+      !selectedQuestion.prompt ||
+      !selectedQuestion.accepted_answer
+    ) {
+      console.error('Study Mode selector returned an incomplete question.');
+      return null;
+    }
+
+    return selectedQuestion;
+  }
+
+  async function openStudyMode() {
+    if (studyModeOpenLock.current) return;
+
+    studyModeOpenLock.current = true;
     setAuthoredStudyQuestionIndex(0);
+    setPriorityStudyQuestion(null);
     setIsAnswerVisible(false);
     setStudyFeedback(null);
     setStudyResponse(null);
-    setMode('study');
-    void ensureStudySession();
+    studyResponseRecordedForCard.current = false;
+
+    try {
+      const sessionId = await ensureStudySession();
+
+      if (sessionId) {
+        const selectedQuestion = await selectPriorityStudyQuestion(sessionId);
+        if (selectedQuestion) setPriorityStudyQuestion(selectedQuestion);
+      }
+    } finally {
+      setMode('study');
+      studyModeOpenLock.current = false;
+    }
   }
 
   async function leaveStudyMode(nextMode: Exclude<PlannerMode, 'study'>) {
@@ -722,6 +789,8 @@ export function StudyPlanner({
 
     studySessionIdRef.current = null;
     studySessionCreatePromiseRef.current = null;
+    studyResponseRecordedForCard.current = false;
+    setPriorityStudyQuestion(null);
     setMode(nextMode);
 
     const sessionId = await pendingSession;
@@ -740,7 +809,10 @@ export function StudyPlanner({
   async function persistFinalStudyResponse(
     response: Exclude<StudyResponse, null>
   ) {
-    if (studyResponseSaveLock.current) return;
+    if (
+      studyResponseSaveLock.current ||
+      studyResponseRecordedForCard.current
+    ) return;
 
     setStudyResponse(response);
 
@@ -765,14 +837,18 @@ export function StudyPlanner({
         return;
       }
 
-      setAuthoredStudyQuestionIndex((currentIndex) =>
-        authoredStudyQuestions.length
-          ? (currentIndex + 1) % authoredStudyQuestions.length
-          : 0
-      );
+      studyResponseRecordedForCard.current = true;
+
+      const selectedQuestion = await selectPriorityStudyQuestion(sessionId);
+
+      if (!selectedQuestion) return;
+
+      setPriorityStudyQuestion(selectedQuestion);
+
       setIsAnswerVisible(false);
       setStudyFeedback(null);
       setStudyResponse(null);
+      studyResponseRecordedForCard.current = false;
     } catch (error) {
       console.error('Unable to record Study Mode response.', error);
     } finally {
@@ -2087,7 +2163,6 @@ if (mode === 'study') {
             onClick={() => setIsAnswerVisible(true)}
           >
             <div className="study-v2-card-topline">
-              <StudyProgressBar />
               <StudyCardActions />
             </div>
 
@@ -2111,7 +2186,6 @@ if (mode === 'study') {
           {isAnswerVisible && (
             <article className="study-v2-answer-card" aria-label="Answer card">
               <div className="study-v2-card-topline">
-                <StudyProgressBar />
                 <StudyCardActions />
               </div>
 
@@ -2123,10 +2197,6 @@ if (mode === 'study') {
                   <p>Answer</p>
                   <div className="study-v2-rule" aria-hidden="true" />
                   <p>Explanation</p>
-                </div>
-
-                <div className="study-v2-scroll-indicator" aria-hidden="true">
-                  <span />
                 </div>
               </div>
 
@@ -2360,24 +2430,8 @@ if (mode === 'study') {
 
         .study-v2-card-topline {
           align-items: center;
-          display: grid;
-          gap: 38px;
-          grid-template-columns: minmax(0, 1fr) auto;
-        }
-
-        .study-v2-progress {
-          background: #e5e8ee;
-          border-radius: 999px;
-          height: 13px;
-          overflow: hidden;
-        }
-
-        .study-v2-progress span {
-          background: #0f5ee8;
-          border-radius: inherit;
-          display: block;
-          height: 100%;
-          width: 56%;
+          display: flex;
+          justify-content: flex-end;
         }
 
         .study-v2-card-actions {
@@ -2432,7 +2486,7 @@ if (mode === 'study') {
 
         .study-v2-answer-body {
           display: grid;
-          grid-template-columns: minmax(0, 1fr) 84px;
+          grid-template-columns: minmax(0, 1fr);
           min-height: 398px;
           padding: 52px 0 0;
         }
@@ -2466,48 +2520,6 @@ if (mode === 'study') {
 
         .study-v2-answer-lines .study-v2-rule:last-of-type {
           margin: 10px 0 42px;
-        }
-
-        .study-v2-scroll-indicator {
-          align-self: center;
-          background: #c9ccd2;
-          border-radius: 999px;
-          height: 300px;
-          justify-self: center;
-          position: relative;
-          width: 6px;
-        }
-
-        .study-v2-scroll-indicator::before {
-          border: solid #c9ccd2;
-          border-width: 0 4px 4px 0;
-          content: '';
-          height: 11px;
-          left: -5px;
-          position: absolute;
-          top: -2px;
-          transform: rotate(-135deg);
-          width: 11px;
-        }
-
-        .study-v2-scroll-indicator::after {
-          background: #0f5ee8;
-          border-radius: 999px;
-          bottom: -3px;
-          content: '';
-          height: 15px;
-          left: -4px;
-          position: absolute;
-          width: 15px;
-        }
-
-        .study-v2-scroll-indicator span {
-          background: #0f5ee8;
-          border-radius: 999px;
-          display: block;
-          height: 108px;
-          margin-top: 43px;
-          width: 100%;
         }
 
         .study-v2-feedback-row {
@@ -2699,20 +2711,11 @@ if (mode === 'study') {
           }
 
           .study-v2-card-topline {
-            gap: 18px;
-            grid-template-columns: 1fr;
+            justify-content: flex-end;
           }
 
           .study-v2-card-actions {
             justify-content: flex-end;
-          }
-
-          .study-v2-answer-body {
-            grid-template-columns: 1fr;
-          }
-
-          .study-v2-scroll-indicator {
-            display: none;
           }
 
           .study-v2-feedback-row {
