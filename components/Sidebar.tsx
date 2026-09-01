@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 
 type LibraryNode = {
@@ -359,7 +360,7 @@ export function Sidebar({
           Set Up Deck
         </button>
 
-        <button type="button" disabled style={{ ...navItemStyle, opacity: 0.65 }}>
+        <Link href="/study-creator" style={navItemStyle}>
           <svg
             viewBox="0 0 24 24"
             fill="none"
@@ -371,8 +372,8 @@ export function Sidebar({
             <rect x="4" y="4" width="16" height="16" rx="2" />
             <path d="M12 8v8M8 12h8" />
           </svg>
-          Make Cards
-        </button>
+          Study Creator
+        </Link>
 
         <button type="button" disabled style={{ ...navItemStyle, opacity: 0.65 }}>
           <svg

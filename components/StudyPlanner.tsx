@@ -169,7 +169,7 @@ const learnerNavItems: Array<{
 
 const homeRailItems: Array<{ label: string; icon: string; href?: string }> = [
   { label: 'Deck Menu', icon: 'document' },
-  { label: 'Make Cards', icon: 'edit', href: '/creator/concepts/new' },
+  { label: 'Study Creator', icon: 'edit', href: '/study-creator' },
   { label: 'Stats', icon: 'bars' },
   { label: 'Account Settings', icon: 'gear' },
   { label: 'Menu', icon: 'people' },
@@ -3698,7 +3698,9 @@ if (mode === 'study') {
                   className="home-v2-rail-card"
                   href={item.href}
                   key={item.label}
-                  onClick={handleCreatorClick}
+                  onClick={
+                    item.href.startsWith('/creator/') ? handleCreatorClick : undefined
+                  }
                 >
                   {content}
                 </Link>
