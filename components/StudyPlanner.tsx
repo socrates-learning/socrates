@@ -2479,28 +2479,23 @@ if (mode === 'study') {
     authoredStudyQuestion?.question_accepted_answers[0]?.answer_text || null;
   const authoredStudyExplanation =
     authoredStudyQuestion?.explanation?.trim() || null;
-  const studyAnswer = authoredStudyAnswer || 'Answer';
-  const studyExplanation = authoredStudyQuestion
-    ? authoredStudyExplanation
-    : 'Explanation';
+  const hasStudyQuestion = Boolean(authoredStudyQuestion && authoredStudyAnswer);
 
-  function StudyCardActions() {
-    return (
-      <div className="study-v2-card-actions" aria-label="Study card controls">
-        <button type="button" onClick={() => void leaveStudyMode('setup')}>
-          <span aria-hidden="true">←</span>
-          Go Back
-        </button>
-        <button
-          aria-label="Close study mode"
-          type="button"
-          onClick={() => void leaveStudyMode('dashboard')}
-        >
-          ×
-        </button>
-      </div>
-    );
-  }
+  const studyCardActions = (
+    <div className="study-v2-card-actions" aria-label="Study card controls">
+      <button type="button" onClick={() => void leaveStudyMode('setup')}>
+        <span aria-hidden="true">←</span>
+        Go Back
+      </button>
+      <button
+        aria-label="Close study mode"
+        type="button"
+        onClick={() => void leaveStudyMode('dashboard')}
+      >
+        ×
+      </button>
+    </div>
+  );
 
   return (
     <>
@@ -2508,15 +2503,28 @@ if (mode === 'study') {
       <main className="study-v2-page">
         <section className="study-v2-shell" aria-label="Study Mode">
           <article
-            aria-label={isAnswerVisible ? 'Revealed study card' : 'Question card'}
+            aria-label={
+              hasStudyQuestion
+                ? isAnswerVisible
+                  ? 'Revealed study card'
+                  : 'Question card'
+                : 'No study questions available'
+            }
             className={`study-v2-card ${
-              isAnswerVisible ? 'study-v2-card-revealed' : 'study-v2-card-front'
+              !hasStudyQuestion
+                ? 'study-v2-card-empty'
+                : isAnswerVisible
+                  ? 'study-v2-card-revealed'
+                  : 'study-v2-card-front'
             }`}
             onClick={
-              isAnswerVisible ? undefined : () => setIsAnswerVisible(true)
+              !hasStudyQuestion || isAnswerVisible
+                ? undefined
+                : () => setIsAnswerVisible(true)
             }
             onKeyDown={(event) => {
               if (
+                hasStudyQuestion &&
                 !isAnswerVisible &&
                 (event.key === 'Enter' || event.key === ' ')
               ) {
@@ -2524,28 +2532,47 @@ if (mode === 'study') {
                 setIsAnswerVisible(true);
               }
             }}
-            role={isAnswerVisible ? undefined : 'button'}
-            tabIndex={isAnswerVisible ? undefined : 0}
+            role={!hasStudyQuestion || isAnswerVisible ? undefined : 'button'}
+            tabIndex={!hasStudyQuestion || isAnswerVisible ? undefined : 0}
           >
             <div className="study-v2-card-topline">
-              <StudyCardActions />
+              {studyCardActions}
             </div>
 
-            {!isAnswerVisible ? (
-              <div className="study-v2-question-content">
-                <h1>
-                  {authoredStudyQuestion ? (
-                    authoredStudyQuestion.prompt
-                  ) : (
-                    <>
-                      What is the primary purpose
-                      <br />
-                      of isolating a patient with
-                      <br />
-                      suspected MRSA?
-                    </>
+            {!hasStudyQuestion ? (
+              <div className="study-v2-empty-state">
+                <h1>No study questions available</h1>
+                <p>
+                  This deck doesn&apos;t currently contain any eligible published
+                  questions.
+                </p>
+                <div className="study-v2-empty-actions">
+                  <button type="button" onClick={() => void leaveStudyMode('setup')}>
+                    Set Up Deck
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void leaveStudyMode('dashboard')}
+                  >
+                    Home
+                  </button>
+                  {(role === 'editor' || role === 'admin') && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void leaveStudyMode('dashboard').then(() => {
+                          window.location.assign('/creator/concepts/new');
+                        });
+                      }}
+                    >
+                      Creator Studio
+                    </button>
                   )}
-                </h1>
+                </div>
+              </div>
+            ) : !isAnswerVisible ? (
+              <div className="study-v2-question-content">
+                <h1>{authoredStudyQuestion.prompt}</h1>
                 <p>Tap to reveal answer</p>
               </div>
             ) : (
@@ -2556,15 +2583,15 @@ if (mode === 'study') {
                     aria-labelledby="study-answer-heading"
                   >
                     <h1 id="study-answer-heading">Answer</h1>
-                    <p>{studyAnswer}</p>
+                    <p>{authoredStudyAnswer}</p>
                   </section>
-                  {studyExplanation && (
+                  {authoredStudyExplanation && (
                     <section
                       className="study-v2-explanation-section"
                       aria-labelledby="study-explanation-heading"
                     >
                       <h2 id="study-explanation-heading">Explanation</h2>
-                      <p>{studyExplanation}</p>
+                      <p>{authoredStudyExplanation}</p>
                     </section>
                   )}
                 </div>
@@ -2946,6 +2973,57 @@ if (mode === 'study') {
           font-weight: 650;
           margin: auto 0 0;
           text-align: center;
+        }
+
+        .study-v2-card-empty {
+          cursor: default;
+        }
+
+        .study-v2-empty-state {
+          align-items: center;
+          display: flex;
+          flex: 1;
+          flex-direction: column;
+          justify-content: center;
+          padding: 56px 32px 72px;
+          text-align: center;
+        }
+
+        .study-v2-empty-state h1 {
+          color: #0f2f28;
+          font-size: clamp(2rem, 4vw, 3.5rem);
+          margin: 0;
+        }
+
+        .study-v2-empty-state p {
+          color: #55706a;
+          font-size: 1.05rem;
+          line-height: 1.6;
+          margin: 18px 0 30px;
+          max-width: 540px;
+        }
+
+        .study-v2-empty-actions {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 12px;
+          justify-content: center;
+        }
+
+        .study-v2-empty-actions button {
+          background: #0f766e;
+          border: 1px solid #0f766e;
+          border-radius: 999px;
+          color: #fff;
+          cursor: pointer;
+          font: inherit;
+          font-weight: 700;
+          padding: 11px 20px;
+        }
+
+        .study-v2-empty-actions button:hover {
+          background: #115e59;
+          border-color: #115e59;
         }
 
         @keyframes study-v2-content-in {

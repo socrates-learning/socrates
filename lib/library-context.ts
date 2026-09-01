@@ -80,10 +80,6 @@ export async function resolveActiveLibraryContext({
   }
 
   async function findDefaultActiveLibrary() {
-    const pharmacologyLibrary = await findActiveLibraryBySlug('pharmacology');
-
-    if (pharmacologyLibrary) return pharmacologyLibrary;
-
     const { data } = await supabase
       .from('libraries')
       .select('id, name, slug, description, status')
