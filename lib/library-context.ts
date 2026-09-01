@@ -1,5 +1,6 @@
 import { cookies } from 'next/headers';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
+import { getVerifiedRequestAuthContext } from '@/lib/server-auth-context';
 
 export const ACTIVE_LIBRARY_COOKIE = 'socrates_active_library';
 
@@ -61,10 +62,12 @@ export async function resolveActiveLibraryContext({
     isValidLibrarySlug(requestedSlug);
   const cookieSlug = cookieStore.get(ACTIVE_LIBRARY_COOKIE)?.value || null;
   const cookieSlugIsValid = isValidLibrarySlug(cookieSlug);
-
+  const requestAuth = await getVerifiedRequestAuthContext();
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = requestAuth
+    ? { data: { user: null } }
+    : await supabase.auth.getUser();
 
   async function findActiveLibraryBySlug(slug: string | null | undefined) {
     if (!isValidLibrarySlug(slug)) return null;
@@ -91,7 +94,7 @@ export async function resolveActiveLibraryContext({
     return normalizeLibrary(data as ActiveLibrary | null);
   }
 
-  if (!user) {
+  if (!requestAuth && !user) {
     const requestedLibrary = requestedSlugIsValid
       ? await findActiveLibraryBySlug(requestedSlug)
       : null;
@@ -111,16 +114,35 @@ export async function resolveActiveLibraryContext({
     };
   }
 
-  const [roleResult, membershipResult] = await Promise.all([
-    supabase
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', user.id)
-      .maybeSingle(),
+  const authenticatedUserId = requestAuth?.userId || user?.id;
+
+  if (!authenticatedUserId) {
+    throw new Error('Authenticated request is missing a user identifier.');
+  }
+
+  const candidateSlugs = [requestedSlug, cookieSlug].filter(
+    (slug, index, values): slug is string =>
+      isValidLibrarySlug(slug) && values.indexOf(slug) === index
+  );
+  const [roleResult, membershipResult, candidateLibraryResult] = await Promise.all([
+    requestAuth
+      ? Promise.resolve({ data: { role: requestAuth.role } })
+      : supabase
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', authenticatedUserId)
+          .maybeSingle(),
     supabase
       .from('user_libraries')
       .select('library_id, is_primary, libraries(id, name, slug, description, status)')
-      .eq('user_id', user.id),
+      .eq('user_id', authenticatedUserId),
+    candidateSlugs.length
+      ? supabase
+          .from('libraries')
+          .select('id, name, slug, description, status')
+          .eq('status', 'active')
+          .in('slug', candidateSlugs)
+      : Promise.resolve({ data: [] }),
   ]);
   const roleData = roleResult.data;
   const roleValue = roleData?.role;
@@ -128,12 +150,25 @@ export async function resolveActiveLibraryContext({
     roleValue === 'admin' || roleValue === 'editor' ? roleValue : 'learner';
   const membershipRows = membershipResult.data;
   const resolvedUser = {
-    id: user.id,
-    email: user.email ?? null,
-    displayName:
-      (user.user_metadata?.full_name as string | undefined) ||
-      (user.email ? user.email.split('@')[0] : 'there'),
+    id: authenticatedUserId,
+    email: requestAuth?.email ?? user?.email ?? null,
+    displayName: requestAuth
+      ? requestAuth.displayName
+      : (user?.user_metadata?.full_name as string | undefined) ||
+        (user?.email ? user.email.split('@')[0] : 'there'),
   };
+  const candidateLibraries = new Map(
+    (candidateLibraryResult.data || []).flatMap((library) => {
+      const normalized = normalizeLibrary(library as ActiveLibrary | null);
+      return normalized ? [[normalized.slug, normalized] as const] : [];
+    })
+  );
+  const requestedLibrary = requestedSlug
+    ? candidateLibraries.get(requestedSlug) || null
+    : null;
+  const cookieLibrary = cookieSlugIsValid
+    ? candidateLibraries.get(cookieSlug || '') || null
+    : null;
 
   const memberships = (membershipRows || []).flatMap((membership) => {
     const libraryValue = Array.isArray(membership.libraries)
@@ -154,9 +189,6 @@ export async function resolveActiveLibraryContext({
   const hasMembership = memberships.length > 0;
 
   if (isEditorRole(role)) {
-    const requestedLibrary = requestedSlugIsValid
-      ? await findActiveLibraryBySlug(requestedSlug)
-      : null;
     if (requestedLibrary) {
       return {
         library: requestedLibrary,
@@ -183,9 +215,6 @@ export async function resolveActiveLibraryContext({
       };
     }
 
-    const cookieLibrary = cookieSlugIsValid
-      ? await findActiveLibraryBySlug(cookieSlug)
-      : null;
     if (cookieLibrary) {
       return {
         library: cookieLibrary,
@@ -225,9 +254,6 @@ export async function resolveActiveLibraryContext({
   }
 
   if (requestedSlug) {
-    const requestedLibrary = requestedSlugIsValid
-      ? await findActiveLibraryBySlug(requestedSlug)
-      : null;
     const requestedMembership = requestedLibrary
       ? memberships.find(
           (membership) => membership.library.id === requestedLibrary.id

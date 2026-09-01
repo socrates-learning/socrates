@@ -177,7 +177,12 @@ export function Header() {
           justifyContent: 'flex-end',
         }}
       >
-        <Link style={navButtonStyle} href="/" onClick={handleHomeClick}>
+        <Link
+          style={navButtonStyle}
+          href="/"
+          onClick={handleHomeClick}
+          prefetch={false}
+        >
           Home
         </Link>
 

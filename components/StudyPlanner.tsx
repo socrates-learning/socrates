@@ -1,8 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { Header, HeaderSessionProvider } from '@/components/Header';
 import { supabase } from '@/lib/supabase';
 import type { ActiveLibrary, ActiveLibraryRole } from '@/lib/library-context';
 import type { ReactNode } from 'react';
@@ -324,6 +326,7 @@ export function StudyPlanner({
     role: ActiveLibraryRole;
   } | null;
 }) {
+  const router = useRouter();
   const [mode, setMode] = useState<PlannerMode>('dashboard');
   const [userId, setUserId] = useState<string | null>(
     initialSession?.userId ?? null
@@ -1114,6 +1117,13 @@ export function StudyPlanner({
     window.dispatchEvent(new Event('socrates-open-creator-dashboard'));
   }
 
+  function handleHomeClick(event: MouseEvent<HTMLAnchorElement>) {
+    if (window.location.pathname === '/') {
+      event.preventDefault();
+      setMode('dashboard');
+    }
+  }
+
   function toggleHomeExpanded(id: string) {
     setHomeExpandedIds((current) => {
       const next = new Set(current);
@@ -1146,7 +1156,8 @@ export function StudyPlanner({
         <Link
           className={`${classPrefix}-brand`}
           href="/"
-          onClick={() => setMode('dashboard')}
+          onClick={handleHomeClick}
+          prefetch={false}
         >
           {classPrefix === 'home-v2' ? (
             <Image
@@ -1205,11 +1216,12 @@ export function StudyPlanner({
                   key={item.label}
                   onClick={
                     item.icon === 'home'
-                      ? () => setMode('dashboard')
+                      ? handleHomeClick
                       : item.icon === 'creator'
                         ? handleCreatorClick
                         : undefined
                   }
+                  prefetch={item.icon === 'home' ? false : undefined}
                 >
                   {content}
                 </Link>
@@ -1948,10 +1960,82 @@ export function StudyPlanner({
 
   if (isLoading) {
     return (
-      <div className="panel">
-        <h2>Deck Dashboard</h2>
-        <p className="muted">Loading your deck...</p>
-      </div>
+      <HeaderSessionProvider email={email} role={role}>
+        <Header />
+        <main
+          aria-label="Loading your deck"
+          aria-live="polite"
+          style={{
+            alignItems: 'stretch',
+            background: '#f3f6fb',
+            display: 'flex',
+            flexWrap: 'wrap',
+            minHeight: 'calc(100vh - 126px)',
+          }}
+        >
+          <aside
+            aria-hidden="true"
+            style={{
+              background: 'linear-gradient(180deg, #0c4dc3, #0a3c9f)',
+              boxSizing: 'border-box',
+              display: 'grid',
+              flex: '1 1 190px',
+              gap: 14,
+              minHeight: 420,
+              padding: 22,
+            }}
+          >
+            {homeRailItems.map((item) => (
+              <div
+                key={item.label}
+                style={{
+                  background: 'rgba(255, 255, 255, 0.15)',
+                  border: '1px solid rgba(255, 255, 255, 0.25)',
+                  borderRadius: 12,
+                  minHeight: 62,
+                }}
+              />
+            ))}
+          </aside>
+          <section
+            style={{
+              boxSizing: 'border-box',
+              flex: '5 1 540px',
+              padding: '32px clamp(20px, 4vw, 54px)',
+            }}
+          >
+            <p
+              style={{
+                color: '#48617f',
+                fontSize: 15,
+                fontWeight: 700,
+                margin: '0 0 14px',
+              }}
+            >
+              Loading your deck…
+            </p>
+            <div
+              style={{
+                background: '#ffffff',
+                border: '1px solid #dfe6f0',
+                borderRadius: 18,
+                boxShadow: '0 12px 30px rgba(15, 23, 42, 0.07)',
+                minHeight: 130,
+              }}
+            />
+            <div
+              style={{
+                background: '#ffffff',
+                border: '1px solid #dfe6f0',
+                borderRadius: 18,
+                boxShadow: '0 12px 30px rgba(15, 23, 42, 0.07)',
+                marginTop: 22,
+                minHeight: 300,
+              }}
+            />
+          </section>
+        </main>
+      </HeaderSessionProvider>
     );
   }
 
@@ -2561,7 +2645,7 @@ if (mode === 'study') {
                       type="button"
                       onClick={() => {
                         void leaveStudyMode('dashboard').then(() => {
-                          window.location.assign('/creator/concepts/new');
+                          router.push('/creator/concepts/new');
                         });
                       }}
                     >

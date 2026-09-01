@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
+import {
+  REQUEST_USER_DISPLAY_NAME_HEADER,
+  REQUEST_USER_EMAIL_HEADER,
+  REQUEST_USER_ID_HEADER,
+  REQUEST_USER_ROLE_HEADER,
+} from '@/lib/request-auth-context';
 
 const PUBLIC_PATHS = [
   '/login',
@@ -16,9 +22,31 @@ function isPublicPath(pathname: string) {
 
 export async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
-  let response = NextResponse.next({
-    request,
-  });
+  const requestHeaders = new Headers(request.headers);
+  const refreshedCookies: Array<{
+    name: string;
+    value: string;
+    options?: Parameters<NextResponse['cookies']['set']>[2];
+  }> = [];
+
+  requestHeaders.delete(REQUEST_USER_ID_HEADER);
+  requestHeaders.delete(REQUEST_USER_EMAIL_HEADER);
+  requestHeaders.delete(REQUEST_USER_ROLE_HEADER);
+  requestHeaders.delete(REQUEST_USER_DISPLAY_NAME_HEADER);
+
+  function applyRefreshedCookies(response: NextResponse) {
+    refreshedCookies.forEach(({ name, value, options }) => {
+      response.cookies.set(name, value, options);
+    });
+
+    return response;
+  }
+
+  function continueRequest() {
+    return applyRefreshedCookies(
+      NextResponse.next({ request: { headers: requestHeaders } })
+    );
+  }
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL || '',
@@ -30,10 +58,7 @@ export async function proxy(request: NextRequest) {
         },
         setAll(cookiesToSet) {
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-          response = NextResponse.next({ request });
-          cookiesToSet.forEach(({ name, value, options }) =>
-            response.cookies.set(name, value, options)
-          );
+          refreshedCookies.splice(0, refreshedCookies.length, ...cookiesToSet);
         },
       },
     }
@@ -44,7 +69,7 @@ export async function proxy(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    if (isPublicPath(pathname)) return response;
+    if (isPublicPath(pathname)) return continueRequest();
 
     const loginUrl = request.nextUrl.clone();
     loginUrl.pathname = '/login';
@@ -52,7 +77,7 @@ export async function proxy(request: NextRequest) {
       'next',
       `${request.nextUrl.pathname}${request.nextUrl.search}`
     );
-    return NextResponse.redirect(loginUrl);
+    return applyRefreshedCookies(NextResponse.redirect(loginUrl));
   }
 
   if (
@@ -60,7 +85,7 @@ export async function proxy(request: NextRequest) {
     pathname === '/reset-password' ||
     pathname === '/auth/callback'
   ) {
-    return response;
+    return continueRequest();
   }
 
   const { data: roleData } = await supabase
@@ -72,19 +97,19 @@ export async function proxy(request: NextRequest) {
   const hasValidRole = role === 'learner' || role === 'editor' || role === 'admin';
 
   if (!hasValidRole) {
-    if (pathname === '/pending-approval') return response;
+    if (pathname === '/pending-approval') return continueRequest();
 
     const pendingUrl = request.nextUrl.clone();
     pendingUrl.pathname = '/pending-approval';
     pendingUrl.search = '';
-    return NextResponse.redirect(pendingUrl);
+    return applyRefreshedCookies(NextResponse.redirect(pendingUrl));
   }
 
   if (pathname === '/login' || pathname === '/pending-approval') {
     const homeUrl = request.nextUrl.clone();
     homeUrl.pathname = '/';
     homeUrl.search = '';
-    return NextResponse.redirect(homeUrl);
+    return applyRefreshedCookies(NextResponse.redirect(homeUrl));
   }
 
   if (
@@ -94,7 +119,7 @@ export async function proxy(request: NextRequest) {
     const homeUrl = request.nextUrl.clone();
     homeUrl.pathname = '/';
     homeUrl.search = '';
-    return NextResponse.redirect(homeUrl);
+    return applyRefreshedCookies(NextResponse.redirect(homeUrl));
   }
 
   if (
@@ -105,10 +130,24 @@ export async function proxy(request: NextRequest) {
     const homeUrl = request.nextUrl.clone();
     homeUrl.pathname = '/';
     homeUrl.search = '';
-    return NextResponse.redirect(homeUrl);
+    return applyRefreshedCookies(NextResponse.redirect(homeUrl));
   }
 
-  return response;
+  requestHeaders.set(REQUEST_USER_ID_HEADER, user.id);
+  requestHeaders.set(REQUEST_USER_ROLE_HEADER, role);
+  requestHeaders.set(
+    REQUEST_USER_EMAIL_HEADER,
+    encodeURIComponent(user.email ?? '')
+  );
+  requestHeaders.set(
+    REQUEST_USER_DISPLAY_NAME_HEADER,
+    encodeURIComponent(
+      (user.user_metadata?.full_name as string | undefined) ||
+        (user.email ? user.email.split('@')[0] : 'there')
+    )
+  );
+
+  return continueRequest();
 }
 
 export const config = {

@@ -1,5 +1,6 @@
 import { Header, HeaderSessionProvider } from '@/components/Header';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
+import { getVerifiedRequestAuthContext } from '@/lib/server-auth-context';
 import { redirect } from 'next/navigation';
 
 export default async function CreatorLayout({
@@ -7,24 +8,33 @@ export default async function CreatorLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const requestAuth = await getVerifiedRequestAuthContext();
+  let email = requestAuth?.email ?? null;
+  let role = requestAuth?.role ?? null;
 
-  if (!user) redirect('/login');
+  if (!requestAuth) {
+    const supabase = await createSupabaseServerClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-  const { data: roleData } = await supabase
-    .from('user_roles')
-    .select('role')
-    .eq('user_id', user.id)
-    .maybeSingle();
+    if (!user) redirect('/login');
 
-  if (roleData?.role !== 'admin' && roleData?.role !== 'editor') {
+    const { data: roleData } = await supabase
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    email = user.email ?? 'Account';
+    role = roleData?.role ?? null;
+  }
+
+  if (role !== 'admin' && role !== 'editor') {
     return (
       <HeaderSessionProvider
-        email={user.email ?? 'Account'}
-        role={roleData?.role ?? null}
+        email={email ?? 'Account'}
+        role={role}
       >
         <Header />
         <main className="layout" style={{ gridTemplateColumns: '1fr' }}>
@@ -41,8 +51,8 @@ export default async function CreatorLayout({
 
   return (
     <HeaderSessionProvider
-      email={user.email ?? 'Account'}
-      role={roleData.role}
+      email={email ?? 'Account'}
+      role={role}
     >
       {children}
     </HeaderSessionProvider>
