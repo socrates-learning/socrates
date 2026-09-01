@@ -43,6 +43,24 @@ type StudyDeckConcept = {
   selection_source: string;
 };
 
+type PersonalTopic = {
+  id: string;
+  parent_id: string | null;
+  name: string;
+  sort_order: number;
+};
+
+type PersonalConcept = {
+  id: string;
+  topic_id: string;
+  name: string;
+};
+
+type PersonalCard = {
+  id: string;
+  concept_id: string;
+};
+
 type LearnerProgressMetric = {
   total_concepts: number;
   assessed_concepts: number;
@@ -87,6 +105,10 @@ export type StudyPlannerInitialData = {
   nodePreferences: Record<string, number>;
   conceptOverrides: Record<string, 'included' | 'excluded'>;
   resolvedConcepts: StudyDeckConcept[];
+  personalTopics: PersonalTopic[];
+  personalConcepts: PersonalConcept[];
+  personalCards: PersonalCard[];
+  selectedPersonalTopicIds: string[];
   learnerProgress: LearnerProgressResponse;
   learnerProgressError: string;
   loadError: string;
@@ -125,6 +147,10 @@ function emptyInitialData(
     nodePreferences: {},
     conceptOverrides: {},
     resolvedConcepts: [],
+    personalTopics: [],
+    personalConcepts: [],
+    personalCards: [],
+    selectedPersonalTopicIds: [],
     learnerProgress: emptyLearnerProgress(activeLibrary.id),
     learnerProgressError: '',
     loadError: '',
@@ -174,6 +200,10 @@ export async function loadStudyPlannerInitialData({
     preferenceResult,
     resolvedResult,
     learnerProgressResult,
+    personalTopicsResult,
+    personalConceptsResult,
+    personalCardsResult,
+    personalSelectionsResult,
   ] = await Promise.all([
     supabase
       .from('library_nodes')
@@ -198,6 +228,23 @@ export async function loadStudyPlannerInitialData({
     supabase.rpc('get_library_learner_progress', {
       p_library_id: activeLibrary.id,
     }),
+    supabase
+      .from('personal_topics')
+      .select('id, parent_id, name, sort_order')
+      .order('sort_order')
+      .order('name'),
+    supabase
+      .from('personal_concepts')
+      .select('id, topic_id, name')
+      .order('name'),
+    supabase
+      .from('personal_cards')
+      .select('id, concept_id')
+      .order('created_at'),
+    supabase
+      .from('study_deck_personal_topic_selections')
+      .select('personal_topic_id')
+      .eq('deck_id', activeDeck.id),
   ]);
 
   if (nodeResult.error) {
@@ -215,6 +262,12 @@ export async function loadStudyPlannerInitialData({
       loadError: `Unable to load deck preferences: ${preferenceResult.error.message}`,
     };
   }
+
+  const personalMaterialError =
+    personalTopicsResult.error ||
+    personalConceptsResult.error ||
+    personalCardsResult.error ||
+    personalSelectionsResult.error;
 
   const nodes = (nodeResult.data || []) as LibraryNode[];
   const nodeIds = nodes.map((node) => node.id);
@@ -289,6 +342,20 @@ export async function loadStudyPlannerInitialData({
       ])
     ),
     resolvedConcepts: (resolvedResult.data || []) as StudyDeckConcept[],
+    personalTopics: personalTopicsResult.error
+      ? []
+      : ((personalTopicsResult.data || []) as PersonalTopic[]),
+    personalConcepts: personalConceptsResult.error
+      ? []
+      : ((personalConceptsResult.data || []) as PersonalConcept[]),
+    personalCards: personalCardsResult.error
+      ? []
+      : ((personalCardsResult.data || []) as PersonalCard[]),
+    selectedPersonalTopicIds: personalSelectionsResult.error
+      ? []
+      : (personalSelectionsResult.data || []).map(
+          (selection) => selection.personal_topic_id
+        ),
     learnerProgress:
       learnerProgressResult.error || !learnerProgressResult.data
         ? emptyLearnerProgress(activeLibrary.id)
@@ -296,6 +363,8 @@ export async function loadStudyPlannerInitialData({
     learnerProgressError: learnerProgressResult.error
       ? `Progress could not be loaded: ${learnerProgressResult.error.message}`
       : '',
-    loadError: '',
+    loadError: personalMaterialError
+      ? `Personal study material could not be loaded: ${personalMaterialError.message}`
+      : '',
   };
 }

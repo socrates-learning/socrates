@@ -60,6 +60,24 @@ type StudyDeckConcept = {
   selection_source: string;
 };
 
+type PersonalTopic = {
+  id: string;
+  parent_id: string | null;
+  name: string;
+  sort_order: number;
+};
+
+type PersonalConcept = {
+  id: string;
+  topic_id: string;
+  name: string;
+};
+
+type PersonalCard = {
+  id: string;
+  concept_id: string;
+};
+
 type LearnerProgressMetric = {
   total_concepts: number;
   assessed_concepts: number;
@@ -337,6 +355,10 @@ export function StudyPlanner({
   const router = useRouter();
   const initialRootNodeId =
     initialDeckData?.nodes.find((node) => node.parent_id === null)?.id || null;
+  const initialPersonalRootTopicIds =
+    initialDeckData?.personalTopics
+      .filter((topic) => topic.parent_id === null)
+      .map((topic) => topic.id) || [];
   const [mode, setMode] = useState<PlannerMode>('dashboard');
   const [userId, setUserId] = useState<string | null>(
     initialSession?.userId ?? null
@@ -373,6 +395,21 @@ export function StudyPlanner({
   const [resolvedConcepts, setResolvedConcepts] = useState<StudyDeckConcept[]>(
     initialDeckData?.resolvedConcepts || []
   );
+  const [personalTopics, setPersonalTopics] = useState<PersonalTopic[]>(
+    initialDeckData?.personalTopics || []
+  );
+  const [personalConcepts, setPersonalConcepts] = useState<PersonalConcept[]>(
+    initialDeckData?.personalConcepts || []
+  );
+  const [personalCards, setPersonalCards] = useState<PersonalCard[]>(
+    initialDeckData?.personalCards || []
+  );
+  const [selectedPersonalTopicIds, setSelectedPersonalTopicIds] = useState<
+    Set<string>
+  >(new Set(initialDeckData?.selectedPersonalTopicIds || []));
+  const [expandedPersonalTopicIds, setExpandedPersonalTopicIds] = useState<
+    Set<string>
+  >(new Set(initialPersonalRootTopicIds));
   const [learnerProgress, setLearnerProgress] =
     useState<LearnerProgressResponse>(
       initialDeckData?.learnerProgress || emptyLearnerProgress
@@ -497,6 +534,11 @@ export function StudyPlanner({
       setNodePreferences({});
       setConceptOverrides({});
       setResolvedConcepts([]);
+      setPersonalTopics([]);
+      setPersonalConcepts([]);
+      setPersonalCards([]);
+      setSelectedPersonalTopicIds(new Set());
+      setExpandedPersonalTopicIds(new Set());
       setLearnerProgress(emptyLearnerProgress);
       setMode(
         window.location.hash === '#set-up-deck'
@@ -596,6 +638,11 @@ export function StudyPlanner({
           setNodePreferences({});
           setConceptOverrides({});
           setResolvedConcepts([]);
+          setPersonalTopics([]);
+          setPersonalConcepts([]);
+          setPersonalCards([]);
+          setSelectedPersonalTopicIds(new Set());
+          setExpandedPersonalTopicIds(new Set());
           setLearnerProgress(emptyLearnerProgress);
           return;
         }
@@ -632,6 +679,10 @@ export function StudyPlanner({
         preferenceResult,
         resolvedResult,
         learnerProgressResult,
+        personalTopicsResult,
+        personalConceptsResult,
+        personalCardsResult,
+        personalSelectionsResult,
       ] = await Promise.all([
         supabase
           .from('library_nodes')
@@ -656,6 +707,23 @@ export function StudyPlanner({
         supabase.rpc('get_library_learner_progress', {
           p_library_id: activeLibrary.id,
         }),
+        supabase
+          .from('personal_topics')
+          .select('id, parent_id, name, sort_order')
+          .order('sort_order')
+          .order('name'),
+        supabase
+          .from('personal_concepts')
+          .select('id, topic_id, name')
+          .order('name'),
+        supabase
+          .from('personal_cards')
+          .select('id, concept_id')
+          .order('created_at'),
+        supabase
+          .from('study_deck_personal_topic_selections')
+          .select('personal_topic_id')
+          .eq('deck_id', activeDeck.id),
       ]);
       const { data: nodeData, error: nodeError } = nodeResult;
       const { data: selectedNodesData, error: selectedNodesError } =
@@ -667,6 +735,14 @@ export function StudyPlanner({
         data: learnerProgressData,
         error: learnerProgressLoadError,
       } = learnerProgressResult;
+      const { data: personalTopicsData, error: personalTopicsError } =
+        personalTopicsResult;
+      const { data: personalConceptsData, error: personalConceptsError } =
+        personalConceptsResult;
+      const { data: personalCardsData, error: personalCardsError } =
+        personalCardsResult;
+      const { data: personalSelectionsData, error: personalSelectionsError } =
+        personalSelectionsResult;
 
       if (!isMounted) return;
 
@@ -770,6 +846,34 @@ export function StudyPlanner({
         )
       );
       setResolvedConcepts((resolvedData || []) as StudyDeckConcept[]);
+      const loadedPersonalTopics = personalTopicsError
+        ? []
+        : ((personalTopicsData || []) as PersonalTopic[]);
+      setPersonalTopics(loadedPersonalTopics);
+      setPersonalConcepts(
+        personalConceptsError
+          ? []
+          : ((personalConceptsData || []) as PersonalConcept[])
+      );
+      setPersonalCards(
+        personalCardsError ? [] : ((personalCardsData || []) as PersonalCard[])
+      );
+      setSelectedPersonalTopicIds(
+        new Set(
+          personalSelectionsError
+            ? []
+            : (personalSelectionsData || []).map(
+                (selection) => selection.personal_topic_id
+              )
+        )
+      );
+      setExpandedPersonalTopicIds(
+        new Set(
+          loadedPersonalTopics
+            .filter((topic) => topic.parent_id === null)
+            .map((topic) => topic.id)
+        )
+      );
       setLearnerProgress(
         learnerProgressLoadError || !learnerProgressData
           ? { ...emptyLearnerProgress, library_id: activeLibrary.id }
@@ -1459,6 +1563,51 @@ export function StudyPlanner({
       .sort((a, b) => a.name.localeCompare(b.name));
   }
 
+  function descendantPersonalTopicIds(topicId: string) {
+    const ids = new Set([topicId]);
+    const queue = [topicId];
+
+    while (queue.length) {
+      const currentId = queue.shift();
+      const children = personalTopics.filter(
+        (topic) => topic.parent_id === currentId
+      );
+
+      children.forEach((child) => {
+        if (!ids.has(child.id)) {
+          ids.add(child.id);
+          queue.push(child.id);
+        }
+      });
+    }
+
+    return ids;
+  }
+
+  function personalConceptsForTopic(topicId: string) {
+    return personalConcepts
+      .filter((concept) => concept.topic_id === topicId)
+      .sort((left, right) => left.name.localeCompare(right.name));
+  }
+
+  function personalCardCountForConcept(conceptId: string) {
+    return personalCards.filter((card) => card.concept_id === conceptId).length;
+  }
+
+  function personalBranchCounts(topicId: string) {
+    const topicIds = descendantPersonalTopicIds(topicId);
+    const conceptIds = new Set(
+      personalConcepts
+        .filter((concept) => topicIds.has(concept.topic_id))
+        .map((concept) => concept.id)
+    );
+
+    return {
+      concepts: conceptIds.size,
+      cards: personalCards.filter((card) => conceptIds.has(card.concept_id)).length,
+    };
+  }
+
   function isConceptSelectedByBranch(conceptId: string) {
     return [...selectedNodeIds].some((nodeId) =>
       branchConceptIds(nodeId).includes(conceptId)
@@ -1613,6 +1762,58 @@ export function StudyPlanner({
     setIsSaving(false);
   }
 
+  async function togglePersonalTopicSelection(topicId: string) {
+    if (!activeLibrary?.id || !deck || !userId || isSaving) return;
+
+    const isSelected = selectedPersonalTopicIds.has(topicId);
+    setIsSaving(true);
+    setMessage(
+      isSelected
+        ? 'Removing personal Topic from deck...'
+        : 'Adding personal Topic to deck...'
+    );
+
+    if (isSelected) {
+      const { error } = await supabase
+        .from('study_deck_personal_topic_selections')
+        .delete()
+        .eq('deck_id', deck.id)
+        .eq('personal_topic_id', topicId);
+
+      if (error) {
+        setMessage(`Unable to update personal study material: ${error.message}`);
+        setIsSaving(false);
+        return;
+      }
+
+      setSelectedPersonalTopicIds((current) => {
+        const next = new Set(current);
+        next.delete(topicId);
+        return next;
+      });
+    } else {
+      const { error } = await supabase
+        .from('study_deck_personal_topic_selections')
+        .insert({
+          deck_id: deck.id,
+          user_id: userId,
+          library_id: activeLibrary.id,
+          personal_topic_id: topicId,
+        });
+
+      if (error) {
+        setMessage(`Unable to update personal study material: ${error.message}`);
+        setIsSaving(false);
+        return;
+      }
+
+      setSelectedPersonalTopicIds((current) => new Set(current).add(topicId));
+    }
+
+    setMessage('Personal study selection saved.');
+    setIsSaving(false);
+  }
+
   async function setConceptSelection(conceptId: string, shouldSelect: boolean) {
     if (!activeLibrary?.id || !deck || !userId) return;
 
@@ -1726,6 +1927,217 @@ export function StudyPlanner({
       return next;
     });
     setFocusedNodeId(nodeId);
+  }
+
+  function toggleExpandedPersonalTopic(topicId: string) {
+    setExpandedPersonalTopicIds((current) => {
+      const next = new Set(current);
+
+      if (next.has(topicId)) {
+        next.delete(topicId);
+      } else {
+        next.add(topicId);
+      }
+
+      return next;
+    });
+  }
+
+  function renderPersonalTopic(topic: PersonalTopic, depth = 0): ReactNode {
+    const children = personalTopics
+      .filter((child) => child.parent_id === topic.id)
+      .sort(
+        (left, right) =>
+          left.sort_order - right.sort_order || left.name.localeCompare(right.name)
+      );
+    const directConcepts = personalConceptsForTopic(topic.id);
+    const hasDetails = children.length > 0 || directConcepts.length > 0;
+    const isExpanded = expandedPersonalTopicIds.has(topic.id);
+    const isSelected = selectedPersonalTopicIds.has(topic.id);
+    const counts = personalBranchCounts(topic.id);
+
+    return (
+      <div
+        key={topic.id}
+        style={{
+          marginLeft: depth ? Math.min(depth * 20, 40) : 0,
+          position: 'relative',
+        }}
+      >
+        {depth > 0 && (
+          <span
+            aria-hidden="true"
+            style={{
+              borderLeft: '2px solid #dbeafe',
+              bottom: 0,
+              left: -11,
+              position: 'absolute',
+              top: -9,
+            }}
+          />
+        )}
+
+        <div
+          style={{
+            background: isSelected ? '#eff6ff' : '#ffffff',
+            border: isSelected ? '1px solid #93c5fd' : '1px solid #e2e8f0',
+            borderRadius: 14,
+            marginBottom: 8,
+            padding: '10px 12px',
+          }}
+        >
+          <div style={{ alignItems: 'center', display: 'flex', gap: 10 }}>
+            <button
+              type="button"
+              aria-label={isExpanded ? `Collapse ${topic.name}` : `Expand ${topic.name}`}
+              disabled={!hasDetails}
+              onClick={() => toggleExpandedPersonalTopic(topic.id)}
+              style={{
+                alignItems: 'center',
+                background: hasDetails ? '#e0f2fe' : '#f8fafc',
+                border: 0,
+                borderRadius: 10,
+                color: '#0369a1',
+                cursor: hasDetails ? 'pointer' : 'default',
+                display: 'flex',
+                flexShrink: 0,
+                fontSize: 13,
+                height: 34,
+                justifyContent: 'center',
+                width: 34,
+              }}
+            >
+              {!hasDetails ? '•' : isExpanded ? '▼' : '▶'}
+            </button>
+
+            <label
+              style={{
+                alignItems: 'center',
+                cursor: isSaving ? 'wait' : 'pointer',
+                display: 'flex',
+                flex: 1,
+                gap: 10,
+                minWidth: 0,
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={isSelected}
+                disabled={isSaving}
+                onChange={() => void togglePersonalTopicSelection(topic.id)}
+                style={{
+                  accentColor: '#2563eb',
+                  cursor: isSaving ? 'wait' : 'pointer',
+                  height: 18,
+                  width: 18,
+                }}
+              />
+              <span style={{ minWidth: 0 }}>
+                <strong style={{ display: 'block', fontSize: 15, lineHeight: 1.2 }}>
+                  {topic.name}
+                </strong>
+                <span className="muted" style={{ fontSize: 12 }}>
+                  {counts.concepts} {counts.concepts === 1 ? 'Concept' : 'Concepts'} ·{' '}
+                  {counts.cards} {counts.cards === 1 ? 'Card' : 'Cards'}
+                </span>
+              </span>
+            </label>
+          </div>
+
+          {isExpanded && directConcepts.length > 0 && (
+            <div
+              style={{
+                borderTop: '1px solid #dbeafe',
+                display: 'grid',
+                gap: 6,
+                marginTop: 10,
+                padding: '9px 0 1px 44px',
+              }}
+            >
+              {directConcepts.map((concept) => {
+                const cardCount = personalCardCountForConcept(concept.id);
+
+                return (
+                  <div
+                    key={concept.id}
+                    style={{
+                      alignItems: 'center',
+                      background: '#f8fafc',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: 10,
+                      display: 'flex',
+                      gap: 8,
+                      justifyContent: 'space-between',
+                      padding: '8px 10px',
+                    }}
+                  >
+                    <span style={{ color: '#0f172a', fontSize: 13, fontWeight: 700 }}>
+                      {concept.name}
+                    </span>
+                    <span className="muted" style={{ flexShrink: 0, fontSize: 12 }}>
+                      {cardCount} {cardCount === 1 ? 'Card' : 'Cards'}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {isExpanded && children.length > 0 && (
+          <div style={{ marginTop: 4 }}>
+            {children.map((child) => renderPersonalTopic(child, depth + 1))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  function renderPersonalMaterialSection() {
+    const rootTopics = personalTopics
+      .filter((topic) => topic.parent_id === null)
+      .sort(
+        (left, right) =>
+          left.sort_order - right.sort_order || left.name.localeCompare(right.name)
+      );
+
+    return (
+      <section
+        aria-labelledby="personal-study-material-title"
+        style={{
+          borderTop: '1px solid #dbe3ee',
+          marginTop: 18,
+          paddingTop: 16,
+        }}
+      >
+        <div style={{ marginBottom: 12 }}>
+          <h2
+            id="personal-study-material-title"
+            style={{ fontSize: 18, margin: 0 }}
+          >
+            My Study Material
+          </h2>
+        </div>
+
+        {rootTopics.length > 0 ? (
+          <div aria-label="Personal study material Topic tree">
+            {rootTopics.map((topic) => renderPersonalTopic(topic))}
+          </div>
+        ) : (
+          <div
+            style={{
+              background: '#ffffff',
+              border: '1px dashed #cbd5e1',
+              borderRadius: 12,
+              color: '#64748b',
+              padding: '14px',
+            }}
+          >
+            Create personal Topics, Concepts, and Cards in Study Creator to select them here.
+          </div>
+        )}
+      </section>
+    );
   }
 
   function renderNode(node: LibraryNode, depth = 0): ReactNode {
@@ -2234,6 +2646,8 @@ export function StudyPlanner({
               <div aria-label="Set Up Deck Topic Tree" style={{ textAlign: 'left' }}>
                 {rootNodes.map((node) => renderNode(node))}
               </div>
+
+              {renderPersonalMaterialSection()}
             </section>
 
             <div className="study-setup-v2-rule" aria-hidden="true" />
@@ -3795,6 +4209,7 @@ if (mode === 'study') {
                   aria-label="Set Up Deck Topic Tree"
                 >
                   {rootNodes.map((node) => renderNode(node))}
+                  {renderPersonalMaterialSection()}
                 </div>
 
                 <label className="home-v2-setup-cram">
