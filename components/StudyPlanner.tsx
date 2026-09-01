@@ -14,9 +14,7 @@ import { supabase } from '@/lib/supabase';
 import type { ActiveLibrary, ActiveLibraryRole } from '@/lib/library-context';
 import type { StudyPlannerInitialData } from '@/lib/study-planner-initial-data';
 import {
-  resolveStudyCandidates,
-  selectNextUnansweredPersonalCandidate,
-  type OfficialStudyCandidate,
+  selectNextStudyCandidate,
   type StudyCandidate,
 } from '@/lib/study-candidates';
 import { recordPersonalStudyAttempt } from '@/lib/personal-study-attempts';
@@ -132,15 +130,6 @@ const emptyLearnerProgress: LearnerProgressResponse = {
   },
   nodes: [],
   recent_sessions: [],
-};
-
-type PriorityStudyQuestion = {
-  question_id: string;
-  concept_id: string;
-  prompt: string;
-  difficulty: string;
-  testing_angle: string;
-  accepted_answer: string;
 };
 
 type ConceptOverride = 'included' | 'excluded';
@@ -989,95 +978,6 @@ export function StudyPlanner({
     }
   }
 
-  async function selectPriorityStudyCandidate(
-    sessionId: string,
-    candidates: StudyCandidate[]
-  ): Promise<OfficialStudyCandidate | null> {
-    const { data, error } = await supabase.rpc('select_next_study_question', {
-      p_study_session_id: sessionId,
-      p_include_debug: false,
-    });
-
-    if (error) {
-      throw new Error(
-        `Unable to select the next Study Mode question: ${error.message}`
-      );
-    }
-
-    if (!data) {
-      return null;
-    }
-
-    const selectedQuestion = data as PriorityStudyQuestion;
-
-    if (
-      !selectedQuestion.question_id ||
-      !selectedQuestion.concept_id ||
-      !selectedQuestion.prompt ||
-      !selectedQuestion.accepted_answer
-    ) {
-      throw new Error('Study Mode selector returned an incomplete question.');
-    }
-
-    const resolvedCandidate = candidates.find(
-      (candidate): candidate is OfficialStudyCandidate =>
-        candidate.kind === 'official'
-        && candidate.questionId === selectedQuestion.question_id
-        && candidate.conceptId === selectedQuestion.concept_id
-    );
-
-    if (!resolvedCandidate) {
-      throw new Error(
-        'The selected official Question is not present in the resolved Study candidates.'
-      );
-    }
-
-    return {
-      ...resolvedCandidate,
-      prompt: selectedQuestion.prompt,
-      answer: selectedQuestion.accepted_answer,
-      difficulty: selectedQuestion.difficulty,
-      testingAngle: selectedQuestion.testing_angle,
-    };
-  }
-
-  async function selectStage2DStudyCandidate(
-    sessionId: string,
-    phase: 'initial' | 'after-response'
-  ): Promise<StudyCandidate | null> {
-    if (!deck) return null;
-
-    const candidates = await resolveStudyCandidates(supabase, deck.id);
-    const hasOfficialCandidate = candidates.some(
-      (candidate) => candidate.kind === 'official'
-    );
-
-    // Stage 2D deliberately avoids cross-source scoring. A mixed Session opens
-    // with the existing official selector, then traverses each selected
-    // personal Card once before returning to unchanged official selection.
-    if (phase === 'initial' && hasOfficialCandidate) {
-      const officialCandidate = await selectPriorityStudyCandidate(
-        sessionId,
-        candidates
-      );
-      if (officialCandidate) return officialCandidate;
-    }
-
-    const personalCandidate = await selectNextUnansweredPersonalCandidate(
-      supabase,
-      deck.id,
-      sessionId,
-      candidates
-    );
-    if (personalCandidate) return personalCandidate;
-
-    if (hasOfficialCandidate) {
-      return selectPriorityStudyCandidate(sessionId, candidates);
-    }
-
-    return null;
-  }
-
   function resetStudyCardFeedback() {
     if (studyCardFeedbackConfirmationTimer.current !== null) {
       window.clearTimeout(studyCardFeedbackConfirmationTimer.current);
@@ -1180,9 +1080,9 @@ export function StudyPlanner({
       const sessionId = await ensureStudySession();
 
       if (sessionId) {
-        const selectedCandidate = await selectStage2DStudyCandidate(
-          sessionId,
-          'initial'
+        const selectedCandidate = await selectNextStudyCandidate(
+          supabase,
+          sessionId
         );
         if (selectedCandidate) {
           setStudyCandidate(selectedCandidate);
@@ -1271,9 +1171,9 @@ export function StudyPlanner({
       studyResponseRecordedForCard.current = true;
       void refreshLearnerProgress();
 
-      const selectedCandidate = await selectStage2DStudyCandidate(
-        sessionId,
-        'after-response'
+      const selectedCandidate = await selectNextStudyCandidate(
+        supabase,
+        sessionId
       );
 
       if (!selectedCandidate) {

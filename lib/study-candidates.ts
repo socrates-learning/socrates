@@ -47,6 +47,10 @@ export type StudyCandidateRow = {
   created_at: string;
 };
 
+type UnifiedStudyCandidateRow = StudyCandidateRow & {
+  debug?: Record<string, unknown>;
+};
+
 function requireValue(
   value: string | null,
   field: keyof StudyCandidateRow,
@@ -183,6 +187,24 @@ export async function resolveStudyCandidates(
   }
 
   return adaptStudyCandidateRows((data || []) as StudyCandidateRow[]);
+}
+
+export async function selectNextStudyCandidate(
+  supabase: SupabaseClient,
+  studySessionId: string
+): Promise<StudyCandidate | null> {
+  const { data, error } = await supabase.rpc('select_next_study_candidate', {
+    p_study_session_id: studySessionId,
+    p_include_debug: false,
+  });
+
+  if (error) {
+    throw new Error(`Unable to select the next Study candidate: ${error.message}`);
+  }
+
+  if (!data) return null;
+
+  return adaptStudyCandidateRow(data as UnifiedStudyCandidateRow);
 }
 
 export async function selectNextUnansweredPersonalCandidate(
