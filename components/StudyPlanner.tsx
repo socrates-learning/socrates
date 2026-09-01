@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { Header, HeaderSessionProvider } from '@/components/Header';
 import { supabase } from '@/lib/supabase';
 import type { ActiveLibrary, ActiveLibraryRole } from '@/lib/library-context';
+import type { StudyPlannerInitialData } from '@/lib/study-planner-initial-data';
 import type { ReactNode } from 'react';
 
 type LibraryNode = {
@@ -316,9 +317,11 @@ function getNodePath(node: LibraryNode, nodesById: Map<string, LibraryNode>) {
 
 export function StudyPlanner({
   activeLibrary,
+  initialDeckData,
   initialSession,
 }: {
   activeLibrary: ActiveLibrary | null;
+  initialDeckData?: StudyPlannerInitialData;
   initialSession?: {
     userId: string;
     email: string | null;
@@ -327,6 +330,8 @@ export function StudyPlanner({
   } | null;
 }) {
   const router = useRouter();
+  const initialRootNodeId =
+    initialDeckData?.nodes.find((node) => node.parent_id === null)?.id || null;
   const [mode, setMode] = useState<PlannerMode>('dashboard');
   const [userId, setUserId] = useState<string | null>(
     initialSession?.userId ?? null
@@ -341,36 +346,56 @@ export function StudyPlanner({
     initialSession?.displayName ?? 'there'
   );
   const [availableLibraries, setAvailableLibraries] = useState<ActiveLibrary[]>(
-    activeLibrary ? [activeLibrary] : []
+    initialDeckData?.availableLibraries || (activeLibrary ? [activeLibrary] : [])
   );
-  const [deck, setDeck] = useState<StudyDeck | null>(null);
-  const [nodes, setNodes] = useState<LibraryNode[]>([]);
-  const [placements, setPlacements] = useState<Placement[]>([]);
-  const [questionCounts, setQuestionCounts] = useState<Record<string, number>>({});
-  const [selectedNodeIds, setSelectedNodeIds] = useState<Set<string>>(new Set());
+  const [deck, setDeck] = useState<StudyDeck | null>(initialDeckData?.deck || null);
+  const [nodes, setNodes] = useState<LibraryNode[]>(initialDeckData?.nodes || []);
+  const [placements, setPlacements] = useState<Placement[]>(
+    initialDeckData?.placements || []
+  );
+  const [questionCounts, setQuestionCounts] = useState<Record<string, number>>(
+    initialDeckData?.questionCounts || {}
+  );
+  const [selectedNodeIds, setSelectedNodeIds] = useState<Set<string>>(
+    new Set(initialDeckData?.selectedNodeIds || [])
+  );
   const [nodePreferences, setNodePreferences] = useState<Record<string, number>>(
-    {}
+    initialDeckData?.nodePreferences || {}
   );
   const [conceptOverrides, setConceptOverrides] = useState<
     Record<string, ConceptOverride>
-  >({});
-  const [resolvedConcepts, setResolvedConcepts] = useState<StudyDeckConcept[]>([]);
+  >(initialDeckData?.conceptOverrides || {});
+  const [resolvedConcepts, setResolvedConcepts] = useState<StudyDeckConcept[]>(
+    initialDeckData?.resolvedConcepts || []
+  );
   const [learnerProgress, setLearnerProgress] =
-    useState<LearnerProgressResponse>(emptyLearnerProgress);
-  const [learnerProgressError, setLearnerProgressError] = useState('');
+    useState<LearnerProgressResponse>(
+      initialDeckData?.learnerProgress || emptyLearnerProgress
+    );
+  const [learnerProgressError, setLearnerProgressError] = useState(
+    initialDeckData?.learnerProgressError || ''
+  );
   const [authoredStudyQuestions, setAuthoredStudyQuestions] = useState<
     AuthoredStudyQuestion[]
   >([]);
   const [authoredStudyQuestionIndex, setAuthoredStudyQuestionIndex] = useState(0);
   const [priorityStudyQuestion, setPriorityStudyQuestion] =
     useState<PriorityStudyQuestion | null>(null);
-  const [expandedNodeIds, setExpandedNodeIds] = useState<Set<string>>(new Set());
-  const [focusedNodeId, setFocusedNodeId] = useState<string | null>(null);
-  const [message, setMessage] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
+  const [expandedNodeIds, setExpandedNodeIds] = useState<Set<string>>(
+    new Set(initialRootNodeId ? [initialRootNodeId] : [])
+  );
+  const [focusedNodeId, setFocusedNodeId] = useState<string | null>(
+    initialRootNodeId
+  );
+  const [message, setMessage] = useState(initialDeckData?.loadError || '');
+  const [isLoading, setIsLoading] = useState(!initialDeckData);
   const [isSaving, setIsSaving] = useState(false);
-  const [homeExpandedIds, setHomeExpandedIds] = useState<Set<string>>(new Set());
-  const [isSetupCramMode, setIsSetupCramMode] = useState(false);
+  const [homeExpandedIds, setHomeExpandedIds] = useState<Set<string>>(
+    new Set(initialRootNodeId ? [initialRootNodeId] : [])
+  );
+  const [isSetupCramMode, setIsSetupCramMode] = useState(
+    Boolean(initialDeckData?.deck?.cram_mode)
+  );
   const [isAnswerVisible, setIsAnswerVisible] = useState(false);
   const [studyFeedback, setStudyFeedback] = useState<StudyFeedback>(null);
   const [studyResponse, setStudyResponse] = useState<StudyResponse>(null);
@@ -438,6 +463,20 @@ export function StudyPlanner({
 
   useEffect(() => {
     let isMounted = true;
+
+    if (initialDeckData?.libraryId === activeLibrary?.id) {
+      setMode(
+        window.location.hash === '#set-up-deck'
+          ? 'setup'
+          : window.location.hash === '#stats'
+            ? 'stats'
+            : 'dashboard'
+      );
+
+      return () => {
+        isMounted = false;
+      };
+    }
 
     async function loadDeck() {
       setIsLoading(true);
@@ -697,7 +736,7 @@ export function StudyPlanner({
     return () => {
       isMounted = false;
     };
-  }, [activeLibrary, initialSession]);
+  }, [activeLibrary, initialDeckData, initialSession]);
 
   useEffect(() => {
     let isMounted = true;
@@ -3579,7 +3618,7 @@ if (mode === 'study') {
                   type="button"
                   onClick={
                     item.label === 'Deck Menu'
-                      ? () => setMode('dashboard')
+                      ? openSetupMode
                       : item.label === 'Stats'
                         ? () => setMode('stats')
                         : undefined
@@ -4150,7 +4189,7 @@ if (mode === 'study') {
           }
 
           .home-v2-shell {
-            grid-template-columns: 1fr;
+            grid-template-columns: minmax(0, 1fr);
           }
 
           .home-v2-rail {

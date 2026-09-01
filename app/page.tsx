@@ -1,9 +1,17 @@
 import { StudyPlanner } from '@/components/StudyPlanner';
 import { resolveActiveLibraryContext } from '@/lib/library-context';
+import { loadStudyPlannerInitialData } from '@/lib/study-planner-initial-data';
 
 export default async function Home() {
   const activeLibraryContext = await resolveActiveLibraryContext();
   const activeLibrary = activeLibraryContext.library;
+  const initialDeckData =
+    activeLibrary && activeLibraryContext.user
+      ? await loadStudyPlannerInitialData({
+          activeLibrary,
+          role: activeLibraryContext.role,
+        })
+      : undefined;
 
   return (
     activeLibraryContext.needsSelection ? (
@@ -19,6 +27,7 @@ export default async function Home() {
     ) : (
       <StudyPlanner
         activeLibrary={activeLibrary}
+        initialDeckData={initialDeckData}
         initialSession={
           activeLibraryContext.user
             ? {
