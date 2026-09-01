@@ -22,8 +22,6 @@
   border-bottom: 1px solid #e3e8f0;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 20px;
   padding: 15px 24px;
 }
 
@@ -45,12 +43,6 @@
   font-family: Georgia, 'Times New Roman', serif;
   font-size: 30px;
   letter-spacing: -0.035em;
-}
-
-.workspaceHeader > span {
-  color: #687993;
-  font-size: 13px;
-  font-weight: 750;
 }
 
 .notice {
@@ -216,6 +208,19 @@
   color: #687993;
 }
 
+.svgIcon {
+  width: 1.15em;
+  height: 1.15em;
+  display: block;
+  flex: 0 0 auto;
+}
+
+.searchField > span {
+  display: grid;
+  place-items: center;
+  font-size: 16px;
+}
+
 .searchField:focus-within {
   border-color: #2670ed;
   box-shadow: 0 0 0 3px rgba(38, 112, 237, 0.12);
@@ -358,7 +363,9 @@
 .expandButton {
   width: 26px;
   height: 36px;
-  font-size: 18px;
+  display: grid;
+  place-items: center;
+  font-size: 17px;
 }
 
 .expandButton:disabled {
@@ -417,7 +424,9 @@
   width: 32px;
   min-width: 32px;
   height: 34px;
-  letter-spacing: -0.08em;
+  display: grid;
+  place-items: center;
+  font-size: 18px;
 }
 
 .moreButton:hover,
@@ -605,6 +614,9 @@
   border-radius: 8px;
   background: transparent;
   color: #435873;
+  display: flex;
+  align-items: center;
+  gap: 5px;
   font: inherit;
   font-size: 12px;
   font-weight: 800;
@@ -719,7 +731,9 @@
 
 .chevron {
   color: #7890ae;
-  font-size: 23px;
+  display: grid;
+  place-items: center;
+  font-size: 20px;
 }
 
 .cardRow {
@@ -1024,10 +1038,6 @@
 
   .workspaceHeader h1 {
     font-size: 25px;
-  }
-
-  .workspaceHeader > span {
-    display: none;
   }
 
   .columns,

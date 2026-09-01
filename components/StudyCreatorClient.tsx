@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import styles from './StudyCreatorClient.module.css';
 
@@ -48,6 +48,39 @@ type DeleteTarget =
   | { kind: 'concept'; record: PersonalConcept }
   | { kind: 'card'; record: PersonalCard };
 
+type IconName =
+  | 'book'
+  | 'card'
+  | 'chevron-down'
+  | 'chevron-right'
+  | 'folder'
+  | 'more'
+  | 'pencil'
+  | 'search'
+  | 'trash';
+
+function Icon({ name }: { name: IconName }) {
+  const paths: Record<IconName, React.ReactNode> = {
+    book: <><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H11v14H6.5A2.5 2.5 0 0 0 4 19.5z" /><path d="M20 5.5A2.5 2.5 0 0 0 17.5 3H13v14h4.5a2.5 2.5 0 0 1 2.5 2.5z" /></>,
+    card: <><path d="M6 2.75h8l4 4V21.25H6z" /><path d="M14 2.75v4h4M9 12h6M9 16h6" /></>,
+    'chevron-down': <path d="m7 9.5 5 5 5-5" />,
+    'chevron-right': <path d="m9.5 7 5 5-5 5" />,
+    folder: <path d="M3 6.5h6l2-2h4.5A2.5 2.5 0 0 1 18 7v1H5.5A2.5 2.5 0 0 0 3 10.5zm0 4A2.5 2.5 0 0 1 5.5 8H21l-2 11.5H3z" />,
+    more: <><circle cx="5" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /></>,
+    pencil: <><path d="m4 20 4.25-1 10.5-10.5-3.25-3.25L5 15.75z" /><path d="m13.75 7 3.25 3.25" /></>,
+    search: <><circle cx="10.5" cy="10.5" r="6.5" /><path d="m15.5 15.5 4 4" /></>,
+    trash: <><path d="M4 7h16M9 3h6l1 4H8zM6 7l1 14h10l1-14M10 11v6M14 11v6" /></>,
+  };
+
+  return (
+    <svg aria-hidden="true" className={styles.svgIcon} fill="none" viewBox="0 0 24 24">
+      <g stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8">
+        {paths[name]}
+      </g>
+    </svg>
+  );
+}
+
 function getErrorMessage(error: unknown) {
   if (error instanceof Error) return error.message;
   if (typeof error === 'object' && error && 'message' in error) {
@@ -85,6 +118,8 @@ export function StudyCreatorClient({ ownerId }: StudyCreatorClientProps) {
   const [cardQuestion, setCardQuestion] = useState('');
   const [cardAnswer, setCardAnswer] = useState('');
   const [cardConceptId, setCardConceptId] = useState('');
+  const dialogRef = useRef<HTMLElement | null>(null);
+  const modalOpenerRef = useRef<HTMLElement | null>(null);
 
   const loadMaterial = useCallback(async () => {
     setError('');
@@ -203,6 +238,92 @@ export function StudyCreatorClient({ ownerId }: StudyCreatorClientProps) {
     setCardMenuId(null);
   }
 
+  function rememberModalOpener() {
+    modalOpenerRef.current = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+  }
+
+  function closeEditor() {
+    if (!isSaving) setEditorModal(null);
+  }
+
+  function closeDeleteConfirmation() {
+    if (!isSaving) setDeleteTarget(null);
+  }
+
+  function toggleMenu(kind: 'topic' | 'concept' | 'card', id: string) {
+    const isOpen =
+      (kind === 'topic' && topicMenuId === id) ||
+      (kind === 'concept' && conceptMenuId === id) ||
+      (kind === 'card' && cardMenuId === id);
+    closeMenus();
+    if (isOpen) return;
+    if (kind === 'topic') setTopicMenuId(id);
+    if (kind === 'concept') setConceptMenuId(id);
+    if (kind === 'card') setCardMenuId(id);
+  }
+
+  useEffect(() => {
+    if (!topicMenuId && !conceptMenuId && !cardMenuId) return;
+    function dismissMenu(event: PointerEvent | KeyboardEvent) {
+      if (event instanceof KeyboardEvent) {
+        if (event.key === 'Escape') closeMenus();
+        return;
+      }
+      if (!(event.target instanceof Element) || !event.target.closest('[data-overflow-menu]')) {
+        closeMenus();
+      }
+    }
+    document.addEventListener('pointerdown', dismissMenu);
+    document.addEventListener('keydown', dismissMenu);
+    return () => {
+      document.removeEventListener('pointerdown', dismissMenu);
+      document.removeEventListener('keydown', dismissMenu);
+    };
+  }, [cardMenuId, conceptMenuId, topicMenuId]);
+
+  useEffect(() => {
+    closeMenus();
+  }, [centerTab, rightTab, selectedConceptId, selectedTopicId]);
+
+  useEffect(() => {
+    const modalIsOpen = Boolean(editorModal || deleteTarget);
+    if (!modalIsOpen) {
+      const opener = modalOpenerRef.current;
+      modalOpenerRef.current = null;
+      opener?.focus();
+      return;
+    }
+
+    function handleModalKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape' && editorModal && !isSaving) {
+        event.preventDefault();
+        setEditorModal(null);
+        return;
+      }
+      if (event.key !== 'Tab' || !dialogRef.current) return;
+      const focusable = Array.from(
+        dialogRef.current.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"])'
+        )
+      );
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+
+    document.addEventListener('keydown', handleModalKeyDown);
+    return () => document.removeEventListener('keydown', handleModalKeyDown);
+  }, [deleteTarget, editorModal, isSaving]);
+
   function descendantTopicIds(topicId: string, includeSelf = false) {
     const found = new Set<string>(includeSelf ? [topicId] : []);
     const queue = [topicId];
@@ -282,6 +403,7 @@ export function StudyCreatorClient({ ownerId }: StudyCreatorClientProps) {
   function openTopicEditor(record: PersonalTopic | null, parentId = '') {
     clearFeedback();
     closeMenus();
+    rememberModalOpener();
     setTopicName(record?.name ?? '');
     setTopicParentId(record?.parent_id ?? parentId);
     setEditorModal({ kind: 'topic', record });
@@ -290,6 +412,7 @@ export function StudyCreatorClient({ ownerId }: StudyCreatorClientProps) {
   function openConceptEditor(record: PersonalConcept | null) {
     clearFeedback();
     closeMenus();
+    rememberModalOpener();
     setConceptName(record?.name ?? '');
     setConceptDescription(record?.description ?? '');
     setConceptTopicId(record?.topic_id ?? selectedTopicId ?? topics[0]?.id ?? '');
@@ -299,6 +422,7 @@ export function StudyCreatorClient({ ownerId }: StudyCreatorClientProps) {
   function openCardEditor(record: PersonalCard | null, defaultConceptId = '') {
     clearFeedback();
     closeMenus();
+    rememberModalOpener();
     setCardQuestion(record?.question ?? '');
     setCardAnswer(record?.answer ?? '');
     setCardConceptId(record?.concept_id ?? (defaultConceptId || selectedConceptId || concepts[0]?.id || ''));
@@ -439,6 +563,7 @@ export function StudyCreatorClient({ ownerId }: StudyCreatorClientProps) {
   function requestDelete(target: DeleteTarget) {
     clearFeedback();
     closeMenus();
+    rememberModalOpener();
     if (target.kind === 'topic') {
       const hasChildren = topics.some((topic) => topic.parent_id === target.record.id);
       const hasConcepts = concepts.some((concept) => concept.topic_id === target.record.id);
@@ -523,28 +648,31 @@ export function StudyCreatorClient({ ownerId }: StudyCreatorClientProps) {
                 onClick={() => toggleTopic(topic.id)}
                 type="button"
               >
-                {hasExpandableContent ? (isExpanded ? '⌃' : '⌄') : '·'}
+                {hasExpandableContent && <Icon name={isExpanded ? 'chevron-down' : 'chevron-right'} />}
               </button>
               <button className={styles.topicSelect} onClick={() => selectTopic(topic)} type="button">
-                <span className={styles.folderIcon}>▢</span>
+                <span className={styles.folderIcon}><Icon name="folder" /></span>
                 <span>
                   <strong>{topic.name}</strong>
                   <small>{counts.concepts} Concept{counts.concepts === 1 ? '' : 's'} · {counts.cards} Card{counts.cards === 1 ? '' : 's'}</small>
                 </span>
               </button>
               <button
+                aria-expanded={topicMenuId === topic.id}
+                aria-haspopup="menu"
                 aria-label={`Actions for ${topic.name}`}
                 className={styles.moreButton}
-                onClick={() => setTopicMenuId(topicMenuId === topic.id ? null : topic.id)}
+                data-overflow-menu
+                onClick={() => toggleMenu('topic', topic.id)}
                 type="button"
               >
-                •••
+                <Icon name="more" />
               </button>
               {topicMenuId === topic.id && (
-                <div className={styles.actionMenu}>
-                  <button onClick={() => openTopicEditor(topic)} type="button">Edit Topic</button>
-                  <button onClick={() => openTopicEditor(null, topic.id)} type="button">Add child Topic</button>
-                  <button className={styles.menuDanger} onClick={() => requestDelete({ kind: 'topic', record: topic })} type="button">Delete Topic</button>
+                <div className={styles.actionMenu} data-overflow-menu role="menu">
+                  <button onClick={() => openTopicEditor(topic)} role="menuitem" type="button">Edit Topic</button>
+                  <button onClick={() => openTopicEditor(null, topic.id)} role="menuitem" type="button">Add child Topic</button>
+                  <button className={styles.menuDanger} onClick={() => requestDelete({ kind: 'topic', record: topic })} role="menuitem" type="button">Delete Topic</button>
                 </div>
               )}
             </div>
@@ -560,7 +688,7 @@ export function StudyCreatorClient({ ownerId }: StudyCreatorClientProps) {
                       style={{ paddingLeft: 42 + depth * 18 }}
                       type="button"
                     >
-                      <span className={styles.conceptBranchMark}>⌄</span>
+                      <span className={styles.conceptBranchMark}><Icon name="book" /></span>
                       <span>
                         <strong>{concept.name}</strong>
                         <small>{conceptCardCount} Card{conceptCardCount === 1 ? '' : 's'}</small>
@@ -601,7 +729,6 @@ export function StudyCreatorClient({ ownerId }: StudyCreatorClientProps) {
             <p>Private to your account</p>
             <h1>Study Creator</h1>
           </div>
-          <span>Navigate → Select → Create</span>
         </header>
 
         {(message || error) && (
@@ -614,21 +741,18 @@ export function StudyCreatorClient({ ownerId }: StudyCreatorClientProps) {
         <div className={styles.columns}>
           <aside className={`${styles.column} ${styles.topicsColumn}`} aria-label="My Topics">
             <div className={styles.columnTitle}>
-              <div>
-                <p>Step 1</p>
-                <h2>My Topics</h2>
-              </div>
+              <h2>My Topics</h2>
               <span className={styles.privateBadge}>Private</span>
             </div>
             <button className={styles.primaryWide} onClick={() => openTopicEditor(null)} type="button">
               <span>＋</span> New Topic
             </button>
             <label className={styles.searchField}>
-              <span aria-hidden="true">⌕</span>
+              <span aria-hidden="true"><Icon name="search" /></span>
               <input
                 aria-label="Search topics and material"
                 onChange={(event) => setTopicSearch(event.target.value)}
-                placeholder="Search topics…"
+                placeholder="Search your material..."
                 type="search"
                 value={topicSearch}
               />
@@ -638,7 +762,7 @@ export function StudyCreatorClient({ ownerId }: StudyCreatorClientProps) {
                 renderTopicTree(null)
               ) : (
                 <div className={styles.emptyState}>
-                  <span>▢</span>
+                  <span><Icon name="folder" /></span>
                   <strong>Create your first Topic</strong>
                   <p>Topics keep your personal Concepts organized.</p>
                 </div>
@@ -649,9 +773,9 @@ export function StudyCreatorClient({ ownerId }: StudyCreatorClientProps) {
             </div>
             <div className={styles.quickStats}>
               <h3>Quick Stats</h3>
-              <p><span><i className={styles.statBlue}>▢</i> Topics</span><strong>{topics.length}</strong></p>
-              <p><span><i className={styles.statGreen}>▤</i> Concepts</span><strong>{concepts.length}</strong></p>
-              <p><span><i className={styles.statPurple}>▥</i> Cards</span><strong>{cards.length}</strong></p>
+              <p><span><i className={styles.statBlue}><Icon name="folder" /></i> Topics</span><strong>{topics.length}</strong></p>
+              <p><span><i className={styles.statGreen}><Icon name="book" /></i> Concepts</span><strong>{concepts.length}</strong></p>
+              <p><span><i className={styles.statPurple}><Icon name="card" /></i> Cards</span><strong>{cards.length}</strong></p>
             </div>
           </aside>
 
@@ -659,16 +783,16 @@ export function StudyCreatorClient({ ownerId }: StudyCreatorClientProps) {
             {selectedTopic ? (
               <>
                 <div className={styles.selectionHeading}>
-                  <span className={styles.headingIcon}>▢</span>
+                  <span className={styles.headingIcon}><Icon name="folder" /></span>
                   <div>
                     <p>Selected Topic</p>
                     <h2>{selectedTopic.name}</h2>
                   </div>
-                  <button aria-label="Edit selected Topic" className={styles.iconButton} onClick={() => openTopicEditor(selectedTopic)} type="button">✎</button>
+                  <button aria-label="Edit selected Topic" className={styles.iconButton} onClick={() => openTopicEditor(selectedTopic)} title="Edit Topic" type="button"><Icon name="pencil" /></button>
                 </div>
                 <div className={styles.tabs}>
-                  <button className={centerTab === 'concepts' ? styles.activeTab : ''} onClick={() => setCenterTab('concepts')} type="button">Concepts</button>
-                  <button className={centerTab === 'details' ? styles.activeTab : ''} onClick={() => setCenterTab('details')} type="button">Topic Details</button>
+                  <button className={centerTab === 'concepts' ? styles.activeTab : ''} onClick={() => { closeMenus(); setCenterTab('concepts'); }} type="button">Concepts</button>
+                  <button className={centerTab === 'details' ? styles.activeTab : ''} onClick={() => { closeMenus(); setCenterTab('details'); }} type="button">Topic Details</button>
                 </div>
 
                 {centerTab === 'concepts' ? (
@@ -683,16 +807,16 @@ export function StudyCreatorClient({ ownerId }: StudyCreatorClientProps) {
                         return (
                           <article className={`${styles.conceptRow} ${selectedConceptId === concept.id ? styles.selectedConcept : ''}`} key={concept.id}>
                             <button className={styles.conceptSelect} onClick={() => selectConcept(concept)} type="button">
-                              <span className={styles.bookIcon}>▥</span>
+                              <span className={styles.bookIcon}><Icon name="book" /></span>
                               <span><strong>{concept.name}</strong><small>{conceptCardCount} Card{conceptCardCount === 1 ? '' : 's'}</small></span>
                             </button>
-                            <button aria-label={`Actions for ${concept.name}`} className={styles.moreButton} onClick={() => setConceptMenuId(conceptMenuId === concept.id ? null : concept.id)} type="button">•••</button>
-                            <span className={styles.chevron}>›</span>
+                            <button aria-expanded={conceptMenuId === concept.id} aria-haspopup="menu" aria-label={`Actions for ${concept.name}`} className={styles.moreButton} data-overflow-menu onClick={() => toggleMenu('concept', concept.id)} type="button"><Icon name="more" /></button>
+                            <span className={styles.chevron}><Icon name="chevron-right" /></span>
                             {conceptMenuId === concept.id && (
-                              <div className={styles.actionMenu}>
-                                <button onClick={() => openConceptEditor(concept)} type="button">Edit Concept</button>
-                                <button onClick={() => { setSelectedConceptId(concept.id); openCardEditor(null, concept.id); }} type="button">Add Card</button>
-                                <button className={styles.menuDanger} onClick={() => requestDelete({ kind: 'concept', record: concept })} type="button">Delete Concept</button>
+                              <div className={styles.actionMenu} data-overflow-menu role="menu">
+                                <button onClick={() => openConceptEditor(concept)} role="menuitem" type="button">Edit Concept</button>
+                                <button onClick={() => { setSelectedConceptId(concept.id); openCardEditor(null, concept.id); }} role="menuitem" type="button">Add Card</button>
+                                <button className={styles.menuDanger} onClick={() => requestDelete({ kind: 'concept', record: concept })} role="menuitem" type="button">Delete Concept</button>
                               </div>
                             )}
                           </article>
@@ -731,7 +855,7 @@ export function StudyCreatorClient({ ownerId }: StudyCreatorClientProps) {
               </>
             ) : (
               <div className={styles.emptyColumn}>
-                <span>▢</span>
+                <span><Icon name="folder" /></span>
                 <h2>Select or create a Topic</h2>
                 <p>Your Concepts will appear here.</p>
                 <button className={styles.primary} onClick={() => openTopicEditor(null)} type="button">＋ New Topic</button>
@@ -743,19 +867,19 @@ export function StudyCreatorClient({ ownerId }: StudyCreatorClientProps) {
             {selectedConcept ? (
               <>
                 <div className={styles.selectionHeading}>
-                  <span className={`${styles.headingIcon} ${styles.purpleIcon}`}>▥</span>
+                  <span className={`${styles.headingIcon} ${styles.purpleIcon}`}><Icon name="book" /></span>
                   <div>
                     <p>Selected Concept</p>
                     <h2>{selectedConcept.name}</h2>
                   </div>
                   <div className={styles.headingActions}>
-                    <button aria-label="Edit selected Concept" onClick={() => openConceptEditor(selectedConcept)} type="button">✎ <span className={styles.actionLabel}>Edit</span></button>
-                    <button aria-label="Delete selected Concept" className={styles.headingDanger} onClick={() => requestDelete({ kind: 'concept', record: selectedConcept })} type="button">⌫ <span className={styles.actionLabel}>Delete</span></button>
+                    <button aria-label="Edit selected Concept" onClick={() => openConceptEditor(selectedConcept)} title="Edit Concept" type="button"><Icon name="pencil" /> <span className={styles.actionLabel}>Edit</span></button>
+                    <button aria-label="Delete selected Concept" className={styles.headingDanger} onClick={() => requestDelete({ kind: 'concept', record: selectedConcept })} title="Delete Concept" type="button"><Icon name="trash" /> <span className={styles.actionLabel}>Delete</span></button>
                   </div>
                 </div>
                 <div className={styles.tabs}>
-                  <button className={rightTab === 'details' ? styles.activeTab : ''} onClick={() => setRightTab('details')} type="button">Details</button>
-                  <button className={rightTab === 'cards' ? styles.activeTab : ''} onClick={() => setRightTab('cards')} type="button">Cards</button>
+                  <button className={rightTab === 'details' ? styles.activeTab : ''} onClick={() => { closeMenus(); setRightTab('details'); }} type="button">Details</button>
+                  <button className={rightTab === 'cards' ? styles.activeTab : ''} onClick={() => { closeMenus(); setRightTab('cards'); }} type="button">Cards</button>
                 </div>
                 {rightTab === 'cards' ? (
                   <div className={styles.panelBody}>
@@ -768,11 +892,11 @@ export function StudyCreatorClient({ ownerId }: StudyCreatorClientProps) {
                         <article className={styles.cardRow} key={card.id}>
                           <p><strong>Q:</strong> {card.question}</p>
                           <p><strong>A:</strong> {card.answer}</p>
-                          <button aria-label={`Actions for card ${card.question}`} className={styles.moreButton} onClick={() => setCardMenuId(cardMenuId === card.id ? null : card.id)} type="button">•••</button>
+                          <button aria-expanded={cardMenuId === card.id} aria-haspopup="menu" aria-label={`Actions for card ${card.question}`} className={styles.moreButton} data-overflow-menu onClick={() => toggleMenu('card', card.id)} type="button"><Icon name="more" /></button>
                           {cardMenuId === card.id && (
-                            <div className={styles.actionMenu}>
-                              <button onClick={() => openCardEditor(card)} type="button">Edit Card</button>
-                              <button className={styles.menuDanger} onClick={() => requestDelete({ kind: 'card', record: card })} type="button">Delete Card</button>
+                            <div className={styles.actionMenu} data-overflow-menu role="menu">
+                              <button onClick={() => openCardEditor(card)} role="menuitem" type="button">Edit Card</button>
+                              <button className={styles.menuDanger} onClick={() => requestDelete({ kind: 'card', record: card })} role="menuitem" type="button">Delete Card</button>
                             </div>
                           )}
                         </article>
@@ -797,7 +921,7 @@ export function StudyCreatorClient({ ownerId }: StudyCreatorClientProps) {
               </>
             ) : (
               <div className={styles.emptyColumn}>
-                <span>▥</span>
+                <span><Icon name="book" /></span>
                 <h2>Select or create a Concept</h2>
                 <p>Its Cards and details will appear here.</p>
                 {selectedTopic && <button className={styles.primary} onClick={() => openConceptEditor(null)} type="button">＋ New Concept</button>}
@@ -808,8 +932,8 @@ export function StudyCreatorClient({ ownerId }: StudyCreatorClientProps) {
       </section>
 
       {editorModal && (
-        <div className={styles.modalBackdrop} role="presentation" onMouseDown={(event) => { if (event.currentTarget === event.target && !isSaving) setEditorModal(null); }}>
-          <section aria-labelledby="editor-title" aria-modal="true" className={styles.modal} role="dialog">
+        <div className={styles.modalBackdrop} role="presentation" onMouseDown={(event) => { if (event.currentTarget === event.target) closeEditor(); }}>
+          <section aria-labelledby="editor-title" aria-modal="true" className={styles.modal} ref={dialogRef} role="dialog">
             <div className={styles.modalHeader}>
               <div>
                 <p>{editorModal.record ? 'Edit personal content' : 'Create personal content'}</p>
@@ -817,7 +941,7 @@ export function StudyCreatorClient({ ownerId }: StudyCreatorClientProps) {
                   {editorModal.record ? 'Edit' : 'New'} {editorModal.kind === 'card' ? 'Card' : editorModal.kind === 'concept' ? 'Concept' : 'Topic'}
                 </h2>
               </div>
-              <button aria-label="Close editor" disabled={isSaving} onClick={() => setEditorModal(null)} type="button">×</button>
+              <button aria-label="Close editor" disabled={isSaving} onClick={closeEditor} type="button">×</button>
             </div>
 
             {editorModal.kind === 'topic' && (
@@ -829,7 +953,7 @@ export function StudyCreatorClient({ ownerId }: StudyCreatorClientProps) {
                     <option key={topic.id} value={topic.id}>{topicLabel(topic.id)}</option>
                   ))}
                 </select></label>
-                <div className={styles.modalActions}><button className={styles.secondary} disabled={isSaving} onClick={() => setEditorModal(null)} type="button">Cancel</button><button className={styles.primary} disabled={isSaving} type="submit">{isSaving ? 'Saving…' : 'Save Topic'}</button></div>
+                <div className={styles.modalActions}><button className={styles.secondary} disabled={isSaving} onClick={closeEditor} type="button">Cancel</button><button className={styles.primary} disabled={isSaving} type="submit">{isSaving ? 'Saving…' : 'Save Topic'}</button></div>
               </form>
             )}
 
@@ -838,7 +962,7 @@ export function StudyCreatorClient({ ownerId }: StudyCreatorClientProps) {
                 <label>Concept name<input autoFocus maxLength={160} onChange={(event) => setConceptName(event.target.value)} required value={conceptName} /></label>
                 <label>Short description <small>Optional</small><textarea maxLength={1000} onChange={(event) => setConceptDescription(event.target.value)} value={conceptDescription} /></label>
                 <label>Topic<select onChange={(event) => setConceptTopicId(event.target.value)} required value={conceptTopicId}><option value="">Choose a Topic</option>{orderedTopics.map((topic) => <option key={topic.id} value={topic.id}>{topicLabel(topic.id)}</option>)}</select></label>
-                <div className={styles.modalActions}><button className={styles.secondary} disabled={isSaving} onClick={() => setEditorModal(null)} type="button">Cancel</button><button className={styles.primary} disabled={isSaving} type="submit">{isSaving ? 'Saving…' : 'Save Concept'}</button></div>
+                <div className={styles.modalActions}><button className={styles.secondary} disabled={isSaving} onClick={closeEditor} type="button">Cancel</button><button className={styles.primary} disabled={isSaving} type="submit">{isSaving ? 'Saving…' : 'Save Concept'}</button></div>
               </form>
             )}
 
@@ -847,7 +971,7 @@ export function StudyCreatorClient({ ownerId }: StudyCreatorClientProps) {
                 <label>Question / Front<textarea autoFocus maxLength={10000} onChange={(event) => setCardQuestion(event.target.value)} required value={cardQuestion} /></label>
                 <label>Answer / Back<textarea maxLength={20000} onChange={(event) => setCardAnswer(event.target.value)} required value={cardAnswer} /></label>
                 <label>Concept<select onChange={(event) => setCardConceptId(event.target.value)} required value={cardConceptId}><option value="">Choose a Concept</option>{concepts.map((concept) => <option key={concept.id} value={concept.id}>{concept.name} — {topicLabel(concept.topic_id)}</option>)}</select></label>
-                <div className={styles.modalActions}><button className={styles.secondary} disabled={isSaving} onClick={() => setEditorModal(null)} type="button">Cancel</button><button className={styles.primary} disabled={isSaving} type="submit">{isSaving ? 'Saving…' : 'Save Card'}</button></div>
+                <div className={styles.modalActions}><button className={styles.secondary} disabled={isSaving} onClick={closeEditor} type="button">Cancel</button><button className={styles.primary} disabled={isSaving} type="submit">{isSaving ? 'Saving…' : 'Save Card'}</button></div>
               </form>
             )}
           </section>
@@ -856,13 +980,13 @@ export function StudyCreatorClient({ ownerId }: StudyCreatorClientProps) {
 
       {deleteTarget && (
         <div className={styles.modalBackdrop} role="presentation">
-          <section aria-labelledby="delete-title" aria-modal="true" className={`${styles.modal} ${styles.deleteModal}`} role="dialog">
+          <section aria-labelledby="delete-title" aria-modal="true" className={`${styles.modal} ${styles.deleteModal}`} ref={dialogRef} role="dialog">
             <div className={styles.deleteIcon}>!</div>
             <h2 id="delete-title">Delete this {deleteTarget.kind}?</h2>
             <p>{deleteDescription()}</p>
             <p className={styles.deleteNote}>This action cannot be undone.</p>
             <div className={styles.modalActions}>
-              <button className={styles.secondary} disabled={isSaving} onClick={() => setDeleteTarget(null)} type="button">Cancel</button>
+              <button autoFocus className={styles.secondary} disabled={isSaving} onClick={closeDeleteConfirmation} type="button">Cancel</button>
               <button className={styles.dangerButton} disabled={isSaving} onClick={confirmDelete} type="button">{isSaving ? 'Deleting…' : `Delete ${deleteTarget.kind}`}</button>
             </div>
           </section>
