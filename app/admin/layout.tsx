@@ -1,4 +1,4 @@
-import { Header } from '@/components/Header';
+import { Header, HeaderSessionProvider } from '@/components/Header';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
 import { redirect } from 'next/navigation';
 
@@ -36,5 +36,12 @@ export default async function AdminLayout({
     );
   }
 
-  return children;
+  return (
+    <HeaderSessionProvider
+      email={user.email ?? 'Account'}
+      role={roleData.role}
+    >
+      {children}
+    </HeaderSessionProvider>
+  );
 }

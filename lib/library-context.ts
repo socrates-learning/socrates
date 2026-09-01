@@ -174,6 +174,19 @@ export async function resolveActiveLibraryContext({
       };
     }
 
+    if (requestedSlug !== undefined && requestedSlug !== null) {
+      return {
+        library: null,
+        role,
+        user: resolvedUser,
+        source: 'none',
+        canSwitch: true,
+        hasMembership,
+        needsSelection: false,
+        isUnauthorized: false,
+      };
+    }
+
     const cookieLibrary = cookieSlugIsValid
       ? await findActiveLibraryBySlug(cookieSlug)
       : null;
