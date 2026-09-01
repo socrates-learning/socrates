@@ -799,7 +799,16 @@ export function StudyCreatorClient({ ownerId }: StudyCreatorClientProps) {
               <div className={styles.panelBody}>
                 <div className={styles.sectionLead}>
                   <div><h3>Concepts</h3><p>{selectedTopic ? 'Organize ideas within this Topic.' : 'Choose a Topic before adding Concepts.'}</p></div>
-                  <button className={styles.primary} onClick={() => selectedTopic ? openConceptEditor(null) : openTopicEditor(null)} type="button">＋ {selectedTopic ? 'New Concept' : 'New Topic'}</button>
+                  <button
+                    aria-describedby={!selectedTopic ? 'new-concept-requirement' : undefined}
+                    className={styles.primary}
+                    disabled={!selectedTopic}
+                    onClick={() => openConceptEditor(null)}
+                    title={!selectedTopic ? 'Select or create a Topic first' : undefined}
+                    type="button"
+                  >
+                    ＋ New Concept
+                  </button>
                 </div>
                 <div className={styles.conceptList}>
                   {selectedTopicConcepts.map((concept) => {
@@ -822,7 +831,7 @@ export function StudyCreatorClient({ ownerId }: StudyCreatorClientProps) {
                       </article>
                     );
                   })}
-                  {!selectedTopic && <div className={styles.inlineEmpty}>Select or create a Topic to organize your Concepts.</div>}
+                  {!selectedTopic && <div className={styles.inlineEmpty} id="new-concept-requirement">Select or create a Topic to organize your Concepts.</div>}
                   {selectedTopic && !selectedTopicConcepts.length && <div className={styles.inlineEmpty}>No Concepts yet. Create one to begin adding Cards.</div>}
                   {selectedTopicConcepts.length > 0 && (
                     <button className={styles.addPlaceholder} onClick={() => openConceptEditor(null)} type="button">⊕ Add another Concept to this Topic</button>
@@ -875,7 +884,16 @@ export function StudyCreatorClient({ ownerId }: StudyCreatorClientProps) {
               <div className={styles.panelBody}>
                 <div className={styles.sectionLead}>
                   <div><h3>Cards</h3><p>{selectedConcept ? 'Create simple prompts to study this Concept.' : 'Choose a Concept before adding Cards.'}</p></div>
-                  {selectedConcept && <button className={styles.primary} onClick={() => openCardEditor(null)} type="button">＋ New Card</button>}
+                  <button
+                    aria-describedby={!selectedConcept ? 'new-card-requirement' : undefined}
+                    className={styles.primary}
+                    disabled={!selectedConcept}
+                    onClick={() => openCardEditor(null)}
+                    title={!selectedConcept ? 'Select or create a Concept first' : undefined}
+                    type="button"
+                  >
+                    ＋ New Card
+                  </button>
                 </div>
                 <div className={styles.cardList}>
                   {selectedConceptCards.map((card) => (
@@ -891,7 +909,7 @@ export function StudyCreatorClient({ ownerId }: StudyCreatorClientProps) {
                       )}
                     </article>
                   ))}
-                  {!selectedConcept && <div className={styles.inlineEmpty}>Select or create a Concept to start making Cards.</div>}
+                  {!selectedConcept && <div className={styles.inlineEmpty} id="new-card-requirement">Select or create a Concept to start making Cards.</div>}
                   {selectedConcept && !selectedConceptCards.length && <div className={styles.inlineEmpty}>No Cards yet. Create the first Card for this Concept.</div>}
                   {selectedConceptCards.length > 0 && <button className={styles.addPlaceholder} onClick={() => openCardEditor(null)} type="button">⊕ Add another Card to this Concept</button>}
                   {!selectedConcept && selectedTopic && <button className={styles.addPlaceholder} onClick={() => openConceptEditor(null)} type="button">⊕ Create a Concept in this Topic</button>}
