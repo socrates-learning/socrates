@@ -184,3 +184,39 @@ export async function resolveStudyCandidates(
 
   return adaptStudyCandidateRows((data || []) as StudyCandidateRow[]);
 }
+
+export async function selectNextUnansweredPersonalCandidate(
+  supabase: SupabaseClient,
+  deckId: string,
+  studySessionId: string,
+  candidates?: StudyCandidate[]
+): Promise<PersonalStudyCandidate | null> {
+  const [resolvedCandidates, attemptsResult] = await Promise.all([
+    candidates
+      ? Promise.resolve(candidates)
+      : resolveStudyCandidates(supabase, deckId),
+    supabase
+      .from('personal_review_attempts')
+      .select('personal_card_id')
+      .eq('study_session_id', studySessionId)
+      .eq('study_deck_id', deckId),
+  ]);
+
+  if (attemptsResult.error) {
+    throw new Error(
+      `Unable to load personal Study progress: ${attemptsResult.error.message}`
+    );
+  }
+
+  const answeredCardIds = new Set(
+    (attemptsResult.data || []).map((attempt) => attempt.personal_card_id)
+  );
+
+  return (
+    resolvedCandidates.find(
+      (candidate): candidate is PersonalStudyCandidate =>
+        candidate.kind === 'personal'
+        && !answeredCardIds.has(candidate.cardId)
+    ) || null
+  );
+}

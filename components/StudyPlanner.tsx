@@ -13,6 +13,13 @@ import {
 import { supabase } from '@/lib/supabase';
 import type { ActiveLibrary, ActiveLibraryRole } from '@/lib/library-context';
 import type { StudyPlannerInitialData } from '@/lib/study-planner-initial-data';
+import {
+  resolveStudyCandidates,
+  selectNextUnansweredPersonalCandidate,
+  type OfficialStudyCandidate,
+  type StudyCandidate,
+} from '@/lib/study-candidates';
+import { recordPersonalStudyAttempt } from '@/lib/personal-study-attempts';
 import type { ReactNode } from 'react';
 
 type LibraryNode = {
@@ -125,21 +132,6 @@ const emptyLearnerProgress: LearnerProgressResponse = {
   },
   nodes: [],
   recent_sessions: [],
-};
-
-type AuthoredStudyQuestion = {
-  id: string;
-  concept_id: string;
-  prompt: string;
-  explanation: string | null;
-  difficulty: string;
-  testing_angle: string;
-  sort_order: number;
-  created_at: string;
-  question_accepted_answers: Array<{
-    answer_text: string;
-    sort_order: number;
-  }>;
 };
 
 type PriorityStudyQuestion = {
@@ -417,12 +409,8 @@ export function StudyPlanner({
   const [learnerProgressError, setLearnerProgressError] = useState(
     initialDeckData?.learnerProgressError || ''
   );
-  const [authoredStudyQuestions, setAuthoredStudyQuestions] = useState<
-    AuthoredStudyQuestion[]
-  >([]);
-  const [authoredStudyQuestionIndex, setAuthoredStudyQuestionIndex] = useState(0);
-  const [priorityStudyQuestion, setPriorityStudyQuestion] =
-    useState<PriorityStudyQuestion | null>(null);
+  const [studyCandidate, setStudyCandidate] = useState<StudyCandidate | null>(null);
+  const [isStudySequenceComplete, setIsStudySequenceComplete] = useState(false);
   const [expandedNodeIds, setExpandedNodeIds] = useState<Set<string>>(
     new Set(initialRootNodeId ? [initialRootNodeId] : [])
   );
@@ -456,30 +444,22 @@ export function StudyPlanner({
   const studyModeOpenLock = useRef(false);
   const studySessionIdRef = useRef<string | null>(null);
   const studySessionCreatePromiseRef = useRef<Promise<string | null> | null>(null);
-  const sequentialAuthoredStudyQuestion =
-    authoredStudyQuestions[authoredStudyQuestionIndex] || null;
-  const priorityAuthoredStudyQuestion = priorityStudyQuestion
-    ? authoredStudyQuestions.find(
-        (question) => question.id === priorityStudyQuestion.question_id
-      ) || null
+  const authoredStudyQuestion = studyCandidate?.kind === 'official'
+    ? {
+        id: studyCandidate.questionId,
+        concept_id: studyCandidate.conceptId,
+        prompt: studyCandidate.prompt,
+        explanation: studyCandidate.explanation,
+        difficulty: studyCandidate.difficulty,
+        testing_angle: studyCandidate.testingAngle,
+        question_accepted_answers: [
+          {
+            answer_text: studyCandidate.answer,
+            sort_order: 0,
+          },
+        ],
+      }
     : null;
-  const authoredStudyQuestion =
-    priorityStudyQuestion
-      ? {
-          id: priorityStudyQuestion.question_id,
-          concept_id: priorityStudyQuestion.concept_id,
-          prompt: priorityStudyQuestion.prompt,
-          explanation: priorityAuthoredStudyQuestion?.explanation || null,
-          difficulty: priorityStudyQuestion.difficulty,
-          testing_angle: priorityStudyQuestion.testing_angle,
-          question_accepted_answers: [
-            {
-              answer_text: priorityStudyQuestion.accepted_answer,
-              sort_order: 0,
-            },
-          ],
-        }
-      : sequentialAuthoredStudyQuestion;
 
   const nodesById = useMemo(
     () => new Map(nodes.map((node) => [node.id, node])),
@@ -907,84 +887,6 @@ export function StudyPlanner({
   }, [activeLibrary, initialDeckData, initialSession]);
 
   useEffect(() => {
-    let isMounted = true;
-    const conceptIds = resolvedConcepts.map((concept) => concept.concept_id);
-
-    async function loadAuthoredStudyQuestions() {
-      if (!conceptIds.length) {
-        setAuthoredStudyQuestions([]);
-        setAuthoredStudyQuestionIndex(0);
-        return;
-      }
-
-      const { data, error } = await supabase
-        .from('questions')
-        .select(
-          `
-          id,
-          concept_id,
-          prompt,
-          explanation,
-          difficulty,
-          testing_angle,
-          sort_order,
-          created_at,
-          question_accepted_answers!inner (
-            answer_text,
-            sort_order
-          )
-        `
-        )
-        .eq('status', 'published')
-        .eq('question_type', 'short_answer')
-        .in('concept_id', conceptIds)
-        .order('sort_order', { ascending: true })
-        .order('created_at', { ascending: true })
-        .order('id', { ascending: true });
-
-      if (!isMounted) return;
-
-      if (error || !data?.length) {
-        setAuthoredStudyQuestions([]);
-        setAuthoredStudyQuestionIndex(0);
-        return;
-      }
-
-      const conceptOrder = new Map(
-        resolvedConcepts.map((concept, index) => [concept.concept_id, index])
-      );
-      const loadedQuestions = (data as unknown as AuthoredStudyQuestion[])
-        .map((question) => ({
-          ...question,
-          question_accepted_answers: [
-            ...(question.question_accepted_answers || []),
-          ].sort((a, b) => a.sort_order - b.sort_order),
-        }))
-        .sort((left, right) => {
-          const conceptDifference =
-            (conceptOrder.get(left.concept_id) ?? Number.MAX_SAFE_INTEGER) -
-            (conceptOrder.get(right.concept_id) ?? Number.MAX_SAFE_INTEGER);
-          if (conceptDifference !== 0) return conceptDifference;
-          if (left.sort_order !== right.sort_order) {
-            return left.sort_order - right.sort_order;
-          }
-          const createdDifference = left.created_at.localeCompare(right.created_at);
-          if (createdDifference !== 0) return createdDifference;
-          return left.id.localeCompare(right.id);
-        });
-
-      setAuthoredStudyQuestions(loadedQuestions);
-      setAuthoredStudyQuestionIndex(0);
-    }
-
-    void loadAuthoredStudyQuestions();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [resolvedConcepts]);
-
-  useEffect(() => {
     function openModeFromHash() {
       if (window.location.hash === '#set-up-deck') {
         setMode('setup');
@@ -1051,7 +953,7 @@ export function StudyPlanner({
     if (studySessionCreatePromiseRef.current) {
       return studySessionCreatePromiseRef.current;
     }
-    if (!deck || !userId || !authoredStudyQuestions.length) return null;
+    if (!deck || !userId) return null;
 
     const createPromise = (async () => {
       const selectedBalances = [...selectedNodeIds].map(
@@ -1087,19 +989,22 @@ export function StudyPlanner({
     }
   }
 
-  async function selectPriorityStudyQuestion(sessionId: string) {
+  async function selectPriorityStudyCandidate(
+    sessionId: string,
+    candidates: StudyCandidate[]
+  ): Promise<OfficialStudyCandidate | null> {
     const { data, error } = await supabase.rpc('select_next_study_question', {
       p_study_session_id: sessionId,
       p_include_debug: false,
     });
 
     if (error) {
-      console.error('Unable to select the next Study Mode question.', error);
-      return null;
+      throw new Error(
+        `Unable to select the next Study Mode question: ${error.message}`
+      );
     }
 
     if (!data) {
-      console.error('Study Mode selector found no eligible question.');
       return null;
     }
 
@@ -1111,11 +1016,66 @@ export function StudyPlanner({
       !selectedQuestion.prompt ||
       !selectedQuestion.accepted_answer
     ) {
-      console.error('Study Mode selector returned an incomplete question.');
-      return null;
+      throw new Error('Study Mode selector returned an incomplete question.');
     }
 
-    return selectedQuestion;
+    const resolvedCandidate = candidates.find(
+      (candidate): candidate is OfficialStudyCandidate =>
+        candidate.kind === 'official'
+        && candidate.questionId === selectedQuestion.question_id
+        && candidate.conceptId === selectedQuestion.concept_id
+    );
+
+    if (!resolvedCandidate) {
+      throw new Error(
+        'The selected official Question is not present in the resolved Study candidates.'
+      );
+    }
+
+    return {
+      ...resolvedCandidate,
+      prompt: selectedQuestion.prompt,
+      answer: selectedQuestion.accepted_answer,
+      difficulty: selectedQuestion.difficulty,
+      testingAngle: selectedQuestion.testing_angle,
+    };
+  }
+
+  async function selectStage2DStudyCandidate(
+    sessionId: string,
+    phase: 'initial' | 'after-response'
+  ): Promise<StudyCandidate | null> {
+    if (!deck) return null;
+
+    const candidates = await resolveStudyCandidates(supabase, deck.id);
+    const hasOfficialCandidate = candidates.some(
+      (candidate) => candidate.kind === 'official'
+    );
+
+    // Stage 2D deliberately avoids cross-source scoring. A mixed Session opens
+    // with the existing official selector, then traverses each selected
+    // personal Card once before returning to unchanged official selection.
+    if (phase === 'initial' && hasOfficialCandidate) {
+      const officialCandidate = await selectPriorityStudyCandidate(
+        sessionId,
+        candidates
+      );
+      if (officialCandidate) return officialCandidate;
+    }
+
+    const personalCandidate = await selectNextUnansweredPersonalCandidate(
+      supabase,
+      deck.id,
+      sessionId,
+      candidates
+    );
+    if (personalCandidate) return personalCandidate;
+
+    if (hasOfficialCandidate) {
+      return selectPriorityStudyCandidate(sessionId, candidates);
+    }
+
+    return null;
   }
 
   function resetStudyCardFeedback() {
@@ -1208,8 +1168,8 @@ export function StudyPlanner({
     if (studyModeOpenLock.current) return;
 
     studyModeOpenLock.current = true;
-    setAuthoredStudyQuestionIndex(0);
-    setPriorityStudyQuestion(null);
+    setStudyCandidate(null);
+    setIsStudySequenceComplete(false);
     setIsAnswerVisible(false);
     setStudyFeedback(null);
     setStudyResponse(null);
@@ -1220,9 +1180,16 @@ export function StudyPlanner({
       const sessionId = await ensureStudySession();
 
       if (sessionId) {
-        const selectedQuestion = await selectPriorityStudyQuestion(sessionId);
-        if (selectedQuestion) setPriorityStudyQuestion(selectedQuestion);
+        const selectedCandidate = await selectStage2DStudyCandidate(
+          sessionId,
+          'initial'
+        );
+        if (selectedCandidate) {
+          setStudyCandidate(selectedCandidate);
+        }
       }
+    } catch (error) {
+      console.error('Unable to open Study Mode.', error);
     } finally {
       setMode('study');
       studyModeOpenLock.current = false;
@@ -1240,7 +1207,8 @@ export function StudyPlanner({
     studySessionCreatePromiseRef.current = null;
     studyResponseRecordedForCard.current = false;
     resetStudyCardFeedback();
-    setPriorityStudyQuestion(null);
+    setStudyCandidate(null);
+    setIsStudySequenceComplete(false);
     setMode(nextMode);
 
     const sessionId = await pendingSession;
@@ -1269,7 +1237,7 @@ export function StudyPlanner({
 
     setStudyResponse(response);
 
-    if (!authoredStudyQuestion || !userId) return;
+    if (!studyCandidate || !userId || !deck) return;
 
     studyResponseSaveLock.current = true;
 
@@ -1278,26 +1246,43 @@ export function StudyPlanner({
 
       if (!sessionId) return;
 
-      const { error } = await supabase.rpc('record_study_session_attempt', {
-        p_study_session_id: sessionId,
-        p_question_id: authoredStudyQuestion.id,
-        p_concept_id: authoredStudyQuestion.concept_id,
-        p_result: response,
-      });
+      if (studyCandidate.kind === 'official') {
+        const { error } = await supabase.rpc('record_study_session_attempt', {
+          p_study_session_id: sessionId,
+          p_question_id: studyCandidate.questionId,
+          p_concept_id: studyCandidate.conceptId,
+          p_result: response,
+        });
 
-      if (error) {
-        console.error('Unable to record Study Mode response.', error);
-        return;
+        if (error) {
+          console.error('Unable to record Study Mode response.', error);
+          return;
+        }
+      } else {
+        await recordPersonalStudyAttempt(supabase, {
+          studySessionId: sessionId,
+          studyDeckId: deck.id,
+          personalCardId: studyCandidate.cardId,
+          personalConceptId: studyCandidate.personalConceptId,
+          result: response,
+        });
       }
 
       studyResponseRecordedForCard.current = true;
       void refreshLearnerProgress();
 
-      const selectedQuestion = await selectPriorityStudyQuestion(sessionId);
+      const selectedCandidate = await selectStage2DStudyCandidate(
+        sessionId,
+        'after-response'
+      );
 
-      if (!selectedQuestion) return;
-
-      setPriorityStudyQuestion(selectedQuestion);
+      if (!selectedCandidate) {
+        setStudyCandidate(null);
+        setIsStudySequenceComplete(true);
+      } else {
+        setStudyCandidate(selectedCandidate);
+        setIsStudySequenceComplete(false);
+      }
 
       setIsAnswerVisible(false);
       setStudyFeedback(null);
@@ -3108,11 +3093,10 @@ export function StudyPlanner({
   }
 
 if (mode === 'study') {
-  const authoredStudyAnswer =
-    authoredStudyQuestion?.question_accepted_answers[0]?.answer_text || null;
+  const studyAnswer = studyCandidate?.answer || null;
   const authoredStudyExplanation =
     authoredStudyQuestion?.explanation?.trim() || null;
-  const hasStudyQuestion = Boolean(authoredStudyQuestion && authoredStudyAnswer);
+  const hasStudyCandidate = Boolean(studyCandidate && studyAnswer);
 
   const studyCardActions = (
     <div className="study-v2-card-actions" aria-label="Study card controls">
@@ -3137,27 +3121,29 @@ if (mode === 'study') {
         <section className="study-v2-shell" aria-label="Study Mode">
           <article
             aria-label={
-              hasStudyQuestion
+              hasStudyCandidate
                 ? isAnswerVisible
                   ? 'Revealed study card'
                   : 'Question card'
-                : 'No study questions available'
+                : isStudySequenceComplete
+                  ? 'Study sequence complete'
+                  : 'No study material available'
             }
             className={`study-v2-card ${
-              !hasStudyQuestion
+              !hasStudyCandidate
                 ? 'study-v2-card-empty'
                 : isAnswerVisible
                   ? 'study-v2-card-revealed'
                   : 'study-v2-card-front'
             }`}
             onClick={
-              !hasStudyQuestion || isAnswerVisible
+              !hasStudyCandidate || isAnswerVisible
                 ? undefined
                 : () => setIsAnswerVisible(true)
             }
             onKeyDown={(event) => {
               if (
-                hasStudyQuestion &&
+                hasStudyCandidate &&
                 !isAnswerVisible &&
                 (event.key === 'Enter' || event.key === ' ')
               ) {
@@ -3165,19 +3151,24 @@ if (mode === 'study') {
                 setIsAnswerVisible(true);
               }
             }}
-            role={!hasStudyQuestion || isAnswerVisible ? undefined : 'button'}
-            tabIndex={!hasStudyQuestion || isAnswerVisible ? undefined : 0}
+            role={!hasStudyCandidate || isAnswerVisible ? undefined : 'button'}
+            tabIndex={!hasStudyCandidate || isAnswerVisible ? undefined : 0}
           >
             <div className="study-v2-card-topline">
               {studyCardActions}
             </div>
 
-            {!hasStudyQuestion ? (
+            {!hasStudyCandidate ? (
               <div className="study-v2-empty-state">
-                <h1>No study questions available</h1>
+                <h1>
+                  {isStudySequenceComplete
+                    ? 'Study complete'
+                    : 'No study material available'}
+                </h1>
                 <p>
-                  This deck doesn&apos;t currently contain any eligible published
-                  questions.
+                  {isStudySequenceComplete
+                    ? 'You reviewed every selected personal Card in this session.'
+                    : 'This deck does not currently contain an eligible published Question or selected personal Card.'}
                 </p>
                 <div className="study-v2-empty-actions">
                   <button type="button" onClick={() => void leaveStudyMode('setup')}>
@@ -3205,7 +3196,7 @@ if (mode === 'study') {
               </div>
             ) : !isAnswerVisible ? (
               <div className="study-v2-question-content">
-                <h1>{authoredStudyQuestion.prompt}</h1>
+                <h1>{studyCandidate?.prompt}</h1>
                 <p>Tap to reveal answer</p>
               </div>
             ) : (
@@ -3216,7 +3207,7 @@ if (mode === 'study') {
                     aria-labelledby="study-answer-heading"
                   >
                     <h1 id="study-answer-heading">Answer</h1>
-                    <p>{authoredStudyAnswer}</p>
+                    <p>{studyAnswer}</p>
                   </section>
                   {authoredStudyExplanation && (
                     <section
@@ -3230,12 +3221,25 @@ if (mode === 'study') {
                 </div>
 
                 {studyFeedback === null ? (
-                  <div className="study-v2-feedback-row">
-                    {[
-                      ['up', 'Thumbs Up'],
-                      ['more', 'More'],
-                      ['down', 'Thumbs Down'],
-                    ].map(([value, label]) => (
+                  <div
+                    className={`study-v2-feedback-row${
+                      studyCandidate?.kind === 'personal'
+                        ? ' study-v2-feedback-row-personal'
+                        : ''
+                    }`}
+                  >
+                    {(
+                      studyCandidate?.kind === 'official'
+                        ? [
+                            ['up', 'Thumbs Up'],
+                            ['more', 'More'],
+                            ['down', 'Thumbs Down'],
+                          ]
+                        : [
+                            ['up', 'Thumbs Up'],
+                            ['down', 'Thumbs Down'],
+                          ]
+                    ).map(([value, label]) => (
                       <button
                         key={value}
                         type="button"
@@ -3734,6 +3738,10 @@ if (mode === 'study') {
           flex: 0 0 auto;
           grid-template-columns: repeat(3, 1fr);
           min-height: 148px;
+        }
+
+        .study-v2-feedback-row-personal {
+          grid-template-columns: repeat(2, 1fr);
         }
 
         .study-v2-feedback-row button {
