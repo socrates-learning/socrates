@@ -720,6 +720,8 @@ export function StudyCreatorClient({ ownerId }: StudyCreatorClientProps) {
   const unavailableTopicParents = selectedTopic
     ? descendantTopicIds(selectedTopic.id, true)
     : new Set<string>();
+  const visibleCenterTab = selectedTopic ? centerTab : 'concepts';
+  const visibleRightTab = selectedConcept ? rightTab : 'cards';
 
   return (
     <main className={styles.page}>
@@ -780,153 +782,135 @@ export function StudyCreatorClient({ ownerId }: StudyCreatorClientProps) {
           </aside>
 
           <section className={`${styles.column} ${styles.conceptsColumn}`} aria-label="Concepts">
-            {selectedTopic ? (
-              <>
-                <div className={styles.selectionHeading}>
-                  <span className={styles.headingIcon}><Icon name="folder" /></span>
-                  <div>
-                    <p>Selected Topic</p>
-                    <h2>{selectedTopic.name}</h2>
-                  </div>
-                  <button aria-label="Edit selected Topic" className={styles.iconButton} onClick={() => openTopicEditor(selectedTopic)} title="Edit Topic" type="button"><Icon name="pencil" /></button>
-                </div>
-                <div className={styles.tabs}>
-                  <button className={centerTab === 'concepts' ? styles.activeTab : ''} onClick={() => { closeMenus(); setCenterTab('concepts'); }} type="button">Concepts</button>
-                  <button className={centerTab === 'details' ? styles.activeTab : ''} onClick={() => { closeMenus(); setCenterTab('details'); }} type="button">Topic Details</button>
-                </div>
-
-                {centerTab === 'concepts' ? (
-                  <div className={styles.panelBody}>
-                    <div className={styles.sectionLead}>
-                      <div><h3>Concepts</h3><p>Organize ideas within this Topic.</p></div>
-                      <button className={styles.primary} onClick={() => openConceptEditor(null)} type="button">＋ New Concept</button>
-                    </div>
-                    <div className={styles.conceptList}>
-                      {selectedTopicConcepts.map((concept) => {
-                        const conceptCardCount = cards.filter((card) => card.concept_id === concept.id).length;
-                        return (
-                          <article className={`${styles.conceptRow} ${selectedConceptId === concept.id ? styles.selectedConcept : ''}`} key={concept.id}>
-                            <button className={styles.conceptSelect} onClick={() => selectConcept(concept)} type="button">
-                              <span className={styles.bookIcon}><Icon name="book" /></span>
-                              <span><strong>{concept.name}</strong><small>{conceptCardCount} Card{conceptCardCount === 1 ? '' : 's'}</small></span>
-                            </button>
-                            <button aria-expanded={conceptMenuId === concept.id} aria-haspopup="menu" aria-label={`Actions for ${concept.name}`} className={styles.moreButton} data-overflow-menu onClick={() => toggleMenu('concept', concept.id)} type="button"><Icon name="more" /></button>
-                            <span className={styles.chevron}><Icon name="chevron-right" /></span>
-                            {conceptMenuId === concept.id && (
-                              <div className={styles.actionMenu} data-overflow-menu role="menu">
-                                <button onClick={() => openConceptEditor(concept)} role="menuitem" type="button">Edit Concept</button>
-                                <button onClick={() => { setSelectedConceptId(concept.id); openCardEditor(null, concept.id); }} role="menuitem" type="button">Add Card</button>
-                                <button className={styles.menuDanger} onClick={() => requestDelete({ kind: 'concept', record: concept })} role="menuitem" type="button">Delete Concept</button>
-                              </div>
-                            )}
-                          </article>
-                        );
-                      })}
-                      {!selectedTopicConcepts.length && (
-                        <button className={styles.addPlaceholder} onClick={() => openConceptEditor(null)} type="button">⊕ Create the first Concept in this Topic</button>
-                      )}
-                      {selectedTopicConcepts.length > 0 && (
-                        <button className={styles.addPlaceholder} onClick={() => openConceptEditor(null)} type="button">⊕ Add another Concept to this Topic</button>
-                      )}
-                    </div>
-                  </div>
-                ) : (
-                  <div className={styles.panelBody}>
-                    <div className={styles.detailCard}>
-                      <div><span>Topic name</span><strong>{selectedTopic.name}</strong></div>
-                      <label>
-                        Move under
-                        <select value={selectedTopic.parent_id ?? ''} onChange={(event) => moveSelectedTopic(event.target.value)}>
-                          <option value="">Top level</option>
-                          {orderedTopics.filter((topic) => !unavailableTopicParents.has(topic.id)).map((topic) => (
-                            <option key={topic.id} value={topic.id}>{topicLabel(topic.id)}</option>
-                          ))}
-                        </select>
-                      </label>
-                      <p>{topicCounts(selectedTopic.id).concepts} Concepts · {topicCounts(selectedTopic.id).cards} Cards in this branch</p>
-                      <div className={styles.detailActions}>
-                        <button className={styles.secondary} onClick={() => openTopicEditor(selectedTopic)} type="button">Edit Topic</button>
-                        <button className={styles.secondary} onClick={() => openTopicEditor(null, selectedTopic.id)} type="button">Add child Topic</button>
-                        <button className={styles.dangerButton} onClick={() => requestDelete({ kind: 'topic', record: selectedTopic })} type="button">Delete Topic</button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </>
-            ) : (
-              <div className={styles.emptyColumn}>
-                <span><Icon name="folder" /></span>
-                <h2>Select or create a Topic</h2>
-                <p>Your Concepts will appear here.</p>
-                <button className={styles.primary} onClick={() => openTopicEditor(null)} type="button">＋ New Topic</button>
+            <div className={styles.selectionHeading}>
+              <span className={styles.headingIcon}><Icon name="folder" /></span>
+              <div>
+                <p>Selected Topic</p>
+                <h2>{selectedTopic?.name ?? 'No Topic selected'}</h2>
               </div>
-            )}
+              {selectedTopic && <button aria-label="Edit selected Topic" className={styles.iconButton} onClick={() => openTopicEditor(selectedTopic)} title="Edit Topic" type="button"><Icon name="pencil" /></button>}
+            </div>
+            <div className={styles.tabs}>
+              <button className={visibleCenterTab === 'concepts' ? styles.activeTab : ''} onClick={() => { closeMenus(); setCenterTab('concepts'); }} type="button">Concepts</button>
+              <button className={visibleCenterTab === 'details' ? styles.activeTab : ''} disabled={!selectedTopic} onClick={() => { closeMenus(); setCenterTab('details'); }} type="button">Topic Details</button>
+            </div>
+
+            {visibleCenterTab === 'concepts' ? (
+              <div className={styles.panelBody}>
+                <div className={styles.sectionLead}>
+                  <div><h3>Concepts</h3><p>{selectedTopic ? 'Organize ideas within this Topic.' : 'Choose a Topic before adding Concepts.'}</p></div>
+                  <button className={styles.primary} onClick={() => selectedTopic ? openConceptEditor(null) : openTopicEditor(null)} type="button">＋ {selectedTopic ? 'New Concept' : 'New Topic'}</button>
+                </div>
+                <div className={styles.conceptList}>
+                  {selectedTopicConcepts.map((concept) => {
+                    const conceptCardCount = cards.filter((card) => card.concept_id === concept.id).length;
+                    return (
+                      <article className={`${styles.conceptRow} ${selectedConceptId === concept.id ? styles.selectedConcept : ''}`} key={concept.id}>
+                        <button className={styles.conceptSelect} onClick={() => selectConcept(concept)} type="button">
+                          <span className={styles.bookIcon}><Icon name="book" /></span>
+                          <span><strong>{concept.name}</strong><small>{conceptCardCount} Card{conceptCardCount === 1 ? '' : 's'}</small></span>
+                        </button>
+                        <button aria-expanded={conceptMenuId === concept.id} aria-haspopup="menu" aria-label={`Actions for ${concept.name}`} className={styles.moreButton} data-overflow-menu onClick={() => toggleMenu('concept', concept.id)} type="button"><Icon name="more" /></button>
+                        <span className={styles.chevron}><Icon name="chevron-right" /></span>
+                        {conceptMenuId === concept.id && (
+                          <div className={styles.actionMenu} data-overflow-menu role="menu">
+                            <button onClick={() => openConceptEditor(concept)} role="menuitem" type="button">Edit Concept</button>
+                            <button onClick={() => { setSelectedConceptId(concept.id); openCardEditor(null, concept.id); }} role="menuitem" type="button">Add Card</button>
+                            <button className={styles.menuDanger} onClick={() => requestDelete({ kind: 'concept', record: concept })} role="menuitem" type="button">Delete Concept</button>
+                          </div>
+                        )}
+                      </article>
+                    );
+                  })}
+                  {!selectedTopic && <div className={styles.inlineEmpty}>Select or create a Topic to organize your Concepts.</div>}
+                  {selectedTopic && !selectedTopicConcepts.length && <div className={styles.inlineEmpty}>No Concepts yet. Create one to begin adding Cards.</div>}
+                  {selectedTopicConcepts.length > 0 && (
+                    <button className={styles.addPlaceholder} onClick={() => openConceptEditor(null)} type="button">⊕ Add another Concept to this Topic</button>
+                  )}
+                </div>
+              </div>
+            ) : selectedTopic ? (
+              <div className={styles.panelBody}>
+                <div className={styles.detailCard}>
+                  <div><span>Topic name</span><strong>{selectedTopic.name}</strong></div>
+                  <label>
+                    Move under
+                    <select value={selectedTopic.parent_id ?? ''} onChange={(event) => moveSelectedTopic(event.target.value)}>
+                      <option value="">Top level</option>
+                      {orderedTopics.filter((topic) => !unavailableTopicParents.has(topic.id)).map((topic) => (
+                        <option key={topic.id} value={topic.id}>{topicLabel(topic.id)}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <p>{topicCounts(selectedTopic.id).concepts} Concepts · {topicCounts(selectedTopic.id).cards} Cards in this branch</p>
+                  <div className={styles.detailActions}>
+                    <button className={styles.secondary} onClick={() => openTopicEditor(selectedTopic)} type="button">Edit Topic</button>
+                    <button className={styles.secondary} onClick={() => openTopicEditor(null, selectedTopic.id)} type="button">Add child Topic</button>
+                    <button className={styles.dangerButton} onClick={() => requestDelete({ kind: 'topic', record: selectedTopic })} type="button">Delete Topic</button>
+                  </div>
+                </div>
+              </div>
+            ) : null}
           </section>
 
           <section className={`${styles.column} ${styles.cardsColumn}`} aria-label="Concept and Cards">
-            {selectedConcept ? (
-              <>
-                <div className={styles.selectionHeading}>
-                  <span className={`${styles.headingIcon} ${styles.purpleIcon}`}><Icon name="book" /></span>
-                  <div>
-                    <p>Selected Concept</p>
-                    <h2>{selectedConcept.name}</h2>
-                  </div>
-                  <div className={styles.headingActions}>
-                    <button aria-label="Edit selected Concept" onClick={() => openConceptEditor(selectedConcept)} title="Edit Concept" type="button"><Icon name="pencil" /> <span className={styles.actionLabel}>Edit</span></button>
-                    <button aria-label="Delete selected Concept" className={styles.headingDanger} onClick={() => requestDelete({ kind: 'concept', record: selectedConcept })} title="Delete Concept" type="button"><Icon name="trash" /> <span className={styles.actionLabel}>Delete</span></button>
-                  </div>
-                </div>
-                <div className={styles.tabs}>
-                  <button className={rightTab === 'details' ? styles.activeTab : ''} onClick={() => { closeMenus(); setRightTab('details'); }} type="button">Details</button>
-                  <button className={rightTab === 'cards' ? styles.activeTab : ''} onClick={() => { closeMenus(); setRightTab('cards'); }} type="button">Cards</button>
-                </div>
-                {rightTab === 'cards' ? (
-                  <div className={styles.panelBody}>
-                    <div className={styles.sectionLead}>
-                      <div><h3>Cards</h3><p>Create simple prompts to study this Concept.</p></div>
-                      <button className={styles.primary} onClick={() => openCardEditor(null)} type="button">＋ New Card</button>
-                    </div>
-                    <div className={styles.cardList}>
-                      {selectedConceptCards.map((card) => (
-                        <article className={styles.cardRow} key={card.id}>
-                          <p><strong>Q:</strong> {card.question}</p>
-                          <p><strong>A:</strong> {card.answer}</p>
-                          <button aria-expanded={cardMenuId === card.id} aria-haspopup="menu" aria-label={`Actions for card ${card.question}`} className={styles.moreButton} data-overflow-menu onClick={() => toggleMenu('card', card.id)} type="button"><Icon name="more" /></button>
-                          {cardMenuId === card.id && (
-                            <div className={styles.actionMenu} data-overflow-menu role="menu">
-                              <button onClick={() => openCardEditor(card)} role="menuitem" type="button">Edit Card</button>
-                              <button className={styles.menuDanger} onClick={() => requestDelete({ kind: 'card', record: card })} role="menuitem" type="button">Delete Card</button>
-                            </div>
-                          )}
-                        </article>
-                      ))}
-                      <button className={styles.addPlaceholder} onClick={() => openCardEditor(null)} type="button">⊕ {selectedConceptCards.length ? 'Add another Card to this Concept' : 'Create the first Card for this Concept'}</button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className={styles.panelBody}>
-                    <div className={styles.detailCard}>
-                      <div><span>Concept name</span><strong>{selectedConcept.name}</strong></div>
-                      <div><span>Topic</span><strong>{topicLabel(selectedConcept.topic_id)}</strong></div>
-                      <div><span>Description</span><p>{selectedConcept.description || 'No description yet.'}</p></div>
-                      <p>{selectedConceptCards.length} personal Card{selectedConceptCards.length === 1 ? '' : 's'}</p>
-                      <div className={styles.detailActions}>
-                        <button className={styles.secondary} onClick={() => openConceptEditor(selectedConcept)} type="button">Edit Concept</button>
-                        <button className={styles.primary} onClick={() => openCardEditor(null)} type="button">＋ New Card</button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </>
-            ) : (
-              <div className={styles.emptyColumn}>
-                <span><Icon name="book" /></span>
-                <h2>Select or create a Concept</h2>
-                <p>Its Cards and details will appear here.</p>
-                {selectedTopic && <button className={styles.primary} onClick={() => openConceptEditor(null)} type="button">＋ New Concept</button>}
+            <div className={styles.selectionHeading}>
+              <span className={`${styles.headingIcon} ${styles.purpleIcon}`}><Icon name="book" /></span>
+              <div>
+                <p>Selected Concept</p>
+                <h2>{selectedConcept?.name ?? 'No Concept selected'}</h2>
               </div>
-            )}
+              {selectedConcept && (
+                <div className={styles.headingActions}>
+                  <button aria-label="Edit selected Concept" onClick={() => openConceptEditor(selectedConcept)} title="Edit Concept" type="button"><Icon name="pencil" /> <span className={styles.actionLabel}>Edit</span></button>
+                  <button aria-label="Delete selected Concept" className={styles.headingDanger} onClick={() => requestDelete({ kind: 'concept', record: selectedConcept })} title="Delete Concept" type="button"><Icon name="trash" /> <span className={styles.actionLabel}>Delete</span></button>
+                </div>
+              )}
+            </div>
+            <div className={styles.tabs}>
+              <button className={visibleRightTab === 'details' ? styles.activeTab : ''} disabled={!selectedConcept} onClick={() => { closeMenus(); setRightTab('details'); }} type="button">Details</button>
+              <button className={visibleRightTab === 'cards' ? styles.activeTab : ''} onClick={() => { closeMenus(); setRightTab('cards'); }} type="button">Cards</button>
+            </div>
+            {visibleRightTab === 'cards' ? (
+              <div className={styles.panelBody}>
+                <div className={styles.sectionLead}>
+                  <div><h3>Cards</h3><p>{selectedConcept ? 'Create simple prompts to study this Concept.' : 'Choose a Concept before adding Cards.'}</p></div>
+                  {selectedConcept && <button className={styles.primary} onClick={() => openCardEditor(null)} type="button">＋ New Card</button>}
+                </div>
+                <div className={styles.cardList}>
+                  {selectedConceptCards.map((card) => (
+                    <article className={styles.cardRow} key={card.id}>
+                      <p><strong>Q:</strong> {card.question}</p>
+                      <p><strong>A:</strong> {card.answer}</p>
+                      <button aria-expanded={cardMenuId === card.id} aria-haspopup="menu" aria-label={`Actions for card ${card.question}`} className={styles.moreButton} data-overflow-menu onClick={() => toggleMenu('card', card.id)} type="button"><Icon name="more" /></button>
+                      {cardMenuId === card.id && (
+                        <div className={styles.actionMenu} data-overflow-menu role="menu">
+                          <button onClick={() => openCardEditor(card)} role="menuitem" type="button">Edit Card</button>
+                          <button className={styles.menuDanger} onClick={() => requestDelete({ kind: 'card', record: card })} role="menuitem" type="button">Delete Card</button>
+                        </div>
+                      )}
+                    </article>
+                  ))}
+                  {!selectedConcept && <div className={styles.inlineEmpty}>Select or create a Concept to start making Cards.</div>}
+                  {selectedConcept && !selectedConceptCards.length && <div className={styles.inlineEmpty}>No Cards yet. Create the first Card for this Concept.</div>}
+                  {selectedConceptCards.length > 0 && <button className={styles.addPlaceholder} onClick={() => openCardEditor(null)} type="button">⊕ Add another Card to this Concept</button>}
+                  {!selectedConcept && selectedTopic && <button className={styles.addPlaceholder} onClick={() => openConceptEditor(null)} type="button">⊕ Create a Concept in this Topic</button>}
+                </div>
+              </div>
+            ) : selectedConcept ? (
+              <div className={styles.panelBody}>
+                <div className={styles.detailCard}>
+                  <div><span>Concept name</span><strong>{selectedConcept.name}</strong></div>
+                  <div><span>Topic</span><strong>{topicLabel(selectedConcept.topic_id)}</strong></div>
+                  <div><span>Description</span><p>{selectedConcept.description || 'No description yet.'}</p></div>
+                  <p>{selectedConceptCards.length} personal Card{selectedConceptCards.length === 1 ? '' : 's'}</p>
+                  <div className={styles.detailActions}>
+                    <button className={styles.secondary} onClick={() => openConceptEditor(selectedConcept)} type="button">Edit Concept</button>
+                    <button className={styles.primary} onClick={() => openCardEditor(null)} type="button">＋ New Card</button>
+                  </div>
+                </div>
+              </div>
+            ) : null}
           </section>
         </div>
       </section>

@@ -776,6 +776,20 @@
   color: #2268db;
 }
 
+.inlineEmpty {
+  min-height: 76px;
+  border: 1px dashed #d5ddea;
+  border-radius: 12px;
+  background: #fbfcfe;
+  color: #687993;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  text-align: center;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 .detailCard {
   border: 1px solid #dce3ed;
   border-radius: 14px;
