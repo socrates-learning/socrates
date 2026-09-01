@@ -5,6 +5,11 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Header, HeaderSessionProvider } from '@/components/Header';
+import {
+  getBootstrapErrorMessage,
+  getHomeBootstrapView,
+  hasAuthoritativeInitialDeckData,
+} from '@/lib/home-bootstrap';
 import { supabase } from '@/lib/supabase';
 import type { ActiveLibrary, ActiveLibraryRole } from '@/lib/library-context';
 import type { StudyPlannerInitialData } from '@/lib/study-planner-initial-data';
@@ -388,6 +393,7 @@ export function StudyPlanner({
     initialRootNodeId
   );
   const [message, setMessage] = useState(initialDeckData?.loadError || '');
+  const [bootstrapError, setBootstrapError] = useState('');
   const [isLoading, setIsLoading] = useState(!initialDeckData);
   const [isSaving, setIsSaving] = useState(false);
   const [homeExpandedIds, setHomeExpandedIds] = useState<Set<string>>(
@@ -464,7 +470,7 @@ export function StudyPlanner({
   useEffect(() => {
     let isMounted = true;
 
-    if (initialDeckData?.libraryId === activeLibrary?.id) {
+    if (hasAuthoritativeInitialDeckData(initialDeckData, activeLibrary)) {
       setMode(
         window.location.hash === '#set-up-deck'
           ? 'setup'
@@ -481,7 +487,17 @@ export function StudyPlanner({
     async function loadDeck() {
       setIsLoading(true);
       setMessage('');
+      setBootstrapError('');
       setLearnerProgressError('');
+      setDeck(null);
+      setNodes([]);
+      setPlacements([]);
+      setQuestionCounts({});
+      setSelectedNodeIds(new Set());
+      setNodePreferences({});
+      setConceptOverrides({});
+      setResolvedConcepts([]);
+      setLearnerProgress(emptyLearnerProgress);
       setMode(
         window.location.hash === '#set-up-deck'
           ? 'setup'
@@ -490,27 +506,37 @@ export function StudyPlanner({
             : 'dashboard'
       );
 
-      let loadedUserId: string | null = null;
-      let loadedEmail: string | null = null;
-      let loadedRole: string | null = null;
-      let loadedDisplayName = 'there';
+      try {
+        let loadedUserId: string | null = null;
+        let loadedEmail: string | null = null;
+        let loadedRole: string | null = null;
+        let loadedDisplayName = 'there';
 
-      if (initialSession !== undefined) {
-        loadedUserId = initialSession?.userId ?? null;
-        loadedEmail = initialSession?.email ?? null;
-        loadedRole = initialSession?.role ?? null;
-        loadedDisplayName = initialSession?.displayName ?? 'there';
-      } else {
+        if (initialSession !== undefined) {
+          loadedUserId = initialSession?.userId ?? null;
+          loadedEmail = initialSession?.email ?? null;
+          loadedRole = initialSession?.role ?? null;
+          loadedDisplayName = initialSession?.displayName ?? 'there';
+        } else {
         const {
           data: { user },
+          error: authError,
         } = await supabase.auth.getUser();
 
+        if (authError) {
+          throw new Error(`Unable to verify your session: ${authError.message}`);
+        }
+
         if (user) {
-          const { data: roleData } = await supabase
+          const { data: roleData, error: roleError } = await supabase
             .from('user_roles')
             .select('role')
             .eq('user_id', user.id)
             .maybeSingle();
+
+          if (roleError) {
+            throw new Error(`Unable to load your account role: ${roleError.message}`);
+          }
 
           loadedUserId = user.id;
           loadedEmail = user.email ?? 'Account';
@@ -518,17 +544,18 @@ export function StudyPlanner({
           loadedDisplayName =
             (user.user_metadata?.full_name as string | undefined) ||
             (user.email ? user.email.split('@')[0] : 'there');
+          }
         }
-      }
 
-      if (!loadedUserId) {
-        setUserId(null);
-        setEmail(null);
-        setRole(null);
-        setMessage('Sign in to set up your deck.');
-        setIsLoading(false);
-        return;
-      }
+        if (!isMounted) return;
+
+        if (!loadedUserId) {
+          setUserId(null);
+          setEmail(null);
+          setRole(null);
+          setMessage('Sign in to set up your deck.');
+          return;
+        }
 
       const availableLibrariesPromise =
         loadedRole === 'editor' || loadedRole === 'admin'
@@ -537,32 +564,41 @@ export function StudyPlanner({
               .select('id, name, slug, description, status')
               .eq('status', 'active')
               .order('name')
-          : Promise.resolve({ data: activeLibrary ? [activeLibrary] : [] });
+          : Promise.resolve({
+              data: activeLibrary ? [activeLibrary] : [],
+              error: null,
+            });
 
-      if (!isMounted) return;
+        if (!isMounted) return;
 
       setUserId(loadedUserId);
       setEmail(loadedEmail ?? 'Account');
       setRole(loadedRole);
       setDisplayName(loadedDisplayName);
 
-      if (!activeLibrary?.id) {
-        const { data: libraryData } = await availableLibrariesPromise;
+        if (!activeLibrary?.id) {
+          const { data: libraryData, error: libraryError } =
+            await availableLibrariesPromise;
 
-        if (!isMounted) return;
+          if (!isMounted) return;
 
-        setAvailableLibraries((libraryData || []) as ActiveLibrary[]);
-        setDeck(null);
-        setNodes([]);
-        setPlacements([]);
-        setSelectedNodeIds(new Set());
-        setNodePreferences({});
-        setConceptOverrides({});
-        setResolvedConcepts([]);
-        setLearnerProgress(emptyLearnerProgress);
-        setIsLoading(false);
-        return;
-      }
+          if (libraryError) {
+            throw new Error(
+              `Unable to load available Libraries: ${libraryError.message}`
+            );
+          }
+
+          setAvailableLibraries((libraryData || []) as ActiveLibrary[]);
+          setDeck(null);
+          setNodes([]);
+          setPlacements([]);
+          setSelectedNodeIds(new Set());
+          setNodePreferences({});
+          setConceptOverrides({});
+          setResolvedConcepts([]);
+          setLearnerProgress(emptyLearnerProgress);
+          return;
+        }
 
       const [availableLibrariesResult, deckResult] = await Promise.all([
         availableLibrariesPromise,
@@ -570,13 +606,21 @@ export function StudyPlanner({
           p_library_id: activeLibrary.id,
         }),
       ]);
+
+      if (!isMounted) return;
+
+      if (availableLibrariesResult.error) {
+        throw new Error(
+          `Unable to load available Libraries: ${availableLibrariesResult.error.message}`
+        );
+      }
+
       const { data: deckData, error: deckError } = deckResult;
 
       if (deckError || !deckData) {
         setMessage(
           `Unable to load your deck: ${deckError?.message || 'No active deck found.'}`
         );
-        setIsLoading(false);
         return;
       }
 
@@ -614,18 +658,27 @@ export function StudyPlanner({
         }),
       ]);
       const { data: nodeData, error: nodeError } = nodeResult;
-      const { data: selectedNodesData } = selectedNodesResult;
-      const { data: overridesData } = overridesResult;
+      const { data: selectedNodesData, error: selectedNodesError } =
+        selectedNodesResult;
+      const { data: overridesData, error: overridesError } = overridesResult;
       const { data: preferenceData, error: preferenceError } = preferenceResult;
-      const { data: resolvedData } = resolvedResult;
+      const { data: resolvedData, error: resolvedError } = resolvedResult;
       const {
         data: learnerProgressData,
         error: learnerProgressLoadError,
       } = learnerProgressResult;
 
-      if (nodeError) {
-        setMessage(`Unable to load topics: ${nodeError.message}`);
-        setIsLoading(false);
+      if (!isMounted) return;
+
+      const deckStateError =
+        nodeError ||
+        selectedNodesError ||
+        overridesError ||
+        preferenceError ||
+        resolvedError;
+
+      if (deckStateError) {
+        setMessage(`Unable to load your deck: ${deckStateError.message}`);
         return;
       }
 
@@ -651,9 +704,10 @@ export function StudyPlanner({
             .in('library_node_id', nodeIds)
         : { data: [], error: null };
 
+      if (!isMounted) return;
+
       if (placementError) {
         setMessage(`Unable to load deck concepts: ${placementError.message}`);
-        setIsLoading(false);
         return;
       }
 
@@ -661,13 +715,20 @@ export function StudyPlanner({
       const conceptIds = [
         ...new Set(loadedPlacements.map((placement) => placement.concept_id)),
       ];
-      const { data: questionData } = conceptIds.length
+      const { data: questionData, error: questionError } = conceptIds.length
         ? await supabase
             .from('questions')
             .select('concept_id')
             .eq('status', 'published')
             .in('concept_id', conceptIds)
-        : { data: [] };
+        : { data: [], error: null };
+
+      if (!isMounted) return;
+
+      if (questionError) {
+        setMessage(`Unable to load deck questions: ${questionError.message}`);
+        return;
+      }
       const nextQuestionCounts: Record<string, number> = {};
 
       (questionData || []).forEach((question) => {
@@ -675,12 +736,6 @@ export function StudyPlanner({
         nextQuestionCounts[question.concept_id] =
           (nextQuestionCounts[question.concept_id] || 0) + 1;
       });
-
-      if (preferenceError) {
-        setMessage(`Unable to load deck preferences: ${preferenceError.message}`);
-        setIsLoading(false);
-        return;
-      }
 
       if (!isMounted) return;
 
@@ -728,7 +783,16 @@ export function StudyPlanner({
       setExpandedNodeIds(rootNode ? new Set([rootNode.id]) : new Set());
       setHomeExpandedIds(rootNode ? new Set([rootNode.id]) : new Set());
       setFocusedNodeId(rootNode?.id || null);
-      setIsLoading(false);
+      } catch (error) {
+        if (!isMounted) return;
+
+        console.error('Home bootstrap failed.', error);
+        setBootstrapError(getBootstrapErrorMessage(error));
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
     }
 
     loadDeck();
@@ -1893,6 +1957,14 @@ export function StudyPlanner({
     (total, concept) => total + Number(concept.published_question_count || 0),
     0
   );
+  const homeBootstrapView = getHomeBootstrapView({
+    activeLibraryId: activeLibrary?.id,
+    availableLibraryCount: availableLibraries.length,
+    bootstrapError,
+    hasDeck: Boolean(deck),
+    isLoading,
+    role,
+  });
 
   function renderLibrarySubjectSwitcher(
     currentSlug: string | null,
@@ -1943,10 +2015,10 @@ export function StudyPlanner({
                 : undefined
             }
           >
-            Current Subject
+            {currentSlug ? 'Current Subject' : 'Choose a Library'}
           </span>
           <select
-            aria-label="Current Subject"
+            aria-label={currentSlug ? 'Current Subject' : 'Choose a Library'}
             defaultValue={currentSlug || availableLibraries[0].slug}
             name="library_slug"
             style={
@@ -1991,13 +2063,13 @@ export function StudyPlanner({
               : undefined
           }
         >
-          Switch
+          {currentSlug ? 'Switch' : 'Choose Library'}
         </button>
       </form>
     );
   }
 
-  if (isLoading) {
+  if (homeBootstrapView === 'loading') {
     return (
       <HeaderSessionProvider email={email} role={role}>
         <Header />
@@ -2078,17 +2150,41 @@ export function StudyPlanner({
     );
   }
 
+  if (homeBootstrapView === 'error') {
+    return (
+      <HeaderSessionProvider email={email} role={role}>
+        <Header />
+        <main style={{ padding: 24 }}>
+          <div className="panel" role="alert">
+            <h2>Home could not be loaded</h2>
+            <p className="muted">{bootstrapError}</p>
+            <button type="button" onClick={() => window.location.reload()}>
+              Try again
+            </button>
+          </div>
+        </main>
+      </HeaderSessionProvider>
+    );
+  }
+
   if (!activeLibrary?.id) {
     return (
-      <div className="panel">
-        <h2>Deck Dashboard</h2>
-        <p className="muted">Choose an active library before setting up a deck.</p>
-        {renderLibrarySubjectSwitcher(null, true)}
-        {(role === 'admin' || role === 'editor') &&
-          !availableLibraries.length && (
-            <p className="muted">No active Libraries are available.</p>
-          )}
-      </div>
+      <HeaderSessionProvider email={email} role={role}>
+        <Header />
+        <main style={{ padding: 24 }}>
+          <div className="panel">
+            <h2>Choose a Library</h2>
+            <p className="muted">
+              Choose an active Library before setting up or opening your deck.
+            </p>
+            {renderLibrarySubjectSwitcher(null, true)}
+            {(role === 'admin' || role === 'editor') &&
+              !availableLibraries.length && (
+                <p className="muted">No active Libraries are available.</p>
+              )}
+          </div>
+        </main>
+      </HeaderSessionProvider>
     );
   }
 

@@ -1,0 +1,158 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import test from 'node:test';
+
+import {
+  getBootstrapErrorMessage,
+  getHomeBootstrapView,
+  hasAuthoritativeInitialDeckData,
+} from '../lib/home-bootstrap.ts';
+
+const nursing = {
+  id: 'library-nursing',
+  name: 'Nursing',
+  slug: 'nursing',
+  description: null,
+  status: 'active',
+};
+
+const initialDeckData = {
+  libraryId: nursing.id,
+  availableLibraries: [nursing],
+  deck: {
+    id: 'deck-1',
+    user_id: 'user-1',
+    library_id: nursing.id,
+    name: 'My Study Deck',
+    is_active: true,
+    cram_mode: false,
+    created_at: '2026-01-01T00:00:00.000Z',
+    updated_at: '2026-01-01T00:00:00.000Z',
+  },
+  nodes: [],
+  placements: [],
+  questionCounts: {},
+  selectedNodeIds: [],
+  nodePreferences: {},
+  conceptOverrides: {},
+  resolvedConcepts: [],
+  learnerProgress: {
+    library_id: nursing.id,
+    summary: {
+      total_concepts: 0,
+      assessed_concepts: 0,
+      unseen_concepts: 0,
+      assessed_mastery_percent: null,
+      coverage_adjusted_progress_percent: 0,
+      evidence_count: 0,
+      questions_answered: 0,
+      recent_session_count: 0,
+    },
+    nodes: [],
+    recent_sessions: [],
+  },
+  learnerProgressError: '',
+  loadError: '',
+};
+
+test('missing server data and missing active Library are not authoritative', () => {
+  assert.equal(hasAuthoritativeInitialDeckData(undefined, null), false);
+});
+
+test('matching real server-initialized Library and deck skip client bootstrap', () => {
+  assert.equal(
+    hasAuthoritativeInitialDeckData(initialDeckData, nursing),
+    true
+  );
+});
+
+for (const role of ['admin', 'editor']) {
+  test(`${role} without an active Library sees the explicit chooser`, () => {
+    assert.equal(
+      getHomeBootstrapView({
+        activeLibraryId: null,
+        availableLibraryCount: 1,
+        bootstrapError: '',
+        hasDeck: false,
+        isLoading: false,
+        role,
+      }),
+      'staff-library-chooser'
+    );
+  });
+}
+
+test('learner without a primary membership does not enter the staff chooser', () => {
+  assert.equal(
+    getHomeBootstrapView({
+      activeLibraryId: null,
+      availableLibraryCount: 0,
+      bootstrapError: '',
+      hasDeck: false,
+      isLoading: false,
+      role: 'learner',
+    }),
+    'no-active-library'
+  );
+
+  const homePageSource = readFileSync(
+    new URL('../app/page.tsx', import.meta.url),
+    'utf8'
+  );
+  assert.match(homePageSource, /activeLibraryContext\.needsSelection/);
+  assert.match(homePageSource, /Library Selection Needed/);
+});
+
+test('a newly created active deck can finish bootstrap', () => {
+  const studyPlannerSource = readFileSync(
+    new URL('../components/StudyPlanner.tsx', import.meta.url),
+    'utf8'
+  );
+  assert.match(studyPlannerSource, /get_or_create_active_study_deck/);
+
+  assert.equal(
+    getHomeBootstrapView({
+      activeLibraryId: nursing.id,
+      availableLibraryCount: 1,
+      bootstrapError: '',
+      hasDeck: true,
+      isLoading: false,
+      role: 'learner',
+    }),
+    'ready'
+  );
+});
+
+test('an active deck with zero selected nodes still finishes bootstrap', () => {
+  assert.equal(initialDeckData.selectedNodeIds.length, 0);
+  assert.equal(
+    getHomeBootstrapView({
+      activeLibraryId: nursing.id,
+      availableLibraryCount: 1,
+      bootstrapError: '',
+      hasDeck: Boolean(initialDeckData.deck),
+      isLoading: false,
+      role: 'learner',
+    }),
+    'ready'
+  );
+});
+
+test('an unexpected bootstrap rejection becomes a visible error state', () => {
+  const bootstrapError = getBootstrapErrorMessage(
+    new Error('Network request rejected')
+  );
+
+  assert.match(bootstrapError, /Network request rejected/);
+  assert.equal(
+    getHomeBootstrapView({
+      activeLibraryId: nursing.id,
+      availableLibraryCount: 1,
+      bootstrapError,
+      hasDeck: false,
+      isLoading: false,
+      role: 'admin',
+    }),
+    'error'
+  );
+});
