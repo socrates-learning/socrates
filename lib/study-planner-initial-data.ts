@@ -270,14 +270,14 @@ export async function loadStudyPlannerInitialData({
     personalSelectionsResult.error;
 
   const nodes = (nodeResult.data || []) as LibraryNode[];
-  const nodeIds = nodes.map((node) => node.id);
-  const placementResult = nodeIds.length
+  const placementResult = nodes.length
     ? await supabase
         .from('concept_placements')
         .select(
           `
           concept_id,
           library_node_id,
+          library_nodes!inner (library_id),
           concepts!inner (
             id,
             name,
@@ -287,8 +287,8 @@ export async function loadStudyPlannerInitialData({
           )
         `
         )
+        .eq('library_nodes.library_id', activeLibrary.id)
         .eq('concepts.status', 'published')
-        .in('library_node_id', nodeIds)
     : { data: [], error: null };
 
   if (placementResult.error) {

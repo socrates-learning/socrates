@@ -2,6 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import {
+  SocratesStudyCreatorBrowser,
+  type OfficialBrowserData,
+} from './SocratesStudyCreatorBrowser';
+import { StudyCreatorIcon as Icon } from './StudyCreatorIcon';
 import styles from './StudyCreatorClient.module.css';
 
 type PersonalTopic = {
@@ -34,8 +39,34 @@ type PersonalCard = {
   updated_at: string;
 };
 
+export type PersonalOverlay = {
+  id: string;
+  owner_id: string;
+  personal_concept_id: string;
+  library_node_id: string;
+  official_concept_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PersonalMaterial = {
+  topics: PersonalTopic[];
+  concepts: PersonalConcept[];
+  cards: PersonalCard[];
+  overlays: PersonalOverlay[];
+};
+
+type OverlayEditor = {
+  libraryNodeId: string;
+  officialConceptId: string | null;
+  officialName: string;
+  officialPath: string;
+  openCardAfterSave: boolean;
+};
+
 type StudyCreatorClientProps = {
   ownerId: string;
+  officialBrowser: OfficialBrowserData | null;
 };
 
 type EditorModal =
@@ -48,39 +79,6 @@ type DeleteTarget =
   | { kind: 'concept'; record: PersonalConcept }
   | { kind: 'card'; record: PersonalCard };
 
-type IconName =
-  | 'book'
-  | 'card'
-  | 'chevron-down'
-  | 'chevron-right'
-  | 'folder'
-  | 'more'
-  | 'pencil'
-  | 'search'
-  | 'trash';
-
-function Icon({ name }: { name: IconName }) {
-  const paths: Record<IconName, React.ReactNode> = {
-    book: <><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H11v14H6.5A2.5 2.5 0 0 0 4 19.5z" /><path d="M20 5.5A2.5 2.5 0 0 0 17.5 3H13v14h4.5a2.5 2.5 0 0 1 2.5 2.5z" /></>,
-    card: <><path d="M6 2.75h8l4 4V21.25H6z" /><path d="M14 2.75v4h4M9 12h6M9 16h6" /></>,
-    'chevron-down': <path d="m7 9.5 5 5 5-5" />,
-    'chevron-right': <path d="m9.5 7 5 5-5 5" />,
-    folder: <path d="M3 6.5h6l2-2h4.5A2.5 2.5 0 0 1 18 7v1H5.5A2.5 2.5 0 0 0 3 10.5zm0 4A2.5 2.5 0 0 1 5.5 8H21l-2 11.5H3z" />,
-    more: <><circle cx="5" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /></>,
-    pencil: <><path d="m4 20 4.25-1 10.5-10.5-3.25-3.25L5 15.75z" /><path d="m13.75 7 3.25 3.25" /></>,
-    search: <><circle cx="10.5" cy="10.5" r="6.5" /><path d="m15.5 15.5 4 4" /></>,
-    trash: <><path d="M4 7h16M9 3h6l1 4H8zM6 7l1 14h10l1-14M10 11v6M14 11v6" /></>,
-  };
-
-  return (
-    <svg aria-hidden="true" className={styles.svgIcon} fill="none" viewBox="0 0 24 24">
-      <g stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8">
-        {paths[name]}
-      </g>
-    </svg>
-  );
-}
-
 function getErrorMessage(error: unknown) {
   if (error instanceof Error) return error.message;
   if (typeof error === 'object' && error && 'message' in error) {
@@ -89,14 +87,19 @@ function getErrorMessage(error: unknown) {
   return 'Something went wrong. Please try again.';
 }
 
-export function StudyCreatorClient({ ownerId }: StudyCreatorClientProps) {
+export function StudyCreatorClient({
+  ownerId,
+  officialBrowser,
+}: StudyCreatorClientProps) {
   const [topics, setTopics] = useState<PersonalTopic[]>([]);
   const [concepts, setConcepts] = useState<PersonalConcept[]>([]);
   const [cards, setCards] = useState<PersonalCard[]>([]);
+  const [overlays, setOverlays] = useState<PersonalOverlay[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [browseMode, setBrowseMode] = useState<'mine' | 'socrates'>('mine');
 
   const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null);
   const [selectedConceptId, setSelectedConceptId] = useState<string | null>(null);
@@ -110,6 +113,8 @@ export function StudyCreatorClient({ ownerId }: StudyCreatorClientProps) {
 
   const [editorModal, setEditorModal] = useState<EditorModal | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
+  const [overlayEditor, setOverlayEditor] = useState<OverlayEditor | null>(null);
+  const [detachTarget, setDetachTarget] = useState<PersonalOverlay | null>(null);
   const [topicName, setTopicName] = useState('');
   const [topicParentId, setTopicParentId] = useState('');
   const [conceptName, setConceptName] = useState('');
@@ -123,7 +128,7 @@ export function StudyCreatorClient({ ownerId }: StudyCreatorClientProps) {
 
   const loadMaterial = useCallback(async () => {
     setError('');
-    const [topicResult, conceptResult, cardResult] = await Promise.all([
+    const [topicResult, conceptResult, cardResult, overlayResult] = await Promise.all([
       supabase
         .from('personal_topics')
         .select('id, owner_id, parent_id, name, sort_order, created_at, updated_at')
@@ -140,9 +145,14 @@ export function StudyCreatorClient({ ownerId }: StudyCreatorClientProps) {
         .select('id, owner_id, concept_id, question, answer, created_at, updated_at')
         .eq('owner_id', ownerId)
         .order('created_at'),
+      supabase
+        .from('personal_concept_official_placements')
+        .select('id, owner_id, personal_concept_id, library_node_id, official_concept_id, created_at, updated_at')
+        .eq('owner_id', ownerId)
+        .order('created_at'),
     ]);
 
-    const loadError = topicResult.error || conceptResult.error || cardResult.error;
+    const loadError = topicResult.error || conceptResult.error || cardResult.error || overlayResult.error;
     if (loadError) {
       setError(getErrorMessage(loadError));
       setIsLoading(false);
@@ -152,11 +162,13 @@ export function StudyCreatorClient({ ownerId }: StudyCreatorClientProps) {
     const nextTopics = (topicResult.data ?? []) as PersonalTopic[];
     const nextConcepts = (conceptResult.data ?? []) as PersonalConcept[];
     const nextCards = (cardResult.data ?? []) as PersonalCard[];
+    const nextOverlays = (overlayResult.data ?? []) as PersonalOverlay[];
     setTopics(nextTopics);
     setConcepts(nextConcepts);
     setCards(nextCards);
+    setOverlays(nextOverlays);
     setIsLoading(false);
-    return { topics: nextTopics, concepts: nextConcepts, cards: nextCards };
+    return { topics: nextTopics, concepts: nextConcepts, cards: nextCards, overlays: nextOverlays };
   }, [ownerId]);
 
   useEffect(() => {
@@ -248,6 +260,10 @@ export function StudyCreatorClient({ ownerId }: StudyCreatorClientProps) {
     if (!isSaving) setEditorModal(null);
   }
 
+  function closeOverlayEditor() {
+    if (!isSaving) setOverlayEditor(null);
+  }
+
   function closeDeleteConfirmation() {
     if (!isSaving) setDeleteTarget(null);
   }
@@ -288,7 +304,9 @@ export function StudyCreatorClient({ ownerId }: StudyCreatorClientProps) {
   }, [centerTab, rightTab, selectedConceptId, selectedTopicId]);
 
   useEffect(() => {
-    const modalIsOpen = Boolean(editorModal || deleteTarget);
+    const modalIsOpen = Boolean(
+      editorModal || deleteTarget || overlayEditor || detachTarget
+    );
     if (!modalIsOpen) {
       const opener = modalOpenerRef.current;
       modalOpenerRef.current = null;
@@ -300,6 +318,16 @@ export function StudyCreatorClient({ ownerId }: StudyCreatorClientProps) {
       if (event.key === 'Escape' && editorModal && !isSaving) {
         event.preventDefault();
         setEditorModal(null);
+        return;
+      }
+      if (event.key === 'Escape' && overlayEditor && !isSaving) {
+        event.preventDefault();
+        setOverlayEditor(null);
+        return;
+      }
+      if (event.key === 'Escape' && detachTarget && !isSaving) {
+        event.preventDefault();
+        setDetachTarget(null);
         return;
       }
       if (event.key !== 'Tab' || !dialogRef.current) return;
@@ -322,7 +350,7 @@ export function StudyCreatorClient({ ownerId }: StudyCreatorClientProps) {
 
     document.addEventListener('keydown', handleModalKeyDown);
     return () => document.removeEventListener('keydown', handleModalKeyDown);
-  }, [deleteTarget, editorModal, isSaving]);
+  }, [deleteTarget, detachTarget, editorModal, isSaving, overlayEditor]);
 
   function descendantTopicIds(topicId: string, includeSelf = false) {
     const found = new Set<string>(includeSelf ? [topicId] : []);
@@ -427,6 +455,84 @@ export function StudyCreatorClient({ ownerId }: StudyCreatorClientProps) {
     setCardAnswer(record?.answer ?? '');
     setCardConceptId(record?.concept_id ?? (defaultConceptId || selectedConceptId || concepts[0]?.id || ''));
     setEditorModal({ kind: 'card', record });
+  }
+
+  function openOverlayEditor(target: OverlayEditor) {
+    clearFeedback();
+    rememberModalOpener();
+    setConceptName(
+      target.officialConceptId ? `${target.officialName} — My Notes` : ''
+    );
+    setConceptDescription('');
+    setConceptTopicId('');
+    setOverlayEditor(target);
+  }
+
+  async function saveOverlayConcept(event: React.FormEvent) {
+    event.preventDefault();
+    if (!overlayEditor || !conceptName.trim() || !conceptTopicId) return;
+    setIsSaving(true);
+    clearFeedback();
+    const { data, error: createError } = await supabase.rpc(
+      'create_personal_concept_overlay',
+      {
+        p_personal_topic_id: conceptTopicId,
+        p_name: conceptName.trim(),
+        p_description: conceptDescription.trim() || null,
+        p_library_node_id: overlayEditor.libraryNodeId,
+        p_official_concept_id: overlayEditor.officialConceptId,
+      }
+    );
+
+    if (createError) {
+      setError(getErrorMessage(createError));
+      setIsSaving(false);
+      return;
+    }
+
+    const createdConceptId = data?.[0]?.personal_concept_id as string | undefined;
+    await loadMaterial();
+    const shouldOpenCard = overlayEditor.openCardAfterSave && createdConceptId;
+    setOverlayEditor(null);
+    if (shouldOpenCard) {
+      openCardEditor(null, createdConceptId);
+      setMessage('Private Concept linked to Socrates. Add its first Card.');
+    } else {
+      setMessage('Private Concept created and linked to Socrates.');
+    }
+    setIsSaving(false);
+  }
+
+  async function detachOverlay() {
+    if (!detachTarget) return;
+    setIsSaving(true);
+    clearFeedback();
+    const { error: detachError } = await supabase
+      .from('personal_concept_official_placements')
+      .delete()
+      .eq('id', detachTarget.id)
+      .eq('owner_id', ownerId);
+    if (detachError) {
+      setError(getErrorMessage(detachError));
+    } else {
+      await loadMaterial();
+      setDetachTarget(null);
+      setMessage('Socrates link detached. Your personal Concept and Cards were kept.');
+    }
+    setIsSaving(false);
+  }
+
+  function addCardForOfficialConcept(target: OverlayEditor) {
+    const existing = overlays.find(
+      (overlay) =>
+        overlay.library_node_id === target.libraryNodeId &&
+        overlay.official_concept_id === target.officialConceptId
+    );
+    if (existing) {
+      openCardEditor(null, existing.personal_concept_id);
+      return;
+    }
+    openOverlayEditor({ ...target, openCardAfterSave: true });
   }
 
   async function saveTopic(event: React.FormEvent) {
@@ -728,8 +834,26 @@ export function StudyCreatorClient({ ownerId }: StudyCreatorClientProps) {
       <section className={styles.workspace} aria-label="Study Creator workspace">
         <header className={styles.workspaceHeader}>
           <div>
-            <p>Private to your account</p>
+            <p>{browseMode === 'mine' ? 'Private to your account' : 'Socrates library · Official content read only'}</p>
             <h1>Study Creator</h1>
+          </div>
+          <div className={styles.contextSwitch} aria-label="Browse material" role="group">
+            <button
+              aria-pressed={browseMode === 'mine'}
+              className={browseMode === 'mine' ? styles.activeContext : ''}
+              onClick={() => setBrowseMode('mine')}
+              type="button"
+            >
+              My Topics
+            </button>
+            <button
+              aria-pressed={browseMode === 'socrates'}
+              className={browseMode === 'socrates' ? styles.activeContext : ''}
+              onClick={() => setBrowseMode('socrates')}
+              type="button"
+            >
+              Socrates
+            </button>
           </div>
         </header>
 
@@ -740,6 +864,7 @@ export function StudyCreatorClient({ ownerId }: StudyCreatorClientProps) {
           </div>
         )}
 
+        {browseMode === 'mine' ? (
         <div className={styles.columns}>
           <aside className={`${styles.column} ${styles.topicsColumn}`} aria-label="My Topics">
             <div className={styles.columnTitle}>
@@ -931,6 +1056,18 @@ export function StudyCreatorClient({ ownerId }: StudyCreatorClientProps) {
             ) : null}
           </section>
         </div>
+        ) : (
+          <SocratesStudyCreatorBrowser
+            data={officialBrowser}
+            material={{ topics, concepts, cards, overlays }}
+            onAddCard={addCardForOfficialConcept}
+            onAddConcept={openOverlayEditor}
+            onDetach={(overlay) => {
+              rememberModalOpener();
+              setDetachTarget(overlay);
+            }}
+          />
+        )}
       </section>
 
       {editorModal && (
@@ -976,6 +1113,47 @@ export function StudyCreatorClient({ ownerId }: StudyCreatorClientProps) {
                 <div className={styles.modalActions}><button className={styles.secondary} disabled={isSaving} onClick={closeEditor} type="button">Cancel</button><button className={styles.primary} disabled={isSaving} type="submit">{isSaving ? 'Saving…' : 'Save Card'}</button></div>
               </form>
             )}
+          </section>
+        </div>
+      )}
+
+      {overlayEditor && (
+        <div className={styles.modalBackdrop} role="presentation" onMouseDown={(event) => { if (event.currentTarget === event.target) closeOverlayEditor(); }}>
+          <section aria-labelledby="overlay-editor-title" aria-modal="true" className={styles.modal} ref={dialogRef} role="dialog">
+            <div className={styles.modalHeader}>
+              <div>
+                <p>Create private material</p>
+                <h2 id="overlay-editor-title">{overlayEditor.officialConceptId ? 'Set up My Concept' : 'Add My Concept'}</h2>
+              </div>
+              <button aria-label="Close personal Concept setup" disabled={isSaving} onClick={closeOverlayEditor} type="button">×</button>
+            </div>
+            <form className={styles.modalForm} onSubmit={saveOverlayConcept}>
+              <p className={styles.privateExplainer}>This creates material that is private to your account and links it to Socrates. It does not edit or copy official content.</p>
+              <div className={styles.readOnlyField}>
+                <span>{overlayEditor.officialConceptId ? 'Selected Socrates Concept' : 'Selected Socrates Topic'}</span>
+                <strong>{overlayEditor.officialName}</strong>
+                <small>{overlayEditor.officialPath}</small>
+              </div>
+              <label>Concept name<input autoFocus maxLength={160} onChange={(event) => setConceptName(event.target.value)} required value={conceptName} /></label>
+              <label>Short description <small>Optional</small><textarea maxLength={1000} onChange={(event) => setConceptDescription(event.target.value)} value={conceptDescription} /></label>
+              <label>Personal Topic <small>Canonical home</small><select onChange={(event) => setConceptTopicId(event.target.value)} required value={conceptTopicId}><option value="">Choose one of My Topics</option>{orderedTopics.map((topic) => <option key={topic.id} value={topic.id}>{topicLabel(topic.id)}</option>)}</select></label>
+              {topics.length === 0 && <p className={styles.formWarning}>Create a visible personal Topic in My Topics before linking material to Socrates.</p>}
+              <div className={styles.modalActions}><button className={styles.secondary} disabled={isSaving} onClick={closeOverlayEditor} type="button">Cancel</button><button className={styles.primary} disabled={isSaving || topics.length === 0} type="submit">{isSaving ? 'Saving…' : overlayEditor.openCardAfterSave ? 'Create & Continue' : 'Create My Concept'}</button></div>
+            </form>
+          </section>
+        </div>
+      )}
+
+      {detachTarget && (
+        <div className={styles.modalBackdrop} role="presentation">
+          <section aria-labelledby="detach-title" aria-modal="true" className={`${styles.modal} ${styles.deleteModal}`} ref={dialogRef} role="dialog">
+            <div className={styles.detachIcon}>↗</div>
+            <h2 id="detach-title">Detach from Socrates?</h2>
+            <p>This removes only the Socrates placement. Your personal Concept and every Card in it will remain in My Topics.</p>
+            <div className={styles.modalActions}>
+              <button autoFocus className={styles.secondary} disabled={isSaving} onClick={() => setDetachTarget(null)} type="button">Cancel</button>
+              <button className={styles.dangerButton} disabled={isSaving} onClick={detachOverlay} type="button">{isSaving ? 'Detaching…' : 'Detach link'}</button>
+            </div>
           </section>
         </div>
       )}

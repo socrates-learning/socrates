@@ -22,7 +22,14 @@
   border-bottom: 1px solid #e3e8f0;
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 18px;
   padding: 15px 24px;
+}
+
+.workspaceHeader .contextSwitch {
+  width: min(220px, 100%);
+  margin: 0;
 }
 
 .workspaceHeader p,
@@ -98,6 +105,40 @@
   padding: 18px 12px 16px;
 }
 
+.contextSwitch {
+  width: 100%;
+  border: 1px solid #d6deea;
+  border-radius: 10px;
+  background: #f3f6fa;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3px;
+  margin-bottom: 16px;
+  padding: 3px;
+}
+
+.contextSwitch button {
+  min-height: 36px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #5a6d87;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.contextSwitch button:hover {
+  background: #e8eef7;
+  color: #263b5c;
+}
+
+.contextSwitch .activeContext {
+  background: #ffffff;
+  box-shadow: 0 2px 7px rgba(35, 54, 83, 0.12);
+  color: #155fda;
+}
+
 .columnTitle,
 .selectionHeading,
 .sectionLead,
@@ -135,6 +176,24 @@
   padding: 5px 9px;
   font-size: 11px;
   font-weight: 850;
+}
+
+.socratesBadge {
+  border: 1px solid #cbd7e8;
+  border-radius: 999px;
+  background: #f2f5fa;
+  color: #3f5575;
+  padding: 5px 9px;
+  font-size: 11px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.libraryContext {
+  margin: -7px 8px 0;
+  color: #647690;
+  font-size: 12px;
+  font-weight: 720;
 }
 
 .primaryWide,
@@ -429,6 +488,19 @@
   font-size: 18px;
 }
 
+.readOnlyMark {
+  width: 25px;
+  height: 25px;
+  border: 1px solid #d1dbe9;
+  border-radius: 7px;
+  background: #f5f7fa;
+  color: #536985;
+  display: grid;
+  place-items: center;
+  font-size: 10px;
+  font-weight: 900;
+}
+
 .moreButton:hover,
 .iconButton:hover {
   background: #eaf0f8;
@@ -512,6 +584,56 @@
   border-radius: 12px;
   background: #fbfcfe;
   padding: 14px;
+}
+
+.officialSearchResults {
+  border-top: 1px solid #e2e8f0;
+  display: grid;
+  gap: 5px;
+  margin: 0 0 12px;
+  padding: 12px 0 0;
+}
+
+.officialSearchResults h3 {
+  margin: 0 6px 3px;
+  color: #4f617d;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.officialSearchResults button {
+  min-width: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  display: grid;
+  gap: 3px;
+  padding: 8px;
+  text-align: left;
+}
+
+.officialSearchResults button:hover,
+.officialSearchResults button:focus-visible {
+  border-color: #cdddf7;
+  background: #f2f6fc;
+}
+
+.officialSearchResults strong,
+.officialSearchResults small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.officialSearchResults strong {
+  color: #203653;
+  font-size: 12px;
+}
+
+.officialSearchResults small {
+  color: #708097;
+  font-size: 10px;
 }
 
 .quickStats h3 {
@@ -639,6 +761,144 @@
   padding: 0 22px;
 }
 
+.readOnlyStrip {
+  min-height: 49px;
+  border-bottom: 1px solid #e0e6ef;
+  background: #fafbfd;
+  color: #61728b;
+  display: flex;
+  align-items: center;
+  padding: 10px 22px;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.mineSection {
+  border: 1px solid #c9ddf7;
+  border-radius: 12px;
+  background: #f7fbff;
+  display: grid;
+  gap: 8px;
+  margin-bottom: 14px;
+  padding: 12px;
+}
+
+.mineSectionTitle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.mineSectionTitle h3 { margin: 5px 0 0; color: #1b385f; font-size: 15px; }
+
+.mineBadge {
+  width: fit-content;
+  border: 1px solid #8eb9ef;
+  border-radius: 999px;
+  background: #e8f3ff;
+  color: #154f99;
+  padding: 4px 8px;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.mineConceptRow {
+  border: 1px solid #d6e4f5;
+  border-radius: 9px;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px;
+}
+
+.mineConceptRow > div { min-width: 0; display: grid; gap: 3px; }
+.mineConceptRow strong,
+.mineConceptRow small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mineConceptRow strong { color: #193558; font-size: 13px; }
+.mineConceptRow small { color: #637792; font-size: 11px; }
+
+.linkButton {
+  border: 0;
+  background: transparent;
+  color: #315f9b;
+  padding: 6px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 850;
+}
+.linkButton:hover,
+.linkButton:focus-visible { text-decoration: underline; }
+
+.overlayActionBar {
+  border: 1px solid #c9ddf7;
+  border-radius: 12px;
+  background: #f4f9ff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 12px;
+}
+.overlayActionBar > div { min-width: 0; display: grid; gap: 3px; }
+.overlayActionBar strong { color: #193558; font-size: 13px; }
+.overlayActionBar small { color: #60748f; font-size: 11px; }
+
+.mineDetailCard {
+  border: 1px solid #bcd6f5;
+  border-radius: 12px;
+  background: #f7fbff;
+  display: grid;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding: 14px;
+}
+.mineDetailCard > p { margin: 0; color: #435a78; font-size: 12px; line-height: 1.5; }
+.mineCards { display: grid; gap: 8px; }
+.mineCards article { border: 1px solid #d7e4f3; border-radius: 9px; background: #fff; padding: 10px; }
+.mineCards p { margin: 0; color: #3f536f; font-size: 12px; line-height: 1.5; }
+
+.privateExplainer {
+  border: 1px solid #c8dcf4;
+  border-radius: 10px;
+  background: #f4f9ff;
+  margin: 0;
+  padding: 11px 12px;
+  color: #314f75;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.readOnlyField {
+  border: 1px solid #d9e1ec;
+  border-radius: 10px;
+  background: #f8fafc;
+  display: grid;
+  gap: 4px;
+  padding: 11px 12px;
+}
+.readOnlyField span { color: #6b7d95; font-size: 10px; font-weight: 850; letter-spacing: 0.05em; text-transform: uppercase; }
+.readOnlyField strong { color: #263d5c; font-size: 13px; }
+.readOnlyField small { color: #637590; font-size: 11px; }
+.formWarning { margin: 0; color: #9b4d12; font-size: 12px; font-weight: 750; }
+
+.detachIcon {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: #e8f3ff;
+  color: #225b9f;
+  display: grid;
+  place-items: center;
+  font-size: 22px;
+  font-weight: 900;
+}
+
 .tabs button {
   position: relative;
   min-width: 88px;
@@ -708,6 +968,10 @@
   align-items: center;
   gap: 4px;
   padding: 7px 10px 7px 13px;
+}
+
+.officialConceptRow {
+  grid-template-columns: minmax(0, 1fr) 20px;
 }
 
 .selectedConcept {
@@ -822,6 +1086,47 @@
   color: #53647d;
   font-size: 13px;
   line-height: 1.55;
+}
+
+.officialDetailCard {
+  background: #ffffff;
+}
+
+.placementPaths {
+  margin: 0;
+  padding-left: 18px;
+  color: #344b6b;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.officialBody {
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid #e0e6ef;
+  border-radius: 10px;
+  background: #fbfcfe;
+  padding: 14px;
+}
+
+.officialBody :global(.article-body) {
+  color: #435773;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.officialBody :global(.article-body) > :first-child {
+  margin-top: 0;
+}
+
+.officialBody :global(.article-body) > :last-child {
+  margin-bottom: 0;
+}
+
+.readOnlyNote {
+  border-top: 1px solid #e0e6ef;
+  padding-top: 14px;
+  font-weight: 750;
 }
 
 .detailCard select {
@@ -1047,7 +1352,12 @@
 
   .workspaceHeader {
     min-height: 68px;
+    flex-wrap: wrap;
     padding: 12px 15px;
+  }
+
+  .workspaceHeader .contextSwitch {
+    width: 100%;
   }
 
   .workspaceHeader h1 {
@@ -1101,6 +1411,14 @@
   .tabs {
     padding: 0 12px;
   }
+
+  .readOnlyStrip {
+    padding-right: 14px;
+    padding-left: 14px;
+  }
+
+  .overlayActionBar { align-items: stretch; flex-direction: column; }
+  .overlayActionBar .primary { width: 100%; }
 
   .tabs button {
     min-width: 94px;

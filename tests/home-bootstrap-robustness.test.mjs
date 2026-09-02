@@ -184,6 +184,25 @@ test('successful deck preference saves refresh the Home route cache', () => {
   }
 });
 
+test('large Library placement loading stays bounded by Library identity', () => {
+  const sources = [
+    readFileSync(new URL('../components/StudyPlanner.tsx', import.meta.url), 'utf8'),
+    readFileSync(
+      new URL('../lib/study-planner-initial-data.ts', import.meta.url),
+      'utf8'
+    ),
+  ];
+
+  for (const source of sources) {
+    assert.match(source, /library_nodes!inner \(library_id\)/);
+    assert.match(
+      source,
+      /\.eq\('library_nodes\.library_id', activeLibrary\.id\)/
+    );
+    assert.doesNotMatch(source, /\.in\('library_node_id', nodeIds\)/);
+  }
+});
+
 test('Phase 1 UX keeps direct Study, nearby Cram, and Exit-to-Home behavior', () => {
   const studyPlannerSource = readFileSync(
     new URL('../components/StudyPlanner.tsx', import.meta.url),

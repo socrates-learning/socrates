@@ -734,14 +734,14 @@ export function StudyPlanner({
       }
 
       const loadedNodes = (nodeData || []) as LibraryNode[];
-      const nodeIds = loadedNodes.map((node) => node.id);
-      const { data: placementData, error: placementError } = nodeIds.length
+      const { data: placementData, error: placementError } = loadedNodes.length
         ? await supabase
             .from('concept_placements')
             .select(
               `
               concept_id,
               library_node_id,
+              library_nodes!inner (library_id),
               concepts!inner (
                 id,
                 name,
@@ -751,8 +751,8 @@ export function StudyPlanner({
               )
             `
             )
+            .eq('library_nodes.library_id', activeLibrary.id)
             .eq('concepts.status', 'published')
-            .in('library_node_id', nodeIds)
         : { data: [], error: null };
 
       if (!isMounted) return;
