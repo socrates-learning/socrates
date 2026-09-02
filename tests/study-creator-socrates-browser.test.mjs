@@ -43,7 +43,7 @@ test('shared Topic utilities preserve arbitrary-depth paths and search ancestors
 });
 
 test('My Topics remains the default and personal CRUD stays on personal tables', () => {
-  assert.match(componentSource, /useState<'mine' \| 'socrates'>\('mine'\)/);
+  assert.match(componentSource, /useState<'mine' \| 'socrates' \| 'decks'>\('mine'\)/);
   assert.match(componentSource, /browseMode === 'mine'/);
   assert.match(componentSource, /\.from\('personal_topics'\)/);
   assert.match(componentSource, /\.from\('personal_concepts'\)/);

@@ -28,7 +28,7 @@
 }
 
 .workspaceHeader .contextSwitch {
-  width: min(220px, 100%);
+  width: min(360px, 100%);
   margin: 0;
 }
 
@@ -111,7 +111,7 @@
   border-radius: 10px;
   background: #f3f6fa;
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, 1fr);
   gap: 3px;
   margin-bottom: 16px;
   padding: 3px;

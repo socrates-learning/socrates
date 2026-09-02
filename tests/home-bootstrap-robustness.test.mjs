@@ -37,6 +37,12 @@ const initialDeckData = {
   nodePreferences: {},
   conceptOverrides: {},
   resolvedConcepts: [],
+  personalTopics: [],
+  personalConcepts: [],
+  personalCards: [],
+  selectedPersonalTopicIds: [],
+  personalCollections: [],
+  selectedPersonalCollectionIds: [],
   learnerProgress: {
     library_id: nursing.id,
     summary: {
@@ -174,6 +180,7 @@ test('successful deck preference saves refresh the Home route cache', () => {
     'Cram Mode preference saved.',
     'Deck updated.',
     'Personal study selection saved.',
+    'Personal Deck study selection saved.',
   ]) {
     const successIndex = studyPlannerSource.indexOf(successMessage);
     assert.notEqual(successIndex, -1);
@@ -182,6 +189,31 @@ test('successful deck preference saves refresh the Home route cache', () => {
       /router\.refresh\(\)/
     );
   }
+});
+
+test('Set Up Deck loads and persists compact Personal Deck selections', () => {
+  const studyPlannerSource = readFileSync(
+    new URL('../components/StudyPlanner.tsx', import.meta.url),
+    'utf8'
+  );
+  const initialDataSource = readFileSync(
+    new URL('../lib/study-planner-initial-data.ts', import.meta.url),
+    'utf8'
+  );
+
+  for (const source of [studyPlannerSource, initialDataSource]) {
+    assert.match(source, /personal_collections/);
+    assert.match(source, /personal_collection_cards\(count\)/);
+    assert.match(source, /study_deck_personal_collection_selections/);
+    assert.match(source, /selectedPersonalCollectionIds/);
+  }
+  assert.match(studyPlannerSource, /Personal Decks/);
+  assert.match(studyPlannerSource, /Personal Deck study selections/);
+  assert.match(studyPlannerSource, /No Personal Decks yet/);
+  assert.match(
+    studyPlannerSource,
+    /Personal Deck study selection saved\.[\s\S]{0,220}router\.refresh\(\)/
+  );
 });
 
 test('large Library placement loading stays bounded by Library identity', () => {

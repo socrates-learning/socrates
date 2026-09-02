@@ -61,6 +61,21 @@ type PersonalCard = {
   concept_id: string;
 };
 
+type PersonalCollection = {
+  id: string;
+  name: string;
+  cardCount: number;
+};
+
+type PersonalCollectionRow = {
+  id: string;
+  name: string;
+  personal_collection_cards:
+    | { count: number }[]
+    | { count: number }
+    | null;
+};
+
 type LearnerProgressMetric = {
   total_concepts: number;
   assessed_concepts: number;
@@ -109,6 +124,8 @@ export type StudyPlannerInitialData = {
   personalConcepts: PersonalConcept[];
   personalCards: PersonalCard[];
   selectedPersonalTopicIds: string[];
+  personalCollections: PersonalCollection[];
+  selectedPersonalCollectionIds: string[];
   learnerProgress: LearnerProgressResponse;
   learnerProgressError: string;
   loadError: string;
@@ -151,6 +168,8 @@ function emptyInitialData(
     personalConcepts: [],
     personalCards: [],
     selectedPersonalTopicIds: [],
+    personalCollections: [],
+    selectedPersonalCollectionIds: [],
     learnerProgress: emptyLearnerProgress(activeLibrary.id),
     learnerProgressError: '',
     loadError: '',
@@ -204,6 +223,8 @@ export async function loadStudyPlannerInitialData({
     personalConceptsResult,
     personalCardsResult,
     personalSelectionsResult,
+    personalCollectionsResult,
+    personalCollectionSelectionsResult,
   ] = await Promise.all([
     supabase
       .from('library_nodes')
@@ -245,6 +266,14 @@ export async function loadStudyPlannerInitialData({
       .from('study_deck_personal_topic_selections')
       .select('personal_topic_id')
       .eq('deck_id', activeDeck.id),
+    supabase
+      .from('personal_collections')
+      .select('id, name, personal_collection_cards(count)')
+      .order('name'),
+    supabase
+      .from('study_deck_personal_collection_selections')
+      .select('personal_collection_id')
+      .eq('deck_id', activeDeck.id),
   ]);
 
   if (nodeResult.error) {
@@ -267,7 +296,9 @@ export async function loadStudyPlannerInitialData({
     personalTopicsResult.error ||
     personalConceptsResult.error ||
     personalCardsResult.error ||
-    personalSelectionsResult.error;
+    personalSelectionsResult.error ||
+    personalCollectionsResult.error ||
+    personalCollectionSelectionsResult.error;
 
   const nodes = (nodeResult.data || []) as LibraryNode[];
   const placementResult = nodes.length
@@ -355,6 +386,25 @@ export async function loadStudyPlannerInitialData({
       ? []
       : (personalSelectionsResult.data || []).map(
           (selection) => selection.personal_topic_id
+        ),
+    personalCollections: personalCollectionsResult.error
+      ? []
+      : ((personalCollectionsResult.data || []) as unknown as PersonalCollectionRow[]).map(
+          (collection) => {
+            const count = Array.isArray(collection.personal_collection_cards)
+              ? collection.personal_collection_cards[0]?.count
+              : collection.personal_collection_cards?.count;
+            return {
+              id: collection.id,
+              name: collection.name,
+              cardCount: Number(count || 0),
+            };
+          }
+        ),
+    selectedPersonalCollectionIds: personalCollectionSelectionsResult.error
+      ? []
+      : (personalCollectionSelectionsResult.data || []).map(
+          (selection) => selection.personal_collection_id
         ),
     learnerProgress:
       learnerProgressResult.error || !learnerProgressResult.data

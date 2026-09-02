@@ -87,6 +87,21 @@ type PersonalCard = {
   concept_id: string;
 };
 
+type PersonalCollection = {
+  id: string;
+  name: string;
+  cardCount: number;
+};
+
+type PersonalCollectionRow = {
+  id: string;
+  name: string;
+  personal_collection_cards:
+    | { count: number }[]
+    | { count: number }
+    | null;
+};
+
 type LearnerProgressMetric = {
   total_concepts: number;
   assessed_concepts: number;
@@ -391,6 +406,13 @@ export function StudyPlanner({
   const [selectedPersonalTopicIds, setSelectedPersonalTopicIds] = useState<
     Set<string>
   >(new Set(initialDeckData?.selectedPersonalTopicIds || []));
+  const [personalCollections, setPersonalCollections] = useState<
+    PersonalCollection[]
+  >(initialDeckData?.personalCollections || []);
+  const [selectedPersonalCollectionIds, setSelectedPersonalCollectionIds] =
+    useState<Set<string>>(
+      new Set(initialDeckData?.selectedPersonalCollectionIds || [])
+    );
   const [expandedPersonalTopicIds, setExpandedPersonalTopicIds] = useState<
     Set<string>
   >(new Set(initialPersonalRootTopicIds));
@@ -658,6 +680,8 @@ export function StudyPlanner({
         personalConceptsResult,
         personalCardsResult,
         personalSelectionsResult,
+        personalCollectionsResult,
+        personalCollectionSelectionsResult,
       ] = await Promise.all([
         supabase
           .from('library_nodes')
@@ -699,6 +723,14 @@ export function StudyPlanner({
           .from('study_deck_personal_topic_selections')
           .select('personal_topic_id')
           .eq('deck_id', activeDeck.id),
+        supabase
+          .from('personal_collections')
+          .select('id, name, personal_collection_cards(count)')
+          .order('name'),
+        supabase
+          .from('study_deck_personal_collection_selections')
+          .select('personal_collection_id')
+          .eq('deck_id', activeDeck.id),
       ]);
       const { data: nodeData, error: nodeError } = nodeResult;
       const { data: selectedNodesData, error: selectedNodesError } =
@@ -718,6 +750,12 @@ export function StudyPlanner({
         personalCardsResult;
       const { data: personalSelectionsData, error: personalSelectionsError } =
         personalSelectionsResult;
+      const { data: personalCollectionsData, error: personalCollectionsError } =
+        personalCollectionsResult;
+      const {
+        data: personalCollectionSelectionsData,
+        error: personalCollectionSelectionsError,
+      } = personalCollectionSelectionsResult;
 
       if (!isMounted) return;
 
@@ -839,6 +877,31 @@ export function StudyPlanner({
             ? []
             : (personalSelectionsData || []).map(
                 (selection) => selection.personal_topic_id
+              )
+        )
+      );
+      setPersonalCollections(
+        personalCollectionsError
+          ? []
+          : ((personalCollectionsData || []) as unknown as PersonalCollectionRow[]).map(
+              (collection) => {
+                const count = Array.isArray(collection.personal_collection_cards)
+                  ? collection.personal_collection_cards[0]?.count
+                  : collection.personal_collection_cards?.count;
+                return {
+                  id: collection.id,
+                  name: collection.name,
+                  cardCount: Number(count || 0),
+                };
+              }
+            )
+      );
+      setSelectedPersonalCollectionIds(
+        new Set(
+          personalCollectionSelectionsError
+            ? []
+            : (personalCollectionSelectionsData || []).map(
+                (selection) => selection.personal_collection_id
               )
         )
       );
@@ -1719,6 +1782,61 @@ export function StudyPlanner({
     setIsSaving(false);
   }
 
+  async function togglePersonalCollectionSelection(collectionId: string) {
+    if (!activeLibrary?.id || !deck || !userId || isSaving) return;
+
+    const isSelected = selectedPersonalCollectionIds.has(collectionId);
+    setIsSaving(true);
+    setMessage(
+      isSelected
+        ? 'Removing Personal Deck from study...'
+        : 'Adding Personal Deck to study...'
+    );
+
+    if (isSelected) {
+      const { error } = await supabase
+        .from('study_deck_personal_collection_selections')
+        .delete()
+        .eq('deck_id', deck.id)
+        .eq('personal_collection_id', collectionId);
+
+      if (error) {
+        setMessage(`Unable to update Personal Deck selection: ${error.message}`);
+        setIsSaving(false);
+        return;
+      }
+
+      setSelectedPersonalCollectionIds((current) => {
+        const next = new Set(current);
+        next.delete(collectionId);
+        return next;
+      });
+    } else {
+      const { error } = await supabase
+        .from('study_deck_personal_collection_selections')
+        .insert({
+          deck_id: deck.id,
+          user_id: userId,
+          library_id: activeLibrary.id,
+          personal_collection_id: collectionId,
+        });
+
+      if (error) {
+        setMessage(`Unable to update Personal Deck selection: ${error.message}`);
+        setIsSaving(false);
+        return;
+      }
+
+      setSelectedPersonalCollectionIds((current) =>
+        new Set(current).add(collectionId)
+      );
+    }
+
+    setMessage('Personal Deck study selection saved.');
+    router.refresh();
+    setIsSaving(false);
+  }
+
   async function setConceptSelection(conceptId: string, shouldSelect: boolean) {
     if (!activeLibrary?.id || !deck || !userId) return;
 
@@ -2041,6 +2159,61 @@ export function StudyPlanner({
             Create personal Topics, Concepts, and Cards in Study Creator to select them here.
           </div>
         )}
+
+        <section
+          aria-labelledby="personal-decks-study-title"
+          style={{ borderTop: '1px solid #e2e8f0', marginTop: 16, paddingTop: 14 }}
+        >
+          <h3 id="personal-decks-study-title" style={{ fontSize: 16, margin: '0 0 10px' }}>
+            Personal Decks
+          </h3>
+          {personalCollections.length > 0 ? (
+            <div aria-label="Personal Deck study selections" style={{ display: 'grid', gap: 8 }}>
+              {personalCollections.map((collection) => (
+                <label
+                  key={collection.id}
+                  style={{
+                    alignItems: 'center',
+                    background: selectedPersonalCollectionIds.has(collection.id)
+                      ? '#eff6ff'
+                      : '#ffffff',
+                    border: selectedPersonalCollectionIds.has(collection.id)
+                      ? '1px solid #93c5fd'
+                      : '1px solid #e2e8f0',
+                    borderRadius: 12,
+                    cursor: isSaving ? 'wait' : 'pointer',
+                    display: 'flex',
+                    gap: 10,
+                    padding: '10px 12px',
+                  }}
+                >
+                  <input
+                    checked={selectedPersonalCollectionIds.has(collection.id)}
+                    disabled={isSaving}
+                    onChange={() =>
+                      void togglePersonalCollectionSelection(collection.id)
+                    }
+                    style={{ accentColor: '#2563eb', height: 18, width: 18 }}
+                    type="checkbox"
+                  />
+                  <span style={{ minWidth: 0 }}>
+                    <strong style={{ display: 'block', fontSize: 15 }}>
+                      {collection.name}
+                    </strong>
+                    <span className="muted" style={{ fontSize: 12 }}>
+                      {collection.cardCount}{' '}
+                      {collection.cardCount === 1 ? 'Card' : 'Cards'}
+                    </span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          ) : (
+            <p className="muted" style={{ fontSize: 13, margin: 0 }}>
+              No Personal Decks yet. Create one in Study Creator when you need it.
+            </p>
+          )}
+        </section>
       </section>
     );
   }

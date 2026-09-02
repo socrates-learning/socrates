@@ -6,10 +6,11 @@ import {
   SocratesStudyCreatorBrowser,
   type OfficialBrowserData,
 } from './SocratesStudyCreatorBrowser';
+import { PersonalDecksBrowser } from './PersonalDecksBrowser';
 import { StudyCreatorIcon as Icon } from './StudyCreatorIcon';
 import styles from './StudyCreatorClient.module.css';
 
-type PersonalTopic = {
+export type PersonalTopic = {
   id: string;
   owner_id: string;
   parent_id: string | null;
@@ -19,7 +20,7 @@ type PersonalTopic = {
   updated_at: string;
 };
 
-type PersonalConcept = {
+export type PersonalConcept = {
   id: string;
   owner_id: string;
   topic_id: string;
@@ -29,7 +30,7 @@ type PersonalConcept = {
   updated_at: string;
 };
 
-type PersonalCard = {
+export type PersonalCard = {
   id: string;
   owner_id: string;
   concept_id: string;
@@ -99,7 +100,7 @@ export function StudyCreatorClient({
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
-  const [browseMode, setBrowseMode] = useState<'mine' | 'socrates'>('mine');
+  const [browseMode, setBrowseMode] = useState<'mine' | 'socrates' | 'decks'>('mine');
 
   const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null);
   const [selectedConceptId, setSelectedConceptId] = useState<string | null>(null);
@@ -834,7 +835,7 @@ export function StudyCreatorClient({
       <section className={styles.workspace} aria-label="Study Creator workspace">
         <header className={styles.workspaceHeader}>
           <div>
-            <p>{browseMode === 'mine' ? 'Private to your account' : 'Socrates library · Official content read only'}</p>
+            <p>{browseMode === 'mine' ? 'Private to your account' : browseMode === 'socrates' ? 'Socrates library · Official content read only' : 'Owner-global · Cards stay in My Topics'}</p>
             <h1>Study Creator</h1>
           </div>
           <div className={styles.contextSwitch} aria-label="Browse material" role="group">
@@ -853,6 +854,14 @@ export function StudyCreatorClient({
               type="button"
             >
               Socrates
+            </button>
+            <button
+              aria-pressed={browseMode === 'decks'}
+              className={browseMode === 'decks' ? styles.activeContext : ''}
+              onClick={() => setBrowseMode('decks')}
+              type="button"
+            >
+              Personal Decks
             </button>
           </div>
         </header>
@@ -1056,7 +1065,7 @@ export function StudyCreatorClient({
             ) : null}
           </section>
         </div>
-        ) : (
+        ) : browseMode === 'socrates' ? (
           <SocratesStudyCreatorBrowser
             data={officialBrowser}
             material={{ topics, concepts, cards, overlays }}
@@ -1066,6 +1075,11 @@ export function StudyCreatorClient({
               rememberModalOpener();
               setDetachTarget(overlay);
             }}
+          />
+        ) : (
+          <PersonalDecksBrowser
+            material={{ topics, concepts, cards }}
+            ownerId={ownerId}
           />
         )}
       </section>
