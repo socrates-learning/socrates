@@ -507,6 +507,338 @@
   font-size: 0.9rem;
 }
 
+.conceptBrowsePanel {
+  margin-top: 12px;
+  overflow: hidden;
+  border: 1px solid #d8e1ef;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.conceptBrowseHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fbff;
+}
+
+.conceptBrowseHeading > div {
+  display: grid;
+  gap: 2px;
+}
+
+.conceptBrowseHeading span {
+  color: #687386;
+  font-size: 0.8rem;
+}
+
+.conceptBrowseTree {
+  max-height: 300px;
+  overflow: auto;
+  padding: 5px 0;
+}
+
+.conceptBrowseBranch {
+  min-width: 0;
+}
+
+.conceptBrowseTopicRow,
+.conceptBrowseConceptRow {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: #273142;
+  font: inherit;
+  text-align: left;
+}
+
+.conceptBrowseTopicRow {
+  display: flex;
+  min-height: 40px;
+  align-items: center;
+  gap: 8px;
+  padding-top: 6px;
+  padding-right: 12px;
+  padding-bottom: 6px;
+  cursor: pointer;
+}
+
+.conceptBrowseTopicRow:hover,
+.conceptBrowseTopicRow:focus-visible,
+.conceptBrowseConceptRow:hover,
+.conceptBrowseConceptRow:focus-visible {
+  background: #edf5ff;
+  outline: none;
+}
+
+.conceptBrowseTopicRow:disabled {
+  cursor: default;
+}
+
+.conceptBrowseChevron {
+  display: inline-flex;
+  width: 18px;
+  flex: 0 0 18px;
+  align-items: center;
+  justify-content: center;
+}
+
+.conceptBrowseTopicName {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conceptBrowseTopicRow small {
+  margin-left: auto;
+  color: #687386;
+  white-space: nowrap;
+}
+
+.conceptBrowseConceptRow {
+  display: flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 7px;
+  padding-right: 14px;
+  padding-bottom: 7px;
+  cursor: pointer;
+}
+
+.conceptBrowseConceptRow[aria-pressed='true'] {
+  background: #e8f0ff;
+  color: #0f4eb8;
+}
+
+.conceptBrowseConceptRow small {
+  color: #687386;
+  white-space: nowrap;
+}
+
+.linkedConceptContext {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 16px;
+  border: 1px solid #bfd5f1;
+  border-radius: 7px;
+  padding: 10px 12px;
+  background: #f5f9ff;
+  color: #17365f;
+}
+
+.linkedConceptContext span {
+  overflow-wrap: anywhere;
+  color: #52647a;
+  font-size: 0.84rem;
+}
+
+.prerequisitesSection {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 16px;
+}
+
+.prerequisitesHeading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.prerequisitesHeading h3,
+.prerequisitesHeading p {
+  margin: 0;
+}
+
+.prerequisitesHeading p {
+  margin-top: 4px;
+  color: #687386;
+  font-size: 0.84rem;
+}
+
+.prerequisitesHeading > span {
+  border-radius: 999px;
+  padding: 4px 8px;
+  background: #eef4fc;
+  color: #35516f;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.prerequisiteList,
+.prerequisiteSearchResults {
+  display: grid;
+  gap: 7px;
+}
+
+.prerequisiteCard,
+.prerequisiteResult {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid #d8e1ef;
+  border-radius: 7px;
+  padding: 9px 10px;
+  background: #fbfdff;
+}
+
+.prerequisiteCard > div:first-child,
+.prerequisiteResult > span {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.prerequisiteCard small,
+.prerequisiteResult small {
+  width: 100%;
+  overflow-wrap: anywhere;
+  color: #687386;
+  font-size: 0.78rem;
+}
+
+.prerequisiteTypeBadge {
+  border: 1px solid #bfd5f1;
+  border-radius: 999px;
+  padding: 2px 6px;
+  background: #f1f7ff;
+  color: #24558d;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.prerequisiteCardActions,
+.prerequisiteControls,
+.prerequisiteChoiceGroup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.prerequisiteCardActions select,
+.prerequisiteControls select {
+  min-height: 38px;
+  border: 1px solid #cfd5dd;
+  border-radius: 6px;
+  padding: 6px 30px 6px 9px;
+  background: #ffffff;
+  color: #20252d;
+  font: inherit;
+}
+
+.prerequisiteControls {
+  flex-wrap: wrap;
+}
+
+.prerequisiteControls .searchBox {
+  min-width: 220px;
+  flex: 1 1 260px;
+}
+
+.prerequisiteChoiceGroup .primaryButton,
+.prerequisiteChoiceGroup .secondaryButton,
+.prerequisiteControls > .secondaryButton {
+  min-height: 38px;
+  padding: 7px 12px;
+  font-size: 0.86rem;
+}
+
+.prerequisiteResult {
+  width: 100%;
+  color: #273142;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.prerequisiteResult:hover,
+.prerequisiteResult:focus-visible {
+  border-color: #8eb2f3;
+  background: #edf5ff;
+  outline: none;
+}
+
+.prerequisiteResult:disabled,
+.conceptBrowseConceptRow:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+}
+
+.prerequisiteBrowseTopicRow {
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  gap: 8px;
+  padding-top: 5px;
+  padding-right: 8px;
+  padding-bottom: 5px;
+}
+
+.prerequisiteExpandButton {
+  display: inline-flex;
+  width: 28px;
+  height: 30px;
+  flex: 0 0 28px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 5px;
+  padding: 0;
+  background: transparent;
+  color: #445267;
+  cursor: pointer;
+}
+
+.prerequisiteExpandButton:hover,
+.prerequisiteExpandButton:focus-visible {
+  background: #edf5ff;
+  outline: none;
+}
+
+.prerequisiteExpandButton:disabled {
+  cursor: default;
+}
+
+.prerequisiteBrowseTopicRow small {
+  margin-left: auto;
+  color: #687386;
+  white-space: nowrap;
+}
+
+.compactAddButton {
+  min-height: 32px;
+  margin-left: auto;
+  border: 1px solid #c9d6e6;
+  border-radius: 5px;
+  padding: 5px 8px;
+  background: #ffffff;
+  color: #244a75;
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.compactAddButton:hover,
+.compactAddButton:focus-visible {
+  background: #edf5ff;
+  outline: none;
+}
+
 .sourcesPanel {
   margin: 0 18px 18px;
 }
@@ -852,5 +1184,26 @@
 
   .topicChip {
     width: 100%;
+  }
+
+  .prerequisitesHeading,
+  .prerequisiteCard,
+  .prerequisiteCardActions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .prerequisiteCardActions select,
+  .prerequisiteCardActions label {
+    width: 100%;
+  }
+
+  .prerequisiteControls > *,
+  .prerequisiteChoiceGroup {
+    width: 100%;
+  }
+
+  .prerequisiteChoiceGroup > button {
+    flex: 1;
   }
 }

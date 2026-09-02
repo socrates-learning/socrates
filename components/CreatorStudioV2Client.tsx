@@ -54,6 +54,16 @@ type QuestionConceptOption = {
   id: string;
   name: string;
 };
+type PrerequisiteTargetType = 'concept' | 'topic';
+type PrerequisiteStrength = 'required' | 'recommended';
+type ConceptPrerequisite = {
+  id: string;
+  targetType: PrerequisiteTargetType;
+  targetId: string;
+  name: string;
+  path: string;
+  strength: PrerequisiteStrength;
+};
 type LifecycleStatus = 'draft' | 'published' | 'archived';
 type ExistingQuestion = {
   id: string;
@@ -282,6 +292,7 @@ function draftFingerprint(
   placementIds: Iterable<string>,
   references: Reference[],
   tagIds: Iterable<string>,
+  prerequisites: ConceptPrerequisite[],
   recordStatus: LifecycleStatus
 ) {
   return JSON.stringify({
@@ -299,6 +310,17 @@ function draftFingerprint(
       }))
       .sort((left, right) => left.identity.localeCompare(right.identity)),
     tagIds: Array.from(tagIds).sort(),
+    prerequisites: prerequisites
+      .map(({ targetType, targetId, strength }) => ({
+        targetType,
+        targetId,
+        strength,
+      }))
+      .sort((left, right) =>
+        `${left.targetType}:${left.targetId}`.localeCompare(
+          `${right.targetType}:${right.targetId}`
+        )
+      ),
     recordStatus,
   });
 }
@@ -375,6 +397,22 @@ export function CreatorStudioV2Client({
   );
   const [searchQuery, setSearchQuery] = useState('');
   const [contentConceptSearch, setContentConceptSearch] = useState('');
+  const [isConceptBrowseOpen, setIsConceptBrowseOpen] = useState(false);
+  const [expandedBrowseTopicIds, setExpandedBrowseTopicIds] = useState<Set<string>>(
+    () => new Set(resolvedTopics[0]?.id ? [resolvedTopics[0].id] : [])
+  );
+  const [prerequisites, setPrerequisites] = useState<ConceptPrerequisite[]>([]);
+  const [prerequisiteTargetType, setPrerequisiteTargetType] =
+    useState<PrerequisiteTargetType>('concept');
+  const [prerequisiteStrength, setPrerequisiteStrength] =
+    useState<PrerequisiteStrength>('required');
+  const [prerequisiteSearch, setPrerequisiteSearch] = useState('');
+  const [isPrerequisiteBrowseOpen, setIsPrerequisiteBrowseOpen] = useState(false);
+  const [expandedPrerequisiteTopicIds, setExpandedPrerequisiteTopicIds] =
+    useState<Set<string>>(
+      () => new Set(resolvedTopics[0]?.id ? [resolvedTopics[0].id] : [])
+    );
+  const [prerequisiteStatus, setPrerequisiteStatus] = useState<Status>(null);
   const [activeCreatorTab, setActiveCreatorTab] = useState<CreatorTab>('content');
   const [editorMode, setEditorMode] = useState<EditorMode>('write');
   const [dialogMode, setDialogMode] = useState<DialogMode>(null);
@@ -440,6 +478,7 @@ export function CreatorStudioV2Client({
       resolvedConcept.placementIds,
       initialReferences,
       [],
+      [],
       'draft'
     )
   );
@@ -454,9 +493,17 @@ export function CreatorStudioV2Client({
         selectedTopicIds,
         references,
         conceptTags.map((tag) => tag.id),
+        prerequisites,
         conceptRecordStatus
       ),
-    [concept, conceptRecordStatus, conceptTags, references, selectedTopicIds]
+    [
+      concept,
+      conceptRecordStatus,
+      conceptTags,
+      prerequisites,
+      references,
+      selectedTopicIds,
+    ]
   );
   const currentQuestionFingerprint = useMemo(
     () =>
@@ -643,7 +690,7 @@ export function CreatorStudioV2Client({
     let isMounted = true;
 
     async function loadConceptMetadata() {
-      const [tagResult, statusResult] = await Promise.all([
+      const [tagResult, statusResult, prerequisiteResult] = await Promise.all([
         supabase.rpc('get_concept_tags', {
           p_concept_id: resolvedConcept.id,
         }),
@@ -652,6 +699,9 @@ export function CreatorStudioV2Client({
           .select('status')
           .eq('id', resolvedConcept.id)
           .single(),
+        supabase.rpc('get_concept_prerequisites', {
+          p_concept_id: resolvedConcept.id,
+        }),
       ]);
 
       if (!isMounted) return;
@@ -671,6 +721,13 @@ export function CreatorStudioV2Client({
         });
         return;
       }
+      if (prerequisiteResult.error) {
+        setPrerequisiteStatus({
+          tone: 'error',
+          message: 'Prerequisites could not be loaded for this Concept.',
+        });
+        return;
+      }
 
       const loadedStatus: LifecycleStatus =
         statusResult.data.status === 'published' ||
@@ -684,15 +741,40 @@ export function CreatorStudioV2Client({
         slug: tag.slug,
         status: tag.status === 'archived' ? ('archived' as const) : ('active' as const),
       }));
+      const loadedPrerequisites: ConceptPrerequisite[] = (
+        (prerequisiteResult.data || []) as Array<{
+          id: string;
+          target_type: PrerequisiteTargetType;
+          target_id: string;
+          target_name: string;
+          strength: PrerequisiteStrength;
+        }>
+      ).map((prerequisite) => {
+        const topicPath =
+          prerequisite.target_type === 'topic'
+            ? findTopicPath(topics, prerequisite.target_id)
+            : null;
+
+        return {
+          id: prerequisite.id,
+          targetType: prerequisite.target_type,
+          targetId: prerequisite.target_id,
+          name: prerequisite.target_name,
+          path: topicPath?.map((topic) => topic.name).join(' › ') || '',
+          strength: prerequisite.strength,
+        };
+      });
 
       setConceptRecordStatus(loadedStatus);
       setConceptTags(loadedTags);
+      setPrerequisites(loadedPrerequisites);
       setSavedDraftFingerprint(
         draftFingerprint(
           resolvedConcept.bodyMarkdown,
           resolvedConcept.placementIds,
           initialReferences,
           loadedTags.map((tag) => tag.id),
+          loadedPrerequisites,
           loadedStatus
         )
       );
@@ -710,6 +792,7 @@ export function CreatorStudioV2Client({
     resolvedConcept.bodyMarkdown,
     resolvedConcept.id,
     resolvedConcept.placementIds,
+    topics,
   ]);
 
   useEffect(() => {
@@ -745,7 +828,11 @@ export function CreatorStudioV2Client({
     }
     if (
       activeCreatorTab !== 'questions' &&
-      !contentConceptSearch.trim()
+      !contentConceptSearch.trim() &&
+      !isConceptBrowseOpen &&
+      !isPrerequisiteBrowseOpen &&
+      !prerequisiteSearch.trim() &&
+      prerequisites.length === 0
     ) {
       return;
     }
@@ -812,7 +899,16 @@ export function CreatorStudioV2Client({
     return () => {
       isMounted = false;
     };
-  }, [activeCreatorTab, activeLibraryId, contentConceptSearch, topics]);
+  }, [
+    activeCreatorTab,
+    activeLibraryId,
+    contentConceptSearch,
+    isConceptBrowseOpen,
+    isPrerequisiteBrowseOpen,
+    prerequisiteSearch,
+    prerequisites.length,
+    topics,
+  ]);
 
   useEffect(() => {
     if (activeCreatorTab !== 'questions') return;
@@ -934,6 +1030,67 @@ export function CreatorStudioV2Client({
       .sort((left, right) => left.name.localeCompare(right.name))
       .slice(0, 20);
   }, [normalizedContentConceptSearch, questionConceptsByTopicId, topics]);
+  const normalizedPrerequisiteSearch = prerequisiteSearch
+    .trim()
+    .toLocaleLowerCase();
+  const prerequisiteConceptOptions = useMemo(() => {
+    const conceptsById = new Map<
+      string,
+      { id: string; name: string; paths: string[] }
+    >();
+
+    Object.entries(questionConceptsByTopicId).forEach(
+      ([topicId, conceptOptions]) => {
+        const path = findTopicPath(topics, topicId) || [];
+        const pathLabel = path.map((topic) => topic.name).join(' › ');
+
+        conceptOptions.forEach((option) => {
+          const existing = conceptsById.get(option.id) || {
+            id: option.id,
+            name: option.name,
+            paths: [],
+          };
+          if (pathLabel && !existing.paths.includes(pathLabel)) {
+            existing.paths.push(pathLabel);
+          }
+          conceptsById.set(option.id, existing);
+        });
+      }
+    );
+
+    return Array.from(conceptsById.values()).sort((left, right) =>
+      left.name.localeCompare(right.name)
+    );
+  }, [questionConceptsByTopicId, topics]);
+  const prerequisiteSearchResults = useMemo(() => {
+    if (!normalizedPrerequisiteSearch) return [];
+
+    if (prerequisiteTargetType === 'concept') {
+      return prerequisiteConceptOptions
+        .filter(
+          (option) =>
+            option.id !== conceptId &&
+            (option.name.toLocaleLowerCase().includes(normalizedPrerequisiteSearch) ||
+              option.paths.some((path) =>
+                path.toLocaleLowerCase().includes(normalizedPrerequisiteSearch)
+              ))
+        )
+        .slice(0, 20);
+    }
+
+    return flattenTopics(topics)
+      .filter((topic) =>
+        topic.label.toLocaleLowerCase().includes(normalizedPrerequisiteSearch)
+      )
+      .map((topic) => ({ id: topic.id, name: topic.label.split(' > ').at(-1) || topic.label, paths: [topic.label.replaceAll(' > ', ' › ')] }))
+      .slice(0, 20);
+  }, [
+    conceptId,
+    normalizedPrerequisiteSearch,
+    prerequisiteConceptOptions,
+    prerequisiteTargetType,
+    topics,
+  ]);
   const normalizedSearch = searchQuery.trim().toLocaleLowerCase();
   const normalizedQuestionConceptSearch = questionConceptSearch
     .trim()
@@ -965,6 +1122,48 @@ export function CreatorStudioV2Client({
     const displayPath = path.length > 1 ? path.slice(1) : path;
     return displayPath.map((topic) => topic.name).join(' > ');
   }, [questionTopicId, topics]);
+  const linkedQuestionConcept = useMemo(() => {
+    if (!questionConceptId) return null;
+
+    let name =
+      resolvedConcept.id === questionConceptId ? resolvedConcept.name : '';
+    const paths: Array<{ topicId: string; label: string }> = [];
+
+    Object.entries(questionConceptsByTopicId).forEach(
+      ([topicId, conceptOptions]) => {
+        const option = conceptOptions.find(
+          (conceptOption) => conceptOption.id === questionConceptId
+        );
+        if (!option) return;
+        if (!name) name = option.name;
+
+        const path = findTopicPath(topics, topicId);
+        if (path?.length) {
+          paths.push({
+            topicId,
+            label: path.map((topic) => topic.name).join(' › '),
+          });
+        }
+      }
+    );
+
+    const preferredPath =
+      paths.find((path) => path.topicId === questionTopicId)?.label ||
+      paths[0]?.label ||
+      '';
+
+    return {
+      name: name || 'Selected concept',
+      path: preferredPath,
+    };
+  }, [
+    questionConceptId,
+    questionConceptsByTopicId,
+    questionTopicId,
+    resolvedConcept.id,
+    resolvedConcept.name,
+    topics,
+  ]);
   const questionConceptCountByTopicId = useMemo(() => {
     const counts = new Map<string, number>();
 
@@ -2038,9 +2237,10 @@ export function CreatorStudioV2Client({
       (concept.trim() ||
         selectedTopicIds.size > 0 ||
         references.length > 0 ||
+        prerequisites.length > 0 ||
         referenceDraftHasContent) &&
       !window.confirm(
-        'Clear the concept draft, its selected topics, and its references?'
+        'Clear the concept draft, selected topics, prerequisites, and references?'
       )
     ) {
       return;
@@ -2049,6 +2249,9 @@ export function CreatorStudioV2Client({
     setSelectedTopicIds(new Set());
     setReferences([]);
     setConceptTags([]);
+    setPrerequisites([]);
+    setPrerequisiteSearch('');
+    setPrerequisiteStatus(null);
     setTagDraft('');
     setTagStatus(null);
     setReferenceDraft(emptyReferenceDraft);
@@ -2089,6 +2292,63 @@ export function CreatorStudioV2Client({
     navigateFromCreator(`/creator/concepts/${selectedConceptId}`);
   }
 
+  function addPrerequisite(
+    targetType: PrerequisiteTargetType,
+    targetId: string,
+    name: string,
+    path: string
+  ) {
+    if (targetType === 'concept' && targetId === conceptId) {
+      setPrerequisiteStatus({
+        tone: 'error',
+        message: 'A Concept cannot be its own prerequisite.',
+      });
+      return;
+    }
+    if (
+      prerequisites.some(
+        (item) => item.targetType === targetType && item.targetId === targetId
+      )
+    ) {
+      setPrerequisiteStatus({
+        tone: 'error',
+        message: `${name} is already linked as a prerequisite.`,
+      });
+      return;
+    }
+
+    setPrerequisites((current) => [
+      ...current,
+      {
+        id: `draft-${targetType}-${targetId}`,
+        targetType,
+        targetId,
+        name,
+        path,
+        strength: prerequisiteStrength,
+      },
+    ]);
+    setPrerequisiteSearch('');
+    setPrerequisiteStatus({
+      tone: 'success',
+      message: `${name} added. Save the Concept to persist this relationship.`,
+    });
+  }
+
+  function removePrerequisite(item: ConceptPrerequisite) {
+    setPrerequisites((current) =>
+      current.filter(
+        (candidate) =>
+          candidate.targetType !== item.targetType ||
+          candidate.targetId !== item.targetId
+      )
+    );
+    setPrerequisiteStatus({
+      tone: 'info',
+      message: `${item.name} removed. Save the Concept to persist this change.`,
+    });
+  }
+
   function startNewConcept() {
     if (
       isContentDirty &&
@@ -2103,6 +2363,10 @@ export function CreatorStudioV2Client({
     setConceptRecordStatus('draft');
     setSelectedTopicIds(new Set());
     setConceptTags([]);
+    setPrerequisites([]);
+    setPrerequisiteSearch('');
+    setIsPrerequisiteBrowseOpen(false);
+    setPrerequisiteStatus(null);
     setTagDraft('');
     setTagStatus(null);
     setReferences([]);
@@ -2114,7 +2378,7 @@ export function CreatorStudioV2Client({
     setEditorMode('write');
     setActiveCreatorTab('content');
     setStatus(null);
-    setSavedDraftFingerprint(draftFingerprint('', [], [], [], 'draft'));
+    setSavedDraftFingerprint(draftFingerprint('', [], [], [], [], 'draft'));
     router.push('/creator/concepts/new');
   }
 
@@ -2152,9 +2416,12 @@ export function CreatorStudioV2Client({
     setConceptRecordStatus('draft');
     setSelectedTopicIds(new Set());
     setConceptTags([]);
+    setPrerequisites([]);
+    setPrerequisiteSearch('');
+    setPrerequisiteStatus(null);
     setReferences([]);
     setContentConceptSearch('');
-    setSavedDraftFingerprint(draftFingerprint('', [], [], [], 'draft'));
+    setSavedDraftFingerprint(draftFingerprint('', [], [], [], [], 'draft'));
     await loadTagCatalog();
     broadcastTagCatalogUsageInvalidation();
     setIsSaving(false);
@@ -2193,7 +2460,9 @@ export function CreatorStudioV2Client({
     setSaveFeedback('saving');
     setStatus(null);
 
-    const { data, error } = await supabase.rpc('save_concept_with_version', {
+    const { data, error } = await supabase.rpc(
+      'save_concept_with_prerequisites',
+      {
       p_concept_id: conceptId,
       p_name: name,
       p_body_markdown: bodyMarkdownToSave,
@@ -2209,7 +2478,13 @@ export function CreatorStudioV2Client({
         url: reference.url,
         note: reference.notes,
       })),
-    });
+        p_prerequisites: prerequisites.map((prerequisite) => ({
+          target_type: prerequisite.targetType,
+          target_id: prerequisite.targetId,
+          strength: prerequisite.strength,
+        })),
+      }
+    );
 
     if (error) {
       setIsSaving(false);
@@ -2309,6 +2584,7 @@ export function CreatorStudioV2Client({
         placementIdsToSave,
         confirmedReferences,
         tagIdsToSave,
+        prerequisites,
         conceptRecordStatus
       )
     );
@@ -2605,6 +2881,161 @@ export function CreatorStudioV2Client({
         {hasChildren && isExpanded && (
           <div className={depth > 0 ? styles.nestedTopics : undefined}>
             {topic.children.map((child) => renderQuestionTopic(child, depth + 1))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  function renderPrerequisiteBrowseTopic(topic: Topic, depth = 0) {
+    const directConcepts = questionConceptsByTopicId[topic.id] || [];
+    const conceptCountInBranch = questionConceptCountByTopicId.get(topic.id) || 0;
+    const isExpanded = expandedPrerequisiteTopicIds.has(topic.id);
+    const canExpand = topic.children.length > 0 || directConcepts.length > 0;
+    const topicPath =
+      findTopicPath(topics, topic.id)?.map((item) => item.name).join(' › ') ||
+      topic.name;
+
+    return (
+      <div className={styles.conceptBrowseBranch} key={`prerequisite-${topic.id}`}>
+        <div
+          className={styles.prerequisiteBrowseTopicRow}
+          style={{ paddingLeft: `${8 + depth * 28}px` }}
+        >
+          <button
+            className={styles.prerequisiteExpandButton}
+            type="button"
+            aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${topic.name}`}
+            aria-expanded={canExpand ? isExpanded : undefined}
+            disabled={!canExpand}
+            onClick={() => {
+              if (!canExpand) return;
+              setExpandedPrerequisiteTopicIds((current) => {
+                const next = new Set(current);
+                if (next.has(topic.id)) next.delete(topic.id);
+                else next.add(topic.id);
+                return next;
+              });
+            }}
+          >
+            {canExpand ? (
+              isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />
+            ) : (
+              <span className={styles.arrowSpacer} />
+            )}
+          </button>
+          <Folder size={18} strokeWidth={1.7} />
+          <span className={styles.conceptBrowseTopicName}>{topic.name}</span>
+          {prerequisiteTargetType === 'topic' ? (
+            <button
+              className={styles.compactAddButton}
+              type="button"
+              onClick={() => addPrerequisite('topic', topic.id, topic.name, topicPath)}
+            >
+              Add Topic
+            </button>
+          ) : (
+            <small>
+              {conceptCountInBranch} {conceptCountInBranch === 1 ? 'Concept' : 'Concepts'}
+            </small>
+          )}
+        </div>
+
+        {isExpanded && (
+          <div>
+            {prerequisiteTargetType === 'concept' &&
+              directConcepts.map((option) => {
+                const isSelf = option.id === conceptId;
+                return (
+                  <button
+                    className={styles.conceptBrowseConceptRow}
+                    key={`${topic.id}-${option.id}`}
+                    type="button"
+                    disabled={isSelf}
+                    style={{ paddingLeft: `${48 + depth * 28}px` }}
+                    onClick={() =>
+                      addPrerequisite('concept', option.id, option.name, topicPath)
+                    }
+                  >
+                    <span>{option.name}</span>
+                    <small>{isSelf ? 'Currently editing' : 'Add Concept'}</small>
+                  </button>
+                );
+              })}
+            {topic.children.map((child) =>
+              renderPrerequisiteBrowseTopic(child, depth + 1)
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  function renderConceptBrowseTopic(topic: Topic, depth = 0) {
+    const directConcepts = questionConceptsByTopicId[topic.id] || [];
+    const conceptCountInBranch =
+      questionConceptCountByTopicId.get(topic.id) || 0;
+    const canExpand = topic.children.length > 0 || directConcepts.length > 0;
+    const isExpanded = expandedBrowseTopicIds.has(topic.id);
+
+    return (
+      <div className={styles.conceptBrowseBranch} key={`browse-${topic.id}`}>
+        <button
+          className={styles.conceptBrowseTopicRow}
+          type="button"
+          aria-expanded={canExpand ? isExpanded : undefined}
+          disabled={!canExpand}
+          style={{ paddingLeft: `${12 + depth * 28}px` }}
+          onClick={() => {
+            if (!canExpand) return;
+            setExpandedBrowseTopicIds((current) => {
+              const next = new Set(current);
+              if (next.has(topic.id)) next.delete(topic.id);
+              else next.add(topic.id);
+              return next;
+            });
+          }}
+        >
+          <span className={styles.conceptBrowseChevron} aria-hidden="true">
+            {canExpand ? (
+              isExpanded ? (
+                <ChevronDown size={16} />
+              ) : (
+                <ChevronRight size={16} />
+              )
+            ) : (
+              <span className={styles.arrowSpacer} />
+            )}
+          </span>
+          <Folder size={18} strokeWidth={1.7} />
+          <span className={styles.conceptBrowseTopicName}>{topic.name}</span>
+          <small>
+            {conceptCountInBranch}{' '}
+            {conceptCountInBranch === 1 ? 'Concept' : 'Concepts'}
+          </small>
+        </button>
+
+        {isExpanded && (
+          <div>
+            {directConcepts.map((conceptOption) => {
+              const isSelected = conceptOption.id === conceptId;
+              return (
+                <button
+                  className={styles.conceptBrowseConceptRow}
+                  key={`${topic.id}-${conceptOption.id}`}
+                  type="button"
+                  aria-pressed={isSelected}
+                  style={{ paddingLeft: `${48 + depth * 28}px` }}
+                  onClick={() => openConceptFromSearch(conceptOption.id)}
+                >
+                  <span>{conceptOption.name}</span>
+                  {isSelected && <small>Currently editing</small>}
+                </button>
+              );
+            })}
+            {topic.children.map((child) =>
+              renderConceptBrowseTopic(child, depth + 1)
+            )}
           </div>
         )}
       </div>
@@ -2953,6 +3384,15 @@ export function CreatorStudioV2Client({
                   <button
                     className={styles.secondaryButton}
                     type="button"
+                    aria-expanded={isConceptBrowseOpen}
+                    aria-controls="concept-browse-panel"
+                    onClick={() => setIsConceptBrowseOpen((current) => !current)}
+                  >
+                    <Folder size={17} /> Browse Concepts
+                  </button>
+                  <button
+                    className={styles.secondaryButton}
+                    type="button"
                     onClick={startNewConcept}
                   >
                     <Plus size={17} /> New Concept
@@ -3074,6 +3514,32 @@ export function CreatorStudioV2Client({
                         No concepts match “{contentConceptSearch.trim()}”.
                       </p>
                     )}
+                  </div>
+                )}
+
+                {isConceptBrowseOpen && (
+                  <div
+                    className={styles.conceptBrowsePanel}
+                    id="concept-browse-panel"
+                    aria-label="Browse Concepts by Topic"
+                  >
+                    <div className={styles.conceptBrowseHeading}>
+                      <div>
+                        <strong>Browse Concepts</strong>
+                        <span>Choose a Topic Tree branch, then select a Concept.</span>
+                      </div>
+                      <button
+                        className={styles.menuButton}
+                        type="button"
+                        aria-label="Close Browse Concepts"
+                        onClick={() => setIsConceptBrowseOpen(false)}
+                      >
+                        <X size={18} />
+                      </button>
+                    </div>
+                    <div className={styles.conceptBrowseTree}>
+                      {topics.map((topic) => renderConceptBrowseTopic(topic))}
+                    </div>
                   </div>
                 )}
               </section>
@@ -3383,6 +3849,226 @@ export function CreatorStudioV2Client({
                 </div>
               )}
             </div>
+
+            <div className={styles.prerequisitesSection}>
+              <div className={styles.prerequisitesHeading}>
+                <div>
+                  <h3>Prerequisites / Relationships</h3>
+                  <p>
+                    Link foundational Concepts or Topic Tree branches. No graph
+                    drawing required.
+                  </p>
+                </div>
+                <span>{prerequisites.length} linked</span>
+              </div>
+
+              <div className={styles.prerequisiteList} aria-label="Linked prerequisites">
+                {prerequisites.length ? (
+                  prerequisites.map((item) => {
+                    const conceptPath =
+                      item.targetType === 'concept'
+                        ? prerequisiteConceptOptions.find(
+                            (option) => option.id === item.targetId
+                          )?.paths[0]
+                        : '';
+                    const displayPath = item.path || conceptPath || '';
+
+                    return (
+                      <article className={styles.prerequisiteCard} key={`${item.targetType}-${item.targetId}`}>
+                        <div>
+                          <span className={styles.prerequisiteTypeBadge}>
+                            {item.targetType === 'concept' ? 'Concept' : 'Topic'}
+                          </span>
+                          <strong>{item.name}</strong>
+                          {displayPath && <small>{displayPath}</small>}
+                        </div>
+                        <div className={styles.prerequisiteCardActions}>
+                          <label>
+                            <span className={styles.srOnly}>
+                              Strength for {item.name}
+                            </span>
+                            <select
+                              aria-label={`Strength for ${item.name}`}
+                              value={item.strength}
+                              onChange={(event) => {
+                                const strength = event.target
+                                  .value as PrerequisiteStrength;
+                                setPrerequisites((current) =>
+                                  current.map((candidate) =>
+                                    candidate.targetType === item.targetType &&
+                                    candidate.targetId === item.targetId
+                                      ? { ...candidate, strength }
+                                      : candidate
+                                  )
+                                );
+                                setPrerequisiteStatus(null);
+                              }}
+                            >
+                              <option value="required">Required</option>
+                              <option value="recommended">Recommended</option>
+                            </select>
+                          </label>
+                          <button
+                            className={styles.menuButton}
+                            type="button"
+                            aria-label={`Remove ${item.name} prerequisite`}
+                            onClick={() => removePrerequisite(item)}
+                          >
+                            <X size={17} />
+                          </button>
+                        </div>
+                      </article>
+                    );
+                  })
+                ) : (
+                  <p className={styles.emptySelection}>
+                    No prerequisites linked. Downstream scheduling is unchanged.
+                  </p>
+                )}
+              </div>
+
+              <div className={styles.prerequisiteControls}>
+                <div className={styles.prerequisiteChoiceGroup} aria-label="Prerequisite target type">
+                  {(['concept', 'topic'] as const).map((targetType) => (
+                    <button
+                      className={
+                        prerequisiteTargetType === targetType
+                          ? styles.primaryButton
+                          : styles.secondaryButton
+                      }
+                      key={targetType}
+                      type="button"
+                      aria-pressed={prerequisiteTargetType === targetType}
+                      onClick={() => {
+                        setPrerequisiteTargetType(targetType);
+                        setPrerequisiteSearch('');
+                        setPrerequisiteStatus(null);
+                      }}
+                    >
+                      {targetType === 'concept' ? 'Concept' : 'Topic'}
+                    </button>
+                  ))}
+                </div>
+                <label>
+                  <span className={styles.srOnly}>New prerequisite strength</span>
+                  <select
+                    aria-label="New prerequisite strength"
+                    value={prerequisiteStrength}
+                    onChange={(event) =>
+                      setPrerequisiteStrength(
+                        event.target.value as PrerequisiteStrength
+                      )
+                    }
+                  >
+                    <option value="required">Required</option>
+                    <option value="recommended">Recommended</option>
+                  </select>
+                </label>
+                <label className={styles.searchBox}>
+                  <span className={styles.srOnly}>
+                    Search {prerequisiteTargetType} prerequisites
+                  </span>
+                  <input
+                    value={prerequisiteSearch}
+                    onChange={(event) => {
+                      setPrerequisiteSearch(event.target.value);
+                      setPrerequisiteStatus(null);
+                    }}
+                    placeholder={`Search ${prerequisiteTargetType === 'concept' ? 'Concepts' : 'Topics'}`}
+                  />
+                  <Search size={19} />
+                </label>
+                <button
+                  className={styles.secondaryButton}
+                  type="button"
+                  aria-expanded={isPrerequisiteBrowseOpen}
+                  aria-controls="prerequisite-browser"
+                  onClick={() =>
+                    setIsPrerequisiteBrowseOpen((current) => !current)
+                  }
+                >
+                  <Folder size={17} /> Browse
+                </button>
+              </div>
+
+              {normalizedPrerequisiteSearch && (
+                <div className={styles.prerequisiteSearchResults} aria-label="Prerequisite search results">
+                  {prerequisiteSearchResults.length ? (
+                    prerequisiteSearchResults.map((option) => (
+                      <button
+                        className={styles.prerequisiteResult}
+                        key={`${prerequisiteTargetType}-${option.id}`}
+                        type="button"
+                        disabled={
+                          prerequisiteTargetType === 'concept' &&
+                          option.id === conceptId
+                        }
+                        onClick={() =>
+                          addPrerequisite(
+                            prerequisiteTargetType,
+                            option.id,
+                            option.name,
+                            option.paths[0] || ''
+                          )
+                        }
+                      >
+                        <span>
+                          <strong>{option.name}</strong>
+                          {option.paths[0] && <small>{option.paths[0]}</small>}
+                        </span>
+                        <small>
+                          {option.id === conceptId ? 'Currently editing' : 'Add'}
+                        </small>
+                      </button>
+                    ))
+                  ) : (
+                    <p className={styles.emptySelection}>
+                      No {prerequisiteTargetType === 'concept' ? 'Concepts' : 'Topics'} match “{prerequisiteSearch.trim()}”.
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {isPrerequisiteBrowseOpen && (
+                <div
+                  className={styles.conceptBrowsePanel}
+                  id="prerequisite-browser"
+                  aria-label="Browse prerequisite targets by Topic Tree"
+                >
+                  <div className={styles.conceptBrowseHeading}>
+                    <div>
+                      <strong>
+                        Browse {prerequisiteTargetType === 'concept' ? 'Concepts' : 'Topics'}
+                      </strong>
+                      <span>
+                        Add a {prerequisiteStrength} prerequisite from the existing Topic Tree.
+                      </span>
+                    </div>
+                    <button
+                      className={styles.menuButton}
+                      type="button"
+                      aria-label="Close prerequisite browser"
+                      onClick={() => setIsPrerequisiteBrowseOpen(false)}
+                    >
+                      <X size={18} />
+                    </button>
+                  </div>
+                  <div className={styles.conceptBrowseTree}>
+                    {topics.map((topic) => renderPrerequisiteBrowseTopic(topic))}
+                  </div>
+                </div>
+              )}
+
+              {prerequisiteStatus && (
+                <div
+                  className={`${styles.referenceStatus} ${styles[prerequisiteStatus.tone]}`}
+                  role="status"
+                  aria-live="polite"
+                >
+                  {prerequisiteStatus.message}
+                </div>
+              )}
+            </div>
               </section>
 
               <section className={`${styles.panel} ${styles.sourcesPanel}`}>
@@ -3578,6 +4264,18 @@ export function CreatorStudioV2Client({
                     <p>Create the front and back of the study card.</p>
                   </div>
 
+                  {linkedQuestionConcept && (
+                    <div
+                      className={styles.linkedConceptContext}
+                      aria-label="Linked Concept"
+                    >
+                      <strong>Linked Concept: {linkedQuestionConcept.name}</strong>
+                      {linkedQuestionConcept.path && (
+                        <span>{linkedQuestionConcept.path}</span>
+                      )}
+                    </div>
+                  )}
+
                   <div
                     style={{
                       borderBottom: '1px solid #e2e8f0',
@@ -3737,6 +4435,17 @@ export function CreatorStudioV2Client({
                         />
                         <Search size={20} />
                       </label>
+                      <button
+                        className={styles.secondaryButton}
+                        type="button"
+                        aria-controls="question-concept-browser"
+                        onClick={() => {
+                          setQuestionConceptSearch('');
+                          setSearchQuery('');
+                        }}
+                      >
+                        <Folder size={17} /> Browse Concepts
+                      </button>
                       <label
                         style={{
                           alignItems: 'center',
@@ -3949,7 +4658,11 @@ export function CreatorStudioV2Client({
                     </div>
                   )}
 
-                  <div className={styles.treeViewport} aria-label="Question Topic Tree">
+                  <div
+                    className={styles.treeViewport}
+                    id="question-concept-browser"
+                    aria-label="Question Topic Tree"
+                  >
                     {topics.map((topic) => renderQuestionTopic(topic))}
                     {normalizedSearch && searchIds.size === 0 && (
                       <div className={styles.emptyTree}>
