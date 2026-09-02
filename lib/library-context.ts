@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
 import { getVerifiedRequestAuthContext } from '@/lib/server-auth-context';
+import { getSoleAccessibleLibrary } from '@/lib/home-bootstrap';
 
 export const ACTIVE_LIBRARY_COOKIE = 'socrates_active_library';
 
@@ -241,6 +242,32 @@ export async function resolveActiveLibraryContext({
       };
     }
 
+    const { data: activeLibraryRows } = await supabase
+      .from('libraries')
+      .select('id, name, slug, description, status')
+      .eq('status', 'active')
+      .order('name')
+      .limit(2);
+    const soleActiveLibrary = getSoleAccessibleLibrary(
+      (activeLibraryRows || []).flatMap((library) => {
+        const normalized = normalizeLibrary(library as ActiveLibrary | null);
+        return normalized ? [normalized] : [];
+      })
+    );
+
+    if (soleActiveLibrary) {
+      return {
+        library: soleActiveLibrary,
+        role,
+        user: resolvedUser,
+        source: 'fallback',
+        canSwitch: true,
+        hasMembership,
+        needsSelection: false,
+        isUnauthorized: false,
+      };
+    }
+
     return {
       library: null,
       role,
@@ -252,6 +279,8 @@ export async function resolveActiveLibraryContext({
       isUnauthorized: false,
     };
   }
+
+  const soleMembership = getSoleAccessibleLibrary(memberships);
 
   if (requestedSlug) {
     const requestedMembership = requestedLibrary
@@ -273,13 +302,13 @@ export async function resolveActiveLibraryContext({
   }
 
   return {
-    library: primaryMembership?.library || null,
+    library: primaryMembership?.library || soleMembership?.library || null,
     role,
     user: resolvedUser,
-    source: primaryMembership ? 'primary' : 'none',
+    source: primaryMembership ? 'primary' : soleMembership ? 'fallback' : 'none',
     canSwitch: false,
     hasMembership,
-    needsSelection: !primaryMembership,
+    needsSelection: !primaryMembership && !soleMembership,
     isUnauthorized: false,
   };
 }

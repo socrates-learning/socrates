@@ -167,7 +167,6 @@ const learnerNavItems: Array<{
 ];
 
 const homeRailItems: Array<{ label: string; icon: string; href?: string }> = [
-  { label: 'Deck Menu', icon: 'document' },
   { label: 'Study Creator', icon: 'edit', href: '/study-creator' },
   { label: 'Stats', icon: 'bars' },
   { label: 'Account Settings', icon: 'gear' },
@@ -2272,7 +2271,8 @@ export function StudyPlanner({
   ) {
     if (
       (role !== 'admin' && role !== 'editor') ||
-      !availableLibraries.length
+      !availableLibraries.length ||
+      (Boolean(currentSlug) && availableLibraries.length === 1)
     ) {
       return null;
     }
@@ -3003,9 +3003,9 @@ if (mode === 'study') {
 
   const studyCardActions = (
     <div className="study-v2-card-actions" aria-label="Study card controls">
-      <button type="button" onClick={() => void leaveStudyMode('setup')}>
+      <button type="button" onClick={() => void leaveStudyMode('dashboard')}>
         <span aria-hidden="true">←</span>
-        Go Back
+        Exit
       </button>
       <button
         aria-label="Close study mode"
@@ -4040,11 +4040,7 @@ if (mode === 'study') {
                   }
                   type="button"
                   onClick={
-                    item.label === 'Deck Menu'
-                      ? openSetupMode
-                      : item.label === 'Stats'
-                        ? () => setMode('stats')
-                        : undefined
+                    item.label === 'Stats' ? () => setMode('stats') : undefined
                   }
                 >
                   {content}
@@ -4091,13 +4087,30 @@ if (mode === 'study') {
               </div>
 
               <div className="home-v2-hero">
-                <button
-                  className="home-v2-study"
-                  type="button"
-                  onClick={openStudyMode}
-                >
-                  STUDY
-                </button>
+                <div className="home-v2-study-stack">
+                  <button
+                    className="home-v2-study"
+                    type="button"
+                    onClick={openStudyMode}
+                  >
+                    STUDY
+                  </button>
+
+                  <label className="home-v2-setup-cram home-v2-study-cram">
+                    <input
+                      checked={isSetupCramMode}
+                      disabled={isSaving}
+                      type="checkbox"
+                      onChange={() => void toggleSetupCramMode()}
+                    />
+                    <span>
+                      <strong>Cram Mode</strong>
+                      <small>
+                        Maximize number of questions. Less variety, more volume.
+                      </small>
+                    </span>
+                  </label>
+                </div>
               </div>
 
               <section
@@ -4123,20 +4136,6 @@ if (mode === 'study') {
                   {renderPersonalMaterialSection()}
                 </div>
 
-                <label className="home-v2-setup-cram">
-                  <input
-                    checked={isSetupCramMode}
-                    disabled={isSaving}
-                    type="checkbox"
-                    onChange={() => void toggleSetupCramMode()}
-                  />
-                  <span>
-                    <strong>Cram Mode</strong>
-                    <small>
-                      Maximize number of questions. Less variety, more volume.
-                    </small>
-                  </span>
-                </label>
               </section>
             </>
           )}
@@ -4380,6 +4379,11 @@ if (mode === 'study') {
           width: 100%;
         }
 
+        .home-v2-study-stack {
+          display: grid;
+          gap: 12px;
+        }
+
         .home-v2-checkbox {
           accent-color: #2563eb;
           height: 25px;
@@ -4487,6 +4491,14 @@ if (mode === 'study') {
           gap: 12px;
           margin-top: 18px;
           padding-top: 18px;
+        }
+
+        .home-v2-study-cram {
+          background: #ffffff;
+          border: 1px solid #dbe3ef;
+          border-radius: 8px;
+          margin-top: 0;
+          padding: 14px 16px;
         }
 
         .home-v2-setup-cram input {

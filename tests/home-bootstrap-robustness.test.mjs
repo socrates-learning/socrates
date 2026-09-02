@@ -5,6 +5,7 @@ import test from 'node:test';
 import {
   getBootstrapErrorMessage,
   getHomeBootstrapView,
+  getSoleAccessibleLibrary,
   hasAuthoritativeInitialDeckData,
 } from '../lib/home-bootstrap.ts';
 
@@ -57,6 +58,12 @@ const initialDeckData = {
 
 test('missing server data and missing active Library are not authoritative', () => {
   assert.equal(hasAuthoritativeInitialDeckData(undefined, null), false);
+});
+
+test('a single accessible Library can bootstrap without a chooser', () => {
+  assert.equal(getSoleAccessibleLibrary([nursing]), nursing);
+  assert.equal(getSoleAccessibleLibrary([]), null);
+  assert.equal(getSoleAccessibleLibrary([nursing, { ...nursing, id: 'other' }]), null);
 });
 
 test('matching real server-initialized Library and deck skip client bootstrap', () => {
@@ -175,4 +182,22 @@ test('successful deck preference saves refresh the Home route cache', () => {
       /router\.refresh\(\)/
     );
   }
+});
+
+test('Phase 1 UX keeps direct Study, nearby Cram, and Exit-to-Home behavior', () => {
+  const studyPlannerSource = readFileSync(
+    new URL('../components/StudyPlanner.tsx', import.meta.url),
+    'utf8'
+  );
+
+  assert.doesNotMatch(studyPlannerSource, /label: 'Deck Menu'/);
+  assert.match(
+    studyPlannerSource,
+    /className="home-v2-study"[\s\S]*?onClick=\{openStudyMode\}/
+  );
+  assert.match(studyPlannerSource, /home-v2-study-cram/);
+  assert.match(
+    studyPlannerSource,
+    /leaveStudyMode\('dashboard'\)[\s\S]*?<span aria-hidden="true">←<\/span>[\s\S]*?Exit/
+  );
 });

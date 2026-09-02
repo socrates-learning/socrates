@@ -24,6 +24,10 @@ export function isStaffRole(role: ActiveLibraryRole | string | null) {
   return role === 'admin' || role === 'editor';
 }
 
+export function getSoleAccessibleLibrary<T>(libraries: readonly T[]): T | null {
+  return libraries.length === 1 ? libraries[0] : null;
+}
+
 export function getHomeBootstrapView({
   activeLibraryId,
   availableLibraryCount,
