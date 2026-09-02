@@ -1594,6 +1594,7 @@ export function StudyPlanner({
       current ? { ...current, cram_mode: nextCramMode } : current
     );
     setMessage('Cram Mode preference saved.');
+    router.refresh();
     setIsSaving(false);
   }
 
@@ -1644,6 +1645,7 @@ export function StudyPlanner({
 
     setMessage('Deck updated.');
     await refreshResolvedDeck();
+    router.refresh();
     setIsSaving(false);
   }
 
@@ -1696,6 +1698,7 @@ export function StudyPlanner({
     }
 
     setMessage('Personal study selection saved.');
+    router.refresh();
     setIsSaving(false);
   }
 

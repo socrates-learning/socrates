@@ -156,3 +156,23 @@ test('an unexpected bootstrap rejection becomes a visible error state', () => {
     'error'
   );
 });
+
+test('successful deck preference saves refresh the Home route cache', () => {
+  const studyPlannerSource = readFileSync(
+    new URL('../components/StudyPlanner.tsx', import.meta.url),
+    'utf8'
+  );
+
+  for (const successMessage of [
+    'Cram Mode preference saved.',
+    'Deck updated.',
+    'Personal study selection saved.',
+  ]) {
+    const successIndex = studyPlannerSource.indexOf(successMessage);
+    assert.notEqual(successIndex, -1);
+    assert.match(
+      studyPlannerSource.slice(successIndex, successIndex + 220),
+      /router\.refresh\(\)/
+    );
+  }
+});
