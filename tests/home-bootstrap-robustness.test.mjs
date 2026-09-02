@@ -195,7 +195,23 @@ test('Phase 1 UX keeps direct Study, nearby Cram, and Exit-to-Home behavior', ()
     studyPlannerSource,
     /className="home-v2-study"[\s\S]*?onClick=\{openStudyMode\}/
   );
-  assert.match(studyPlannerSource, /home-v2-study-cram/);
+  assert.match(studyPlannerSource, /home-v2-study-options/);
+  assert.match(
+    studyPlannerSource,
+    /checked=\{isSetupCramMode\}[\s\S]*?toggleSetupCramMode/
+  );
+  assert.match(
+    studyPlannerSource,
+    /Game Mode <small>Coming soon<\/small>/
+  );
+  assert.match(
+    studyPlannerSource,
+    /Community \/ Trial Content <small>Coming soon<\/small>/
+  );
+  assert.match(
+    studyPlannerSource,
+    /@media \(max-width: 1100px\)[\s\S]*?\.home-v2-hero \{[\s\S]*?grid-template-columns: 1fr;/
+  );
   assert.match(
     studyPlannerSource,
     /leaveStudyMode\('dashboard'\)[\s\S]*?<span aria-hidden="true">←<\/span>[\s\S]*?Exit/

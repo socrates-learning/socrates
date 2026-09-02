@@ -18,6 +18,10 @@ import {
   type StudyCandidate,
 } from '@/lib/study-candidates';
 import { recordPersonalStudyAttempt } from '@/lib/personal-study-attempts';
+import {
+  classifyStudySessionStart,
+  type StudySessionStartOutcome,
+} from '@/lib/study-session-start';
 import type { ReactNode } from 'react';
 
 type LibraryNode = {
@@ -399,6 +403,9 @@ export function StudyPlanner({
   );
   const [studyCandidate, setStudyCandidate] = useState<StudyCandidate | null>(null);
   const [isStudySequenceComplete, setIsStudySequenceComplete] = useState(false);
+  const [studyStartFailure, setStudyStartFailure] = useState<
+    Exclude<StudySessionStartOutcome['kind'], 'started'> | null
+  >(null);
   const [expandedNodeIds, setExpandedNodeIds] = useState<Set<string>>(
     new Set(initialRootNodeId ? [initialRootNodeId] : [])
   );
@@ -957,13 +964,21 @@ export function StudyPlanner({
         p_study_deck_id: deck.id,
         p_new_mastery_balance: sessionBalance,
       });
+      const outcome = classifyStudySessionStart(data as string | null, error);
 
-      if (error || !data) {
+      if (outcome.kind === 'empty-deck') {
+        setStudyStartFailure('empty-deck');
+        return null;
+      }
+
+      if (outcome.kind === 'error') {
+        setStudyStartFailure('error');
         console.error('Unable to start Study Mode session.', error);
         return null;
       }
 
-      const sessionId = data as string;
+      setStudyStartFailure(null);
+      const sessionId = outcome.sessionId;
       studySessionIdRef.current = sessionId;
       return sessionId;
     })();
@@ -1069,6 +1084,7 @@ export function StudyPlanner({
     studyModeOpenLock.current = true;
     setStudyCandidate(null);
     setIsStudySequenceComplete(false);
+    setStudyStartFailure(null);
     setIsAnswerVisible(false);
     setStudyFeedback(null);
     setStudyResponse(null);
@@ -1088,6 +1104,7 @@ export function StudyPlanner({
         }
       }
     } catch (error) {
+      setStudyStartFailure('error');
       console.error('Unable to open Study Mode.', error);
     } finally {
       setMode('study');
@@ -1108,6 +1125,7 @@ export function StudyPlanner({
     resetStudyCardFeedback();
     setStudyCandidate(null);
     setIsStudySequenceComplete(false);
+    setStudyStartFailure(null);
     setMode(nextMode);
 
     const sessionId = await pendingSession;
@@ -3000,6 +3018,20 @@ if (mode === 'study') {
   const authoredStudyExplanation =
     authoredStudyQuestion?.explanation?.trim() || null;
   const hasStudyCandidate = Boolean(studyCandidate && studyAnswer);
+  const emptyStudyTitle = isStudySequenceComplete
+    ? 'Study complete'
+    : studyStartFailure === 'empty-deck'
+      ? 'No study material selected'
+      : studyStartFailure === 'error'
+        ? 'Study Mode could not start'
+        : 'No study material available';
+  const emptyStudyMessage = isStudySequenceComplete
+    ? 'You reviewed every selected personal Card in this session.'
+    : studyStartFailure === 'empty-deck'
+      ? 'Select an official Topic or a personal Topic in Set Up Deck, then try again.'
+      : studyStartFailure === 'error'
+        ? 'Study Mode could not be started. Please try again.'
+        : 'This deck does not currently contain an eligible published Question or selected personal Card.';
 
   const studyCardActions = (
     <div className="study-v2-card-actions" aria-label="Study card controls">
@@ -3030,7 +3062,7 @@ if (mode === 'study') {
                   : 'Question card'
                 : isStudySequenceComplete
                   ? 'Study sequence complete'
-                  : 'No study material available'
+                  : emptyStudyTitle
             }
             className={`study-v2-card ${
               !hasStudyCandidate
@@ -3063,16 +3095,8 @@ if (mode === 'study') {
 
             {!hasStudyCandidate ? (
               <div className="study-v2-empty-state">
-                <h1>
-                  {isStudySequenceComplete
-                    ? 'Study complete'
-                    : 'No study material available'}
-                </h1>
-                <p>
-                  {isStudySequenceComplete
-                    ? 'You reviewed every selected personal Card in this session.'
-                    : 'This deck does not currently contain an eligible published Question or selected personal Card.'}
-                </p>
+                <h1>{emptyStudyTitle}</h1>
+                <p>{emptyStudyMessage}</p>
                 <div className="study-v2-empty-actions">
                   <button type="button" onClick={() => void leaveStudyMode('setup')}>
                     Set Up Deck
@@ -4087,27 +4111,36 @@ if (mode === 'study') {
               </div>
 
               <div className="home-v2-hero">
-                <div className="home-v2-study-stack">
-                  <button
-                    className="home-v2-study"
-                    type="button"
-                    onClick={openStudyMode}
-                  >
-                    STUDY
-                  </button>
+                <button
+                  className="home-v2-study"
+                  type="button"
+                  onClick={openStudyMode}
+                >
+                  STUDY
+                </button>
 
-                  <label className="home-v2-setup-cram home-v2-study-cram">
+                <div className="home-v2-study-options" aria-label="Study options">
+                  <label className="home-v2-study-option">
                     <input
                       checked={isSetupCramMode}
                       disabled={isSaving}
                       type="checkbox"
                       onChange={() => void toggleSetupCramMode()}
                     />
+                    <span>Cram Mode</span>
+                  </label>
+
+                  <label className="home-v2-study-option home-v2-study-option-soon">
+                    <input disabled type="checkbox" />
                     <span>
-                      <strong>Cram Mode</strong>
-                      <small>
-                        Maximize number of questions. Less variety, more volume.
-                      </small>
+                      Game Mode <small>Coming soon</small>
+                    </span>
+                  </label>
+
+                  <label className="home-v2-study-option home-v2-study-option-soon">
+                    <input disabled type="checkbox" />
+                    <span>
+                      Community / Trial Content <small>Coming soon</small>
                     </span>
                   </label>
                 </div>
@@ -4357,9 +4390,10 @@ if (mode === 'study') {
         }
 
         .home-v2-hero {
-          align-items: center;
+          align-items: stretch;
           display: grid;
-          grid-template-columns: minmax(320px, 596px);
+          gap: 18px;
+          grid-template-columns: minmax(320px, 596px) minmax(230px, 280px);
           justify-content: center;
           margin-bottom: 30px;
         }
@@ -4379,9 +4413,48 @@ if (mode === 'study') {
           width: 100%;
         }
 
-        .home-v2-study-stack {
+        .home-v2-study-options {
+          background: #ffffff;
+          border: 1px solid #dbe3ef;
+          border-radius: 8px;
           display: grid;
-          gap: 12px;
+          gap: 4px;
+          padding: 10px 12px;
+        }
+
+        .home-v2-study-option {
+          align-items: center;
+          color: #0f172a;
+          display: flex;
+          font-size: 14px;
+          font-weight: 750;
+          gap: 9px;
+          min-height: 38px;
+          padding: 4px 2px;
+        }
+
+        .home-v2-study-option input {
+          accent-color: #2563eb;
+          flex: 0 0 auto;
+          height: 18px;
+          margin: 0;
+          width: 18px;
+        }
+
+        .home-v2-study-option span {
+          min-width: 0;
+        }
+
+        .home-v2-study-option small {
+          color: #64748b;
+          display: block;
+          font-size: 10px;
+          font-weight: 650;
+          margin-top: 1px;
+        }
+
+        .home-v2-study-option-soon {
+          color: #64748b;
         }
 
         .home-v2-checkbox {
@@ -4481,41 +4554,6 @@ if (mode === 'study') {
 
         .home-v2-setup-tree {
           text-align: left;
-        }
-
-        .home-v2-setup-cram {
-          align-items: center;
-          border-top: 1px solid #dbe3ef;
-          color: #0f172a;
-          display: flex;
-          gap: 12px;
-          margin-top: 18px;
-          padding-top: 18px;
-        }
-
-        .home-v2-study-cram {
-          background: #ffffff;
-          border: 1px solid #dbe3ef;
-          border-radius: 8px;
-          margin-top: 0;
-          padding: 14px 16px;
-        }
-
-        .home-v2-setup-cram input {
-          accent-color: #2563eb;
-          height: 22px;
-          width: 22px;
-        }
-
-        .home-v2-setup-cram span,
-        .home-v2-setup-cram small {
-          display: block;
-        }
-
-        .home-v2-setup-cram small {
-          color: #64748b;
-          font-size: 12px;
-          margin-top: 2px;
         }
 
         .home-v2-progress-list,
