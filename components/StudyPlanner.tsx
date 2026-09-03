@@ -1,6 +1,13 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type MouseEvent,
+} from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -85,6 +92,18 @@ type PersonalConcept = {
 type PersonalCard = {
   id: string;
   concept_id: string;
+};
+
+type PersonalConceptOverlayMatch = {
+  personalConceptId: string;
+  libraryNodeId: string;
+  name: string;
+  topicId: string;
+};
+
+type StudyCandidateFlag = {
+  id: string;
+  note: string | null;
 };
 
 type PersonalCollection = {
@@ -454,6 +473,26 @@ export function StudyPlanner({
   const [isStudyCardFeedbackSubmitting, setIsStudyCardFeedbackSubmitting] =
     useState(false);
   const [isStudyCardFeedbackSent, setIsStudyCardFeedbackSent] = useState(false);
+  const [isAddToThisOpen, setIsAddToThisOpen] = useState(false);
+  const [isAddToThisLoading, setIsAddToThisLoading] = useState(false);
+  const [isAddToThisSaving, setIsAddToThisSaving] = useState(false);
+  const [addToThisError, setAddToThisError] = useState('');
+  const [addToThisFront, setAddToThisFront] = useState('');
+  const [addToThisBack, setAddToThisBack] = useState('');
+  const [addToThisConceptName, setAddToThisConceptName] = useState('');
+  const [addToThisPersonalTopicId, setAddToThisPersonalTopicId] = useState('');
+  const [addToThisOfficialNodeId, setAddToThisOfficialNodeId] = useState('');
+  const [addToThisConceptId, setAddToThisConceptId] = useState('');
+  const [addToThisOverlayMatches, setAddToThisOverlayMatches] = useState<
+    PersonalConceptOverlayMatch[]
+  >([]);
+  const [candidateFlag, setCandidateFlag] = useState<StudyCandidateFlag | null>(null);
+  const [isCandidateFlagLoading, setIsCandidateFlagLoading] = useState(false);
+  const [isFlagModalOpen, setIsFlagModalOpen] = useState(false);
+  const [isFlagSaving, setIsFlagSaving] = useState(false);
+  const [flagNote, setFlagNote] = useState('');
+  const [flagError, setFlagError] = useState('');
+  const [studyActionStatus, setStudyActionStatus] = useState('');
   const studyResponseSaveLock = useRef(false);
   const studyCardFeedbackSaveLock = useRef(false);
   const studyCardFeedbackConfirmationTimer = useRef<number | null>(null);
@@ -482,6 +521,10 @@ export function StudyPlanner({
     () => new Map(nodes.map((node) => [node.id, node])),
     [nodes]
   );
+  const personalTopicsById = useMemo(
+    () => new Map(personalTopics.map((topic) => [topic.id, topic])),
+    [personalTopics]
+  );
   const learnerProgressByNodeId = useMemo(
     () =>
       new Map(
@@ -500,6 +543,69 @@ export function StudyPlanner({
       }
     };
   }, []);
+
+  useEffect(() => {
+    const candidate = studyCandidate;
+    let isCurrent = true;
+
+    setIsAddToThisOpen(false);
+    setIsFlagModalOpen(false);
+    setCandidateFlag(null);
+    setFlagNote('');
+    setFlagError('');
+    setStudyActionStatus('');
+
+    if (!candidate || !userId) {
+      setIsCandidateFlagLoading(false);
+      return () => {
+        isCurrent = false;
+      };
+    }
+    const candidateToLoad = candidate;
+
+    async function loadCandidateFlag() {
+      setIsCandidateFlagLoading(true);
+      const targetColumn =
+        candidateToLoad.kind === 'official' ? 'question_id' : 'personal_card_id';
+      const targetId =
+        candidateToLoad.kind === 'official'
+          ? candidateToLoad.questionId
+          : candidateToLoad.cardId;
+      const { data, error } = await supabase
+        .from('study_candidate_flags')
+        .select('id, note')
+        .eq(targetColumn, targetId)
+        .maybeSingle();
+
+      if (!isCurrent) return;
+
+      if (error) {
+        console.error('Unable to load the private Study flag.', error);
+      } else {
+        setCandidateFlag((data as StudyCandidateFlag | null) ?? null);
+      }
+      setIsCandidateFlagLoading(false);
+    }
+
+    void loadCandidateFlag();
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [studyCandidate, userId]);
+
+  useEffect(() => {
+    if (!isAddToThisOpen && !isFlagModalOpen) return;
+
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key !== 'Escape') return;
+      if (!isAddToThisSaving) setIsAddToThisOpen(false);
+      if (!isFlagSaving) setIsFlagModalOpen(false);
+    }
+
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [isAddToThisOpen, isAddToThisSaving, isFlagModalOpen, isFlagSaving]);
 
   useEffect(() => {
     let isMounted = true;
@@ -1139,6 +1245,298 @@ export function StudyPlanner({
         studyCardFeedbackSaveLock.current = false;
       }
     }
+  }
+
+  function getPersonalTopicPath(topicId: string) {
+    const names: string[] = [];
+    const visited = new Set<string>();
+    let currentId: string | null = topicId;
+
+    while (currentId && !visited.has(currentId)) {
+      visited.add(currentId);
+      const topic = personalTopicsById.get(currentId);
+      if (!topic) break;
+      names.unshift(topic.name);
+      currentId = topic.parent_id;
+    }
+
+    return names.join(' / ');
+  }
+
+  function getOfficialCandidatePlacements(candidate: StudyCandidate | null) {
+    if (!candidate || candidate.kind !== 'official') return [];
+    return placements.filter(
+      (placement) => placement.concept_id === candidate.conceptId
+    );
+  }
+
+  function getOfficialCandidateConceptName(candidate: StudyCandidate | null) {
+    const concept = getOfficialCandidatePlacements(candidate)
+      .map(getConceptFromPlacement)
+      .find(Boolean);
+    return concept?.name || 'Official Concept';
+  }
+
+  async function openAddToThis() {
+    const candidate = studyCandidate;
+    if (!candidate) return;
+
+    setIsAddToThisOpen(true);
+    setIsAddToThisLoading(candidate.kind === 'official');
+    setIsAddToThisSaving(false);
+    setAddToThisError('');
+    setAddToThisFront('');
+    setAddToThisBack('');
+    setAddToThisPersonalTopicId('');
+    setAddToThisOfficialNodeId('');
+    setAddToThisOverlayMatches([]);
+    setAddToThisConceptId(
+      candidate.kind === 'personal' ? candidate.personalConceptId : ''
+    );
+
+    if (candidate.kind === 'personal') return;
+
+    const officialPlacements = getOfficialCandidatePlacements(candidate);
+    setAddToThisConceptName(
+      `${getOfficialCandidateConceptName(candidate)} — My Notes`
+    );
+
+    if (officialPlacements.length === 1) {
+      setAddToThisOfficialNodeId(officialPlacements[0].library_node_id);
+    }
+
+    const libraryNodeIds = officialPlacements.map(
+      (placement) => placement.library_node_id
+    );
+
+    if (libraryNodeIds.length === 0) {
+      setAddToThisError(
+        'This official Concept has no visible placement in the active Library.'
+      );
+      setIsAddToThisLoading(false);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('personal_concept_official_placements')
+      .select(
+        'personal_concept_id, library_node_id, personal_concepts!inner(id, topic_id, name)'
+      )
+      .eq('official_concept_id', candidate.conceptId)
+      .in('library_node_id', libraryNodeIds);
+
+    if (studyCandidate?.candidateId !== candidate.candidateId) return;
+
+    if (error) {
+      setAddToThisError(
+        error.message || 'Private Concept destinations could not be loaded.'
+      );
+      setIsAddToThisLoading(false);
+      return;
+    }
+
+    const matchesByConceptId = new Map<string, PersonalConceptOverlayMatch>();
+    (
+      (data || []) as Array<{
+        personal_concept_id: string;
+        library_node_id: string;
+        personal_concepts: PersonalConcept | PersonalConcept[];
+      }>
+    ).forEach((row) => {
+      const concept = Array.isArray(row.personal_concepts)
+        ? row.personal_concepts[0]
+        : row.personal_concepts;
+      if (!concept) return;
+      matchesByConceptId.set(row.personal_concept_id, {
+        personalConceptId: row.personal_concept_id,
+        libraryNodeId: row.library_node_id,
+        name: concept.name,
+        topicId: concept.topic_id,
+      });
+    });
+    const matches = [...matchesByConceptId.values()];
+    setAddToThisOverlayMatches(matches);
+    setAddToThisConceptId(
+      matches.length === 1 ? matches[0].personalConceptId : ''
+    );
+    setIsAddToThisLoading(false);
+  }
+
+  async function saveAddToThisCard(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const candidate = studyCandidate;
+    const normalizedFront = addToThisFront.trim();
+    const normalizedBack = addToThisBack.trim();
+
+    if (
+      !candidate ||
+      !userId ||
+      !normalizedFront ||
+      !normalizedBack ||
+      isAddToThisSaving
+    ) return;
+
+    setIsAddToThisSaving(true);
+    setAddToThisError('');
+
+    try {
+      let destinationConceptId: string | undefined =
+        candidate.kind === 'personal'
+          ? candidate.personalConceptId
+          : addToThisConceptId;
+      let destinationConceptName =
+        personalConcepts.find((concept) => concept.id === destinationConceptId)
+          ?.name || 'personal Concept';
+
+      if (
+        candidate.kind === 'official' &&
+        addToThisOverlayMatches.length === 0
+      ) {
+        const normalizedConceptName = addToThisConceptName.trim();
+        if (
+          !normalizedConceptName ||
+          !addToThisPersonalTopicId ||
+          !addToThisOfficialNodeId
+        ) {
+          setAddToThisError(
+            'Choose the personal Topic, Concept name, and official location.'
+          );
+          return;
+        }
+
+        const { data, error } = await supabase.rpc(
+          'create_personal_concept_overlay',
+          {
+            p_personal_topic_id: addToThisPersonalTopicId,
+            p_name: normalizedConceptName,
+            p_description: null,
+            p_library_node_id: addToThisOfficialNodeId,
+            p_official_concept_id: candidate.conceptId,
+          }
+        );
+
+        if (error) throw error;
+        destinationConceptId = data?.[0]?.personal_concept_id as
+          | string
+          | undefined;
+        if (!destinationConceptId) {
+          throw new Error('The private Concept was not returned after creation.');
+        }
+        destinationConceptName = normalizedConceptName;
+        setPersonalConcepts((current) => [
+          ...current,
+          {
+            id: destinationConceptId as string,
+            topic_id: addToThisPersonalTopicId,
+            name: normalizedConceptName,
+          },
+        ]);
+      }
+
+      if (!destinationConceptId) {
+        setAddToThisError('Choose a private Concept destination.');
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('personal_cards')
+        .insert({
+          owner_id: userId,
+          concept_id: destinationConceptId,
+          question: normalizedFront,
+          answer: normalizedBack,
+        })
+        .select('id, concept_id')
+        .single();
+
+      if (error) throw error;
+      setPersonalCards((current) => [...current, data as PersonalCard]);
+      setIsAddToThisOpen(false);
+      setStudyActionStatus(
+        `Private Card created under ${destinationConceptName}.`
+      );
+    } catch (error) {
+      console.error('Unable to create the private Study Card.', error);
+      setAddToThisError(
+        error instanceof Error
+          ? error.message
+          : 'The private Card could not be created. Please try again.'
+      );
+    } finally {
+      setIsAddToThisSaving(false);
+    }
+  }
+
+  function openFlagModal() {
+    setFlagNote(candidateFlag?.note || '');
+    setFlagError('');
+    setIsFlagModalOpen(true);
+  }
+
+  async function saveCandidateFlag(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const candidate = studyCandidate;
+    if (!candidate || !userId || isFlagSaving) return;
+
+    setIsFlagSaving(true);
+    setFlagError('');
+    const normalizedNote = flagNote.trim() || null;
+    const targetColumn =
+      candidate.kind === 'official' ? 'question_id' : 'personal_card_id';
+    const payload = {
+      user_id: userId,
+      question_id: candidate.kind === 'official' ? candidate.questionId : null,
+      personal_card_id: candidate.kind === 'personal' ? candidate.cardId : null,
+      note: normalizedNote,
+    };
+
+    const { data, error } = await supabase
+      .from('study_candidate_flags')
+      .upsert(payload, { onConflict: `user_id,${targetColumn}` })
+      .select('id, note')
+      .single();
+
+    if (error) {
+      console.error('Unable to save the private Study flag.', error);
+      setFlagError(error.message || 'The flag could not be saved.');
+      setIsFlagSaving(false);
+      return;
+    }
+
+    if (studyCandidate?.candidateId === candidate.candidateId) {
+      setCandidateFlag(data as StudyCandidateFlag);
+      setFlagNote((data as StudyCandidateFlag).note || '');
+      setStudyActionStatus(candidateFlag ? 'Flag changes saved.' : 'Card flagged.');
+      setIsFlagModalOpen(false);
+    }
+    setIsFlagSaving(false);
+  }
+
+  async function removeCandidateFlag() {
+    const candidate = studyCandidate;
+    if (!candidateFlag || !candidate || isFlagSaving) return;
+
+    setIsFlagSaving(true);
+    setFlagError('');
+    const { error } = await supabase
+      .from('study_candidate_flags')
+      .delete()
+      .eq('id', candidateFlag.id);
+
+    if (error) {
+      console.error('Unable to remove the private Study flag.', error);
+      setFlagError(error.message || 'The flag could not be removed.');
+      setIsFlagSaving(false);
+      return;
+    }
+
+    if (studyCandidate?.candidateId === candidate.candidateId) {
+      setCandidateFlag(null);
+      setFlagNote('');
+      setStudyActionStatus('Flag removed.');
+      setIsFlagModalOpen(false);
+    }
+    setIsFlagSaving(false);
   }
 
   async function openStudyMode() {
@@ -3191,6 +3589,25 @@ if (mode === 'study') {
   const authoredStudyExplanation =
     authoredStudyQuestion?.explanation?.trim() || null;
   const hasStudyCandidate = Boolean(studyCandidate && studyAnswer);
+  const officialCandidatePlacements = getOfficialCandidatePlacements(studyCandidate);
+  const addToThisDestinationConcept = personalConcepts.find(
+    (concept) =>
+      concept.id ===
+      (studyCandidate?.kind === 'personal'
+        ? studyCandidate.personalConceptId
+        : addToThisConceptId)
+  );
+  const addToThisDestinationReady =
+    studyCandidate?.kind === 'personal'
+      ? Boolean(studyCandidate.personalConceptId)
+      : addToThisOverlayMatches.length > 0
+        ? Boolean(addToThisConceptId)
+        : Boolean(
+            personalTopics.length > 0 &&
+              addToThisPersonalTopicId &&
+              addToThisConceptName.trim() &&
+              addToThisOfficialNodeId
+          );
   const emptyStudyTitle = isStudySequenceComplete
     ? 'Study complete'
     : studyStartFailure === 'empty-deck'
@@ -3208,6 +3625,38 @@ if (mode === 'study') {
 
   const studyCardActions = (
     <div className="study-v2-card-actions" aria-label="Study card controls">
+      {hasStudyCandidate && (
+        <>
+          <button
+            className="study-v2-context-action"
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              void openAddToThis();
+            }}
+            onKeyDown={(event) => event.stopPropagation()}
+          >
+            <span aria-hidden="true">＋</span>
+            Add to this
+          </button>
+          <button
+            aria-pressed={Boolean(candidateFlag)}
+            className={`study-v2-context-action study-v2-flag-action${
+              candidateFlag ? ' study-v2-flag-action-active' : ''
+            }`}
+            disabled={isCandidateFlagLoading}
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              openFlagModal();
+            }}
+            onKeyDown={(event) => event.stopPropagation()}
+          >
+            <span aria-hidden="true">⚑</span>
+            {isCandidateFlagLoading ? 'Loading…' : 'Flag'}
+          </button>
+        </>
+      )}
       <button type="button" onClick={() => void leaveStudyMode('dashboard')}>
         <span aria-hidden="true">←</span>
         Exit
@@ -3506,6 +3955,348 @@ if (mode === 'study') {
               </>
             )}
           </article>
+
+          {isAddToThisOpen && studyCandidate && (
+            <div
+              className="study-v2-modal-backdrop"
+              role="presentation"
+              onMouseDown={(event) => {
+                if (
+                  event.currentTarget === event.target &&
+                  !isAddToThisSaving
+                ) {
+                  setIsAddToThisOpen(false);
+                }
+              }}
+            >
+              <section
+                aria-labelledby="study-add-to-this-title"
+                aria-modal="true"
+                className="study-v2-modal"
+                role="dialog"
+              >
+                <div className="study-v2-modal-header">
+                  <div>
+                    <p>Private personal material</p>
+                    <h2 id="study-add-to-this-title">Add to this</h2>
+                  </div>
+                  <button
+                    aria-label="Close Add to this"
+                    disabled={isAddToThisSaving}
+                    type="button"
+                    onClick={() => setIsAddToThisOpen(false)}
+                  >
+                    ×
+                  </button>
+                </div>
+
+                <form className="study-v2-modal-form" onSubmit={saveAddToThisCard}>
+                  <div className="study-v2-read-only-context">
+                    <span>
+                      {studyCandidate.kind === 'official'
+                        ? 'Official Question · read only'
+                        : 'Current personal Card · read only'}
+                    </span>
+                    <strong>{studyCandidate.prompt}</strong>
+                    <small>
+                      {studyCandidate.kind === 'official'
+                        ? getOfficialCandidateConceptName(studyCandidate)
+                        : addToThisDestinationConcept?.name || 'Personal Concept'}
+                    </small>
+                  </div>
+
+                  <p className="study-v2-private-explainer">
+                    Start with a blank private Card. Official content will not be
+                    copied or changed, and the Card will not be added to a Personal
+                    Deck automatically.
+                  </p>
+
+                  {studyCandidate.kind === 'official' && (
+                    <div className="study-v2-destination-fields">
+                      {isAddToThisLoading ? (
+                        <p role="status">Loading private destinations…</p>
+                      ) : addToThisOverlayMatches.length === 1 ? (
+                        <div className="study-v2-read-only-field">
+                          <span>Private Concept destination</span>
+                          <strong>{addToThisOverlayMatches[0].name}</strong>
+                          <small>
+                            {getPersonalTopicPath(
+                              addToThisOverlayMatches[0].topicId
+                            )}
+                          </small>
+                        </div>
+                      ) : addToThisOverlayMatches.length > 1 ? (
+                        <label>
+                          Private Concept destination
+                          <select
+                            required
+                            value={addToThisConceptId}
+                            onChange={(event) => {
+                              setAddToThisConceptId(event.target.value);
+                              setAddToThisError('');
+                            }}
+                          >
+                            <option value="">Choose a private Concept</option>
+                            {addToThisOverlayMatches.map((match) => (
+                              <option
+                                key={match.personalConceptId}
+                                value={match.personalConceptId}
+                              >
+                                {match.name} — {getPersonalTopicPath(match.topicId)}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      ) : (
+                        <>
+                          {personalTopics.length === 0 ? (
+                            <div className="study-v2-modal-warning">
+                              <strong>Create a personal Topic first.</strong>
+                              <p>
+                                Add to this will not create a hidden Topic. Open Study
+                                Creator, create a visible personal Topic, then return.
+                              </p>
+                              <Link href="/study-creator">Open Study Creator</Link>
+                            </div>
+                          ) : (
+                            <>
+                              <label>
+                                Personal Topic <small>Canonical home</small>
+                                <select
+                                  required
+                                  value={addToThisPersonalTopicId}
+                                  onChange={(event) => {
+                                    setAddToThisPersonalTopicId(event.target.value);
+                                    setAddToThisError('');
+                                  }}
+                                >
+                                  <option value="">Choose one of My Topics</option>
+                                  {personalTopics.map((topic) => (
+                                    <option key={topic.id} value={topic.id}>
+                                      {getPersonalTopicPath(topic.id)}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                              <label>
+                                Personal Concept name
+                                <input
+                                  maxLength={160}
+                                  required
+                                  value={addToThisConceptName}
+                                  onChange={(event) => {
+                                    setAddToThisConceptName(event.target.value);
+                                    setAddToThisError('');
+                                  }}
+                                />
+                              </label>
+                              {officialCandidatePlacements.length === 1 ? (
+                                <div className="study-v2-read-only-field">
+                                  <span>Official location</span>
+                                  <strong>
+                                    {getNodePath(
+                                      nodesById.get(
+                                        officialCandidatePlacements[0].library_node_id
+                                      ) as LibraryNode,
+                                      nodesById
+                                    )}
+                                  </strong>
+                                </div>
+                              ) : (
+                                <label>
+                                  Official location
+                                  <select
+                                    required
+                                    value={addToThisOfficialNodeId}
+                                    onChange={(event) => {
+                                      setAddToThisOfficialNodeId(event.target.value);
+                                      setAddToThisError('');
+                                    }}
+                                  >
+                                    <option value="">Choose the official location</option>
+                                    {officialCandidatePlacements.map((placement) => {
+                                      const node = nodesById.get(
+                                        placement.library_node_id
+                                      );
+                                      return node ? (
+                                        <option key={node.id} value={node.id}>
+                                          {getNodePath(node, nodesById)}
+                                        </option>
+                                      ) : null;
+                                    })}
+                                  </select>
+                                </label>
+                              )}
+                            </>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
+
+                  {studyCandidate.kind === 'personal' && (
+                    <div className="study-v2-read-only-field">
+                      <span>Private Concept destination · locked</span>
+                      <strong>
+                        {addToThisDestinationConcept?.name || 'Personal Concept'}
+                      </strong>
+                      <small>No Concept reassignment</small>
+                    </div>
+                  )}
+
+                  <label>
+                    Question / Front
+                    <textarea
+                      autoFocus
+                      maxLength={10000}
+                      required
+                      value={addToThisFront}
+                      onChange={(event) => {
+                        setAddToThisFront(event.target.value);
+                        setAddToThisError('');
+                      }}
+                    />
+                  </label>
+                  <label>
+                    Answer / Back
+                    <textarea
+                      maxLength={20000}
+                      required
+                      value={addToThisBack}
+                      onChange={(event) => {
+                        setAddToThisBack(event.target.value);
+                        setAddToThisError('');
+                      }}
+                    />
+                  </label>
+
+                  <div className="study-v2-modal-footer">
+                    <p aria-live="polite" role="status">
+                      {addToThisError}
+                    </p>
+                    <button
+                      className="study-v2-modal-secondary"
+                      disabled={isAddToThisSaving}
+                      type="button"
+                      onClick={() => setIsAddToThisOpen(false)}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      className="study-v2-modal-primary"
+                      disabled={
+                        isAddToThisLoading ||
+                        isAddToThisSaving ||
+                        !addToThisDestinationReady ||
+                        !addToThisFront.trim() ||
+                        !addToThisBack.trim()
+                      }
+                      type="submit"
+                    >
+                      {isAddToThisSaving ? 'Saving…' : 'Save Card'}
+                    </button>
+                  </div>
+                </form>
+              </section>
+            </div>
+          )}
+
+          {isFlagModalOpen && studyCandidate && (
+            <div
+              className="study-v2-modal-backdrop"
+              role="presentation"
+              onMouseDown={(event) => {
+                if (event.currentTarget === event.target && !isFlagSaving) {
+                  setIsFlagModalOpen(false);
+                }
+              }}
+            >
+              <section
+                aria-labelledby="study-flag-title"
+                aria-modal="true"
+                className="study-v2-modal study-v2-flag-modal"
+                role="dialog"
+              >
+                <div className="study-v2-modal-header">
+                  <div>
+                    <p>Private reminder</p>
+                    <h2 id="study-flag-title">
+                      {candidateFlag ? 'Edit Flag' : 'Flag this Card'}
+                    </h2>
+                  </div>
+                  <button
+                    aria-label="Close Flag"
+                    disabled={isFlagSaving}
+                    type="button"
+                    onClick={() => setIsFlagModalOpen(false)}
+                  >
+                    ×
+                  </button>
+                </div>
+                <form className="study-v2-modal-form" onSubmit={saveCandidateFlag}>
+                  <p className="study-v2-private-explainer">
+                    Only you can see this flag. It does not affect scheduling,
+                    mastery, or whether this Card appears in Study Mode.
+                  </p>
+                  <label>
+                    Note <small>Optional</small>
+                    <textarea
+                      autoFocus
+                      maxLength={4000}
+                      placeholder="Why do you want to revisit this?"
+                      value={flagNote}
+                      onChange={(event) => {
+                        setFlagNote(event.target.value);
+                        setFlagError('');
+                      }}
+                    />
+                  </label>
+                  <div className="study-v2-modal-footer">
+                    <p aria-live="polite" role="status">
+                      {flagError}
+                    </p>
+                    {candidateFlag && (
+                      <button
+                        className="study-v2-modal-danger"
+                        disabled={isFlagSaving}
+                        type="button"
+                        onClick={() => void removeCandidateFlag()}
+                      >
+                        Remove Flag
+                      </button>
+                    )}
+                    <button
+                      className="study-v2-modal-secondary"
+                      disabled={isFlagSaving}
+                      type="button"
+                      onClick={() => setIsFlagModalOpen(false)}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      className="study-v2-modal-primary"
+                      disabled={isFlagSaving}
+                      type="submit"
+                    >
+                      {isFlagSaving
+                        ? 'Saving…'
+                        : candidateFlag
+                          ? 'Save Changes'
+                          : 'Save Flag'}
+                    </button>
+                  </div>
+                </form>
+              </section>
+            </div>
+          )}
+
+          <p
+            aria-live="polite"
+            className="study-v2-action-status"
+            role="status"
+          >
+            {studyActionStatus}
+          </p>
         </section>
       </main>
 
@@ -3656,7 +4447,9 @@ if (mode === 'study') {
           align-items: center;
           color: #06133c;
           display: flex;
-          gap: 28px;
+          flex-wrap: wrap;
+          gap: 10px;
+          justify-content: flex-end;
         }
 
         .study-v2-card-actions button {
@@ -3666,16 +4459,38 @@ if (mode === 'study') {
           color: inherit;
           display: inline-flex;
           font: inherit;
-          font-size: 23px;
+          font-size: 17px;
           font-weight: 650;
-          gap: 10px;
-          padding: 0;
+          gap: 7px;
+          min-height: 38px;
+          padding: 4px 8px;
         }
 
         .study-v2-card-actions button:last-child {
-          font-size: 48px;
+          font-size: 40px;
           font-weight: 300;
           line-height: 0.8;
+        }
+
+        .study-v2-card-actions .study-v2-context-action {
+          border: 1px solid #9fb0c9;
+          border-radius: 999px;
+          color: #0f5ee8;
+          cursor: pointer;
+          font-size: 14px;
+          font-weight: 800;
+          padding: 6px 12px;
+        }
+
+        .study-v2-card-actions .study-v2-context-action:disabled {
+          cursor: wait;
+          opacity: 0.58;
+        }
+
+        .study-v2-card-actions .study-v2-flag-action-active {
+          background: #0f5ee8;
+          border-color: #0f5ee8;
+          color: #ffffff;
         }
 
         .study-v2-card-topline {
@@ -3761,6 +4576,236 @@ if (mode === 'study') {
         .study-v2-empty-actions button:hover {
           background: #115e59;
           border-color: #115e59;
+        }
+
+        .study-v2-modal-backdrop {
+          align-items: center;
+          background: rgba(3, 12, 35, 0.64);
+          display: flex;
+          inset: 0;
+          justify-content: center;
+          overflow-y: auto;
+          padding: 24px;
+          position: fixed;
+          z-index: 1000;
+        }
+
+        .study-v2-modal {
+          background: #ffffff;
+          border: 1px solid #dbe2ee;
+          border-radius: 12px;
+          box-shadow: 0 28px 70px rgba(3, 12, 35, 0.3);
+          color: #08143b;
+          margin: auto;
+          max-width: 620px;
+          overflow: hidden;
+          width: 100%;
+        }
+
+        .study-v2-flag-modal {
+          max-width: 520px;
+        }
+
+        .study-v2-modal-header {
+          align-items: flex-start;
+          border-bottom: 1px solid #dbe2ee;
+          display: flex;
+          gap: 18px;
+          justify-content: space-between;
+          padding: 20px 22px 16px;
+        }
+
+        .study-v2-modal-header p {
+          color: #0f5ee8;
+          font-size: 12px;
+          font-weight: 850;
+          letter-spacing: 0.08em;
+          margin: 0 0 4px;
+          text-transform: uppercase;
+        }
+
+        .study-v2-modal-header h2 {
+          font-family: Georgia, "Times New Roman", Times, serif;
+          font-size: 28px;
+          letter-spacing: -0.035em;
+          margin: 0;
+        }
+
+        .study-v2-modal-header > button {
+          background: transparent;
+          border: 0;
+          color: #334155;
+          cursor: pointer;
+          font: inherit;
+          font-size: 34px;
+          line-height: 1;
+          padding: 0;
+        }
+
+        .study-v2-modal-form {
+          display: grid;
+          gap: 14px;
+          padding: 18px 22px 22px;
+        }
+
+        .study-v2-modal-form label {
+          color: #172554;
+          display: grid;
+          font-size: 14px;
+          font-weight: 800;
+          gap: 6px;
+        }
+
+        .study-v2-modal-form label small {
+          color: #64748b;
+          font-weight: 650;
+        }
+
+        .study-v2-modal-form input,
+        .study-v2-modal-form select,
+        .study-v2-modal-form textarea {
+          background: #ffffff;
+          border: 1px solid #b8c4d6;
+          border-radius: 7px;
+          color: #0f172a;
+          font: inherit;
+          line-height: 1.4;
+          min-height: 42px;
+          padding: 9px 11px;
+          width: 100%;
+        }
+
+        .study-v2-modal-form textarea {
+          min-height: 82px;
+          resize: vertical;
+        }
+
+        .study-v2-modal-form input:focus,
+        .study-v2-modal-form select:focus,
+        .study-v2-modal-form textarea:focus {
+          border-color: #0f5ee8;
+          box-shadow: 0 0 0 3px rgba(15, 94, 232, 0.14);
+          outline: 0;
+        }
+
+        .study-v2-read-only-context,
+        .study-v2-read-only-field {
+          background: #f8fafc;
+          border: 1px solid #dbe2ee;
+          border-radius: 8px;
+          display: grid;
+          gap: 4px;
+          padding: 12px 14px;
+        }
+
+        .study-v2-read-only-context span,
+        .study-v2-read-only-field span {
+          color: #64748b;
+          font-size: 11px;
+          font-weight: 850;
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
+        }
+
+        .study-v2-read-only-context strong,
+        .study-v2-read-only-field strong {
+          line-height: 1.35;
+        }
+
+        .study-v2-read-only-context small,
+        .study-v2-read-only-field small {
+          color: #64748b;
+        }
+
+        .study-v2-private-explainer,
+        .study-v2-destination-fields > p {
+          color: #475569;
+          font-size: 13px;
+          line-height: 1.5;
+          margin: 0;
+        }
+
+        .study-v2-destination-fields {
+          display: grid;
+          gap: 12px;
+        }
+
+        .study-v2-modal-warning {
+          background: #fffbeb;
+          border: 1px solid #f3d48a;
+          border-radius: 8px;
+          color: #713f12;
+          padding: 12px 14px;
+        }
+
+        .study-v2-modal-warning p {
+          font-size: 13px;
+          line-height: 1.45;
+          margin: 5px 0 9px;
+        }
+
+        .study-v2-modal-warning a {
+          color: #0f5ee8;
+          font-weight: 800;
+        }
+
+        .study-v2-modal-footer {
+          align-items: center;
+          display: flex;
+          flex-wrap: wrap;
+          gap: 9px;
+          justify-content: flex-end;
+          padding-top: 2px;
+        }
+
+        .study-v2-modal-footer p {
+          color: #b91c1c;
+          flex: 1 1 180px;
+          font-size: 13px;
+          margin: 0;
+        }
+
+        .study-v2-modal-footer button {
+          border: 1px solid #b8c4d6;
+          border-radius: 7px;
+          cursor: pointer;
+          font: inherit;
+          font-weight: 800;
+          min-height: 40px;
+          padding: 8px 13px;
+        }
+
+        .study-v2-modal-footer button:disabled {
+          cursor: not-allowed;
+          opacity: 0.55;
+        }
+
+        .study-v2-modal-secondary {
+          background: #ffffff;
+          color: #0f5ee8;
+        }
+
+        .study-v2-modal-primary {
+          background: #0f5ee8;
+          border-color: #0f5ee8 !important;
+          color: #ffffff;
+        }
+
+        .study-v2-modal-danger {
+          background: #ffffff;
+          border-color: #dc2626 !important;
+          color: #b91c1c;
+        }
+
+        .study-v2-action-status {
+          height: 1px;
+          margin: -1px;
+          overflow: hidden;
+          padding: 0;
+          position: absolute;
+          width: 1px;
+          clip: rect(0, 0, 0, 0);
+          white-space: nowrap;
         }
 
         @keyframes study-v2-content-in {
@@ -4153,6 +5198,36 @@ if (mode === 'study') {
             justify-content: flex-end;
           }
 
+          .study-v2-modal-backdrop {
+            align-items: flex-start;
+            padding: 12px;
+          }
+
+          .study-v2-modal-header {
+            padding: 16px 16px 13px;
+          }
+
+          .study-v2-modal-header h2 {
+            font-size: 24px;
+          }
+
+          .study-v2-modal-form {
+            gap: 12px;
+            padding: 14px 16px 16px;
+          }
+
+          .study-v2-modal-form textarea {
+            min-height: 72px;
+          }
+
+          .study-v2-modal-footer {
+            align-items: stretch;
+          }
+
+          .study-v2-modal-footer p {
+            flex-basis: 100%;
+          }
+
           .study-v2-feedback-row {
             grid-template-columns: 1fr;
           }
@@ -4194,6 +5269,61 @@ if (mode === 'study') {
             border-bottom: 1px solid #dbe2ee;
             border-right: 0;
             min-height: 140px;
+          }
+        }
+
+        @media (max-width: 520px) {
+          .study-v2-page {
+            padding: 12px 7px 24px;
+          }
+
+          .study-v2-shell {
+            padding: 10px 7px;
+          }
+
+          .study-v2-card {
+            height: min(620px, 74dvh);
+            min-height: 470px;
+          }
+
+          .study-v2-card-topline {
+            padding: 0 9px;
+          }
+
+          .study-v2-card-actions {
+            gap: 5px;
+          }
+
+          .study-v2-card-actions button {
+            font-size: 14px;
+            min-height: 34px;
+            padding: 3px 5px;
+          }
+
+          .study-v2-card-actions .study-v2-context-action {
+            font-size: 12px;
+            padding: 5px 8px;
+          }
+
+          .study-v2-card-actions button:last-child {
+            font-size: 32px;
+          }
+
+          .study-v2-question-content {
+            padding-left: 14px;
+            padding-right: 14px;
+          }
+
+          .study-v2-question-content h1 {
+            font-size: 28px;
+          }
+
+          .study-v2-modal-backdrop {
+            padding: 7px;
+          }
+
+          .study-v2-modal-footer button {
+            flex: 1 1 auto;
           }
         }
       `}</style>
