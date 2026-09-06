@@ -67,6 +67,9 @@ type ConceptPrerequisite = {
 type LifecycleStatus = 'draft' | 'published' | 'archived';
 type ExistingQuestion = {
   id: string;
+  conceptId: string;
+  primaryConceptName: string;
+  relatedConceptIds: string[];
   prompt: string;
   answer: string;
   difficulty: QuestionDifficulty;
@@ -334,6 +337,7 @@ function questionDraftFingerprint({
   testingAngle,
   recordStatus,
   tagIds,
+  relatedConceptIds = [],
 }: {
   questionId: string | null;
   conceptId: string | null;
@@ -343,8 +347,10 @@ function questionDraftFingerprint({
   testingAngle: string;
   recordStatus: LifecycleStatus;
   tagIds: Iterable<string>;
+  relatedConceptIds?: Iterable<string>;
 }) {
   return JSON.stringify({
+    relatedConceptIds: Array.from(new Set(relatedConceptIds)).sort(),
     questionId,
     conceptId,
     prompt,
@@ -444,6 +450,10 @@ export function CreatorStudioV2Client({
   >({});
   const [questionConceptSearch, setQuestionConceptSearch] = useState('');
   const [needsQuestionsOnly, setNeedsQuestionsOnly] = useState(false);
+  const [editingQuestionPrimary, setEditingQuestionPrimary] = useState<{ id: string; name: string } | null>(null);
+  const [questionRelatedConceptIds, setQuestionRelatedConceptIds] = useState<string[]>([]);
+  const [relatedConceptSearch, setRelatedConceptSearch] = useState('');
+  const primaryQuestionConceptId = editingQuestionPrimary?.id || questionConceptId;
   const [questionPrompt, setQuestionPrompt] = useState('');
   const [questionAnswer, setQuestionAnswer] = useState('');
   const [questionDifficulty, setQuestionDifficulty] =
@@ -509,17 +519,19 @@ export function CreatorStudioV2Client({
     () =>
       questionDraftFingerprint({
         questionId,
-        conceptId: questionConceptId,
+        conceptId: primaryQuestionConceptId,
         prompt: questionPrompt,
         answer: questionAnswer,
         difficulty: questionDifficulty,
         testingAngle: questionTestingAngle,
         recordStatus: questionRecordStatus,
         tagIds: questionTags.map((tag) => tag.id),
+        relatedConceptIds: questionRelatedConceptIds,
       }),
     [
       questionAnswer,
-      questionConceptId,
+      primaryQuestionConceptId,
+      questionRelatedConceptIds,
       questionDifficulty,
       questionId,
       questionPrompt,
@@ -549,7 +561,9 @@ export function CreatorStudioV2Client({
       questionAnswer.trim() ||
       questionDifficulty !== 'medium' ||
       questionTestingAngle.trim() !== 'General Understanding' ||
-      questionTags.length
+      questionTags.length ||
+      questionRelatedConceptIds.length ||
+      (JSON.parse(savedQuestionFingerprint).relatedConceptIds || []).length
   );
   const isQuestionDirty =
     hasQuestionDraft && currentQuestionFingerprint !== savedQuestionFingerprint;
@@ -963,6 +977,8 @@ export function CreatorStudioV2Client({
 
     previousQuestionConceptIdRef.current = questionConceptId;
     setQuestionId(null);
+    setEditingQuestionPrimary(null);
+    setQuestionRelatedConceptIds([]);
     setQuestionPrompt('');
     setQuestionAnswer('');
     setQuestionDifficulty('medium');
@@ -1376,21 +1392,21 @@ export function CreatorStudioV2Client({
   }
 
   async function fetchExistingQuestions(
-    conceptId: string
+    conceptId: string,
+    libraryId: string | null
   ): Promise<ExistingQuestion[] | null> {
-    const { data, error } = await supabase
-      .from('questions')
-      .select(
-        'id, prompt, difficulty, testing_angle, status, sort_order, question_accepted_answers(answer_text, sort_order), question_tags(tag_id, tags(id, name, slug, status))'
-      )
-      .eq('concept_id', conceptId)
-      .order('created_at', { ascending: false })
-      .order('id', { ascending: false });
+    const { data, error } = await supabase.rpc('get_creator_questions', {
+      p_active_library_id: libraryId,
+      p_concept_id: conceptId,
+    });
 
     if (error) return null;
 
     type ExistingQuestionRow = {
       id: string;
+      concept_id: string;
+      primary_concept_name: string;
+      related_concepts: Array<{ id: string; name: string }>;
       prompt: string | null;
       difficulty: string | null;
       testing_angle: string | null;
@@ -1454,6 +1470,9 @@ export function CreatorStudioV2Client({
 
       return {
         id: question.id,
+        conceptId: question.concept_id,
+        primaryConceptName: question.primary_concept_name,
+        relatedConceptIds: (question.related_concepts || []).map((concept) => concept.id),
         prompt: question.prompt || '',
         answer: acceptedAnswers[0]?.answer_text || '',
         difficulty,
@@ -1465,13 +1484,13 @@ export function CreatorStudioV2Client({
   }
 
   async function refreshExistingQuestionList(conceptId: string) {
-    const loadedQuestions = await fetchExistingQuestions(conceptId);
+    const loadedQuestions = await fetchExistingQuestions(conceptId, activeLibraryId);
     if (!loadedQuestions) return;
 
     setExistingQuestions(loadedQuestions);
     setQuestionCountsByConceptId((current) => ({
       ...current,
-      [conceptId]: loadedQuestions.length,
+      [conceptId]: loadedQuestions.filter((question) => question.conceptId === conceptId).length,
     }));
   }
 
@@ -1480,6 +1499,10 @@ export function CreatorStudioV2Client({
     const testingAngle = preserveContext ? questionTestingAngle : 'General Understanding';
     const recordStatus = preserveContext ? questionRecordStatus : 'published';
     const tags = preserveContext ? questionTags : [];
+    const relatedConceptIds = preserveContext ? questionRelatedConceptIds : [];
+    setEditingQuestionPrimary(null);
+    setQuestionRelatedConceptIds(relatedConceptIds);
+    setRelatedConceptSearch('');
     setQuestionId(null);
     setQuestionPrompt('');
     setQuestionAnswer('');
@@ -1499,6 +1522,7 @@ export function CreatorStudioV2Client({
         testingAngle,
         recordStatus,
         tagIds: tags.map((tag) => tag.id),
+        relatedConceptIds,
       })
     );
   }
@@ -1539,6 +1563,8 @@ export function CreatorStudioV2Client({
     if (!confirmDiscardQuestionChanges()) return;
 
     setQuestionId(question.id);
+    setEditingQuestionPrimary({ id: question.conceptId, name: question.primaryConceptName });
+    setQuestionRelatedConceptIds(question.relatedConceptIds || []);
     setQuestionPrompt(question.prompt);
     setQuestionAnswer(question.answer);
     setQuestionDifficulty(question.difficulty);
@@ -1550,13 +1576,14 @@ export function CreatorStudioV2Client({
     setSavedQuestionFingerprint(
       questionDraftFingerprint({
         questionId: question.id,
-        conceptId: questionConceptId,
+        conceptId: question.conceptId,
         prompt: question.prompt,
         answer: question.answer,
         difficulty: question.difficulty,
         testingAngle: question.testingAngle,
         recordStatus: question.status,
         tagIds: question.tags.map((tag) => tag.id),
+        relatedConceptIds: question.relatedConceptIds || [],
       })
     );
     setQuestionStatus(null);
@@ -1586,7 +1613,7 @@ export function CreatorStudioV2Client({
     setIsLoadingExistingQuestions(true);
 
     async function loadExistingQuestions() {
-      const loadedQuestions = await fetchExistingQuestions(conceptId);
+      const loadedQuestions = await fetchExistingQuestions(conceptId, activeLibraryId);
 
       if (!isMounted) return;
 
@@ -1603,7 +1630,7 @@ export function CreatorStudioV2Client({
       setExistingQuestions(loadedQuestions);
       setQuestionCountsByConceptId((current) => ({
         ...current,
-        [conceptId]: loadedQuestions.length,
+        [conceptId]: loadedQuestions.filter((question) => question.conceptId === conceptId).length,
       }));
     }
 
@@ -2660,9 +2687,11 @@ export function CreatorStudioV2Client({
       p_testing_angle: testingAngle,
     };
 
-    const { data, error } = await supabase.rpc('save_question_with_version', {
+    const { data, error } = await supabase.rpc('save_question_with_relationships', {
       p_question_id: questionId,
-      p_concept_id: questionConceptId,
+      p_concept_id: primaryQuestionConceptId,
+      p_active_library_id: activeLibraryId,
+      p_related_concept_ids: questionRelatedConceptIds,
       ...questionPayload,
       p_status: questionRecordStatus,
       p_accepted_answers: [{ answer_text: answer, sort_order: 0 }],
@@ -2694,13 +2723,14 @@ export function CreatorStudioV2Client({
 
     const nextFingerprint = questionDraftFingerprint({
       questionId: savedQuestionId,
-      conceptId: questionConceptId,
+      conceptId: primaryQuestionConceptId,
       prompt,
       answer,
       difficulty: questionDifficulty,
       testingAngle,
       recordStatus: questionRecordStatus,
       tagIds: questionTags.map((tag) => tag.id),
+        relatedConceptIds: questionRelatedConceptIds,
     });
 
     if (questionId === null) {
@@ -4293,10 +4323,10 @@ export function CreatorStudioV2Client({
                   {linkedQuestionConcept && (
                     <div
                       className={styles.linkedConceptContext}
-                      aria-label="Linked Concept"
+                      aria-label="Primary Concept"
                     >
-                      <strong>Linked Concept: {linkedQuestionConcept.name}</strong>
-                      {linkedQuestionConcept.path && (
+                      <strong>Primary Concept: {editingQuestionPrimary?.name || linkedQuestionConcept.name}</strong>
+                      {!editingQuestionPrimary && linkedQuestionConcept.path && (
                         <span>{linkedQuestionConcept.path}</span>
                       )}
                     </div>
@@ -4314,12 +4344,13 @@ export function CreatorStudioV2Client({
                         alignItems: 'center',
                         display: 'flex',
                         justifyContent: 'space-between',
+                        flexWrap: 'wrap',
                         gap: 12,
                         marginBottom: 10,
                       }}
                     >
                       <h3 style={{ margin: 0 }}>Existing Questions · Newest first</h3>
-                      <span style={{ display: 'flex', gap: 8 }}>
+                      <span style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                         <button
                           className={styles.secondaryButton}
                           type="button"
@@ -4391,7 +4422,8 @@ export function CreatorStudioV2Client({
                               </span>
                               <small style={{ color: '#687386' }}>
                                 {question.difficulty} · {question.testingAngle} ·{' '}
-                                {question.status}
+                                {question.status} · {question.conceptId === questionConceptId ? 'Primary Question' : 'Related Question'}
+                                {' · Primary Concept: '}{question.primaryConceptName}
                               </small>
                             </button>
                           );
@@ -4401,6 +4433,34 @@ export function CreatorStudioV2Client({
                       <p className={styles.emptySelection}>No questions yet.</p>
                     )}
                   </div>
+
+                  <fieldset disabled={isSavingQuestion} style={{ border: '1px solid #cbd5e1', borderRadius: 8, padding: 12, marginBottom: 16, minWidth: 0 }}>
+                    <legend>Related Concepts · authoring only</legend>
+                    <p>Use Related Concepts to find this Question. Only the Primary Concept receives mastery evidence. Selections carry over to the next new Question.</p>
+                    <label style={{ display: 'grid', gap: 6 }}>
+                      Search Related Concepts or Topic paths
+                      <input value={relatedConceptSearch} onChange={(event) => setRelatedConceptSearch(event.target.value)} type="search" />
+                    </label>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBlock: 8 }}>
+                      {questionRelatedConceptIds.map((id) => (
+                        <button className={styles.secondaryButton} style={{ whiteSpace: 'normal', overflowWrap: 'anywhere' }} type="button" key={id} onClick={() => setQuestionRelatedConceptIds((current) => current.filter((value) => value !== id))}>
+                          Related: {Object.values(questionConceptsByTopicId).flat().find((concept) => concept.id === id)?.name || id} ×
+                        </button>
+                      ))}
+                    </div>
+                    <div style={{ maxHeight: 220, overflowY: 'auto', display: 'grid', gap: 8 }} tabIndex={0} aria-label="Related Concepts choices">
+                      {Array.from(new Map(flattenTopics(topics).flatMap((topic) =>
+                        (questionConceptsByTopicId[topic.id] || []).map((concept) => ({ ...concept, path: topic.label }))
+                      ).filter((concept) => concept.id !== primaryQuestionConceptId &&
+                        `${concept.name} ${concept.path}`.toLocaleLowerCase().includes(relatedConceptSearch.toLocaleLowerCase())
+                      ).map((concept) => [concept.id, concept])).values()).map((concept) => (
+                        <label key={concept.id} style={{ display: 'flex', alignItems: 'start', gap: 8 }}>
+                          <input type="checkbox" checked={questionRelatedConceptIds.includes(concept.id)} onChange={(event) => setQuestionRelatedConceptIds((current) => event.target.checked ? [...new Set([...current, concept.id])] : current.filter((id) => id !== concept.id))} />
+                          <span>{concept.name}<small style={{ display: 'block', color: '#64748b' }}>{concept.path}</small></span>
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
 
                   <label style={{ display: 'grid', gap: 8 }}>
                     <strong>Question</strong>
@@ -4438,7 +4498,7 @@ export function CreatorStudioV2Client({
                 <section className={`${styles.panel} ${styles.topicPanel}`}>
                   <div>
                     <h2>2. Topic Tree</h2>
-                    <p>Select the topic, then choose the concept this question tests.</p>
+                    <p>Browse Questions by Concept. New Questions use the selected Concept as Primary; existing Questions keep their Primary.</p>
                   </div>
 
                   <div style={{ display: 'grid', gap: 8, marginBottom: 12 }}>

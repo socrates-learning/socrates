@@ -23,10 +23,10 @@ test('Content keeps keyword search and adds Topic Tree browsing', () => {
 });
 
 test('Question authoring keeps the linked Concept and Topic path visible', () => {
-  assert.match(creatorSource, /aria-label="Linked Concept"/);
+  assert.match(creatorSource, /aria-label="Primary Concept"/);
   assert.match(
     creatorSource,
-    /Linked Concept: \{linkedQuestionConcept\.name\}/
+    /Primary Concept: \{editingQuestionPrimary\?\.name \|\| linkedQuestionConcept\.name\}/
   );
   assert.match(
     creatorSource,

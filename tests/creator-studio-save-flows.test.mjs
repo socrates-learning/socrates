@@ -47,9 +47,10 @@ function editor({ editing = false, response, references = [] } = {}) {
   };
   const database = {
     async rpc(name, payload) {
+      if (name === 'get_creator_questions') return { data: [], error: null };
       calls.push({ name, payload });
       if (response) return response(name, payload);
-      return { data: name === 'save_question_with_version'
+      return { data: name === 'save_question_with_relationships'
         ? { id: payload.p_question_id || 'saved-question' }
         : { concept_id: payload.p_concept_id || 'saved-concept', references: payload.p_references.map(r => ({
           client_id: r.client_id, source_id: 'source', attribution_id: 'attribution',
@@ -139,10 +140,7 @@ for (const lifecycle of ['published', 'draft']) {
     await h.render().saveQuestion();
     assert.equal(h.calls[1].payload.p_question_id, null);
     assert.equal(h.calls[1].payload.p_concept_id, 'existing-concept');
-    assert.deepEqual(h.orders.filter(o => o.table === 'questions').slice(0, 2), [
-      { table: 'questions', column: 'created_at', ascending: false },
-      { table: 'questions', column: 'id', ascending: false },
-    ]);
+
   });
 }
 
@@ -151,7 +149,7 @@ test('edit-mode Concept and Question saves retain identity and content', async (
   let e = h.render(); e.setConcept('Edited Concept');
   await h.render().saveConcept();
   e = h.render(); assert.equal(e.concept, 'Edited Concept'); assert.notEqual(e.conceptId, null);
-  e.selectExistingQuestion({ id: 'existing-question', prompt: 'Old', answer: 'Answer', difficulty: 'easy', testingAngle: 'Recall', status: 'draft', tags: [] });
+  e.selectExistingQuestion({ id: 'existing-question', conceptId: 'existing-concept', primaryConceptName: 'Existing Concept', relatedConceptIds: [], prompt: 'Old', answer: 'Answer', difficulty: 'easy', testingAngle: 'Recall', status: 'draft', tags: [] });
   e = h.render(); e.setQuestionPrompt('Edited Question');
   await h.render().saveQuestion();
   e = h.render(); assert.equal(e.questionId, 'existing-question');
