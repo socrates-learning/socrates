@@ -50,7 +50,7 @@ function editor({ editing = false, response, references = [] } = {}) {
       if (name === 'get_creator_questions') return { data: [], error: null };
       calls.push({ name, payload });
       if (response) return response(name, payload);
-      return { data: name === 'save_question_with_relationships'
+      return { data: name === 'save_question_with_relationships_v2'
         ? { id: payload.p_question_id || 'saved-question' }
         : { concept_id: payload.p_concept_id || 'saved-concept', references: payload.p_references.map(r => ({
           client_id: r.client_id, source_id: 'source', attribution_id: 'attribution',

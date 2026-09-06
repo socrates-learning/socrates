@@ -70,6 +70,7 @@ type ExistingQuestion = {
   conceptId: string;
   primaryConceptName: string;
   relatedConceptIds: string[];
+  additionalTestingAngles: string[];
   prompt: string;
   answer: string;
   difficulty: QuestionDifficulty;
@@ -338,6 +339,7 @@ function questionDraftFingerprint({
   recordStatus,
   tagIds,
   relatedConceptIds = [],
+  additionalTestingAngles = [],
 }: {
   questionId: string | null;
   conceptId: string | null;
@@ -348,8 +350,10 @@ function questionDraftFingerprint({
   recordStatus: LifecycleStatus;
   tagIds: Iterable<string>;
   relatedConceptIds?: Iterable<string>;
+  additionalTestingAngles?: Iterable<string>;
 }) {
   return JSON.stringify({
+    additionalTestingAngles: Array.from(new Set(Array.from(additionalTestingAngles, (angle) => angle.trim().toLowerCase()))).sort(),
     relatedConceptIds: Array.from(new Set(relatedConceptIds)).sort(),
     questionId,
     conceptId,
@@ -452,6 +456,8 @@ export function CreatorStudioV2Client({
   const [needsQuestionsOnly, setNeedsQuestionsOnly] = useState(false);
   const [editingQuestionPrimary, setEditingQuestionPrimary] = useState<{ id: string; name: string } | null>(null);
   const [questionRelatedConceptIds, setQuestionRelatedConceptIds] = useState<string[]>([]);
+  const [questionAdditionalTestingAngles, setQuestionAdditionalTestingAngles] = useState<string[]>([]);
+  const [additionalAngleSearch, setAdditionalAngleSearch] = useState('');
   const [relatedConceptSearch, setRelatedConceptSearch] = useState('');
   const primaryQuestionConceptId = editingQuestionPrimary?.id || questionConceptId;
   const [questionPrompt, setQuestionPrompt] = useState('');
@@ -527,11 +533,13 @@ export function CreatorStudioV2Client({
         recordStatus: questionRecordStatus,
         tagIds: questionTags.map((tag) => tag.id),
         relatedConceptIds: questionRelatedConceptIds,
+        additionalTestingAngles: questionAdditionalTestingAngles,
       }),
     [
       questionAnswer,
       primaryQuestionConceptId,
       questionRelatedConceptIds,
+      questionAdditionalTestingAngles,
       questionDifficulty,
       questionId,
       questionPrompt,
@@ -563,6 +571,8 @@ export function CreatorStudioV2Client({
       questionTestingAngle.trim() !== 'General Understanding' ||
       questionTags.length ||
       questionRelatedConceptIds.length ||
+      questionAdditionalTestingAngles.length ||
+      (JSON.parse(savedQuestionFingerprint).additionalTestingAngles || []).length ||
       (JSON.parse(savedQuestionFingerprint).relatedConceptIds || []).length
   );
   const isQuestionDirty =
@@ -979,6 +989,7 @@ export function CreatorStudioV2Client({
     setQuestionId(null);
     setEditingQuestionPrimary(null);
     setQuestionRelatedConceptIds([]);
+    setQuestionAdditionalTestingAngles([]);
     setQuestionPrompt('');
     setQuestionAnswer('');
     setQuestionDifficulty('medium');
@@ -1410,6 +1421,7 @@ export function CreatorStudioV2Client({
       prompt: string | null;
       difficulty: string | null;
       testing_angle: string | null;
+      additional_testing_angles: string[] | null;
       status: string | null;
       question_accepted_answers:
         | Array<{ answer_text: string | null; sort_order: number | null }>
@@ -1477,6 +1489,7 @@ export function CreatorStudioV2Client({
         answer: acceptedAnswers[0]?.answer_text || '',
         difficulty,
         testingAngle: question.testing_angle || 'General Understanding',
+        additionalTestingAngles: question.additional_testing_angles || [],
         status: recordStatus,
         tags,
       };
@@ -1499,6 +1512,9 @@ export function CreatorStudioV2Client({
     const testingAngle = preserveContext ? questionTestingAngle : 'General Understanding';
     const recordStatus = preserveContext ? questionRecordStatus : 'published';
     const tags = preserveContext ? questionTags : [];
+    const additionalTestingAngles = preserveContext ? questionAdditionalTestingAngles : [];
+    setQuestionAdditionalTestingAngles(additionalTestingAngles);
+    setAdditionalAngleSearch('');
     const relatedConceptIds = preserveContext ? questionRelatedConceptIds : [];
     setEditingQuestionPrimary(null);
     setQuestionRelatedConceptIds(relatedConceptIds);
@@ -1523,6 +1539,7 @@ export function CreatorStudioV2Client({
         recordStatus,
         tagIds: tags.map((tag) => tag.id),
         relatedConceptIds,
+        additionalTestingAngles,
       })
     );
   }
@@ -1569,6 +1586,7 @@ export function CreatorStudioV2Client({
     setQuestionAnswer(question.answer);
     setQuestionDifficulty(question.difficulty);
     setQuestionTestingAngle(question.testingAngle);
+    setQuestionAdditionalTestingAngles(question.additionalTestingAngles || []);
     setQuestionRecordStatus(question.status);
     setQuestionTags(question.tags);
     setQuestionTagDraft('');
@@ -1584,6 +1602,7 @@ export function CreatorStudioV2Client({
         recordStatus: question.status,
         tagIds: question.tags.map((tag) => tag.id),
         relatedConceptIds: question.relatedConceptIds || [],
+        additionalTestingAngles: question.additionalTestingAngles || [],
       })
     );
     setQuestionStatus(null);
@@ -2687,11 +2706,12 @@ export function CreatorStudioV2Client({
       p_testing_angle: testingAngle,
     };
 
-    const { data, error } = await supabase.rpc('save_question_with_relationships', {
+    const { data, error } = await supabase.rpc('save_question_with_relationships_v2', {
       p_question_id: questionId,
       p_concept_id: primaryQuestionConceptId,
       p_active_library_id: activeLibraryId,
       p_related_concept_ids: questionRelatedConceptIds,
+      p_additional_testing_angles: questionAdditionalTestingAngles,
       ...questionPayload,
       p_status: questionRecordStatus,
       p_accepted_answers: [{ answer_text: answer, sort_order: 0 }],
@@ -2730,7 +2750,8 @@ export function CreatorStudioV2Client({
       testingAngle,
       recordStatus: questionRecordStatus,
       tagIds: questionTags.map((tag) => tag.id),
-        relatedConceptIds: questionRelatedConceptIds,
+      relatedConceptIds: questionRelatedConceptIds,
+      additionalTestingAngles: questionAdditionalTestingAngles,
     });
 
     if (questionId === null) {
@@ -4797,22 +4818,40 @@ export function CreatorStudioV2Client({
                   </label>
 
                   <label style={{ display: 'grid', gap: 8 }}>
-                    <strong>Testing Angle</strong>
+                    <strong>Primary Testing Angle</strong>
                     <select
                       value={questionTestingAngle}
                       disabled={isSavingQuestion}
                       onChange={(event) => {
-                        setQuestionTestingAngle(event.target.value);
-                        setQuestionStatus(null);
+                        const nextPrimary = event.target.value;
+                        const removed = questionAdditionalTestingAngles.some((angle) => angle.trim().toLowerCase() === nextPrimary.trim().toLowerCase());
+                        setQuestionTestingAngle(nextPrimary);
+                        setQuestionAdditionalTestingAngles((angles) => angles.filter((angle) => angle.trim().toLowerCase() !== nextPrimary.trim().toLowerCase()));
+                        setQuestionStatus(removed ? { tone: 'success', message: `${nextPrimary} is now Primary and was removed from Additional Testing Angles.` } : null);
                       }}
                     >
-                      {testingAngleOptions.map((angle) => (
+                      {Array.from(new Set([questionTestingAngle, ...testingAngleOptions])).map((angle) => (
                         <option key={angle} value={angle}>
                           {angle}
                         </option>
                       ))}
                     </select>
                   </label>
+
+                  <fieldset disabled={isSavingQuestion} style={{ minWidth: 0, margin: 0 }}>
+                    <legend>Additional Testing Angles</legend>
+                    <p>Classification only. Learner evidence uses the Primary Testing Angle.</p>
+                    <input type="search" aria-label="Search Additional Testing Angles" value={additionalAngleSearch} onChange={(event) => setAdditionalAngleSearch(event.target.value)} style={{ width: '100%', boxSizing: 'border-box' }} />
+                    <div style={{ maxHeight: 180, overflowY: 'auto', display: 'grid', gap: 8 }}>
+                      {Array.from(new Map([...questionAdditionalTestingAngles, ...testingAngleOptions].map((angle) => [angle.trim().toLowerCase(), angle])).values()).filter((angle) => angle.trim().toLowerCase() !== questionTestingAngle.trim().toLowerCase() && angle.toLowerCase().includes(additionalAngleSearch.toLowerCase())).map((angle) => (
+                        <label key={angle} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                          <input type="checkbox" checked={questionAdditionalTestingAngles.some((value) => value.trim().toLowerCase() === angle.trim().toLowerCase())} onChange={(event) => setQuestionAdditionalTestingAngles((angles) => event.target.checked ? [...angles, angle] : angles.filter((value) => value.trim().toLowerCase() !== angle.trim().toLowerCase()))} />
+                          {angle}
+                        </label>
+                      ))}
+                    </div>
+                    <small>{questionAdditionalTestingAngles.length ? `Selected: ${questionAdditionalTestingAngles.join(', ')}` : 'No Additional Testing Angles'}</small>
+                  </fieldset>
 
                   <label style={{ display: 'grid', gap: 8 }}>
                     <strong>Status</strong>

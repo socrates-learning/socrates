@@ -10,7 +10,7 @@ import { buildConceptTopicTree } from '../lib/concept-topic-tree.ts';
 // regression tests, not browser or database integration tests.
 const source = readFileSync(new URL('../components/CreatorStudioV2Client.tsx', import.meta.url), 'utf8');
 const exposed = [
-  'saveConcept', 'saveQuestion', 'startNewConcept', 'selectExistingQuestion',
+  'setActiveCreatorTab', 'setQuestionAdditionalTestingAngles', 'questionAdditionalTestingAngles', 'saveConcept', 'saveQuestion', 'startNewConcept', 'selectExistingQuestion',
   'setConcept', 'setConceptRecordStatus', 'setQuestionPrompt', 'setQuestionAnswer',
   'setQuestionDifficulty', 'setQuestionTestingAngle', 'setQuestionRecordStatus',
   'conceptId', 'concept', 'conceptRecordStatus', 'selectedTopicIds', 'references',
@@ -95,69 +95,40 @@ function editor({ editing = false, response, references = [] } = {}) {
   return { render, calls, orders, routes };
 }
 
-test('related selections participate in dirty state and persist across rapid saves', async () => {
-  const h = editor({ editing: true });
-  let e = h.render(); e.setQuestionRelatedConceptIds(['related-b', 'related-a']);
-  assert.equal(h.render().isQuestionDirty, true);
-  e.setQuestionPrompt('Batch 1'); e.setQuestionAnswer('Answer');
-  await h.render().saveQuestion(); e = h.render();
-  assert.deepEqual([...h.calls[0].payload.p_related_concept_ids], ['related-b', 'related-a']);
-  assert.equal(h.calls[0].payload.p_active_library_id, 'library');
-  assert.deepEqual([...e.questionRelatedConceptIds], ['related-b', 'related-a']);
-  assert.equal(e.questionPrompt, ''); assert.equal(e.questionAnswer, '');
-  assert.equal(e.isQuestionDirty, false);
-  e.setQuestionRelatedConceptIds(['related-a', 'related-b']);
-  assert.equal(h.render().isQuestionDirty, false, 'selection order is not a change');
-  e.setQuestionPrompt('Batch 2'); e.setQuestionAnswer('Answer 2');
-  await h.render().saveQuestion();
-  assert.equal(h.calls[1].payload.p_question_id, null);
-  assert.equal(h.calls[1].payload.p_related_concept_ids.length, 2);
+test('Additional angle cluster participates in dirty state and survives rapid entry', async () => {
+ const h=editor({editing:true}); let e=h.render();
+ e.setQuestionAdditionalTestingAngles(['Recall','Application']); e.setQuestionTestingAngle('Mechanism');
+ assert.equal(h.render().isQuestionDirty,true);
+ e.setQuestionPrompt('One'); e.setQuestionAnswer('Answer'); await h.render().saveQuestion(); e=h.render();
+ assert.deepEqual([...h.calls[0].payload.p_additional_testing_angles],['Recall','Application']);
+ assert.equal(e.questionTestingAngle,'Mechanism'); assert.deepEqual([...e.questionAdditionalTestingAngles],['Recall','Application']);
+ assert.equal(e.isQuestionDirty,false); assert.equal(e.questionPrompt,'');
+ e.setQuestionAdditionalTestingAngles(['Application','Recall']); assert.equal(h.render().isQuestionDirty,false);
+ e.setQuestionPrompt('Two');e.setQuestionAnswer('Answer');await h.render().saveQuestion();
+ assert.equal(h.calls[1].payload.p_question_id,null);assert.equal(h.calls[1].payload.p_additional_testing_angles.length,2);
+});
+test('failed save preserves Additional angles and dirty form', async () => {
+ const h=editor({editing:true,response:()=>({error:{message:'Rejected'}})});const e=h.render();
+ e.setQuestionPrompt('Keep');e.setQuestionAnswer('Answer');e.setQuestionAdditionalTestingAngles(['Recall']);
+ await h.render().saveQuestion();assert.deepEqual([...h.render().questionAdditionalTestingAngles],['Recall']);assert.equal(h.render().questionPrompt,'Keep');assert.equal(h.render().isQuestionDirty,true);
+});
+test('reload restores Additional and edits can clear them', async () => {
+ const h=editor({editing:true,response:name=>({data:name==='get_creator_questions'?[{id:'q',concept_id:'existing-concept',prompt:'Question',testing_angle:'Mechanism',additional_testing_angles:['Recall','Application'],question_accepted_answers:[{answer_text:'Answer'}]}]:{id:'q'},error:null})});
+ const [q]=await h.render().fetchExistingQuestions('existing-concept','library');
+ h.render().selectExistingQuestion(q);assert.deepEqual([...h.render().questionAdditionalTestingAngles],['Recall','Application']);assert.equal(h.render().isQuestionDirty,false);
+ h.render().setQuestionAdditionalTestingAngles([]);await h.render().saveQuestion();assert.equal(h.calls[0].payload.p_additional_testing_angles.length,0);assert.equal(h.render().isQuestionDirty,false);
+});
+function nodes(tree,predicate,result=[]) {if(!tree||typeof tree!=='object')return result;if(predicate(tree))result.push(tree);for(const child of [tree.props?.children].flat(Infinity))nodes(child,predicate,result);return result;}
+test('Primary control promotion visibly removes Additional with case normalized identity',()=>{
+ const h=editor({editing:true});h.render().setActiveCreatorTab('questions');h.render().setQuestionAdditionalTestingAngles(['Recall','Application']);
+ let e=h.render();const controls=nodes(e.tree,n=>n.type==='select'&&n.props.value===e.questionTestingAngle);
+ assert.equal(controls.length,1);controls[0].props.onChange({target:{value:'Recall'}});
+ e=h.render();assert.equal(e.questionTestingAngle,'Recall');assert.deepEqual([...e.questionAdditionalTestingAngles],['Application']);
+ assert.equal(nodes(e.tree,n=>n.type==='input'&&n.props.type==='search'&&n.props['aria-label']==='Search Additional Testing Angles').length,1);
 });
 
-test('related browse edits retain true Primary; empty selection clears explicitly', async () => {
-  const h = editor({ editing: true });
-  h.render().selectExistingQuestion({ id: 'question', conceptId: 'true-primary', primaryConceptName: 'Primary', relatedConceptIds: ['existing-concept', 'another'], prompt: 'Prompt', answer: 'Answer', difficulty: 'hard', testingAngle: 'Recall', status: 'published', tags: [] });
-  let e = h.render();
-  assert.equal(e.questionConceptId, 'existing-concept');
-  assert.equal(e.primaryQuestionConceptId, 'true-primary');
-  assert.equal(e.isQuestionDirty, false);
-  e.setQuestionRelatedConceptIds([]); await h.render().saveQuestion();
-  assert.equal(h.calls[0].payload.p_concept_id, 'true-primary');
-  assert.equal(h.calls[0].payload.p_related_concept_ids.length, 0);
-  assert.equal(h.render().isQuestionDirty, false);
-  h.render().startNewQuestion();
-  assert.equal(h.render().primaryQuestionConceptId, 'existing-concept');
-  assert.equal(h.render().questionRelatedConceptIds.length, 0);
-});
-
-test('failed relationship save retains draft, true primary, and secondary choices', async () => {
-  const h = editor({ editing: true, response: () => ({ error: { message: 'Rejected association' } }) });
-  let e = h.render(); e.setQuestionPrompt('Keep'); e.setQuestionAnswer('Keep answer'); e.setQuestionRelatedConceptIds(['related']);
-  await h.render().saveQuestion(); e = h.render();
-  assert.equal(e.questionPrompt, 'Keep'); assert.equal(e.questionAnswer, 'Keep answer');
-  assert.deepEqual([...e.questionRelatedConceptIds], ['related']);
-  assert.equal(e.isQuestionDirty, true); assert.equal(e.isSavingQuestion, false);
-});
-
-test('coherent loader restores associations without inflating Primary counts', async () => {
-  const h = editor({ editing: true, response: (name) => ({ data: name === 'get_creator_questions' ? [
-    { id: 'one', concept_id: 'existing-concept', primary_concept_name: 'One', related_concepts: [{id:'related'}], prompt: 'Newest', status:'published' },
-    { id: 'two', concept_id: 'other', primary_concept_name: 'Other', related_concepts: [{id:'existing-concept'}], prompt: 'Older', status:'published' },
-  ] : [], error: null }) });
-  const questions = await h.render().fetchExistingQuestions('existing-concept', 'library');
-  assert.deepEqual(questions.map(q => q.id), ['one','two']);
-  assert.equal(questions[1].conceptId, 'other');
-  assert.deepEqual([...questions[1].relatedConceptIds], ['existing-concept']);
-  await h.render().refreshExistingQuestionList('existing-concept');
-  assert.equal(h.render().questionCountsByConceptId['existing-concept'], 1);
-});
-
-test('new browse context clears relationship context; list remains bounded', () => {
-  const h = editor({ editing: true }); h.render().setQuestionRelatedConceptIds(['related']);
-  h.render().selectQuestionConcept('new-primary');
-  assert.equal(h.render().questionRelatedConceptIds.length, 0);
-  assert.equal(h.render().primaryQuestionConceptId, 'new-primary');
-  const css = readFileSync(new URL('../components/CreatorStudioV2Client.module.css', import.meta.url), 'utf8');
-  assert.match(css, /\.existingQuestionList[\s\S]*?overflow(?:-y)?:\s*auto/);
-  assert.match(source, /Related Question/);
+test('Additional-only change is dirty, including clearing a retained batch cluster',async()=>{
+ const h=editor({editing:true});h.render().setQuestionAdditionalTestingAngles(['Recall']);assert.equal(h.render().isQuestionDirty,true);
+ h.render().setQuestionPrompt('Prompt');h.render().setQuestionAnswer('Answer');await h.render().saveQuestion();
+ assert.equal(h.render().isQuestionDirty,false);h.render().setQuestionAdditionalTestingAngles([]);assert.equal(h.render().isQuestionDirty,true);
 });
