@@ -377,7 +377,7 @@ export function CreatorStudioV2Client({
   const [conceptName, setConceptName] = useState(resolvedConcept.name);
   const [concept, setConcept] = useState(resolvedConcept.bodyMarkdown);
   const [conceptRecordStatus, setConceptRecordStatus] =
-    useState<LifecycleStatus>('draft');
+    useState<LifecycleStatus>(resolvedConcept.id ? 'draft' : 'published');
   const [topics, setTopics] = useState<Topic[]>(resolvedTopics);
   const [activeTopicId, setActiveTopicId] = useState(
     resolvedConcept.placementIds[0] || resolvedTopics[0]?.id || ''
@@ -452,7 +452,7 @@ export function CreatorStudioV2Client({
     'General Understanding'
   );
   const [questionRecordStatus, setQuestionRecordStatus] =
-    useState<LifecycleStatus>('draft');
+    useState<LifecycleStatus>('published');
   const [questionTags, setQuestionTags] = useState<ConceptTag[]>([]);
   const [questionTagDraft, setQuestionTagDraft] = useState('');
   const [questionTagStatus, setQuestionTagStatus] = useState<Status>(null);
@@ -479,7 +479,7 @@ export function CreatorStudioV2Client({
       initialReferences,
       [],
       [],
-      'draft'
+      resolvedConcept.id ? 'draft' : 'published'
     )
   );
   const editingReference = editingReferenceId
@@ -967,7 +967,7 @@ export function CreatorStudioV2Client({
     setQuestionAnswer('');
     setQuestionDifficulty('medium');
     setQuestionTestingAngle('General Understanding');
-    setQuestionRecordStatus('draft');
+    setQuestionRecordStatus('published');
     setSavedQuestionFingerprint(
       questionDraftFingerprint({
         questionId: null,
@@ -976,7 +976,7 @@ export function CreatorStudioV2Client({
         answer: '',
         difficulty: 'medium',
         testingAngle: 'General Understanding',
-        recordStatus: 'draft',
+        recordStatus: 'published',
         tagIds: [],
       })
     );
@@ -1384,8 +1384,8 @@ export function CreatorStudioV2Client({
         'id, prompt, difficulty, testing_angle, status, sort_order, question_accepted_answers(answer_text, sort_order), question_tags(tag_id, tags(id, name, slug, status))'
       )
       .eq('concept_id', conceptId)
-      .order('sort_order', { ascending: true })
-      .order('id', { ascending: true });
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false });
 
     if (error) return null;
 
@@ -1475,15 +1475,19 @@ export function CreatorStudioV2Client({
     }));
   }
 
-  function resetQuestionEditor(conceptId: string | null) {
+  function resetQuestionEditor(conceptId: string | null, preserveContext = false) {
+    const difficulty = preserveContext ? questionDifficulty : 'medium';
+    const testingAngle = preserveContext ? questionTestingAngle : 'General Understanding';
+    const recordStatus = preserveContext ? questionRecordStatus : 'published';
+    const tags = preserveContext ? questionTags : [];
     setQuestionId(null);
     setQuestionPrompt('');
     setQuestionAnswer('');
-    setQuestionDifficulty('medium');
-    setQuestionTestingAngle('General Understanding');
-    setQuestionRecordStatus('draft');
-    setQuestionTags([]);
-    setQuestionTagDraft('');
+    setQuestionDifficulty(difficulty);
+    setQuestionTestingAngle(testingAngle);
+    setQuestionRecordStatus(recordStatus);
+    setQuestionTags(tags);
+    if (!preserveContext) setQuestionTagDraft('');
     setQuestionTagStatus(null);
     setSavedQuestionFingerprint(
       questionDraftFingerprint({
@@ -1491,10 +1495,10 @@ export function CreatorStudioV2Client({
         conceptId,
         prompt: '',
         answer: '',
-        difficulty: 'medium',
-        testingAngle: 'General Understanding',
-        recordStatus: 'draft',
-        tagIds: [],
+        difficulty,
+        testingAngle,
+        recordStatus,
+        tagIds: tags.map((tag) => tag.id),
       })
     );
   }
@@ -2357,11 +2361,16 @@ export function CreatorStudioV2Client({
       return;
     }
 
+    resetConceptEditor();
+    router.push('/creator/concepts/new');
+  }
+
+  function resetConceptEditor(placementIds: string[] = []) {
     setConceptId(null);
     setConceptName('');
     setConcept('');
-    setConceptRecordStatus('draft');
-    setSelectedTopicIds(new Set());
+    setConceptRecordStatus('published');
+    setSelectedTopicIds(new Set(placementIds));
     setConceptTags([]);
     setPrerequisites([]);
     setPrerequisiteSearch('');
@@ -2378,8 +2387,7 @@ export function CreatorStudioV2Client({
     setEditorMode('write');
     setActiveCreatorTab('content');
     setStatus(null);
-    setSavedDraftFingerprint(draftFingerprint('', [], [], [], [], 'draft'));
-    router.push('/creator/concepts/new');
+    setSavedDraftFingerprint(draftFingerprint('', placementIds, [], [], [], 'published'));
   }
 
   async function deleteCurrentConcept() {
@@ -2413,7 +2421,7 @@ export function CreatorStudioV2Client({
     setConceptId(null);
     setConceptName('');
     setConcept('');
-    setConceptRecordStatus('draft');
+    setConceptRecordStatus('published');
     setSelectedTopicIds(new Set());
     setConceptTags([]);
     setPrerequisites([]);
@@ -2421,7 +2429,7 @@ export function CreatorStudioV2Client({
     setPrerequisiteStatus(null);
     setReferences([]);
     setContentConceptSearch('');
-    setSavedDraftFingerprint(draftFingerprint('', [], [], [], [], 'draft'));
+    setSavedDraftFingerprint(draftFingerprint('', [], [], [], [], 'published'));
     await loadTagCatalog();
     broadcastTagCatalogUsageInvalidation();
     setIsSaving(false);
@@ -2429,6 +2437,7 @@ export function CreatorStudioV2Client({
   }
 
   async function saveConcept() {
+    if (isSaving || isSavingQuestion) return;
     if (!concept.trim()) {
       showStatus('error', 'Write a concept or explanation before saving.');
       return;
@@ -2528,7 +2537,7 @@ export function CreatorStudioV2Client({
       setSaveFeedback(null);
       showStatus(
         'error',
-        'Concept draft saved, but the reference save response was incomplete. Please retry.'
+        'Concept saved, but the reference save response was incomplete. Please retry.'
       );
       return;
     }
@@ -2555,7 +2564,7 @@ export function CreatorStudioV2Client({
       setSaveFeedback(null);
       showStatus(
         'error',
-        'Concept draft saved, but one or more references were not confirmed. Please retry.'
+        'Concept saved, but one or more references were not confirmed. Please retry.'
       );
       return;
     }
@@ -2596,13 +2605,27 @@ export function CreatorStudioV2Client({
     setSaveFeedback('saved');
 
     if (wasNewConcept) {
-      router.replace(`/creator/concepts/${savedConceptId}`);
+      // Update the local browser immediately without remounting and losing context.
+      setQuestionConceptsByTopicId((current) => {
+        const next = { ...current };
+        for (const topicId of placementIdsToSave) {
+          next[topicId] = [
+            ...(next[topicId] || []).filter((item) => item.id !== savedConceptId),
+            { id: savedConceptId, name },
+          ].sort((left, right) => left.name.localeCompare(right.name));
+        }
+        return next;
+      });
+      resetConceptEditor(placementIdsToSave);
+      window.history.replaceState(window.history.state, '', '/creator/concepts/new');
+      showStatus('success', `“${name}” saved as ${conceptRecordStatus}. Ready for another Concept.`);
     } else {
       router.refresh();
     }
   }
 
   async function saveQuestion() {
+    if (isSaving || isSavingQuestion) return;
     const prompt = questionPrompt.trim();
     const answer = questionAnswer.trim();
     const testingAngle = questionTestingAngle.trim() || 'General Understanding';
@@ -2669,8 +2692,6 @@ export function CreatorStudioV2Client({
       return;
     }
 
-    if (!questionId) setQuestionId(savedQuestionId);
-
     const nextFingerprint = questionDraftFingerprint({
       questionId: savedQuestionId,
       conceptId: questionConceptId,
@@ -2682,10 +2703,18 @@ export function CreatorStudioV2Client({
       tagIds: questionTags.map((tag) => tag.id),
     });
 
-    setQuestionPrompt(prompt);
-    setQuestionAnswer(answer);
-    setQuestionTestingAngle(testingAngle);
-    setSavedQuestionFingerprint(nextFingerprint);
+    if (questionId === null) {
+      resetQuestionEditor(questionConceptId, true);
+      setQuestionStatus({
+        tone: 'success',
+        message: `Question saved as ${questionRecordStatus}. Ready for another Question.`,
+      });
+    } else {
+      setQuestionPrompt(prompt);
+      setQuestionAnswer(answer);
+      setQuestionTestingAngle(testingAngle);
+      setSavedQuestionFingerprint(nextFingerprint);
+    }
     await Promise.all([
       refreshExistingQuestionList(questionConceptId),
       loadTagCatalog(),
@@ -3117,7 +3146,7 @@ export function CreatorStudioV2Client({
     <>
       <Header />
       <main className={styles.workspace}>
-        <section className={styles.studioShell}>
+        <fieldset className={styles.studioShell} disabled={isSaving || isSavingQuestion} aria-label="Creator Studio editor">
           <header className={styles.localHeader}>
             <h1>Creator Studio</h1>
             <div className={styles.headerActions}>
@@ -3135,36 +3164,33 @@ export function CreatorStudioV2Client({
               >
                 Library Organizer
               </button>
-              {visibleSaveFeedback && (
-                <span className={styles.saveState} role="status" aria-live="polite">
-                  {visibleSaveFeedback === 'saving' ? 'Saving…' : 'Saved'}
-                </span>
-              )}
-              <button className={styles.secondaryButton} type="button" onClick={clearDraft}>
-                Clear
-              </button>
-              {activeCreatorTab !== 'tags' && (
-                <button
-                  className={styles.primaryButton}
-                  type="button"
-                  onClick={
-                    activeCreatorTab === 'content' ? saveConcept : saveQuestion
-                  }
-                  disabled={
-                    activeCreatorTab === 'content' ? isSaving : isSavingQuestion
-                  }
-                >
-                  {activeCreatorTab === 'content'
-                    ? isSaving
-                      ? 'Saving…'
-                      : 'Save'
-                    : isSavingQuestion
-                      ? 'Saving…'
-                      : 'Save'}
+              {activeCreatorTab === 'content' && (
+                <button className={styles.secondaryButton} type="button" onClick={clearDraft}>
+                  Clear Concept
                 </button>
               )}
             </div>
           </header>
+
+          {activeCreatorTab !== 'tags' && (
+            <div className={styles.saveToolbar}>
+              <span role="status" aria-live="polite">
+                {visibleSaveFeedback === 'saving' ? 'Saving…' :
+                  (activeCreatorTab === 'content' ? status?.message : questionStatus?.message) ||
+                  (visibleSaveFeedback === 'saved' ? 'Saved' :
+                    activeCreatorTab === 'content' ? 'Concept workspace' : 'Question workspace')}
+              </span>
+              <button
+                className={styles.primaryButton}
+                type="button"
+                onClick={activeCreatorTab === 'content' ? saveConcept : saveQuestion}
+                disabled={isSaving || isSavingQuestion}
+              >
+                {isSaving || isSavingQuestion ? 'Saving…' :
+                  activeCreatorTab === 'content' ? 'Save Concept' : 'Save Question'}
+              </button>
+            </div>
+          )}
 
           <nav
             aria-label="Creator Studio sections"
@@ -3443,7 +3469,7 @@ export function CreatorStudioV2Client({
                     <select
                       aria-label="Concept status"
                       value={conceptRecordStatus}
-                      disabled={!conceptId || isSaving}
+                      disabled={isSaving}
                       onChange={(event) => {
                         setConceptRecordStatus(
                           event.target.value as LifecycleStatus
@@ -4292,7 +4318,7 @@ export function CreatorStudioV2Client({
                         marginBottom: 10,
                       }}
                     >
-                      <h3 style={{ margin: 0 }}>Existing Questions</h3>
+                      <h3 style={{ margin: 0 }}>Existing Questions · Newest first</h3>
                       <span style={{ display: 'flex', gap: 8 }}>
                         <button
                           className={styles.secondaryButton}
@@ -4324,7 +4350,7 @@ export function CreatorStudioV2Client({
                         Loading questions…
                       </p>
                     ) : existingQuestions.length ? (
-                      <div style={{ display: 'grid', gap: 6 }}>
+                      <div key={existingQuestions[0].id} className={styles.existingQuestionList} tabIndex={0} aria-label="Existing Questions, newest first">
                         {existingQuestions.map((question) => {
                           const isSelected = question.id === questionId;
 
@@ -4659,7 +4685,8 @@ export function CreatorStudioV2Client({
                   )}
 
                   <div
-                    className={styles.treeViewport}
+                    className={`${styles.treeViewport} ${styles.questionConceptBrowser}`}
+                    tabIndex={0}
                     id="question-concept-browser"
                     aria-label="Question Topic Tree"
                   >
@@ -4732,7 +4759,7 @@ export function CreatorStudioV2Client({
                     <select
                       aria-label="Question status"
                       value={questionRecordStatus}
-                      disabled={!questionId || isSavingQuestion}
+                      disabled={isSavingQuestion}
                       onChange={(event) => {
                         setQuestionRecordStatus(
                           event.target.value as LifecycleStatus
@@ -4848,7 +4875,7 @@ export function CreatorStudioV2Client({
               <footer className={styles.bottomActions}>
                 <div className={styles.infoMessage}>
                   <Info size={22} />
-                  <span>Questions are saved as draft short-answer cards for the selected concept.</span>
+                  <span>New questions default to Published. Choose Draft to save unfinished work for the selected Concept.</span>
                 </div>
               </footer>
 
@@ -4863,7 +4890,7 @@ export function CreatorStudioV2Client({
               )}
             </>
           ) : null}
-        </section>
+        </fieldset>
       </main>
     </>
   );

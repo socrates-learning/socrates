@@ -1,6 +1,7 @@
-import { notFound } from 'next/navigation';
+import { redirect, notFound } from 'next/navigation';
 import { CreatorStudioV2Client } from '@/components/CreatorStudioV2Client';
 import { buildConceptTopicTree } from '@/lib/concept-topic-tree';
+import { resolveActiveLibraryContext } from '@/lib/library-context';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
 
 export default async function EditConceptPage({
@@ -9,12 +10,14 @@ export default async function EditConceptPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  const context = await resolveActiveLibraryContext();
+  if (!context.library) redirect('/');
   const supabase = await createSupabaseServerClient();
-  const [{ data: nursingLibrary }, { data: concept }] = await Promise.all([
+  const [{ data: activeLibrary }, { data: concept }] = await Promise.all([
     supabase
       .from('libraries')
       .select('id, library_nodes(id, name, parent_id, sort_order)')
-      .eq('slug', 'nursing')
+      .eq('id', context.library.id)
       .eq('status', 'active')
       .maybeSingle(),
     supabase
@@ -24,8 +27,8 @@ export default async function EditConceptPage({
       .maybeSingle(),
   ]);
 
-  if (!nursingLibrary || !concept) notFound();
-  const nodes = [...(nursingLibrary.library_nodes || [])].sort(
+  if (!activeLibrary || !concept) notFound();
+  const nodes = [...(activeLibrary.library_nodes || [])].sort(
     (left, right) => {
       if (left.sort_order === null && right.sort_order !== null) return 1;
       if (left.sort_order !== null && right.sort_order === null) return -1;
@@ -35,15 +38,12 @@ export default async function EditConceptPage({
       );
     }
   );
-  const nodeIds = (nodes || []).map((node) => node.id);
   const [placementResult, referenceResult] = await Promise.all([
-    nodeIds.length
-      ? supabase
-          .from('concept_placements')
-          .select('library_node_id')
-          .eq('concept_id', concept.id)
-          .in('library_node_id', nodeIds)
-      : Promise.resolve({ data: [] }),
+    supabase
+      .from('concept_placements')
+      .select('library_node_id, library_nodes!inner(library_id)')
+      .eq('concept_id', concept.id)
+      .eq('library_nodes.library_id', activeLibrary.id),
     supabase
       .from('content_source_notes')
       .select('id, source_id, note, created_at, sources(id, title, author, url)')
@@ -51,7 +51,8 @@ export default async function EditConceptPage({
       .is('learn_section_id', null)
       .order('created_at'),
   ]);
-  const { data: placements } = placementResult;
+  const { data: placements, error: placementError } = placementResult;
+  if (placementError) throw placementError;
   const { data: referenceRows, error: referenceError } = referenceResult;
 
   if (referenceError) throw referenceError;
@@ -92,7 +93,8 @@ export default async function EditConceptPage({
 
   return (
     <CreatorStudioV2Client
-      activeLibraryId={nursingLibrary.id}
+      key={activeLibrary.id}
+      activeLibraryId={activeLibrary.id}
       initialTopics={buildConceptTopicTree(nodes || [])}
       initialConcept={{
         id: concept.id,

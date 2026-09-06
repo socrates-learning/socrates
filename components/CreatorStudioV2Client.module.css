@@ -8,7 +8,9 @@
 .studioShell {
   width: min(1460px, 100%);
   margin: 0 auto;
-  overflow: hidden;
+  overflow: clip;
+  min-width: 0;
+  padding: 0;
   border: 1px solid #d7dce3;
   border-radius: 7px;
   background: #ffffff;
@@ -1206,4 +1208,48 @@
   .prerequisiteChoiceGroup > button {
     flex: 1;
   }
+}
+
+/* One Save action remains beside the editor while the page scrolls. */
+.saveToolbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  background: #ffffff;
+  border-bottom: 1px solid #d9dde3;
+  box-shadow: 0 3px 8px rgb(15 23 42 / 6%);
+}
+
+.saveToolbar > span {
+  min-width: 0;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.saveToolbar > button {
+  flex-shrink: 0;
+}
+
+.existingQuestionList {
+  display: grid;
+  gap: 6px;
+  max-height: 240px;
+  overflow: auto;
+  min-width: 0;
+}
+
+.existingQuestionList > button {
+  min-width: 0;
+}
+
+.questionConceptBrowser {
+  flex: none;
+  min-height: 0;
+  height: min(480px, 60vh);
+  overflow: auto;
 }

@@ -108,11 +108,6 @@ export function Header() {
     borderColor: '#2b71ff',
     boxShadow: '0 12px 26px rgba(21, 94, 232, 0.25)',
   };
-  const disabledNavButtonStyle = {
-    ...navButtonStyle,
-    cursor: 'default',
-    opacity: 1,
-  };
 
   return (
     <header
@@ -185,10 +180,6 @@ export function Header() {
         >
           Home
         </Link>
-
-        <button style={disabledNavButtonStyle} type="button" disabled>
-          Learn
-        </button>
 
         {isEditor && (
           <Link

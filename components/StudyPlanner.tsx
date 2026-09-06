@@ -18,6 +18,7 @@ import {
   hasAuthoritativeInitialDeckData,
 } from '@/lib/home-bootstrap';
 import { supabase } from '@/lib/supabase';
+import { getTopicSelectionPresentation } from '@/lib/topic-selection-presentation';
 import type { ActiveLibrary, ActiveLibraryRole } from '@/lib/library-context';
 import type { StudyPlannerInitialData } from '@/lib/study-planner-initial-data';
 import {
@@ -199,7 +200,6 @@ const learnerNavItems: Array<{
   href?: string;
 }> = [
   { href: '/', icon: 'home', label: 'Home' },
-  { icon: 'learn', label: 'Learn' },
   { href: '/creator/concepts/new', icon: 'creator', label: 'Creator Studio' },
   { href: '/admin/users', icon: 'admin', label: 'Admin' },
 ];
@@ -2620,7 +2620,11 @@ export function StudyPlanner({
     const children = nodes.filter((child) => child.parent_id === node.id);
     const isExpanded = expandedNodeIds.has(node.id);
     const branchConceptCount = branchConceptIds(node.id).length;
-    const selected = selectedNodeIds.has(node.id);
+    const selection = getTopicSelectionPresentation(
+      node.id, nodes, placements, selectedNodeIds, conceptOverrides
+    );
+    const selected = selection.checked || selection.partial;
+    const inheritedOnly = selection.inherited && !selection.explicit;
     const preference = nodePreferences[node.id] ?? 50;
 
     return (
@@ -2699,7 +2703,12 @@ export function StudyPlanner({
             >
               <input
                 type="checkbox"
-                checked={selected}
+                checked={selection.checked}
+                ref={(input) => { if (input) input.indeterminate = selection.partial; }}
+                aria-checked={selection.partial ? 'mixed' : selection.checked}
+                disabled={isSaving || inheritedOnly}
+                aria-describedby={`topic-selection-${node.id}`}
+                title={inheritedOnly ? 'Included through a selected parent Topic. Change the parent selection to adjust.' : undefined}
                 onChange={() => void toggleNodeSelection(node.id)}
                 style={{
                   accentColor: '#2563eb',
@@ -2724,6 +2733,12 @@ export function StudyPlanner({
                   {branchConceptCount}{' '}
                   {branchConceptCount === 1 ? 'concept' : 'concepts'}
                 </span>
+                <span id={`topic-selection-${node.id}`} className="muted" style={{ display: 'block', fontSize: 12 }}>
+                  {selection.partial ? 'Partially included. ' : ''}
+                  {inheritedOnly
+                    ? 'Included by parent'
+                    : selection.explicit ? 'Selected directly' : ''}
+                </span>
               </span>
             </label>
 
@@ -2746,7 +2761,7 @@ export function StudyPlanner({
             </span>
           </div>
 
-          {selected && (
+          {selection.explicit && (
             <div
               style={{
                 borderTop: '1px solid #dbeafe',
