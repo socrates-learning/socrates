@@ -27,7 +27,6 @@ export function Sidebar({
   const [expandedNodeIds, setExpandedNodeIds] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(Boolean(activeLibrary?.id));
-  const [isDeckSetupOpen, setIsDeckSetupOpen] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -93,32 +92,6 @@ export function Sidebar({
       isMounted = false;
     };
   }, [activeId, activeLibrary?.id]);
-
-  useEffect(() => {
-  function syncDeckSetupState() {
-    setIsDeckSetupOpen(window.location.hash === '#set-up-deck');
-  }
-
-  function markFocusedModeOpen() {
-    setIsDeckSetupOpen(true);
-  }
-
-  function markDashboardOpen() {
-    setIsDeckSetupOpen(false);
-  }
-
-  syncDeckSetupState();
-
-  window.addEventListener('hashchange', syncDeckSetupState);
-  window.addEventListener('socrates-open-deck-setup', markFocusedModeOpen);
-  window.addEventListener('socrates-open-deck-dashboard', markDashboardOpen);
-
-  return () => {
-    window.removeEventListener('hashchange', syncDeckSetupState);
-    window.removeEventListener('socrates-open-deck-setup', markFocusedModeOpen);
-    window.removeEventListener('socrates-open-deck-dashboard', markDashboardOpen);
-  };
-}, []);
 
   useEffect(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -214,13 +187,8 @@ export function Sidebar({
     ? rootNodes.filter((node) => nodeMatchesSearch(node))
     : rootNodes;
 
-  function openDeckSetup() {
-    window.location.hash = 'set-up-deck';
-    window.dispatchEvent(new Event('socrates-open-deck-setup'));
-  }
-
-  if (!activeId && isDeckSetupOpen) {
-    return null;
+  function openHome() {
+    window.location.assign('/');
   }
 
   if (!activeId) {
@@ -301,38 +269,6 @@ export function Sidebar({
         </div>
       </div>
 
-      {/* Main STUDY button */}
-      <button
-        type="button"
-        onClick={openDeckSetup}
-        style={{
-          alignItems: 'center',
-          background: 'linear-gradient(135deg, #2563eb, #4f46e5)',
-          border: '2px solid #60a5fa',
-          borderRadius: 14,
-          boxShadow: '0 6px 16px rgba(37, 99, 235, 0.35)',
-          color: 'white',
-          display: 'flex',
-          fontSize: 20,
-          fontWeight: 700,
-          gap: 14,
-          justifyContent: 'center',
-          marginBottom: 18,
-          minHeight: 64,
-          width: '100%',
-        }}
-      >
-        <svg
-          viewBox="0 0 24 24"
-          fill="currentColor"
-          style={{ height: 28, width: 28 }}
-          aria-hidden="true"
-        >
-          <path d="M8 5v14l11-7L8 5Z" />
-        </svg>
-        STUDY
-      </button>
-
       {/* Main navigation */}
       <div
         style={{
@@ -341,7 +277,7 @@ export function Sidebar({
           gap: 6,
         }}
       >
-        <button type="button" onClick={openDeckSetup} style={navItemStyle}>
+        <button type="button" onClick={openHome} style={navItemStyle}>
           <svg
             viewBox="0 0 24 24"
             fill="none"
@@ -357,7 +293,7 @@ export function Sidebar({
             <path d="M4 18h16" />
             <circle cx="7" cy="18" r="2" />
           </svg>
-          Set Up Deck
+          Home
         </button>
 
         <Link href="/study-creator" style={navItemStyle}>
@@ -487,11 +423,8 @@ export function Sidebar({
       <h3>{activeLibrary?.name || 'Knowledge Library'}</h3>
 
       <div className="stack" style={{ marginBottom: 16 }}>
-        <button className="btn primary" type="button" onClick={openDeckSetup}>
-          STUDY
-        </button>
-        <button className="btn ghost" type="button" onClick={openDeckSetup}>
-          Set Up Deck
+        <button className="btn ghost" type="button" onClick={openHome}>
+          Home
         </button>
       </div>
 

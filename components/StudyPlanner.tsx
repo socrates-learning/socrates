@@ -172,7 +172,7 @@ const emptyLearnerProgress: LearnerProgressResponse = {
 };
 
 type ConceptOverride = 'included' | 'excluded';
-type PlannerMode = 'dashboard' | 'setup' | 'stats' | 'study';
+type PlannerMode = 'dashboard' | 'stats' | 'study';
 type StudyFeedback = 'up' | 'more' | 'down' | null;
 type StudyCardFeedbackType = 'error' | 'suggestion';
 type StudyResponse =
@@ -184,7 +184,7 @@ type StudyResponse =
   | 'too_hard'
   | null;
 
-type LearnerHeaderPrefix = 'home-v2' | 'study-setup-v2' | 'study-v2';
+type LearnerHeaderPrefix = 'home-v2' | 'study-v2';
 type LearnerNavIcon =
   | 'home'
   | 'learn'
@@ -611,14 +611,8 @@ export function StudyPlanner({
     let isMounted = true;
 
     if (hasAuthoritativeInitialDeckData(initialDeckData, activeLibrary)) {
-      setMode(
-        window.location.hash === '#set-up-deck'
-          ? 'setup'
-          : window.location.hash === '#stats'
-            ? 'stats'
-            : 'dashboard'
-      );
-
+      // Hash navigation owns the initial mode. A save-triggered route refresh
+      // must not send a Study session that has just opened back to Home.
       return () => {
         isMounted = false;
       };
@@ -644,11 +638,7 @@ export function StudyPlanner({
       setExpandedPersonalTopicIds(new Set());
       setLearnerProgress(emptyLearnerProgress);
       setMode(
-        window.location.hash === '#set-up-deck'
-          ? 'setup'
-          : window.location.hash === '#stats'
-            ? 'stats'
-            : 'dashboard'
+        window.location.hash === '#stats' ? 'stats' : 'dashboard'
       );
 
       try {
@@ -1052,9 +1042,11 @@ export function StudyPlanner({
 
   useEffect(() => {
     function openModeFromHash() {
+      // Old bookmarks now return to Home without losing Library query parameters.
       if (window.location.hash === '#set-up-deck') {
-        setMode('setup');
-      } else if (window.location.hash === '#stats') {
+        window.history.replaceState(null, '', window.location.pathname + window.location.search);
+      }
+      if (window.location.hash === '#stats') {
         setMode('stats');
       } else {
         setMode('dashboard');
@@ -1067,12 +1059,10 @@ export function StudyPlanner({
 
     openModeFromHash();
     window.addEventListener('hashchange', openModeFromHash);
-    window.addEventListener('socrates-open-deck-setup', openModeFromHash);
     window.addEventListener('socrates-open-deck-dashboard', openDashboard);
 
     return () => {
       window.removeEventListener('hashchange', openModeFromHash);
-      window.removeEventListener('socrates-open-deck-setup', openModeFromHash);
       window.removeEventListener('socrates-open-deck-dashboard', openDashboard);
     };
   }, []);
@@ -1080,24 +1070,22 @@ export function StudyPlanner({
   useEffect(() => {
   const layout = document.querySelector<HTMLElement>('main.layout');
 
-  if (mode === 'setup') {
-    window.history.replaceState(null, '', '#set-up-deck');
-  } else if (mode === 'stats') {
+  if (mode === 'stats') {
     window.history.replaceState(null, '', '#stats');
   } else if (
     window.location.hash === '#set-up-deck' ||
     window.location.hash === '#stats'
   ) {
-    window.history.replaceState(null, '', window.location.pathname);
+    window.history.replaceState(null, '', window.location.pathname + window.location.search);
   }
 
   if (!layout) return;
 
-  if (mode === 'setup' || mode === 'study') {
-    // Page 2 and Page 3 use the focused full-width layout.
+  if (mode === 'study') {
+    // Study uses the focused full-width layout.
     layout.style.gridTemplateColumns = '1fr';
 
-    window.dispatchEvent(new Event('socrates-open-deck-setup'));
+    window.dispatchEvent(new Event('socrates-open-study'));
   } else {
     // Page 1 returns to the normal dashboard layout.
     layout.style.gridTemplateColumns = '';
@@ -1107,10 +1095,6 @@ export function StudyPlanner({
     }
   }
 }, [mode]);
-
-  function openSetupMode() {
-    setMode('setup');
-  }
 
   async function ensureStudySession() {
     if (studySessionIdRef.current) return studySessionIdRef.current;
@@ -1540,7 +1524,7 @@ export function StudyPlanner({
   }
 
   async function openStudyMode() {
-    if (studyModeOpenLock.current) return;
+    if (studyModeOpenLock.current || isSaving || !deck || !userId) return;
 
     studyModeOpenLock.current = true;
     setStudyCandidate(null);
@@ -1804,7 +1788,8 @@ export function StudyPlanner({
                   className={className}
                   key={item.label}
                   type="button"
-                  onClick={openSetupMode}
+                  onClick={openStudyMode}
+                  disabled={isSaving}
                 >
                   {content}
                 </button>
@@ -3101,504 +3086,6 @@ export function StudyPlanner({
     );
   }
 
-  if (mode === 'setup') {
-    return (
-      <>
-        {renderLearnerHeader('study-setup-v2')}
-        <main className="study-setup-v2-page">
-          <section className="study-setup-v2-card" aria-labelledby="study-setup-v2-title">
-            <div className="study-setup-v2-title-block">
-              <h1 id="study-setup-v2-title">Set Up Deck</h1>
-              <p>Choose eligible areas and balance new material with mastery review.</p>
-            </div>
-
-            <div className="study-setup-v2-copy-row">
-              <div>
-                <h2>More New Evidence</h2>
-                <p>Focus on new concepts and building knowledge.</p>
-              </div>
-              <div>
-                <h2>More Repetition for Mastery</h2>
-                <p>Reinforce what you know and strengthen long-term mastery.</p>
-              </div>
-            </div>
-
-            <section
-              className="study-setup-v2-slider-area"
-              aria-label="Topic Tree eligibility and study preferences"
-            >
-              <div style={{ marginBottom: 14, textAlign: 'left' }}>
-                <h2 style={{ marginBottom: 4 }}>Eligible Topic Tree</h2>
-                <p className="muted" style={{ margin: 0 }}>
-                  Select each area that may contribute questions, then set its New to
-                  Mastery preference.
-                </p>
-              </div>
-
-              <div aria-label="Set Up Deck Topic Tree" style={{ textAlign: 'left' }}>
-                {rootNodes.map((node) => renderNode(node))}
-              </div>
-
-              {renderPersonalMaterialSection()}
-            </section>
-
-            <div className="study-setup-v2-rule" aria-hidden="true" />
-
-            <section className="study-setup-v2-info">
-              <span className="study-setup-v2-info-icon" aria-hidden="true">
-                i
-              </span>
-              <div>
-                <h2>How it works</h2>
-                <p>
-                  Questions are selected based on your chosen balance, your progress,
-                  and what will help you learn most effectively right now.
-                </p>
-              </div>
-            </section>
-
-            <div className="study-setup-v2-footer-actions">
-              <label className="study-setup-v2-cram">
-                <input
-                  checked={isSetupCramMode}
-                  disabled={isSaving}
-                  type="checkbox"
-                  onChange={() => void toggleSetupCramMode()}
-                />
-                <span>
-                  <strong>Cram Mode</strong>
-                  <small>Maximize number of questions. Less variety, more volume.</small>
-                </span>
-              </label>
-
-              <button className="study-setup-v2-start" type="button" onClick={openStudyMode}>
-                START STUDY
-              </button>
-            </div>
-          </section>
-        </main>
-
-        <style jsx global>{`
-          .study-setup-v2-header {
-            align-items: center;
-            background: linear-gradient(180deg, #061846, #041238);
-            color: #ffffff;
-            display: flex;
-            gap: 28px;
-            justify-content: space-between;
-            min-height: 126px;
-            padding: 34px 36px 28px;
-          }
-
-          .study-setup-v2-brand {
-            align-items: center;
-            color: #ffffff;
-            display: flex;
-            gap: 12px;
-            min-width: 500px;
-          }
-
-          .study-setup-v2-brand-mark {
-            flex: 0 0 auto;
-            height: 66px;
-            object-fit: contain;
-            width: 76px;
-          }
-
-          .study-setup-v2-brand strong {
-            display: block;
-            font-family: Georgia, "Times New Roman", Times, serif;
-            font-size: 42px;
-            font-weight: 900;
-            letter-spacing: -0.055em;
-            line-height: 0.95;
-          }
-
-          .study-setup-v2-brand span {
-            color: #edf4ff;
-            display: block;
-            font-size: 16px;
-            font-weight: 500;
-            letter-spacing: -0.02em;
-            margin-top: 10px;
-          }
-
-          .study-setup-v2-nav {
-            align-items: center;
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-            justify-content: flex-end;
-          }
-
-          .study-setup-v2-nav-item {
-            align-items: center;
-            background: rgba(6, 24, 70, 0.72);
-            border: 1px solid rgba(214, 224, 246, 0.36);
-            border-radius: 9px;
-            color: #ffffff;
-            display: inline-flex;
-            font: inherit;
-            font-size: 16px;
-            font-weight: 800;
-            gap: 9px;
-            min-height: 58px;
-            padding: 13px 16px;
-            white-space: nowrap;
-          }
-
-          .study-setup-v2-nav-item:disabled {
-            cursor: default;
-            opacity: 1;
-          }
-
-          .study-setup-v2-nav-active,
-          .study-setup-v2-nav-account {
-            background: #155ee8;
-            border-color: #2b71ff;
-            box-shadow: 0 12px 26px rgba(21, 94, 232, 0.25);
-          }
-
-          .study-setup-v2-nav-icon {
-            display: inline-flex;
-            height: 23px;
-            width: 23px;
-          }
-
-          .study-setup-v2-nav-icon svg {
-            fill: none;
-            height: 100%;
-            stroke: currentColor;
-            stroke-linecap: round;
-            stroke-linejoin: round;
-            stroke-width: 2.1;
-            width: 100%;
-          }
-
-          .study-setup-v2-page {
-            background: #f8fafc;
-            display: flex;
-            justify-content: center;
-            min-height: calc(100vh - 126px);
-            padding: 52px 40px 64px;
-          }
-
-          .study-setup-v2-card {
-            background: #ffffff;
-            border: 1px solid #e5eaf2;
-            border-radius: 14px;
-            box-shadow: 0 18px 36px rgba(15, 23, 42, 0.14);
-            max-width: 1228px;
-            padding: 36px 62px 72px;
-            width: 100%;
-          }
-
-          .study-setup-v2-title-block {
-            text-align: center;
-          }
-
-          .study-setup-v2-title-block h1 {
-            color: #08143b;
-            font-family: Georgia, "Times New Roman", Times, serif;
-            font-size: 50px;
-            font-weight: 900;
-            letter-spacing: -0.055em;
-            line-height: 1;
-            margin: 0 0 18px;
-          }
-
-          .study-setup-v2-title-block p {
-            color: #384463;
-            font-size: 21px;
-            letter-spacing: -0.02em;
-            margin: 0;
-          }
-
-          .study-setup-v2-copy-row {
-            display: grid;
-            gap: 28px;
-            grid-template-columns: 1fr 1fr;
-            margin: 58px 0 44px;
-          }
-
-          .study-setup-v2-copy-row div:last-child {
-            justify-self: end;
-            max-width: 370px;
-          }
-
-          .study-setup-v2-copy-row h2 {
-            color: #0955e8;
-            font-size: 23px;
-            font-weight: 900;
-            letter-spacing: -0.045em;
-            line-height: 1.1;
-            margin: 0 0 12px;
-          }
-
-          .study-setup-v2-copy-row p {
-            color: #2c3654;
-            font-size: 19px;
-            line-height: 1.45;
-            margin: 0;
-            max-width: 310px;
-          }
-
-          .study-setup-v2-slider-area {
-            position: relative;
-          }
-
-          .study-setup-v2-slider-wrap {
-            height: 58px;
-            position: relative;
-          }
-
-          .study-setup-v2-slider-track {
-            background: #e5e8ee;
-            border-radius: 999px;
-            box-shadow: inset 0 1px 3px rgba(15, 23, 42, 0.14);
-            height: 14px;
-            left: 0;
-            overflow: hidden;
-            position: absolute;
-            right: 0;
-            top: 22px;
-          }
-
-          .study-setup-v2-slider-track span {
-            background: #0f5ee8;
-            border-radius: inherit;
-            display: block;
-            height: 100%;
-          }
-
-          .study-setup-v2-slider {
-            appearance: none;
-            background: transparent;
-            border: 0;
-            height: 58px;
-            margin: 0;
-            padding: 0;
-            position: relative;
-            width: 100%;
-            z-index: 2;
-          }
-
-          .study-setup-v2-slider::-webkit-slider-runnable-track {
-            background: transparent;
-            border: 0;
-            height: 14px;
-          }
-
-          .study-setup-v2-slider::-moz-range-track {
-            background: transparent;
-            border: 0;
-            height: 14px;
-          }
-
-          .study-setup-v2-slider::-webkit-slider-thumb {
-            appearance: none;
-            background: #ffffff;
-            border: 1px solid #e5e7eb;
-            border-radius: 999px;
-            box-shadow: 0 8px 18px rgba(15, 23, 42, 0.18);
-            height: 58px;
-            margin-top: -22px;
-            width: 58px;
-          }
-
-          .study-setup-v2-slider::-moz-range-thumb {
-            background: #ffffff;
-            border: 1px solid #e5e7eb;
-            border-radius: 999px;
-            box-shadow: 0 8px 18px rgba(15, 23, 42, 0.18);
-            height: 58px;
-            width: 58px;
-          }
-
-          .study-setup-v2-ticks {
-            display: grid;
-            grid-template-columns: repeat(9, 1fr);
-            margin: 0 84px;
-          }
-
-          .study-setup-v2-ticks span {
-            background: #c7ced8;
-            height: 13px;
-            justify-self: center;
-            width: 1px;
-          }
-
-          .study-setup-v2-labels {
-            color: #161f38;
-            display: flex;
-            font-size: 18px;
-            justify-content: space-between;
-            margin-top: 24px;
-            padding: 0 24px;
-          }
-
-          .study-setup-v2-labels strong {
-            font-weight: 900;
-          }
-
-          .study-setup-v2-rule {
-            border-top: 1px solid #d9dee8;
-            margin: 64px 0 54px;
-          }
-
-          .study-setup-v2-info {
-            align-items: flex-start;
-            background: #eff6ff;
-            border-radius: 10px;
-            display: flex;
-            gap: 26px;
-            margin: 0 14px;
-            padding: 34px 34px 32px;
-          }
-
-          .study-setup-v2-info-icon {
-            align-items: center;
-            border: 2px solid #0f5ee8;
-            border-radius: 999px;
-            color: #0f5ee8;
-            display: inline-flex;
-            flex: 0 0 30px;
-            font-family: Georgia, "Times New Roman", Times, serif;
-            font-size: 22px;
-            font-weight: 900;
-            height: 30px;
-            justify-content: center;
-            line-height: 1;
-            margin-top: 4px;
-            width: 30px;
-          }
-
-          .study-setup-v2-info h2 {
-            color: #0955e8;
-            font-size: 23px;
-            font-weight: 900;
-            letter-spacing: -0.04em;
-            margin: 0 0 12px;
-          }
-
-          .study-setup-v2-info p {
-            color: #2d3654;
-            font-size: 18px;
-            line-height: 1.45;
-            margin: 0;
-            max-width: 720px;
-          }
-
-          .study-setup-v2-footer-actions {
-            align-items: center;
-            display: flex;
-            gap: 28px;
-            justify-content: center;
-            margin: 50px auto 0;
-          }
-
-          .study-setup-v2-cram {
-            align-items: flex-start;
-            color: #101a36;
-            display: flex;
-            gap: 14px;
-            margin: 0;
-            max-width: 320px;
-          }
-
-          .study-setup-v2-cram input {
-            accent-color: #0f5ee8;
-            height: 24px;
-            margin-top: 3px;
-            width: 24px;
-          }
-
-          .study-setup-v2-cram strong {
-            display: block;
-            font-size: 22px;
-            font-weight: 900;
-            letter-spacing: -0.035em;
-            line-height: 1.1;
-            margin-bottom: 10px;
-          }
-
-          .study-setup-v2-cram small {
-            color: #2f3a59;
-            display: block;
-            font-size: 16px;
-            line-height: 1.45;
-          }
-
-          .study-setup-v2-start {
-            background: #155ee8;
-            border: 1px solid #0f4fc7;
-            border-radius: 9px;
-            box-shadow: 0 12px 26px rgba(21, 94, 232, 0.22);
-            color: #ffffff;
-            font: inherit;
-            font-size: 18px;
-            font-weight: 900;
-            min-height: 54px;
-            padding: 14px 24px;
-          }
-
-          @media (max-width: 1100px) {
-            .study-setup-v2-header {
-              align-items: flex-start;
-              flex-direction: column;
-              min-height: auto;
-            }
-
-            .study-setup-v2-brand {
-              min-width: 0;
-            }
-
-            .study-setup-v2-brand-mark {
-              height: 48px;
-              width: 55px;
-            }
-
-            .study-setup-v2-nav {
-              justify-content: flex-start;
-            }
-          }
-
-          @media (max-width: 900px) {
-            .study-setup-v2-page {
-              min-height: auto;
-              padding: 28px 18px 42px;
-            }
-
-            .study-setup-v2-card {
-              padding: 30px 24px 42px;
-            }
-
-            .study-setup-v2-title-block h1 {
-              font-size: 40px;
-            }
-
-            .study-setup-v2-copy-row {
-              grid-template-columns: 1fr;
-            }
-
-            .study-setup-v2-copy-row div:last-child {
-              justify-self: start;
-            }
-
-            .study-setup-v2-labels {
-              padding: 0;
-            }
-
-            .study-setup-v2-footer-actions {
-              align-items: stretch;
-              flex-direction: column;
-            }
-          }
-        `}</style>
-      </>
-    );
-  }
-
 if (mode === 'study') {
   const studyAnswer = studyCandidate?.answer || null;
   const authoredStudyExplanation =
@@ -3623,17 +3110,26 @@ if (mode === 'study') {
               addToThisConceptName.trim() &&
               addToThisOfficialNodeId
           );
+  const hasStudySelections =
+    selectedNodeIds.size > 0 ||
+    selectedPersonalTopicIds.size > 0 ||
+    selectedPersonalCollectionIds.size > 0 ||
+    Object.values(conceptOverrides).some((state) => state === 'included');
   const emptyStudyTitle = isStudySequenceComplete
     ? 'Study complete'
     : studyStartFailure === 'empty-deck'
-      ? 'No study material selected'
+      ? hasStudySelections
+        ? 'No eligible study material'
+        : 'No study material selected'
       : studyStartFailure === 'error'
         ? 'Study Mode could not start'
         : 'No study material available';
   const emptyStudyMessage = isStudySequenceComplete
     ? 'You reviewed every selected personal Card in this session.'
     : studyStartFailure === 'empty-deck'
-      ? 'Select an official Topic or a personal Topic in Set Up Deck, then try again.'
+      ? hasStudySelections
+        ? 'Your selections are saved, but they contain no eligible Published official Questions or selected personal Cards. Review your deck settings on Home.'
+        : 'Choose an official Topic, personal Topic, or Personal Deck on Home, then start Study.'
       : studyStartFailure === 'error'
         ? 'Study Mode could not be started. Please try again.'
         : 'This deck does not currently contain an eligible published Question or selected personal Card.';
@@ -3735,9 +3231,6 @@ if (mode === 'study') {
                 <h1>{emptyStudyTitle}</h1>
                 <p>{emptyStudyMessage}</p>
                 <div className="study-v2-empty-actions">
-                  <button type="button" onClick={() => void leaveStudyMode('setup')}>
-                    Set Up Deck
-                  </button>
                   <button
                     type="button"
                     onClick={() => void leaveStudyMode('dashboard')}
@@ -5431,6 +4924,7 @@ if (mode === 'study') {
               <div className="home-v2-hero">
                 <button
                   className="home-v2-study"
+                  disabled={isSaving}
                   type="button"
                   onClick={openStudyMode}
                 >
@@ -5470,7 +4964,7 @@ if (mode === 'study') {
               >
                 <div className="home-v2-setup-heading">
                   <div>
-                    <h3 id="home-v2-setup-title">Set Up Deck</h3>
+                    <h3 id="home-v2-setup-title">Deck settings</h3>
                     <p>
                       Choose eligible areas and balance new material with mastery review.
                     </p>
@@ -5481,7 +4975,7 @@ if (mode === 'study') {
 
                 <div
                   className="home-v2-setup-tree"
-                  aria-label="Set Up Deck Topic Tree"
+                  aria-label="Home deck settings Topic Tree"
                 >
                   {rootNodes.map((node) => renderNode(node))}
                   {renderPersonalMaterialSection()}
