@@ -23,11 +23,27 @@ const priorityFields = [
   ['recent_penalty', 'Recent Concept penalty'],
 ] as const;
 const number = (value: unknown) => typeof value === 'number' ? value.toLocaleString(undefined, { maximumFractionDigits: 3 }) : String(value ?? '—');
+// Display-only thresholds; persisted mastery and scheduler state are unchanged.
+const masteryColor = (value: number) => value < .4 ? '#ee5876' : value < .6 ? '#f2a34e' : value < .65 ? '#e9bd48' : '#45b986';
+const anglePalette = ['#347fea', '#46bd88', '#f5a14d', '#9770df', '#ec5d7e'];
+function angleColor(name: string) {
+  const key = name.toLowerCase();
+  if (key.includes('recognition') || key.includes('definition')) return anglePalette[0];
+  if (key.includes('mechanism') || key.includes('pathophysiology')) return anglePalette[1];
+  if (key.includes('manifestation')) return anglePalette[2];
+  if (key.includes('assessment') || key.includes('interpretation')) return anglePalette[3];
+  if (key.includes('application')) return anglePalette[4];
+  if (key.includes('intervention') || key.includes('management')) return '#299da5';
+  if (key.includes('complication') || key.includes('outcome')) return '#bd9640';
+  if (key.includes('differentiation') || key.includes('comparison')) return '#6866c7';
+  if (key.includes('general understanding')) return '#6488a5';
+  return `hsl(${Array.from(key).reduce((hash, char) => (hash * 31 + char.charCodeAt(0)) >>> 0, 0) % 360} 55% 48%)`;
+}
 const shortDate = (value: string) => new Date(value).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 function Mastery({ concept }: { concept: Concept }) {
   return <span className={styles.mastery}>
     <span className={styles.meter} role="meter" aria-label={`${concept.name} mastery estimate`} aria-valuemin={0} aria-valuemax={1} aria-valuenow={concept.state?.mastery_estimate ?? undefined} aria-valuetext={concept.state ? number(concept.state.mastery_estimate) : 'No evidence'}>
-      <i style={{ width: `${Math.max(0, Math.min(1, concept.state?.mastery_estimate ?? 0)) * 100}%` }} />
+      <i style={{ background: masteryColor(concept.state?.mastery_estimate ?? 0), width: `${Math.max(0, Math.min(1, concept.state?.mastery_estimate ?? 0)) * 100}%` }} />
     </span><strong title={concept.state ? String(concept.state.mastery_estimate) : 'No evidence'}>{concept.state ? number(concept.state.mastery_estimate) : '—'}</strong>
   </span>;
 }
@@ -39,7 +55,7 @@ const reasons: Record<string, string> = {
   priority_score: 'The scheduler selected this offer using its current priority score.',
 };
 const date = (value: string) => new Date(value).toLocaleString();
-const response = (value: string) => value.replaceAll('_', ' ');
+const response = (value: string) => ({ didnt_know: "Didn't Know", too_hard: 'Too Hard', average: 'Average', easy: 'Easy' }[value] ?? value.replaceAll('_', ' '));
 
 export function CreatorAlgorithmDiagnostics({ libraryId }: { libraryId: string | null }) {
   const [data, setData] = useState<Diagnostics | null>(null);
@@ -73,6 +89,15 @@ export function CreatorAlgorithmDiagnostics({ libraryId }: { libraryId: string |
   const visibleConcepts = data?.concepts.filter(c => c.name.toLowerCase().includes(search.toLowerCase())) ?? [];
   const [showAll, setShowAll] = useState(false);
   const conceptRows = showAll ? visibleConcepts : visibleConcepts.slice(0, 6);
+  const angles = selected?.angles ?? [];
+  const totalEvidence = angles.reduce((total, angle) => total + angle.evidence_count, 0);
+  let evidenceOffset = 0;
+  const donutStops = angles.filter(angle => angle.evidence_count > 0).map(angle => {
+    const start = evidenceOffset;
+    evidenceOffset += angle.evidence_count / totalEvidence * 100;
+    return `${angleColor(angle.testing_angle)} ${start}% ${evidenceOffset}%`;
+  });
+  const scoreScale = Math.max(1, ...priorityFields.map(([key]) => typeof selectedOffer?.[key] === 'number' ? Math.abs(selectedOffer[key] as number) : 0));
   return (
     <section className={styles.dashboard} aria-label="Algorithm diagnostics">
       <header className={styles.heading}>
@@ -104,24 +129,30 @@ export function CreatorAlgorithmDiagnostics({ libraryId }: { libraryId: string |
             </div>
             <div className={styles.panelFooter}><span>Persisted Concept state across Libraries</span>{visibleConcepts.length > 6 && <button type="button" onClick={() => setShowAll(v => !v)}>{showAll ? 'Show fewer' : `View all ${visibleConcepts.length}`} →</button>}</div>
           </section>
-          <section className={styles.panel} aria-label="Primary Testing Angle state">
-            <div className={styles.panelHeading}><h3>Testing Angle State</h3><Target size={17} aria-hidden="true" /></div>
+          <section className={styles.panel} aria-label="Testing Angle Evidence">
+            <div className={styles.panelHeading}><h3>Testing Angle Evidence</h3><Target size={17} aria-hidden="true" /></div>
             <p className={styles.selectedName} title={selected?.name}>{selected?.name || 'Select a Concept'}</p>
-            <div className={styles.angleList}>
-              {selected?.angles.map((a, i) => <article className={styles.angle} key={a.testing_angle}>
-                <span className={styles.angleDot} style={{ background: ['#307dea', '#42b887', '#ecaa55', '#9670d7'][i % 4] }} />
-                <div><strong title={a.testing_angle}>{a.testing_angle}</strong><small title={date(a.last_exposure_at)}>Last exposure {shortDate(a.last_exposure_at)} · {response(a.last_result)}</small></div>
-                <span className={styles.angleEvidence}><strong>{a.evidence_count}</strong><small>evidence</small></span>
-              </article>)}
-              {!selected?.angles.length && <p className={styles.empty}>No Primary Testing Angle evidence for this Concept.</p>}
+            <div className={styles.evidenceChart}>
+              <div className={styles.donut} role="img" aria-label={`${number(totalEvidence)} total persisted Primary Testing Angle evidence for ${selected?.name ?? 'the selected Concept'}. Distribution in the adjacent legend.`} style={{ background: totalEvidence > 0 ? `conic-gradient(${donutStops.join(', ')})` : '#e9edf5' }}>
+                <div><strong>{number(totalEvidence)}</strong><span>Total evidence</span></div>
+              </div>
+              <ul className={styles.angleList} aria-label="Primary Testing Angle evidence distribution">
+                {angles.map(a => <li className={styles.angle} key={a.testing_angle}>
+                  <span className={styles.angleDot} style={{ background: angleColor(a.testing_angle) }} />
+                  <span className={styles.angleName} title={a.testing_angle}>{a.testing_angle}</span>
+                  <strong>{number(a.evidence_count)}</strong>
+                  <span className={styles.angleShare}>{totalEvidence > 0 ? `${(a.evidence_count / totalEvidence * 100).toLocaleString(undefined, { maximumFractionDigits: 1 })}%` : '—'}</span>
+                </li>)}
+                {!angles.length && <li className={styles.empty}>No Primary Testing Angle evidence for this Concept.</li>}
+              </ul>
             </div>
-            <p className={styles.panelFooter}>Historical Primary evidence only · self-ratings, not accuracy</p>
+            <p className={styles.panelFooter}>Selected Concept · persisted Primary evidence across Libraries. Additional classifications add no evidence. Self-ratings are not accuracy.</p>
           </section>
         </div>
         <section className={styles.panel} aria-label="Recent study activity">
           <div className={styles.panelHeading}><h3>Recent Study Activity</h3><span className={styles.badge}>Latest {data.recent_attempts.length} / 50 official attempts</span></div>
           <div className={styles.activity} tabIndex={0} aria-label="Recent official attempt history">
-            <table><thead><tr><th>Date / Time</th><th>Concept</th><th>Question</th><th>Primary Testing Angle</th><th>Response</th></tr></thead><tbody>{data.recent_attempts.map(a => <tr key={a.id}><td><time dateTime={a.created_at} title={date(a.created_at)}>{shortDate(a.created_at)}, {new Date(a.created_at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}</time></td><td><span className={styles.activityConcept} title={a.concept_name || undefined}>{a.concept_name || 'Unavailable Concept'}</span></td><td><span className={styles.activityPrompt} title={a.current_prompt || undefined}>{a.current_prompt || 'Prompt unavailable'}</span></td><td><span className={styles.activityAngle} title={a.testing_angle || undefined}>{a.testing_angle || 'Not recorded'}</span></td><td><span className={styles.response}>{response(a.result)}</span></td></tr>)}</tbody></table>
+            <table><thead><tr><th>Date / Time</th><th>Concept</th><th>Question</th><th>Primary Testing Angle</th><th>Response</th></tr></thead><tbody>{data.recent_attempts.map(a => <tr key={a.id}><td><time dateTime={a.created_at} title={date(a.created_at)}>{shortDate(a.created_at)}, {new Date(a.created_at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}</time></td><td><span className={styles.activityConcept} title={a.concept_name || undefined}>{a.concept_name || 'Unavailable Concept'}</span></td><td><span className={styles.activityPrompt} title={a.current_prompt || undefined}>{a.current_prompt || 'Prompt unavailable'}</span></td><td><span className={styles.activityAngle} title={a.testing_angle || undefined}>{a.testing_angle || 'Not recorded'}</span></td><td><span className={styles.response} data-response={a.result}>{response(a.result)}</span></td></tr>)}</tbody></table>
             {!data.recent_attempts.length && <p className={styles.empty}>No recorded official attempts in this Library.</p>}
           </div>
           <p className={styles.note}>Recorded responses and Primary Angles · Concept names and Question excerpts reflect current content</p>
@@ -130,7 +161,7 @@ export function CreatorAlgorithmDiagnostics({ libraryId }: { libraryId: string |
           <section className={styles.panel} aria-label="Concept spotlight">
             <div className={styles.panelHeading}><h3>Concept Spotlight</h3><span className={styles.badge}>Current state</span></div>
             <div className={styles.spotlightTable} tabIndex={0} aria-label="Concept spotlight table">
-              <table><thead><tr><th>Concept</th><th>Mastery</th><th>Evidence</th><th>Last studied</th></tr></thead><tbody>{conceptRows.map(c => <tr key={c.id} aria-selected={selectedId === c.id}><td><button type="button" onClick={() => setSelectedId(c.id)} title={c.name}>{c.name}</button></td><td><Mastery concept={c} /></td><td>{c.state?.evidence_count ?? '—'}</td><td><span title={c.state ? date(c.state.last_exposure_at) : undefined}>{c.state ? shortDate(c.state.last_exposure_at) : 'Not yet'}</span></td></tr>)}</tbody></table>
+              <table><thead><tr><th>Concept</th><th>Mastery</th><th>Evidence</th><th>Last studied</th><th>Priority</th></tr></thead><tbody>{conceptRows.map(c => <tr key={c.id} aria-selected={selectedId === c.id}><td><button type="button" onClick={() => setSelectedId(c.id)} title={c.name}>{c.name}</button></td><td><Mastery concept={c} /></td><td>{c.state?.evidence_count ?? '—'}</td><td><span title={c.state ? date(c.state.last_exposure_at) : undefined}>{c.state ? shortDate(c.state.last_exposure_at) : 'Not yet'}</span></td><td>{offer?.concept_id === c.id ? <span className={styles.offerPriority} title="Current official offer only">{offer.concept_priority != null ? number(offer.concept_priority) : '—'}<small>Current offer</small></span> : '—'}</td></tr>)}</tbody></table>
               {!conceptRows.length && <p className={styles.empty}>No matching Concepts.</p>}
             </div>
             {selected && <details className={styles.raw}><summary>Selected Concept details</summary><p>{selected.name}</p><p>Mastery: {selected.state ? String(selected.state.mastery_estimate) : 'No evidence'} · Last response: {selected.state ? response(selected.state.last_result) : 'None'}</p></details>}
@@ -149,7 +180,7 @@ export function CreatorAlgorithmDiagnostics({ libraryId }: { libraryId: string |
               <div>
                 {selectedOffer ? <>
                   <h5 className={styles.breakdownTitle}>Priority Score Breakdown</h5>
-                  <dl className={styles.breakdown} aria-label="Authoritative priority components">{priorityFields.filter(([key]) => selectedOffer[key] != null).map(([key, label]) => <div key={key}><dt>{label}</dt><dd title={String(selectedOffer[key])}>{number(selectedOffer[key])}</dd></div>)}</dl>
+                  <dl className={styles.breakdown} aria-label="Authoritative priority components">{priorityFields.filter(([key]) => selectedOffer[key] != null).map(([key, label]) => <div key={key}><dt>{label}</dt><dd title={String(selectedOffer[key])}><span className={styles.scoreTrack} aria-hidden="true"><i style={{ width: `${typeof selectedOffer[key] === 'number' ? Math.abs(selectedOffer[key] as number) / scoreScale * 100 : 0}%` }} /></span><span>{number(selectedOffer[key])}</span></dd></div>)}</dl>
                   {selectedOffer.concept_priority != null && <div className={styles.priority}><span>Final Priority</span><strong title={String(selectedOffer.concept_priority)}>{number(selectedOffer.concept_priority)}</strong></div>}
                   {data.session?.cram_mode && <p className={styles.note}>Cram uses traversal rules; Normal Mode scores are unavailable.</p>}
                 </> : <p className={styles.note}>{data.session ? 'Exact priority is available only for the current official offer.' : 'No open Study session. Start one in Study to inspect its current offer.'}</p>}
