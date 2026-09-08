@@ -77,6 +77,7 @@ function editor({ editing = false, response, references = [] } = {}) {
     '@/lib/supabase': { supabase: database },
     '@/lib/safe-navigation': {},
     '@/lib/tag-catalog-invalidation': { broadcastTagCatalogUsageInvalidation() {} },
+    './CreatorAlgorithmDiagnostics': {},
     './CreatorStudioV2Client.module.css': { default: {} },
   };
   const context = {

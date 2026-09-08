@@ -36,9 +36,9 @@ test('Question authoring keeps the linked Concept and Topic path visible', () =>
   assert.match(creatorStyles, /\.linkedConceptContext/);
 });
 
-test('Creator Studio section structure remains Content, Questions, and Tags', () => {
+test('Creator Studio section structure includes Content, Questions, Tags, and Algorithm', () => {
   assert.match(
     creatorSource,
-    /\(\['content', 'questions', 'tags'\] as const\)\.map/
+    /\(\['content', 'questions', 'tags', 'algorithm'\] as const\)\.map/
   );
 });

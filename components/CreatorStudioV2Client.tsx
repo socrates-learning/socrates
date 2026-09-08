@@ -21,6 +21,7 @@ import {
 } from '@/lib/concept-topic-tree';
 import { MarkdownContent } from '@/components/MarkdownContent';
 import { supabase } from '@/lib/supabase';
+import { CreatorAlgorithmDiagnostics } from './CreatorAlgorithmDiagnostics';
 import { navigateBackOrFallback } from '@/lib/safe-navigation';
 import {
   broadcastTagCatalogUsageInvalidation,
@@ -79,7 +80,7 @@ type ExistingQuestion = {
   tags: ConceptTag[];
 };
 
-type CreatorTab = 'content' | 'questions' | 'tags';
+type CreatorTab = 'content' | 'questions' | 'tags' | 'algorithm';
 type EditorMode = 'write' | 'preview';
 type QuestionDifficulty = 'easy' | 'medium' | 'hard';
 type MarkdownFormat =
@@ -3223,7 +3224,7 @@ export function CreatorStudioV2Client({
             </div>
           </header>
 
-          {activeCreatorTab !== 'tags' && (
+          {(activeCreatorTab === 'content' || activeCreatorTab === 'questions') && (
             <div className={styles.saveToolbar}>
               <span role="status" aria-live="polite">
                 {visibleSaveFeedback === 'saving' ? 'Saving…' :
@@ -3250,12 +3251,13 @@ export function CreatorStudioV2Client({
               display: 'flex',
               alignItems: 'flex-end',
               gap: 0,
-              padding: '0 28px',
+              padding: '0 12px',
+              flexWrap: 'wrap',
               borderBottom: '1px solid #d9dde3',
               background: 'linear-gradient(180deg, #f8fbff, #eef4fc)',
             }}
           >
-            {(['content', 'questions', 'tags'] as const).map((tab) => {
+            {(['content', 'questions', 'tags', 'algorithm'] as const).map((tab) => {
               const isActive = activeCreatorTab === tab;
               return (
                 <button
@@ -3278,7 +3280,7 @@ export function CreatorStudioV2Client({
                     borderColor: isActive ? '#9fb8dc' : '#c7d5e8',
                     borderBottomColor: isActive ? '#ffffff' : '#d9dde3',
                     borderRadius: '10px 10px 0 0',
-                    padding: '12px 28px 11px',
+                    padding: '12px clamp(10px, 2vw, 28px) 11px',
                     background: isActive ? '#ffffff' : '#eaf2ff',
                     color: isActive ? '#061846' : '#24405f',
                     font: 'inherit',
@@ -3292,11 +3294,15 @@ export function CreatorStudioV2Client({
                     ? 'Content'
                     : tab === 'questions'
                       ? 'Questions'
-                      : 'Tags'}
+                      : tab === 'tags' ? 'Tags' : 'Algorithm'}
                 </button>
               );
             })}
           </nav>
+
+          {activeCreatorTab === 'algorithm' && (
+            <CreatorAlgorithmDiagnostics libraryId={activeLibraryId} />
+          )}
 
           {activeCreatorTab === 'tags' && (
             <section
