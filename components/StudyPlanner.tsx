@@ -11,7 +11,7 @@ import {
 import Image from 'next/image';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { Header, HeaderSessionProvider } from '@/components/Header';
 import {
   getBootstrapErrorMessage,
@@ -402,6 +402,7 @@ export function StudyPlanner({
   } | null;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const initialRootNodeId =
     initialDeckData?.nodes.find((node) => node.parent_id === null)?.id || null;
   const initialPersonalRootTopicIds =
@@ -1071,6 +1072,8 @@ export function StudyPlanner({
   const canViewAlgorithmDiagnostics = role === 'editor' || role === 'admin';
 
   useEffect(() => {
+    if (pathname !== '/') return;
+
     function openModeFromHash() {
       // Old bookmarks now return to Home without losing Library query parameters.
       if (window.location.hash === '#set-up-deck') {
@@ -1105,7 +1108,7 @@ export function StudyPlanner({
       window.removeEventListener('popstate', openModeFromHash);
       window.removeEventListener('socrates-open-deck-dashboard', openDashboard);
     };
-  }, [canViewAlgorithmDiagnostics]);
+  }, [canViewAlgorithmDiagnostics, pathname]);
 
   useEffect(() => {
   const layout = document.querySelector<HTMLElement>('main.layout');
@@ -1745,6 +1748,13 @@ export function StudyPlanner({
   function handleHomeClick(event: MouseEvent<HTMLAnchorElement>) {
     if (window.location.pathname === '/') {
       event.preventDefault();
+      if (window.location.hash) {
+        window.history.pushState(
+          null,
+          '',
+          window.location.pathname + window.location.search
+        );
+      }
       setMode('dashboard');
     }
   }

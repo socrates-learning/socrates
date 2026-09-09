@@ -15,6 +15,10 @@ const studyPlannerSource = readFileSync(
   'utf8'
 );
 const homeStyles = readFileSync(new URL('../app/home.css', import.meta.url), 'utf8');
+const headerSource = readFileSync(
+  new URL('../components/Header.tsx', import.meta.url),
+  'utf8'
+);
 
 test('Content keeps keyword search and adds Topic Tree browsing', () => {
   assert.match(creatorSource, /placeholder="Search concepts"/);
@@ -54,4 +58,21 @@ test('Creator Studio stays authoring-only while Stats owns Algorithm diagnostics
   assert.match(studyPlannerSource, /mode !== 'stats'/);
   assert.match(studyPlannerSource, /home-v2-shell-stats/);
   assert.match(homeStyles, /\.home-v2-shell-stats\s*{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/s);
+});
+
+test('global and in-page Home navigation resolve to the canonical dashboard', () => {
+  assert.match(headerSource, /href="\/"[\s\S]*?onClick=\{handleHomeClick\}/);
+  assert.match(studyPlannerSource, /const pathname = usePathname\(\)/);
+  assert.match(
+    studyPlannerSource,
+    /useEffect\(\(\) => \{\s*if \(pathname !== '\/'\) return;[\s\S]*?function openModeFromHash\(\)/
+  );
+  assert.match(
+    studyPlannerSource,
+    /\}, \[canViewAlgorithmDiagnostics, pathname\]\);/
+  );
+  assert.match(
+    studyPlannerSource,
+    /function handleHomeClick[\s\S]*?window\.history\.pushState\([\s\S]*?window\.location\.pathname \+ window\.location\.search[\s\S]*?setMode\('dashboard'\)/
+  );
 });
