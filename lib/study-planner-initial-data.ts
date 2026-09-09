@@ -121,6 +121,7 @@ export type StudyPlannerInitialData = {
   placements: Placement[];
   questionCounts: Record<string, number>;
   selectedNodeIds: string[];
+  excludedNodeIds: string[];
   nodePreferences: Record<string, number>;
   conceptOverrides: Record<string, 'included' | 'excluded'>;
   resolvedConcepts: StudyDeckConcept[];
@@ -165,6 +166,7 @@ function emptyInitialData(
     placements: [],
     questionCounts: {},
     selectedNodeIds: [],
+    excludedNodeIds: [],
     nodePreferences: {},
     conceptOverrides: {},
     resolvedConcepts: [],
@@ -219,6 +221,7 @@ export async function loadStudyPlannerInitialData({
   const [
     nodeResult,
     selectedNodesResult,
+    excludedNodesResult,
     overridesResult,
     preferenceResult,
     resolvedResult,
@@ -238,6 +241,10 @@ export async function loadStudyPlannerInitialData({
       .order('name'),
     supabase
       .from('user_study_node_selections')
+      .select('node_id')
+      .eq('deck_id', activeDeck.id),
+    supabase
+      .from('study_deck_node_exclusions')
       .select('node_id')
       .eq('deck_id', activeDeck.id),
     supabase
@@ -357,6 +364,9 @@ export async function loadStudyPlannerInitialData({
     questionCounts,
     selectedNodeIds: (selectedNodesResult.data || []).map(
       (selection) => selection.node_id
+    ),
+    excludedNodeIds: (excludedNodesResult.data || []).map(
+      (exclusion) => exclusion.node_id
     ),
     nodePreferences: Object.fromEntries(
       (preferenceResult.data || []).map((preference) => [

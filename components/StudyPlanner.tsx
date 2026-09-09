@@ -19,7 +19,10 @@ import {
   hasAuthoritativeInitialDeckData,
 } from '@/lib/home-bootstrap';
 import { supabase } from '@/lib/supabase';
-import { getTopicSelectionPresentation } from '@/lib/topic-selection-presentation';
+import {
+  getEffectiveTopicNodeIds,
+  getTopicSelectionPresentation,
+} from '@/lib/topic-selection-presentation';
 import type { ActiveLibrary, ActiveLibraryRole } from '@/lib/library-context';
 import type { StudyPlannerInitialData } from '@/lib/study-planner-initial-data';
 import {
@@ -437,6 +440,9 @@ export function StudyPlanner({
   const [selectedNodeIds, setSelectedNodeIds] = useState<Set<string>>(
     new Set(initialDeckData?.selectedNodeIds || [])
   );
+  const [excludedNodeIds, setExcludedNodeIds] = useState<Set<string>>(
+    new Set(initialDeckData?.excludedNodeIds || [])
+  );
   const [nodePreferences, setNodePreferences] = useState<Record<string, number>>(
     initialDeckData?.nodePreferences || {}
   );
@@ -663,6 +669,7 @@ export function StudyPlanner({
       setPlacements([]);
       setQuestionCounts({});
       setSelectedNodeIds(new Set());
+      setExcludedNodeIds(new Set());
       setNodePreferences({});
       setConceptOverrides({});
       setResolvedConcepts([]);
@@ -763,6 +770,7 @@ export function StudyPlanner({
           setNodes([]);
           setPlacements([]);
           setSelectedNodeIds(new Set());
+          setExcludedNodeIds(new Set());
           setNodePreferences({});
           setConceptOverrides({});
           setResolvedConcepts([]);
@@ -803,6 +811,7 @@ export function StudyPlanner({
       const [
         nodeResult,
         selectedNodesResult,
+        excludedNodesResult,
         overridesResult,
         preferenceResult,
         resolvedResult,
@@ -821,6 +830,10 @@ export function StudyPlanner({
           .order('name'),
         supabase
           .from('user_study_node_selections')
+          .select('node_id')
+          .eq('deck_id', activeDeck.id),
+        supabase
+          .from('study_deck_node_exclusions')
           .select('node_id')
           .eq('deck_id', activeDeck.id),
         supabase
@@ -866,6 +879,8 @@ export function StudyPlanner({
       const { data: nodeData, error: nodeError } = nodeResult;
       const { data: selectedNodesData, error: selectedNodesError } =
         selectedNodesResult;
+      const { data: excludedNodesData, error: excludedNodesError } =
+        excludedNodesResult;
       const { data: overridesData, error: overridesError } = overridesResult;
       const { data: preferenceData, error: preferenceError } = preferenceResult;
       const { data: resolvedData, error: resolvedError } = resolvedResult;
@@ -893,6 +908,7 @@ export function StudyPlanner({
       const deckStateError =
         nodeError ||
         selectedNodesError ||
+        excludedNodesError ||
         overridesError ||
         preferenceError ||
         resolvedError;
@@ -965,6 +981,9 @@ export function StudyPlanner({
       setQuestionCounts(nextQuestionCounts);
       setSelectedNodeIds(
         new Set((selectedNodesData || []).map((selection) => selection.node_id))
+      );
+      setExcludedNodeIds(
+        new Set((excludedNodesData || []).map((exclusion) => exclusion.node_id))
       );
       setNodePreferences(
         Object.fromEntries(
@@ -2038,8 +2057,16 @@ export function StudyPlanner({
   }
 
   function isConceptSelectedByBranch(conceptId: string) {
-    return [...selectedNodeIds].some((nodeId) =>
-      branchConceptIds(nodeId).includes(conceptId)
+    const effectiveNodeIds = getEffectiveTopicNodeIds(
+      nodes,
+      selectedNodeIds,
+      excludedNodeIds
+    );
+
+    return placements.some(
+      (placement) =>
+        placement.concept_id === conceptId &&
+        effectiveNodeIds.has(placement.library_node_id)
     );
   }
 
@@ -2156,50 +2183,40 @@ export function StudyPlanner({
     setIsSaving(false);
   }
 
-  async function toggleNodeSelection(nodeId: string) {
+  async function toggleNodeSelection(nodeId: string, shouldInclude: boolean) {
     if (!activeLibrary?.id || !deck || !userId) return;
 
-    const isSelected = selectedNodeIds.has(nodeId);
     setIsSaving(true);
-    setMessage(isSelected ? 'Removing topic from deck...' : 'Adding topic to deck...');
+    setMessage(
+      shouldInclude ? 'Adding topic to deck...' : 'Removing topic from deck...'
+    );
 
-    if (isSelected) {
-      const { error } = await supabase
-        .from('user_study_node_selections')
-        .delete()
-        .eq('deck_id', deck.id)
-        .eq('node_id', nodeId);
+    const { data, error } = await supabase.rpc('set_study_deck_node_selection', {
+      p_deck_id: deck.id,
+      p_node_id: nodeId,
+      p_should_include: shouldInclude,
+    });
 
-      if (error) {
-        setMessage(`Unable to update deck: ${error.message}`);
-        setIsSaving(false);
-        return;
-      }
-
-      setSelectedNodeIds((current) => {
-        const next = new Set(current);
-        next.delete(nodeId);
-        return next;
-      });
-    } else {
-      const { error } = await supabase.from('user_study_node_selections').insert({
-        deck_id: deck.id,
-        user_id: userId,
-        library_id: activeLibrary.id,
-        node_id: nodeId,
-      });
-
-      if (error) {
-        setMessage(`Unable to update deck: ${error.message}`);
-        setIsSaving(false);
-        return;
-      }
-
-      setSelectedNodeIds((current) => new Set(current).add(nodeId));
-      setNodePreferences((current) =>
-        current[nodeId] === undefined ? { ...current, [nodeId]: 50 } : current
-      );
+    if (error) {
+      setMessage(`Unable to update deck: ${error.message}`);
+      setIsSaving(false);
+      return;
     }
+
+    const persisted = data as {
+      selected_node_ids?: string[];
+      excluded_node_ids?: string[];
+    } | null;
+    const nextSelectedIds = new Set(persisted?.selected_node_ids || []);
+    setSelectedNodeIds(nextSelectedIds);
+    setExcludedNodeIds(new Set(persisted?.excluded_node_ids || []));
+    setNodePreferences((current) => {
+      const next = { ...current };
+      for (const selectedId of nextSelectedIds) {
+        if (next[selectedId] === undefined) next[selectedId] = 50;
+      }
+      return next;
+    });
 
     setMessage('Deck updated.');
     await refreshResolvedDeck();
@@ -2395,20 +2412,27 @@ export function StudyPlanner({
       .from('user_study_node_selections')
       .delete()
       .eq('deck_id', deck.id);
+    const { error: exclusionError } = await supabase
+      .from('study_deck_node_exclusions')
+      .delete()
+      .eq('deck_id', deck.id);
     const { error: overrideError } = await supabase
       .from('user_study_concept_overrides')
       .delete()
       .eq('deck_id', deck.id);
 
-    if (nodeError || overrideError) {
+    if (nodeError || exclusionError || overrideError) {
       setMessage(
-        `Unable to clear deck: ${nodeError?.message || overrideError?.message}`
+        `Unable to clear deck: ${
+          nodeError?.message || exclusionError?.message || overrideError?.message
+        }`
       );
       setIsSaving(false);
       return;
     }
 
     setSelectedNodeIds(new Set());
+    setExcludedNodeIds(new Set());
     setConceptOverrides({});
     await refreshResolvedDeck();
     setMessage('Deck cleared.');
@@ -2703,10 +2727,14 @@ export function StudyPlanner({
       (conceptId) => (questionCounts[conceptId] || 0) > 0
     ).length;
     const selection = getTopicSelectionPresentation(
-      node.id, nodes, placements, selectedNodeIds, conceptOverrides
+      node.id,
+      nodes,
+      placements,
+      selectedNodeIds,
+      excludedNodeIds,
+      conceptOverrides
     );
     const selected = selection.checked || selection.partial;
-    const inheritedOnly = selection.inherited && !selection.explicit;
     const preference = nodePreferences[node.id] ?? 50;
 
     return (
@@ -2788,10 +2816,12 @@ export function StudyPlanner({
                 checked={selection.checked}
                 ref={(input) => { if (input) input.indeterminate = selection.partial; }}
                 aria-checked={selection.partial ? 'mixed' : selection.checked}
-                disabled={isSaving || inheritedOnly}
+                disabled={isSaving}
                 aria-describedby={`topic-selection-${node.id}`}
-                title={inheritedOnly ? 'Included through a selected parent Topic. Change the parent selection to adjust.' : undefined}
-                onChange={() => void toggleNodeSelection(node.id)}
+                title={selection.inherited ? 'Included through a selected parent Topic. Uncheck to exclude this branch.' : undefined}
+                onChange={(event) =>
+                  void toggleNodeSelection(node.id, event.currentTarget.checked)
+                }
                 style={{
                   accentColor: '#2563eb',
                   cursor: 'pointer',
@@ -2817,9 +2847,13 @@ export function StudyPlanner({
                 </span>
                 <span id={`topic-selection-${node.id}`} className="muted" style={{ display: 'block', fontSize: 12 }}>
                   {selection.partial ? 'Partially included. ' : ''}
-                  {inheritedOnly
-                    ? 'Included by parent'
-                    : selection.explicit ? 'Selected directly' : ''}
+                  {selection.excluded
+                    ? 'Excluded'
+                    : selection.excludedByAncestor
+                      ? 'Excluded by parent'
+                    : selection.inherited
+                      ? 'Included by parent'
+                      : selection.explicit ? 'Selected directly' : ''}
                 </span>
               </span>
             </label>
