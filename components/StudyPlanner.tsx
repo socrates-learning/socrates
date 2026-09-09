@@ -10,6 +10,7 @@ import {
 } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { Header, HeaderSessionProvider } from '@/components/Header';
 import {
@@ -175,6 +176,7 @@ const emptyLearnerProgress: LearnerProgressResponse = {
 
 type ConceptOverride = 'included' | 'excluded';
 type PlannerMode = 'dashboard' | 'stats' | 'study';
+type StatsTab = 'progress' | 'history' | 'algorithm';
 type StudyFeedback = 'up' | 'more' | 'down' | null;
 type StudyCardFeedbackType = 'error' | 'suggestion';
 type StudyResponse =
@@ -212,6 +214,33 @@ const homeRailItems: Array<{ label: string; icon: string; href?: string }> = [
   { label: 'Account Settings', icon: 'gear', href: '/account' },
   { label: 'Menu', icon: 'people' },
 ];
+
+const CreatorAlgorithmDiagnostics = dynamic(
+  () =>
+    import('./CreatorAlgorithmDiagnostics').then(
+      (module) => module.CreatorAlgorithmDiagnostics
+    ),
+  {
+    loading: () => (
+      <p className="home-v2-stats-loading" role="status">
+        Loading Algorithm diagnostics…
+      </p>
+    ),
+  }
+);
+
+const statsTabHashes: Record<StatsTab, string> = {
+  progress: '#stats',
+  history: '#stats-history',
+  algorithm: '#stats-algorithm',
+};
+
+function getStatsTabFromHash(hash: string): StatsTab | null {
+  if (hash === statsTabHashes.progress) return 'progress';
+  if (hash === statsTabHashes.history) return 'history';
+  if (hash === statsTabHashes.algorithm) return 'algorithm';
+  return null;
+}
 
 function LearnerHeaderIcon({
   icon,
@@ -380,6 +409,7 @@ export function StudyPlanner({
       .filter((topic) => topic.parent_id === null)
       .map((topic) => topic.id) || [];
   const [mode, setMode] = useState<PlannerMode>('dashboard');
+  const [statsTab, setStatsTab] = useState<StatsTab>('progress');
   const [userId, setUserId] = useState<string | null>(
     initialSession?.userId ?? null
   );
@@ -1038,13 +1068,23 @@ export function StudyPlanner({
     };
   }, [activeLibrary, initialDeckData, initialSession]);
 
+  const canViewAlgorithmDiagnostics = role === 'editor' || role === 'admin';
+
   useEffect(() => {
     function openModeFromHash() {
       // Old bookmarks now return to Home without losing Library query parameters.
       if (window.location.hash === '#set-up-deck') {
         window.history.replaceState(null, '', window.location.pathname + window.location.search);
       }
-      if (window.location.hash === '#stats') {
+      const requestedStatsTab = getStatsTabFromHash(window.location.hash);
+
+      if (requestedStatsTab) {
+        if (requestedStatsTab === 'algorithm' && !canViewAlgorithmDiagnostics) {
+          setStatsTab('progress');
+          window.history.replaceState(null, '', statsTabHashes.progress);
+        } else {
+          setStatsTab(requestedStatsTab);
+        }
         setMode('stats');
       } else {
         setMode('dashboard');
@@ -1057,22 +1097,28 @@ export function StudyPlanner({
 
     openModeFromHash();
     window.addEventListener('hashchange', openModeFromHash);
+    window.addEventListener('popstate', openModeFromHash);
     window.addEventListener('socrates-open-deck-dashboard', openDashboard);
 
     return () => {
       window.removeEventListener('hashchange', openModeFromHash);
+      window.removeEventListener('popstate', openModeFromHash);
       window.removeEventListener('socrates-open-deck-dashboard', openDashboard);
     };
-  }, []);
+  }, [canViewAlgorithmDiagnostics]);
 
   useEffect(() => {
   const layout = document.querySelector<HTMLElement>('main.layout');
 
   if (mode === 'stats') {
-    window.history.replaceState(null, '', '#stats');
+    const requestedStatsTab = getStatsTabFromHash(window.location.hash);
+
+    if (requestedStatsTab !== statsTab) {
+      window.history.replaceState(null, '', statsTabHashes[statsTab]);
+    }
   } else if (
     window.location.hash === '#set-up-deck' ||
-    window.location.hash === '#stats'
+    getStatsTabFromHash(window.location.hash)
   ) {
     window.history.replaceState(null, '', window.location.pathname + window.location.search);
   }
@@ -1092,7 +1138,17 @@ export function StudyPlanner({
       window.dispatchEvent(new Event('socrates-open-deck-dashboard'));
     }
   }
-}, [mode]);
+}, [mode, statsTab]);
+
+  function openStatsTab(tab: StatsTab) {
+    if (tab === 'algorithm' && !canViewAlgorithmDiagnostics) return;
+
+    setStatsTab(tab);
+    setMode('stats');
+    if (window.location.hash !== statsTabHashes[tab]) {
+      window.history.pushState(null, '', statsTabHashes[tab]);
+    }
+  }
 
   async function ensureStudySession() {
     if (studySessionIdRef.current) return studySessionIdRef.current;
@@ -4906,78 +4962,155 @@ if (mode === 'study') {
   return (
     <>
       {renderLearnerHeader('home-v2')}
-      <main className="home-v2-shell">
-        <aside className="home-v2-rail" aria-label="Deck navigation">
-          <div className="home-v2-rail-list">
-            {homeRailItems.map((item) => {
-              const content = (
-                <>
-                  <RailIcon icon={item.icon} />
-                  <span>{item.label}</span>
-                </>
-              );
+      <main className={`home-v2-shell${mode === 'stats' ? ' home-v2-shell-stats' : ''}`}>
+        {mode !== 'stats' && (
+          <aside className="home-v2-rail" aria-label="Deck navigation">
+            <div className="home-v2-rail-list">
+              {homeRailItems.map((item) => {
+                const content = (
+                  <>
+                    <RailIcon icon={item.icon} />
+                    <span>{item.label}</span>
+                  </>
+                );
 
-              return item.href ? (
-                <Link
-                  className="home-v2-rail-card"
-                  href={item.href}
-                  key={item.label}
-                  onClick={
-                    item.href.startsWith('/creator/') ? handleCreatorClick : undefined
-                  }
-                >
-                  {content}
-                </Link>
-              ) : (
-                <button
-                  className="home-v2-rail-card"
-                  key={item.label}
-                  title={
-                    item.label === 'Account Settings' && email
-                      ? `Signed in as ${email}`
-                      : undefined
-                  }
-                  type="button"
-                  onClick={
-                    item.label === 'Stats' ? () => setMode('stats') : undefined
-                  }
-                >
-                  {content}
-                </button>
-              );
-            })}
-          </div>
-          <button className="home-v2-logout" type="button" onClick={handleLogout}>
-            <RailIcon icon="edit" />
-            <span>Log Out</span>
-          </button>
-        </aside>
+                return item.href ? (
+                  <Link
+                    className="home-v2-rail-card"
+                    href={item.href}
+                    key={item.label}
+                    onClick={
+                      item.href.startsWith('/creator/') ? handleCreatorClick : undefined
+                    }
+                  >
+                    {content}
+                  </Link>
+                ) : (
+                  <button
+                    className="home-v2-rail-card"
+                    key={item.label}
+                    title={
+                      item.label === 'Account Settings' && email
+                        ? `Signed in as ${email}`
+                        : undefined
+                    }
+                    type="button"
+                    onClick={
+                      item.label === 'Stats' ? () => openStatsTab('progress') : undefined
+                    }
+                  >
+                    {content}
+                  </button>
+                );
+              })}
+            </div>
+            <button className="home-v2-logout" type="button" onClick={handleLogout}>
+              <RailIcon icon="edit" />
+              <span>Log Out</span>
+            </button>
+          </aside>
+        )}
 
         <section className="home-v2-workspace">
           {mode === 'stats' ? (
             <>
-              <div className="home-v2-topline">
-                <h2>Learner Progress</h2>
+              <div className="home-v2-topline home-v2-stats-heading">
+                <div>
+                  <h2>Stats</h2>
+                  <p>Track your progress and learning activity.</p>
+                </div>
               </div>
 
-              <section className="home-v2-deck-card" aria-labelledby="tree-title">
-                <h3 id="tree-title">
-                  Current Deck: <span>{activeLibrary.name}</span>
-                </h3>
-                <p className="home-v2-progress-overview">
-                  {learnerProgress.summary.assessed_concepts}/
-                  {learnerProgress.summary.total_concepts} Concepts assessed ·{' '}
-                  {learnerProgress.summary.unseen_concepts} unseen ·{' '}
-                  {learnerProgress.summary.questions_answered} Questions answered ·{' '}
-                  {learnerProgress.summary.recent_session_count} recent sessions
-                </p>
-                {learnerProgressError && (
-                  <p className="home-v2-progress-overview">{learnerProgressError}</p>
+              <nav className="home-v2-stats-tabs" aria-label="Stats sections" role="tablist">
+                {(['progress', 'history'] as const).map((tab) => (
+                  <button
+                    aria-selected={statsTab === tab}
+                    key={tab}
+                    onClick={() => openStatsTab(tab)}
+                    role="tab"
+                    type="button"
+                  >
+                    {tab === 'progress' ? 'Progress' : 'Study History'}
+                  </button>
+                ))}
+                {canViewAlgorithmDiagnostics && (
+                  <button
+                    aria-selected={statsTab === 'algorithm'}
+                    onClick={() => openStatsTab('algorithm')}
+                    role="tab"
+                    type="button"
+                  >
+                    Algorithm
+                  </button>
                 )}
-                <div className="home-v2-tree">
-                  {rootNodes.map((node) => renderHomeTreeRow(node, 0))}
+              </nav>
+
+              {statsTab === 'progress' && (
+                <section className="home-v2-deck-card" aria-labelledby="tree-title">
+                  <h3 id="tree-title">
+                    Current Deck: <span>{activeLibrary.name}</span>
+                  </h3>
+                  <p className="home-v2-progress-overview">
+                    {learnerProgress.summary.assessed_concepts}/
+                    {learnerProgress.summary.total_concepts} Concepts assessed ·{' '}
+                    {learnerProgress.summary.unseen_concepts} unseen ·{' '}
+                    {learnerProgress.summary.questions_answered} Questions answered ·{' '}
+                    {learnerProgress.summary.recent_session_count} recent sessions
+                  </p>
+                  {learnerProgressError && (
+                    <p className="home-v2-progress-overview">{learnerProgressError}</p>
+                  )}
+                  <div className="home-v2-tree">
+                    {rootNodes.map((node) => renderHomeTreeRow(node, 0))}
+                  </div>
+                </section>
+              )}
+
+              {statsTab === 'history' && (
+                <section className="home-v2-deck-card" aria-labelledby="study-history-title">
+                  <h3 id="study-history-title">
+                    Study History: <span>{activeLibrary.name}</span>
+                  </h3>
+                  <p className="home-v2-progress-overview">
+                    Your five most recent recorded Study Sessions in this Library.
+                  </p>
+                  {learnerProgressError && (
+                    <p className="home-v2-progress-overview">{learnerProgressError}</p>
+                  )}
+                  {learnerProgress.recent_sessions.length ? (
+                    <div className="home-v2-history-list">
+                      {learnerProgress.recent_sessions.map((session) => (
+                        <article className="home-v2-history-row" key={session.id}>
+                          <div>
+                            <strong>{session.deck_name || 'Study Session'}</strong>
+                            <time dateTime={session.started_at} suppressHydrationWarning>
+                              {new Date(session.started_at).toLocaleString()}
+                            </time>
+                          </div>
+                          <span>
+                            {session.answered_count}{' '}
+                            {session.answered_count === 1 ? 'response' : 'responses'}
+                          </span>
+                          <small>{session.ended_at ? 'Completed' : 'In progress'}</small>
+                        </article>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="home-v2-history-empty">
+                      No recorded Study Sessions in this Library yet.
+                    </p>
+                  )}
+                </section>
+              )}
+
+              {statsTab === 'algorithm' && canViewAlgorithmDiagnostics && (
+                <div className="home-v2-algorithm-workspace">
+                  <CreatorAlgorithmDiagnostics
+                    libraryId={activeLibrary.id}
+                    requestScope={userId ?? 'signed-out'}
+                  />
                 </div>
-              </section>
+              )}
             </>
           ) : (
             <>

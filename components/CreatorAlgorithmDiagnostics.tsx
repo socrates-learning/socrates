@@ -16,6 +16,33 @@ type Diagnostics = {
   official_offer: null | Record<string, string | number | boolean | null>;
   selected_source: string | null; source_decision: string | null;
 };
+type DiagnosticsRpcResult = {
+  data: unknown;
+  error: { message: string } | null;
+};
+const diagnosticsRequests = new Map<string, Promise<DiagnosticsRpcResult>>();
+
+function loadDiagnostics(libraryId: string, refresh: number, requestScope: string) {
+  const libraryScope = `${requestScope}:${libraryId}:`;
+  const requestKey = `${libraryScope}${refresh}`;
+  const existingRequest = diagnosticsRequests.get(requestKey);
+
+  if (existingRequest) return existingRequest;
+
+  const request = Promise.resolve(
+    supabase.rpc('get_creator_algorithm_diagnostics', {
+      p_library_id: libraryId,
+    })
+  ) as Promise<DiagnosticsRpcResult>;
+
+  for (const cachedKey of diagnosticsRequests.keys()) {
+    if (cachedKey.startsWith(libraryScope) && cachedKey !== requestKey) {
+      diagnosticsRequests.delete(cachedKey);
+    }
+  }
+  diagnosticsRequests.set(requestKey, request);
+  return request;
+}
 const priorityFields = [
   ['new_component', 'New Concept'], ['review_component', 'Review need'],
   ['angle_component', 'Testing Angle need'], ['prerequisite_priority_component', 'Prerequisite'],
@@ -57,7 +84,13 @@ const reasons: Record<string, string> = {
 const date = (value: string) => new Date(value).toLocaleString();
 const response = (value: string) => ({ didnt_know: "Didn't Know", too_hard: 'Too Hard', average: 'Average', easy: 'Easy' }[value] ?? value.replaceAll('_', ' '));
 
-export function CreatorAlgorithmDiagnostics({ libraryId }: { libraryId: string | null }) {
+export function CreatorAlgorithmDiagnostics({
+  libraryId,
+  requestScope,
+}: {
+  libraryId: string | null;
+  requestScope: string;
+}) {
   const [data, setData] = useState<Diagnostics | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -69,7 +102,7 @@ export function CreatorAlgorithmDiagnostics({ libraryId }: { libraryId: string |
     async function load() {
       setLoading(true); setError(null); setData(null);
       if (!libraryId) { setLoading(false); return; }
-      const result = await supabase.rpc('get_creator_algorithm_diagnostics', { p_library_id: libraryId });
+      const result = await loadDiagnostics(libraryId, refresh, requestScope);
       if (cancelled) return;
       if (result.error) {
         setError('Diagnostics could not be loaded. The staff diagnostics database function must be installed and your account must be an editor or admin.');
@@ -82,7 +115,7 @@ export function CreatorAlgorithmDiagnostics({ libraryId }: { libraryId: string |
     }
     void load().catch(() => { if (!cancelled) { setError('Diagnostics could not be loaded. Check your connection and retry.'); setLoading(false); } });
     return () => { cancelled = true; };
-  }, [libraryId, refresh]);
+  }, [libraryId, refresh, requestScope]);
   const selected = data?.concepts.find(c => c.id === selectedId);
   const offer = data?.official_offer;
   const selectedOffer = offer?.concept_id === selectedId ? offer : null;

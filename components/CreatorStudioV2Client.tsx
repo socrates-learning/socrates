@@ -21,7 +21,6 @@ import {
 } from '@/lib/concept-topic-tree';
 import { MarkdownContent } from '@/components/MarkdownContent';
 import { supabase } from '@/lib/supabase';
-import { CreatorAlgorithmDiagnostics } from './CreatorAlgorithmDiagnostics';
 import { navigateBackOrFallback } from '@/lib/safe-navigation';
 import {
   broadcastTagCatalogUsageInvalidation,
@@ -80,7 +79,7 @@ type ExistingQuestion = {
   tags: ConceptTag[];
 };
 
-type CreatorTab = 'content' | 'questions' | 'tags' | 'algorithm';
+type CreatorTab = 'content' | 'questions' | 'tags';
 type EditorMode = 'write' | 'preview';
 type QuestionDifficulty = 'easy' | 'medium' | 'hard';
 type MarkdownFormat =
@@ -3257,7 +3256,7 @@ export function CreatorStudioV2Client({
               background: 'linear-gradient(180deg, #f8fbff, #eef4fc)',
             }}
           >
-            {(['content', 'questions', 'tags', 'algorithm'] as const).map((tab) => {
+            {(['content', 'questions', 'tags'] as const).map((tab) => {
               const isActive = activeCreatorTab === tab;
               return (
                 <button
@@ -3294,15 +3293,11 @@ export function CreatorStudioV2Client({
                     ? 'Content'
                     : tab === 'questions'
                       ? 'Questions'
-                      : tab === 'tags' ? 'Tags' : 'Algorithm'}
+                      : 'Tags'}
                 </button>
               );
             })}
           </nav>
-
-          {activeCreatorTab === 'algorithm' && (
-            <CreatorAlgorithmDiagnostics libraryId={activeLibraryId} />
-          )}
 
           {activeCreatorTab === 'tags' && (
             <section
