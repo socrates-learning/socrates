@@ -1,6 +1,12 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+} from 'react';
 import { useRouter } from 'next/navigation';
 import {
   ArrowUpDown,
@@ -69,6 +75,7 @@ type ExistingQuestion = {
   id: string;
   conceptId: string;
   primaryConceptName: string;
+  relatedConcepts: Array<{ id: string; name: string }>;
   relatedConceptIds: string[];
   additionalTestingAngles: string[];
   prompt: string;
@@ -77,6 +84,60 @@ type ExistingQuestion = {
   testingAngle: string;
   status: LifecycleStatus;
   tags: ConceptTag[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+type ExistingQuestionRow = {
+  id: string;
+  concept_id: string;
+  primary_concept_name: string;
+  related_concepts: Array<{ id: string; name: string }> | null;
+  prompt: string | null;
+  difficulty: string | null;
+  testing_angle: string | null;
+  additional_testing_angles: string[] | null;
+  status: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  question_accepted_answers:
+    | Array<{ answer_text: string | null; sort_order: number | null }>
+    | null;
+  question_tags:
+    | Array<{
+        tag_id: string;
+        tags:
+          | {
+              id: string;
+              name: string;
+              slug: string;
+              status: string | null;
+            }
+          | Array<{
+              id: string;
+              name: string;
+              slug: string;
+              status: string | null;
+            }>
+          | null;
+      }>
+    | null;
+};
+
+type QuestionSearchFilters = {
+  text: string;
+  difficulty: '' | QuestionDifficulty;
+  primaryTestingAngle: string;
+  additionalTestingAngle: string;
+  primaryConceptId: string;
+  relatedConceptId: string;
+  status: '' | LifecycleStatus;
+  tagId: string;
+};
+
+type QuestionSearchCursor = {
+  createdAt: string;
+  id: string;
 };
 
 type CreatorTab = 'content' | 'questions' | 'tags';
@@ -126,6 +187,17 @@ const testingAngleOptions = [
   'Complications / Outcomes',
   'Differentiation / Comparison',
 ];
+const QUESTION_SEARCH_PAGE_SIZE = 50;
+const EMPTY_QUESTION_SEARCH_FILTERS: QuestionSearchFilters = {
+  text: '',
+  difficulty: '',
+  primaryTestingAngle: '',
+  additionalTestingAngle: '',
+  primaryConceptId: '',
+  relatedConceptId: '',
+  status: '',
+  tagId: '',
+};
 
 const prototypeTopics: Topic[] = [
   {
@@ -366,6 +438,60 @@ function questionDraftFingerprint({
   });
 }
 
+function mapExistingQuestionRow(question: ExistingQuestionRow): ExistingQuestion {
+  const acceptedAnswers = [...(question.question_accepted_answers || [])].sort(
+    (left, right) => (left.sort_order || 0) - (right.sort_order || 0)
+  );
+  const difficulty: QuestionDifficulty =
+    question.difficulty === 'easy' ||
+    question.difficulty === 'medium' ||
+    question.difficulty === 'hard'
+      ? question.difficulty
+      : 'medium';
+  const recordStatus: LifecycleStatus =
+    question.status === 'published' || question.status === 'archived'
+      ? question.status
+      : 'draft';
+  const tags = (question.question_tags || [])
+    .map((assignment) => {
+      const related = Array.isArray(assignment.tags)
+        ? assignment.tags[0]
+        : assignment.tags;
+      if (!related) return null;
+      return {
+        id: related.id,
+        name: related.name,
+        slug: related.slug,
+        status:
+          related.status === 'archived'
+            ? ('archived' as const)
+            : ('active' as const),
+      };
+    })
+    .filter((tag): tag is ConceptTag => tag !== null)
+    .sort((left, right) => left.name.localeCompare(right.name));
+  const relatedConcepts = [...(question.related_concepts || [])].sort((left, right) =>
+    left.name.localeCompare(right.name)
+  );
+
+  return {
+    id: question.id,
+    conceptId: question.concept_id,
+    primaryConceptName: question.primary_concept_name,
+    relatedConcepts,
+    relatedConceptIds: relatedConcepts.map((concept) => concept.id),
+    prompt: question.prompt || '',
+    answer: acceptedAnswers[0]?.answer_text || '',
+    difficulty,
+    testingAngle: question.testing_angle || 'General Understanding',
+    additionalTestingAngles: question.additional_testing_angles || [],
+    status: recordStatus,
+    tags,
+    createdAt: question.created_at || '',
+    updatedAt: question.updated_at || '',
+  };
+}
+
 export function CreatorStudioV2Client({
   activeLibraryId = null,
   initialTopics,
@@ -477,6 +603,19 @@ export function CreatorStudioV2Client({
   >([]);
   const [isLoadingExistingQuestions, setIsLoadingExistingQuestions] =
     useState(false);
+  const [questionSearchFilters, setQuestionSearchFilters] =
+    useState<QuestionSearchFilters>(EMPTY_QUESTION_SEARCH_FILTERS);
+  const [appliedQuestionSearchFilters, setAppliedQuestionSearchFilters] =
+    useState<QuestionSearchFilters>(EMPTY_QUESTION_SEARCH_FILTERS);
+  const [questionSearchResults, setQuestionSearchResults] = useState<
+    ExistingQuestion[]
+  >([]);
+  const [questionSearchCursor, setQuestionSearchCursor] =
+    useState<QuestionSearchCursor | null>(null);
+  const [questionSearchHasMore, setQuestionSearchHasMore] = useState(false);
+  const [questionSearchError, setQuestionSearchError] = useState('');
+  const [isSearchingQuestions, setIsSearchingQuestions] = useState(false);
+  const questionSearchRequestRef = useRef(0);
   const [questionStatus, setQuestionStatus] = useState<Status>(null);
   const [isSavingQuestion, setIsSavingQuestion] = useState(false);
   const [referenceDraft, setReferenceDraft] = useState<ReferenceDraft>(
@@ -488,6 +627,98 @@ export function CreatorStudioV2Client({
   const [isSaving, setIsSaving] = useState(false);
   const [saveFeedback, setSaveFeedback] = useState<SaveFeedback>(null);
   const [isMutatingTopic, setIsMutatingTopic] = useState(false);
+  const questionSearchLibraryRef = useRef<string | null>(null);
+  const loadQuestionSearchPage = useMemo(
+    () => async (
+      filters: QuestionSearchFilters,
+      cursor: QuestionSearchCursor | null,
+      append: boolean
+    ) => {
+      if (!activeLibraryId) {
+        setQuestionSearchResults([]);
+        setQuestionSearchCursor(null);
+        setQuestionSearchHasMore(false);
+        setQuestionSearchError('');
+        return;
+      }
+
+      const requestId = questionSearchRequestRef.current + 1;
+      questionSearchRequestRef.current = requestId;
+      setIsSearchingQuestions(true);
+      setQuestionSearchError('');
+
+      const { data, error } = await supabase.rpc('search_creator_questions', {
+        p_active_library_id: activeLibraryId,
+        p_search_text: filters.text.trim() || null,
+        p_difficulty: filters.difficulty || null,
+        p_primary_testing_angle: filters.primaryTestingAngle || null,
+        p_additional_testing_angle: filters.additionalTestingAngle || null,
+        p_primary_concept_id: filters.primaryConceptId || null,
+        p_related_concept_id: filters.relatedConceptId || null,
+        p_status: filters.status || null,
+        p_tag_id: filters.tagId || null,
+        p_page_size: QUESTION_SEARCH_PAGE_SIZE,
+        p_before_created_at: cursor?.createdAt || null,
+        p_before_id: cursor?.id || null,
+      });
+
+      if (requestId !== questionSearchRequestRef.current) return;
+
+      setIsSearchingQuestions(false);
+      if (error) {
+        setQuestionSearchError(
+          error.message || 'Library Questions could not be searched.'
+        );
+        if (!append) {
+          setQuestionSearchResults([]);
+          setQuestionSearchCursor(null);
+          setQuestionSearchHasMore(false);
+        }
+        return;
+      }
+
+      const fetched = ((data || []) as unknown as ExistingQuestionRow[]).map(
+        mapExistingQuestionRow
+      );
+      const nextPage = fetched.slice(0, QUESTION_SEARCH_PAGE_SIZE);
+      const lastQuestion = nextPage.at(-1) || null;
+
+      setQuestionSearchResults((current) => {
+        const questionsById = new Map(
+          (append ? current : []).map((question) => [question.id, question])
+        );
+        nextPage.forEach((question) => questionsById.set(question.id, question));
+        return Array.from(questionsById.values());
+      });
+      setQuestionSearchHasMore(fetched.length > QUESTION_SEARCH_PAGE_SIZE);
+      setQuestionSearchCursor(
+        lastQuestion?.createdAt
+          ? { createdAt: lastQuestion.createdAt, id: lastQuestion.id }
+          : null
+      );
+    },
+    [activeLibraryId]
+  );
+  useEffect(() => {
+    if (activeCreatorTab !== 'questions') return;
+
+    if (!activeLibraryId) {
+      questionSearchLibraryRef.current = null;
+      setQuestionSearchResults([]);
+      setQuestionSearchCursor(null);
+      setQuestionSearchHasMore(false);
+      setQuestionSearchError('');
+      return;
+    }
+
+    if (questionSearchLibraryRef.current === activeLibraryId) return;
+
+    questionSearchLibraryRef.current = activeLibraryId;
+    const emptyFilters = { ...EMPTY_QUESTION_SEARCH_FILTERS };
+    setQuestionSearchFilters(emptyFilters);
+    setAppliedQuestionSearchFilters(emptyFilters);
+    void loadQuestionSearchPage(emptyFilters, null, false);
+  }, [activeCreatorTab, activeLibraryId, loadQuestionSearchPage]);
   const [savedDraftFingerprint, setSavedDraftFingerprint] = useState(() =>
     draftFingerprint(
       resolvedConcept.bodyMarkdown,
@@ -1413,87 +1644,9 @@ export function CreatorStudioV2Client({
 
     if (error) return null;
 
-    type ExistingQuestionRow = {
-      id: string;
-      concept_id: string;
-      primary_concept_name: string;
-      related_concepts: Array<{ id: string; name: string }>;
-      prompt: string | null;
-      difficulty: string | null;
-      testing_angle: string | null;
-      additional_testing_angles: string[] | null;
-      status: string | null;
-      question_accepted_answers:
-        | Array<{ answer_text: string | null; sort_order: number | null }>
-        | null;
-      question_tags:
-        | Array<{
-            tag_id: string;
-            tags:
-              | {
-                  id: string;
-                  name: string;
-                  slug: string;
-                  status: string | null;
-                }
-              | Array<{
-                  id: string;
-                  name: string;
-                  slug: string;
-                  status: string | null;
-                }>
-              | null;
-          }>
-        | null;
-    };
-
-    return ((data || []) as unknown as ExistingQuestionRow[]).map((question) => {
-      const acceptedAnswers = [...(question.question_accepted_answers || [])].sort(
-        (left, right) => (left.sort_order || 0) - (right.sort_order || 0)
-      );
-      const difficulty: QuestionDifficulty =
-        question.difficulty === 'easy' ||
-        question.difficulty === 'medium' ||
-        question.difficulty === 'hard'
-          ? question.difficulty
-          : 'medium';
-      const recordStatus: LifecycleStatus =
-        question.status === 'published' || question.status === 'archived'
-          ? question.status
-          : 'draft';
-      const tags = (question.question_tags || [])
-        .map((assignment) => {
-          const related = Array.isArray(assignment.tags)
-            ? assignment.tags[0]
-            : assignment.tags;
-          if (!related) return null;
-          return {
-            id: related.id,
-            name: related.name,
-            slug: related.slug,
-            status:
-              related.status === 'archived'
-                ? ('archived' as const)
-                : ('active' as const),
-          };
-        })
-        .filter((tag): tag is ConceptTag => tag !== null)
-        .sort((left, right) => left.name.localeCompare(right.name));
-
-      return {
-        id: question.id,
-        conceptId: question.concept_id,
-        primaryConceptName: question.primary_concept_name,
-        relatedConceptIds: (question.related_concepts || []).map((concept) => concept.id),
-        prompt: question.prompt || '',
-        answer: acceptedAnswers[0]?.answer_text || '',
-        difficulty,
-        testingAngle: question.testing_angle || 'General Understanding',
-        additionalTestingAngles: question.additional_testing_angles || [],
-        status: recordStatus,
-        tags,
-      };
-    });
+    return ((data || []) as unknown as ExistingQuestionRow[]).map(
+      mapExistingQuestionRow
+    );
   }
 
   async function refreshExistingQuestionList(conceptId: string) {
@@ -1574,10 +1727,13 @@ export function CreatorStudioV2Client({
     return true;
   }
 
-  function selectExistingQuestion(question: ExistingQuestion) {
+  function selectExistingQuestion(
+    question: ExistingQuestion,
+    skipDiscardConfirmation = false
+  ) {
     if (isSavingQuestion) return;
     if (question.id === questionId) return;
-    if (!confirmDiscardQuestionChanges()) return;
+    if (!skipDiscardConfirmation && !confirmDiscardQuestionChanges()) return;
 
     setQuestionId(question.id);
     setEditingQuestionPrimary({ id: question.conceptId, name: question.primaryConceptName });
@@ -1606,6 +1762,64 @@ export function CreatorStudioV2Client({
       })
     );
     setQuestionStatus(null);
+  }
+
+  function selectQuestionSearchResult(question: ExistingQuestion) {
+    if (isSavingQuestion || question.id === questionId) return;
+    if (!confirmDiscardQuestionChanges()) return;
+
+    const primaryConceptTopicId =
+      [questionTopicId, ...Object.keys(questionConceptsByTopicId)].find(
+        (topicId, index, topicIds) =>
+          topicId &&
+          topicIds.indexOf(topicId) === index &&
+          (questionConceptsByTopicId[topicId] || []).some(
+            (conceptOption) => conceptOption.id === question.conceptId
+          )
+      ) || null;
+
+    previousQuestionConceptIdRef.current = question.conceptId;
+    setQuestionConceptId(question.conceptId);
+    if (primaryConceptTopicId) {
+      setActiveTopicId(primaryConceptTopicId);
+      setQuestionTopicId(primaryConceptTopicId);
+      setQuestionConceptOptions(
+        questionConceptsByTopicId[primaryConceptTopicId] || []
+      );
+    }
+    selectExistingQuestion(question, true);
+  }
+
+  function updateQuestionSearchFilter<FilterKey extends keyof QuestionSearchFilters>(
+    key: FilterKey,
+    value: QuestionSearchFilters[FilterKey]
+  ) {
+    setQuestionSearchFilters((current) => ({ ...current, [key]: value }));
+  }
+
+  function submitQuestionSearch(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const nextFilters = { ...questionSearchFilters };
+    setAppliedQuestionSearchFilters(nextFilters);
+    void loadQuestionSearchPage(nextFilters, null, false);
+  }
+
+  function clearQuestionSearch() {
+    const emptyFilters = { ...EMPTY_QUESTION_SEARCH_FILTERS };
+    setQuestionSearchFilters(emptyFilters);
+    setAppliedQuestionSearchFilters(emptyFilters);
+    void loadQuestionSearchPage(emptyFilters, null, false);
+  }
+
+  function loadMoreQuestionSearchResults() {
+    if (!questionSearchCursor || !questionSearchHasMore || isSearchingQuestions) {
+      return;
+    }
+    void loadQuestionSearchPage(
+      appliedQuestionSearchFilters,
+      questionSearchCursor,
+      true
+    );
   }
 
   function startNewQuestion() {
@@ -2766,10 +2980,16 @@ export function CreatorStudioV2Client({
       setQuestionTestingAngle(testingAngle);
       setSavedQuestionFingerprint(nextFingerprint);
     }
-    await Promise.all([
+    const refreshTasks: Array<Promise<unknown>> = [
       refreshExistingQuestionList(questionConceptId),
       loadTagCatalog(),
-    ]);
+    ];
+    if (questionSearchLibraryRef.current === activeLibraryId) {
+      refreshTasks.push(
+        loadQuestionSearchPage(appliedQuestionSearchFilters, null, false)
+      );
+    }
+    await Promise.all(refreshTasks);
     broadcastTagCatalogUsageInvalidation();
     setIsSavingQuestion(false);
     setSaveFeedback('saved');
@@ -2807,10 +3027,16 @@ export function CreatorStudioV2Client({
     }
 
     resetQuestionEditor(questionConceptId);
-    await Promise.all([
+    const refreshTasks: Array<Promise<unknown>> = [
       refreshExistingQuestionList(questionConceptId),
       loadTagCatalog(),
-    ]);
+    ];
+    if (questionSearchLibraryRef.current === activeLibraryId) {
+      refreshTasks.push(
+        loadQuestionSearchPage(appliedQuestionSearchFilters, null, false)
+      );
+    }
+    await Promise.all(refreshTasks);
     broadcastTagCatalogUsageInvalidation();
     setIsSavingQuestion(false);
     setQuestionStatus({ tone: 'success', message: 'Question deleted.' });
@@ -4335,6 +4561,361 @@ export function CreatorStudioV2Client({
             </>
           ) : activeCreatorTab === 'questions' ? (
             <>
+              <section
+                className={`${styles.panel} ${styles.questionSearchPanel}`}
+                aria-labelledby="library-question-search-heading"
+              >
+                <div className={styles.questionSearchHeading}>
+                  <div>
+                    <h2 id="library-question-search-heading">
+                      Library Question Search
+                    </h2>
+                    <p>
+                      Find any Question in the active Library, then load it in
+                      the existing editor below.
+                    </p>
+                  </div>
+                  <span className={styles.questionSearchCount}>
+                    {questionSearchResults.length}
+                    {questionSearchHasMore ? '+' : ''} loaded · newest first
+                  </span>
+                </div>
+
+                <form
+                  className={styles.questionSearchForm}
+                  onSubmit={submitQuestionSearch}
+                >
+                  <label className={styles.questionSearchText}>
+                    <span>Question text</span>
+                    <input
+                      type="search"
+                      name="question-search-text"
+                      value={questionSearchFilters.text}
+                      onChange={(event) =>
+                        updateQuestionSearchFilter('text', event.target.value)
+                      }
+                      placeholder="Search question, answer, or explanation"
+                    />
+                  </label>
+
+                  <div className={styles.questionSearchFilters}>
+                    <label>
+                      <span>Difficulty</span>
+                      <select
+                        name="question-search-difficulty"
+                        value={questionSearchFilters.difficulty}
+                        onChange={(event) =>
+                          updateQuestionSearchFilter(
+                            'difficulty',
+                            event.target.value as '' | QuestionDifficulty
+                          )
+                        }
+                      >
+                        <option value="">All difficulties</option>
+                        <option value="easy">Easy</option>
+                        <option value="medium">Medium</option>
+                        <option value="hard">Hard</option>
+                      </select>
+                    </label>
+
+                    <label>
+                      <span>Primary Testing Angle</span>
+                      <input
+                        type="search"
+                        name="question-search-primary-angle"
+                        list="question-search-angle-options"
+                        value={questionSearchFilters.primaryTestingAngle}
+                        onChange={(event) =>
+                          updateQuestionSearchFilter(
+                            'primaryTestingAngle',
+                            event.target.value
+                          )
+                        }
+                        placeholder="All primary angles"
+                      />
+                    </label>
+
+                    <label>
+                      <span>Additional Testing Angle</span>
+                      <input
+                        type="search"
+                        name="question-search-additional-angle"
+                        list="question-search-angle-options"
+                        value={questionSearchFilters.additionalTestingAngle}
+                        onChange={(event) =>
+                          updateQuestionSearchFilter(
+                            'additionalTestingAngle',
+                            event.target.value
+                          )
+                        }
+                        placeholder="All additional angles"
+                      />
+                    </label>
+
+                    <label>
+                      <span>Primary Concept</span>
+                      <select
+                        name="question-search-primary-concept"
+                        value={questionSearchFilters.primaryConceptId}
+                        onChange={(event) =>
+                          updateQuestionSearchFilter(
+                            'primaryConceptId',
+                            event.target.value
+                          )
+                        }
+                      >
+                        <option value="">All primary Concepts</option>
+                        {prerequisiteConceptOptions.map((conceptOption) => (
+                          <option
+                            key={`primary-concept-search-${conceptOption.id}`}
+                            value={conceptOption.id}
+                          >
+                            {conceptOption.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label>
+                      <span>Related Concept</span>
+                      <select
+                        name="question-search-related-concept"
+                        value={questionSearchFilters.relatedConceptId}
+                        onChange={(event) =>
+                          updateQuestionSearchFilter(
+                            'relatedConceptId',
+                            event.target.value
+                          )
+                        }
+                      >
+                        <option value="">All related Concepts</option>
+                        {prerequisiteConceptOptions.map((conceptOption) => (
+                          <option
+                            key={`related-concept-search-${conceptOption.id}`}
+                            value={conceptOption.id}
+                          >
+                            {conceptOption.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label>
+                      <span>Status</span>
+                      <select
+                        name="question-search-status"
+                        value={questionSearchFilters.status}
+                        onChange={(event) =>
+                          updateQuestionSearchFilter(
+                            'status',
+                            event.target.value as '' | LifecycleStatus
+                          )
+                        }
+                      >
+                        <option value="">All statuses</option>
+                        <option value="published">Published</option>
+                        <option value="draft">Draft</option>
+                        <option value="archived">Archived</option>
+                      </select>
+                    </label>
+
+                    <label>
+                      <span>Tag</span>
+                      <select
+                        name="question-search-tag"
+                        value={questionSearchFilters.tagId}
+                        onChange={(event) =>
+                          updateQuestionSearchFilter('tagId', event.target.value)
+                        }
+                      >
+                        <option value="">All tags</option>
+                        {availableTags.map((tag) => (
+                          <option key={`tag-search-${tag.id}`} value={tag.id}>
+                            {tag.name}
+                            {tag.status === 'archived' ? ' (Archived)' : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+
+                  <datalist id="question-search-angle-options">
+                    {Array.from(
+                      new Set([
+                        ...testingAngleOptions,
+                        ...questionSearchResults.flatMap((question) => [
+                          question.testingAngle,
+                          ...question.additionalTestingAngles,
+                        ]),
+                      ])
+                    )
+                      .filter(Boolean)
+                      .sort((left, right) => left.localeCompare(right))
+                      .map((angle) => (
+                        <option key={`question-search-angle-${angle}`} value={angle} />
+                      ))}
+                  </datalist>
+
+                  <div className={styles.questionSearchActions}>
+                    <button
+                      className={styles.primaryButton}
+                      type="submit"
+                      disabled={isSearchingQuestions}
+                    >
+                      <Search size={17} />
+                      {isSearchingQuestions ? 'Searching…' : 'Search Questions'}
+                    </button>
+                    <button
+                      className={styles.secondaryButton}
+                      type="button"
+                      disabled={isSearchingQuestions}
+                      onClick={clearQuestionSearch}
+                    >
+                      Clear filters
+                    </button>
+                  </div>
+                </form>
+
+                {questionSearchError ? (
+                  <div
+                    className={`${styles.status} ${styles.error} ${styles.questionSearchStatus}`}
+                    role="alert"
+                  >
+                    {questionSearchError}
+                  </div>
+                ) : (
+                  <div
+                    className={styles.questionSearchResults}
+                    aria-label="Library Question search results"
+                    aria-busy={isSearchingQuestions}
+                    tabIndex={0}
+                  >
+                    {questionSearchResults.map((question) => {
+                      const isSelected = question.id === questionId;
+                      const primaryConceptMatch =
+                        appliedQuestionSearchFilters.primaryConceptId ===
+                        question.conceptId;
+                      const relatedConceptMatch =
+                        Boolean(appliedQuestionSearchFilters.relatedConceptId) &&
+                        question.relatedConceptIds.includes(
+                          appliedQuestionSearchFilters.relatedConceptId
+                        );
+                      const primaryAngleMatch =
+                        Boolean(
+                          appliedQuestionSearchFilters.primaryTestingAngle
+                        ) &&
+                        question.testingAngle.toLocaleLowerCase() ===
+                          appliedQuestionSearchFilters.primaryTestingAngle.toLocaleLowerCase();
+                      const additionalAngleMatch =
+                        Boolean(
+                          appliedQuestionSearchFilters.additionalTestingAngle
+                        ) &&
+                        question.additionalTestingAngles.some(
+                          (angle) =>
+                            angle.toLocaleLowerCase() ===
+                            appliedQuestionSearchFilters.additionalTestingAngle.toLocaleLowerCase()
+                        );
+
+                      return (
+                        <button
+                          className={styles.questionSearchResult}
+                          key={question.id}
+                          type="button"
+                          aria-pressed={isSelected}
+                          disabled={isSavingQuestion}
+                          onClick={() => selectQuestionSearchResult(question)}
+                        >
+                          <span className={styles.questionSearchPrompt}>
+                            {question.prompt || 'Untitled Question'}
+                          </span>
+                          <span className={styles.questionSearchMetadata}>
+                            <span>{question.status}</span>
+                            <span>{question.difficulty}</span>
+                            <span>
+                              Primary Concept: {question.primaryConceptName}
+                            </span>
+                            <span>
+                              Primary Angle: {question.testingAngle}
+                            </span>
+                            {question.relatedConcepts.length > 0 && (
+                              <span>
+                                Related:{' '}
+                                {question.relatedConcepts
+                                  .map((conceptOption) => conceptOption.name)
+                                  .join(', ')}
+                              </span>
+                            )}
+                            {question.additionalTestingAngles.length > 0 && (
+                              <span>
+                                Additional:{' '}
+                                {question.additionalTestingAngles.join(', ')}
+                              </span>
+                            )}
+                            {question.tags.length > 0 && (
+                              <span>
+                                Tags:{' '}
+                                {question.tags
+                                  .map(
+                                    (tag) =>
+                                      `${tag.name}${
+                                        tag.status === 'archived'
+                                          ? ' (Archived)'
+                                          : ''
+                                      }`
+                                  )
+                                  .join(', ')}
+                              </span>
+                            )}
+                          </span>
+                          {(primaryConceptMatch ||
+                            relatedConceptMatch ||
+                            primaryAngleMatch ||
+                            additionalAngleMatch) && (
+                            <span className={styles.questionSearchMatches}>
+                              {primaryConceptMatch && (
+                                <span>Primary Concept match</span>
+                              )}
+                              {relatedConceptMatch && (
+                                <span>Related Concept match</span>
+                              )}
+                              {primaryAngleMatch && (
+                                <span>Primary Angle match</span>
+                              )}
+                              {additionalAngleMatch && (
+                                <span>Additional Angle match</span>
+                              )}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                    {!questionSearchResults.length && !isSearchingQuestions && (
+                      <p className={styles.emptySelection}>
+                        No Questions match these Library filters.
+                      </p>
+                    )}
+                    {isSearchingQuestions && !questionSearchResults.length && (
+                      <p className={styles.emptySelection}>
+                        Loading Library Questions…
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {questionSearchHasMore && questionSearchCursor && (
+                  <div className={styles.questionSearchFooter}>
+                    <button
+                      className={styles.secondaryButton}
+                      type="button"
+                      disabled={isSearchingQuestions}
+                      onClick={loadMoreQuestionSearchResults}
+                    >
+                      {isSearchingQuestions ? 'Loading…' : 'Load more Questions'}
+                    </button>
+                  </div>
+                )}
+              </section>
+
               <div className={styles.mainGrid}>
                 <section className={`${styles.panel} ${styles.conceptPanel}`}>
                   <div>
