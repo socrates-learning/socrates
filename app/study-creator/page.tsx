@@ -46,37 +46,37 @@ export default async function StudyCreatorPage() {
 
   if (activeLibrary) {
     const supabase = await createSupabaseServerClient();
-    const { data: nodeRows, error: nodeError } = await supabase
-      .from('library_nodes')
-      .select('id, parent_id, name, sort_order')
-      .eq('library_id', activeLibrary.id)
-      .order('sort_order')
-      .order('name');
+    const [nodeResult, placementResult] = await Promise.all([
+      supabase
+        .from('library_nodes')
+        .select('id, parent_id, name, sort_order')
+        .eq('library_id', activeLibrary.id)
+        .order('sort_order')
+        .order('name'),
+      supabase
+        .from('concept_placements')
+        .select(`
+          library_node_id,
+          sort_order,
+          library_nodes!inner(library_id),
+          concepts!inner(
+            id,
+            name,
+            summary,
+            why_it_matters,
+            body_markdown,
+            status
+          )
+        `)
+        .eq('library_nodes.library_id', activeLibrary.id)
+        .eq('concepts.status', 'published')
+        .order('sort_order'),
+    ]);
+    const { data: nodeRows, error: nodeError } = nodeResult;
 
     if (nodeError && process.env.NODE_ENV !== 'production') {
       console.error('Failed to load Study Creator Socrates Topics:', nodeError);
     }
-
-    const placementResult = nodeRows?.length
-      ? await supabase
-          .from('concept_placements')
-          .select(`
-            library_node_id,
-            sort_order,
-            library_nodes!inner(library_id),
-            concepts!inner(
-              id,
-              name,
-              summary,
-              why_it_matters,
-              body_markdown,
-              status
-            )
-          `)
-          .eq('library_nodes.library_id', activeLibrary.id)
-          .eq('concepts.status', 'published')
-          .order('sort_order')
-      : { data: [], error: null };
 
     if (placementResult.error && process.env.NODE_ENV !== 'production') {
       console.error(

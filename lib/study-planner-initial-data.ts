@@ -229,6 +229,7 @@ export async function loadStudyPlannerInitialData({
     personalSelectionsResult,
     personalCollectionsResult,
     personalCollectionSelectionsResult,
+    placementResult,
   ] = await Promise.all([
     supabase
       .from('library_nodes')
@@ -278,6 +279,24 @@ export async function loadStudyPlannerInitialData({
       .from('study_deck_personal_collection_selections')
       .select('personal_collection_id')
       .eq('deck_id', activeDeck.id),
+    supabase
+      .from('concept_placements')
+      .select(
+        `
+        concept_id,
+        library_node_id,
+        library_nodes!inner (library_id),
+        concepts!inner (
+          id,
+          name,
+          concept_type,
+          summary,
+          status
+        )
+      `
+      )
+      .eq('library_nodes.library_id', activeLibrary.id)
+      .eq('concepts.status', 'published'),
   ]);
 
   if (nodeResult.error) {
@@ -305,27 +324,6 @@ export async function loadStudyPlannerInitialData({
     personalCollectionSelectionsResult.error;
 
   const nodes = (nodeResult.data || []) as LibraryNode[];
-  const placementResult = nodes.length
-    ? await supabase
-        .from('concept_placements')
-        .select(
-          `
-          concept_id,
-          library_node_id,
-          library_nodes!inner (library_id),
-          concepts!inner (
-            id,
-            name,
-            concept_type,
-            summary,
-            status
-          )
-        `
-        )
-        .eq('library_nodes.library_id', activeLibrary.id)
-        .eq('concepts.status', 'published')
-    : { data: [], error: null };
-
   if (placementResult.error) {
     return {
       ...emptyInitialData(activeLibrary, availableLibraries),

@@ -240,6 +240,10 @@ test('Phase 1 UX keeps direct Study, nearby Cram, and Exit-to-Home behavior', ()
     new URL('../components/StudyPlanner.tsx', import.meta.url),
     'utf8'
   );
+  const homeStyles = readFileSync(
+    new URL('../app/home.css', import.meta.url),
+    'utf8'
+  );
 
   assert.doesNotMatch(studyPlannerSource, /label: 'Deck Menu'/);
   assert.match(
@@ -260,7 +264,7 @@ test('Phase 1 UX keeps direct Study, nearby Cram, and Exit-to-Home behavior', ()
     /Community \/ Trial Content <small>Coming soon<\/small>/
   );
   assert.match(
-    studyPlannerSource,
+    homeStyles,
     /@media \(max-width: 1100px\)[\s\S]*?\.home-v2-hero \{[\s\S]*?grid-template-columns: 1fr;/
   );
   assert.match(
