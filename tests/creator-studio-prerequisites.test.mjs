@@ -44,6 +44,19 @@ test('Concept and Topic targets persist with Required or Recommended strength', 
   assert.match(creatorSource, /target_id: prerequisite\.targetId/);
 });
 
+test('Topic prerequisites use checked tree rows with per-edge strength', () => {
+  assert.match(creatorSource, /Use \$\{topic\.name\} as a prerequisite Topic/);
+  assert.match(creatorSource, /checked=\{Boolean\(selectedTopicPrerequisite\)\}/);
+  assert.match(creatorSource, /toggleTopicPrerequisite/);
+  assert.match(creatorSource, /Strength for prerequisite Topic \$\{topic\.name\}/);
+  assert.match(creatorSource, /updatePrerequisiteStrength/);
+  assert.doesNotMatch(creatorSource, />\s*Add Topic\s*</);
+  assert.match(creatorStyles, /\.selectedPrerequisiteTopicRow/);
+  assert.match(creatorStyles, /\.prerequisiteTopicChoice/);
+  assert.match(creatorStyles, /\.prerequisiteTopicStrength/);
+  assert.match(creatorStyles, /\.conceptBrowseTree \{\s*max-height: 300px;\s*overflow: auto;/);
+});
+
 test('database model keeps identities and enforces edge integrity', () => {
   assert.match(
     migrationSource,

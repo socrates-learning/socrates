@@ -2613,6 +2613,43 @@ export function CreatorStudioV2Client({
     });
   }
 
+  function updatePrerequisiteStrength(
+    targetType: PrerequisiteTargetType,
+    targetId: string,
+    strength: PrerequisiteStrength
+  ) {
+    setPrerequisites((current) =>
+      current.map((candidate) =>
+        candidate.targetType === targetType && candidate.targetId === targetId
+          ? { ...candidate, strength }
+          : candidate
+      )
+    );
+    setPrerequisiteStatus(null);
+  }
+
+  function toggleTopicPrerequisite(
+    topicId: string,
+    topicName: string,
+    topicPath: string,
+    checked: boolean
+  ) {
+    const existing = prerequisites.find(
+      (item) => item.targetType === 'topic' && item.targetId === topicId
+    );
+
+    if (checked) {
+      if (!existing) {
+        addPrerequisite('topic', topicId, topicName, topicPath);
+      }
+      return;
+    }
+
+    if (existing) {
+      removePrerequisite(existing);
+    }
+  }
+
   function startNewConcept() {
     if (
       isContentDirty &&
@@ -3201,11 +3238,18 @@ export function CreatorStudioV2Client({
     const topicPath =
       findTopicPath(topics, topic.id)?.map((item) => item.name).join(' › ') ||
       topic.name;
+    const selectedTopicPrerequisite = prerequisites.find(
+      (item) => item.targetType === 'topic' && item.targetId === topic.id
+    );
 
     return (
       <div className={styles.conceptBrowseBranch} key={`prerequisite-${topic.id}`}>
         <div
-          className={styles.prerequisiteBrowseTopicRow}
+          className={`${styles.prerequisiteBrowseTopicRow} ${
+            prerequisiteTargetType === 'topic' && selectedTopicPrerequisite
+              ? styles.selectedPrerequisiteTopicRow
+              : ''
+          }`}
           style={{ paddingLeft: `${8 + depth * 28}px` }}
         >
           <button
@@ -3230,20 +3274,57 @@ export function CreatorStudioV2Client({
               <span className={styles.arrowSpacer} />
             )}
           </button>
-          <Folder size={18} strokeWidth={1.7} />
-          <span className={styles.conceptBrowseTopicName}>{topic.name}</span>
           {prerequisiteTargetType === 'topic' ? (
-            <button
-              className={styles.compactAddButton}
-              type="button"
-              onClick={() => addPrerequisite('topic', topic.id, topic.name, topicPath)}
-            >
-              Add Topic
-            </button>
+            <>
+              <label className={styles.prerequisiteTopicChoice}>
+                <input
+                  className={styles.topicCheckbox}
+                  type="checkbox"
+                  checked={Boolean(selectedTopicPrerequisite)}
+                  aria-label={`Use ${topic.name} as a prerequisite Topic`}
+                  onChange={(event) =>
+                    toggleTopicPrerequisite(
+                      topic.id,
+                      topic.name,
+                      topicPath,
+                      event.target.checked
+                    )
+                  }
+                />
+                <Folder size={18} strokeWidth={1.7} />
+                <span className={styles.conceptBrowseTopicName}>{topic.name}</span>
+              </label>
+              {selectedTopicPrerequisite && (
+                <label className={styles.prerequisiteTopicStrength}>
+                  <span className={styles.srOnly}>
+                    Strength for prerequisite Topic {topic.name}
+                  </span>
+                  <select
+                    aria-label={`Strength for prerequisite Topic ${topic.name}`}
+                    value={selectedTopicPrerequisite.strength}
+                    onChange={(event) =>
+                      updatePrerequisiteStrength(
+                        'topic',
+                        topic.id,
+                        event.target.value as PrerequisiteStrength
+                      )
+                    }
+                  >
+                    <option value="required">Required</option>
+                    <option value="recommended">Recommended</option>
+                  </select>
+                </label>
+              )}
+            </>
           ) : (
-            <small>
-              {conceptCountInBranch} {conceptCountInBranch === 1 ? 'Concept' : 'Concepts'}
-            </small>
+            <>
+              <Folder size={18} strokeWidth={1.7} />
+              <span className={styles.conceptBrowseTopicName}>{topic.name}</span>
+              <small>
+                {conceptCountInBranch}{' '}
+                {conceptCountInBranch === 1 ? 'Concept' : 'Concepts'}
+              </small>
+            </>
           )}
         </div>
 
@@ -4197,15 +4278,11 @@ export function CreatorStudioV2Client({
                               onChange={(event) => {
                                 const strength = event.target
                                   .value as PrerequisiteStrength;
-                                setPrerequisites((current) =>
-                                  current.map((candidate) =>
-                                    candidate.targetType === item.targetType &&
-                                    candidate.targetId === item.targetId
-                                      ? { ...candidate, strength }
-                                      : candidate
-                                  )
+                                updatePrerequisiteStrength(
+                                  item.targetType,
+                                  item.targetId,
+                                  strength
                                 );
-                                setPrerequisiteStatus(null);
                               }}
                             >
                               <option value="required">Required</option>
@@ -4298,33 +4375,95 @@ export function CreatorStudioV2Client({
               {normalizedPrerequisiteSearch && (
                 <div className={styles.prerequisiteSearchResults} aria-label="Prerequisite search results">
                   {prerequisiteSearchResults.length ? (
-                    prerequisiteSearchResults.map((option) => (
-                      <button
-                        className={styles.prerequisiteResult}
-                        key={`${prerequisiteTargetType}-${option.id}`}
-                        type="button"
-                        disabled={
-                          prerequisiteTargetType === 'concept' &&
-                          option.id === conceptId
-                        }
-                        onClick={() =>
-                          addPrerequisite(
-                            prerequisiteTargetType,
-                            option.id,
-                            option.name,
-                            option.paths[0] || ''
-                          )
-                        }
-                      >
-                        <span>
-                          <strong>{option.name}</strong>
-                          {option.paths[0] && <small>{option.paths[0]}</small>}
-                        </span>
-                        <small>
-                          {option.id === conceptId ? 'Currently editing' : 'Add'}
-                        </small>
-                      </button>
-                    ))
+                    prerequisiteSearchResults.map((option) => {
+                      if (prerequisiteTargetType === 'topic') {
+                        const selectedTopicPrerequisite = prerequisites.find(
+                          (item) =>
+                            item.targetType === 'topic' &&
+                            item.targetId === option.id
+                        );
+
+                        return (
+                          <div
+                            className={`${styles.prerequisiteResult} ${
+                              styles.prerequisiteTopicSearchResult
+                            } ${
+                              selectedTopicPrerequisite
+                                ? styles.selectedPrerequisiteTopicRow
+                                : ''
+                            }`}
+                            key={`topic-${option.id}`}
+                          >
+                            <label className={styles.prerequisiteTopicChoice}>
+                              <input
+                                className={styles.topicCheckbox}
+                                type="checkbox"
+                                checked={Boolean(selectedTopicPrerequisite)}
+                                aria-label={`Use ${option.name} as a prerequisite Topic`}
+                                onChange={(event) =>
+                                  toggleTopicPrerequisite(
+                                    option.id,
+                                    option.name,
+                                    option.paths[0] || '',
+                                    event.target.checked
+                                  )
+                                }
+                              />
+                              <span>
+                                <strong>{option.name}</strong>
+                                {option.paths[0] && <small>{option.paths[0]}</small>}
+                              </span>
+                            </label>
+                            {selectedTopicPrerequisite && (
+                              <label className={styles.prerequisiteTopicStrength}>
+                                <span className={styles.srOnly}>
+                                  Strength for prerequisite Topic {option.name}
+                                </span>
+                                <select
+                                  aria-label={`Strength for prerequisite Topic ${option.name}`}
+                                  value={selectedTopicPrerequisite.strength}
+                                  onChange={(event) =>
+                                    updatePrerequisiteStrength(
+                                      'topic',
+                                      option.id,
+                                      event.target.value as PrerequisiteStrength
+                                    )
+                                  }
+                                >
+                                  <option value="required">Required</option>
+                                  <option value="recommended">Recommended</option>
+                                </select>
+                              </label>
+                            )}
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <button
+                          className={styles.prerequisiteResult}
+                          key={`concept-${option.id}`}
+                          type="button"
+                          disabled={option.id === conceptId}
+                          onClick={() =>
+                            addPrerequisite(
+                              'concept',
+                              option.id,
+                              option.name,
+                              option.paths[0] || ''
+                            )
+                          }
+                        >
+                          <span>
+                            <strong>{option.name}</strong>
+                            {option.paths[0] && <small>{option.paths[0]}</small>}
+                          </span>
+                          <small>
+                            {option.id === conceptId ? 'Currently editing' : 'Add'}
+                          </small>
+                        </button>
+                      );
+                    })
                   ) : (
                     <p className={styles.emptySelection}>
                       No {prerequisiteTargetType === 'concept' ? 'Concepts' : 'Topics'} match “{prerequisiteSearch.trim()}”.

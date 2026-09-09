@@ -955,6 +955,64 @@
   padding-bottom: 5px;
 }
 
+.selectedPrerequisiteTopicRow {
+  background: #e8f0ff;
+  color: #0f4eb8;
+}
+
+.prerequisiteTopicChoice {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.prerequisiteTopicChoice .topicCheckbox {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  margin: 0;
+}
+
+.prerequisiteTopicChoice .conceptBrowseTopicName {
+  overflow: visible;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+  white-space: normal;
+}
+
+.prerequisiteTopicChoice > span {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 3px;
+}
+
+.prerequisiteTopicChoice small {
+  margin: 0;
+}
+
+.prerequisiteTopicStrength {
+  flex: 0 0 auto;
+}
+
+.prerequisiteTopicStrength select {
+  min-height: 34px;
+  border: 1px solid #b9c9dd;
+  border-radius: 6px;
+  padding: 5px 28px 5px 8px;
+  background: #ffffff;
+  color: #273142;
+  font: inherit;
+  font-size: 0.8rem;
+}
+
+.prerequisiteTopicSearchResult {
+  cursor: default;
+}
+
 .prerequisiteExpandButton {
   display: inline-flex;
   width: 28px;
@@ -984,26 +1042,6 @@
   margin-left: auto;
   color: #687386;
   white-space: nowrap;
-}
-
-.compactAddButton {
-  min-height: 32px;
-  margin-left: auto;
-  border: 1px solid #c9d6e6;
-  border-radius: 5px;
-  padding: 5px 8px;
-  background: #ffffff;
-  color: #244a75;
-  font: inherit;
-  font-size: 0.78rem;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.compactAddButton:hover,
-.compactAddButton:focus-visible {
-  background: #edf5ff;
-  outline: none;
 }
 
 .sourcesPanel {
@@ -1397,6 +1435,20 @@
 
   .prerequisiteChoiceGroup > button {
     flex: 1;
+  }
+
+  .prerequisiteBrowseTopicRow,
+  .prerequisiteTopicSearchResult {
+    flex-wrap: wrap;
+  }
+
+  .prerequisiteTopicStrength {
+    width: calc(100% - 36px);
+    margin-left: 36px;
+  }
+
+  .prerequisiteTopicStrength select {
+    width: 100%;
   }
 }
 
