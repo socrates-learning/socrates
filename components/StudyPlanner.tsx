@@ -22,8 +22,10 @@ import { getTopicSelectionPresentation } from '@/lib/topic-selection-presentatio
 import type { ActiveLibrary, ActiveLibraryRole } from '@/lib/library-context';
 import type { StudyPlannerInitialData } from '@/lib/study-planner-initial-data';
 import {
+  getOfficialStudyReadyQuestionCounts,
   selectNextStudyCandidate,
   type StudyCandidate,
+  type StudyCandidateRow,
 } from '@/lib/study-candidates';
 import { recordPersonalStudyAttempt } from '@/lib/personal-study-attempts';
 import {
@@ -207,7 +209,7 @@ const learnerNavItems: Array<{
 const homeRailItems: Array<{ label: string; icon: string; href?: string }> = [
   { label: 'Study Creator', icon: 'edit', href: '/study-creator' },
   { label: 'Stats', icon: 'bars' },
-  { label: 'Account Settings', icon: 'gear' },
+  { label: 'Account Settings', icon: 'gear', href: '/account' },
   { label: 'Menu', icon: 'people' },
 ];
 
@@ -902,12 +904,10 @@ export function StudyPlanner({
       const conceptIds = [
         ...new Set(loadedPlacements.map((placement) => placement.concept_id)),
       ];
-      const { data: questionData, error: questionError } = conceptIds.length
-        ? await supabase
-            .from('questions')
-            .select('concept_id')
-            .eq('status', 'published')
-            .in('concept_id', conceptIds)
+      const { data: candidateData, error: questionError } = conceptIds.length
+        ? await supabase.rpc('resolve_study_candidates', {
+            p_deck_id: activeDeck.id,
+          })
         : { data: [], error: null };
 
       if (!isMounted) return;
@@ -916,13 +916,9 @@ export function StudyPlanner({
         setMessage(`Unable to load deck questions: ${questionError.message}`);
         return;
       }
-      const nextQuestionCounts: Record<string, number> = {};
-
-      (questionData || []).forEach((question) => {
-        if (!question.concept_id) return;
-        nextQuestionCounts[question.concept_id] =
-          (nextQuestionCounts[question.concept_id] || 0) + 1;
-      });
+      const nextQuestionCounts = getOfficialStudyReadyQuestionCounts(
+        (candidateData || []) as StudyCandidateRow[]
+      );
 
       if (!isMounted) return;
 
@@ -1993,16 +1989,30 @@ export function StudyPlanner({
   async function refreshResolvedDeck(deckId = deck?.id) {
     if (!deckId) return;
 
-    const { data, error } = await supabase.rpc('resolve_study_deck', {
-      p_deck_id: deckId,
-    });
+    const [resolvedResult, candidateResult] = await Promise.all([
+      supabase.rpc('resolve_study_deck', {
+        p_deck_id: deckId,
+      }),
+      supabase.rpc('resolve_study_candidates', {
+        p_deck_id: deckId,
+      }),
+    ]);
 
-    if (error) {
-      setMessage(`Deck saved, but summary could not refresh: ${error.message}`);
+    if (resolvedResult.error || candidateResult.error) {
+      setMessage(
+        `Deck saved, but summary could not refresh: ${
+          resolvedResult.error?.message || candidateResult.error?.message
+        }`
+      );
       return;
     }
 
-    setResolvedConcepts((data || []) as StudyDeckConcept[]);
+    setResolvedConcepts((resolvedResult.data || []) as StudyDeckConcept[]);
+    setQuestionCounts(
+      getOfficialStudyReadyQuestionCounts(
+        (candidateResult.data || []) as StudyCandidateRow[]
+      )
+    );
   }
 
   async function refreshLearnerProgress() {
@@ -2623,7 +2633,9 @@ export function StudyPlanner({
   function renderNode(node: LibraryNode, depth = 0): ReactNode {
     const children = nodes.filter((child) => child.parent_id === node.id);
     const isExpanded = expandedNodeIds.has(node.id);
-    const branchConceptCount = branchConceptIds(node.id).length;
+    const branchConceptCount = branchConceptIds(node.id).filter(
+      (conceptId) => (questionCounts[conceptId] || 0) > 0
+    ).length;
     const selection = getTopicSelectionPresentation(
       node.id, nodes, placements, selectedNodeIds, conceptOverrides
     );
@@ -2747,7 +2759,7 @@ export function StudyPlanner({
             </label>
 
             <span
-              title="Published questions in this branch"
+              title="Study-ready questions in this branch"
               style={{
                 background: '#f8fafc',
                 border: '1px solid #dbe3ee',
@@ -2843,7 +2855,9 @@ export function StudyPlanner({
     if (!node) return [];
 
     const conceptIds = branchConceptIds(nodeId).filter(
-      (conceptId) => conceptOverrides[conceptId] !== 'excluded'
+      (conceptId) =>
+        conceptOverrides[conceptId] !== 'excluded' &&
+        (questionCounts[conceptId] || 0) > 0
     );
 
     const questionTotal = conceptIds.reduce(
@@ -2860,8 +2874,8 @@ export function StudyPlanner({
       },
     ];
   });
-  const totalQuestions = resolvedConcepts.reduce(
-    (total, concept) => total + Number(concept.published_question_count || 0),
+  const totalQuestions = Object.values(questionCounts).reduce(
+    (total, count) => total + count,
     0
   );
   const homeBootstrapView = getHomeBootstrapView({

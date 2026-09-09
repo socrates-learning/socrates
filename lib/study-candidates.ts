@@ -47,6 +47,39 @@ export type StudyCandidateRow = {
   created_at: string;
 };
 
+export function getOfficialStudyReadyQuestionCounts(
+  rows: Array<
+    Pick<
+      StudyCandidateRow,
+      'candidate_type' | 'official_concept_id' | 'official_question_id'
+    >
+  >
+) {
+  const questionIdsByConcept = new Map<string, Set<string>>();
+
+  rows.forEach((row) => {
+    if (
+      row.candidate_type !== 'official' ||
+      !row.official_concept_id ||
+      !row.official_question_id
+    ) {
+      return;
+    }
+
+    const questionIds =
+      questionIdsByConcept.get(row.official_concept_id) || new Set<string>();
+    questionIds.add(row.official_question_id);
+    questionIdsByConcept.set(row.official_concept_id, questionIds);
+  });
+
+  return Object.fromEntries(
+    [...questionIdsByConcept].map(([conceptId, questionIds]) => [
+      conceptId,
+      questionIds.size,
+    ])
+  );
+}
+
 type UnifiedStudyCandidateRow = StudyCandidateRow & {
   debug?: Record<string, unknown>;
 };

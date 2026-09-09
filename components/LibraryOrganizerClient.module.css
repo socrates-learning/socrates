@@ -1,0 +1,78 @@
+.page {
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+}
+
+.shell {
+  margin: 0 auto;
+  min-width: 0;
+  width: min(1240px, 100%);
+}
+
+.workspace {
+  align-items: start;
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(280px, 0.9fr) minmax(0, 1.1fr);
+  min-width: 0;
+}
+
+.treePanel,
+.operations,
+.selectedLibraryPanel {
+  min-width: 0;
+}
+
+.hierarchyRow {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.hierarchyRow > svg {
+  flex: 0 0 auto;
+}
+
+.hierarchyName {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.hierarchyMeta {
+  flex: 0 1 auto;
+  font-size: 12px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+.selectedLibraryPanel code {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+@media (max-width: 760px) {
+  .page {
+    padding: 10px;
+  }
+
+  .workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .treePanel,
+  .operations > section {
+    padding: 14px;
+  }
+
+  .hierarchyRow {
+    align-items: flex-start !important;
+    flex-wrap: wrap;
+  }
+
+  .hierarchyMeta {
+    flex-basis: 100%;
+    padding-left: 25px;
+    text-align: left;
+  }
+}

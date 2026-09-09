@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ACTIVE_LIBRARY_COOKIE, isValidLibrarySlug } from '@/lib/library-context';
+import { getSafeInternalPath } from '@/lib/safe-internal-path';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
 
 export async function POST(request: NextRequest) {
@@ -41,10 +42,10 @@ export async function POST(request: NextRequest) {
     return new NextResponse('Library not found', { status: 404 });
   }
 
-  const redirectPath =
-    returnTo.startsWith('/') && !returnTo.startsWith('//')
-      ? returnTo
-      : `/library/${library.slug}`;
+  const redirectPath = getSafeInternalPath(
+    returnTo,
+    `/library/${library.slug}`
+  );
   const response = NextResponse.redirect(new URL(redirectPath, request.url), 303);
 
   response.cookies.set(ACTIVE_LIBRARY_COOKIE, library.slug, {

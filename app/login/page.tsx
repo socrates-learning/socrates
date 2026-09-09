@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { getSafeInternalPath } from '@/lib/safe-internal-path';
 
 const RECOVERY_TIMEOUT_MS = 12000;
 
@@ -114,8 +115,7 @@ function LoginForm() {
       return;
     }
 
-    const nextPath = searchParams.get('next') || '/';
-    router.replace(nextPath.startsWith('/') ? nextPath : '/');
+    router.replace(getSafeInternalPath(searchParams.get('next')));
     router.refresh();
   }
 

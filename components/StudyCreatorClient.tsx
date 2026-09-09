@@ -8,6 +8,7 @@ import {
 } from './SocratesStudyCreatorBrowser';
 import { PersonalDecksBrowser } from './PersonalDecksBrowser';
 import { StudyCreatorIcon as Icon } from './StudyCreatorIcon';
+import { resolveStudyCreatorSelection } from '@/lib/study-creator-context';
 import styles from './StudyCreatorClient.module.css';
 
 export type PersonalTopic = {
@@ -126,6 +127,7 @@ export function StudyCreatorClient({
   const [cardConceptId, setCardConceptId] = useState('');
   const dialogRef = useRef<HTMLElement | null>(null);
   const modalOpenerRef = useRef<HTMLElement | null>(null);
+  const selectionRestoredRef = useRef(false);
 
   const loadMaterial = useCallback(async () => {
     setError('');
@@ -164,6 +166,51 @@ export function StudyCreatorClient({
     const nextConcepts = (conceptResult.data ?? []) as PersonalConcept[];
     const nextCards = (cardResult.data ?? []) as PersonalCard[];
     const nextOverlays = (overlayResult.data ?? []) as PersonalOverlay[];
+
+    if (!selectionRestoredRef.current) {
+      const search = new URLSearchParams(window.location.search);
+      let storedTopicId: string | null = null;
+      let storedConceptId: string | null = null;
+
+      if (!search.has('topic') && !search.has('concept')) {
+        try {
+          const stored = JSON.parse(
+            window.localStorage.getItem(`socrates-study-creator-context:${ownerId}`) ||
+              'null'
+          ) as { topicId?: unknown; conceptId?: unknown } | null;
+          storedTopicId = typeof stored?.topicId === 'string' ? stored.topicId : null;
+          storedConceptId =
+            typeof stored?.conceptId === 'string' ? stored.conceptId : null;
+        } catch {
+          window.localStorage.removeItem(
+            `socrates-study-creator-context:${ownerId}`
+          );
+        }
+      }
+
+      const restored = resolveStudyCreatorSelection({
+        concepts: nextConcepts,
+        requestedConceptId: search.get('concept') || storedConceptId,
+        requestedTopicId: search.get('topic') || storedTopicId,
+        topics: nextTopics,
+      });
+      setSelectedTopicId(restored.topicId);
+      setSelectedConceptId(restored.conceptId);
+      setExpandedTopicIds(() => {
+        const expanded = new Set<string>();
+        const topicsById = new Map(nextTopics.map((topic) => [topic.id, topic]));
+        let topic = restored.topicId ? topicsById.get(restored.topicId) : null;
+
+        while (topic && !expanded.has(topic.id)) {
+          expanded.add(topic.id);
+          topic = topic.parent_id ? topicsById.get(topic.parent_id) : null;
+        }
+
+        return expanded;
+      });
+      selectionRestoredRef.current = true;
+    }
+
     setTopics(nextTopics);
     setConcepts(nextConcepts);
     setCards(nextCards);
@@ -231,6 +278,26 @@ export function StudyCreatorClient({
       setSelectedConceptId(selectedTopicConcepts[0].id);
     }
   }, [selectedConceptId, selectedTopicConcepts]);
+
+  useEffect(() => {
+    if (!selectionRestoredRef.current || isLoading) return;
+
+    const url = new URL(window.location.href);
+    if (selectedTopicId) url.searchParams.set('topic', selectedTopicId);
+    else url.searchParams.delete('topic');
+    if (selectedConceptId) url.searchParams.set('concept', selectedConceptId);
+    else url.searchParams.delete('concept');
+
+    window.history.replaceState(
+      window.history.state,
+      '',
+      `${url.pathname}${url.search}${url.hash}`
+    );
+    window.localStorage.setItem(
+      `socrates-study-creator-context:${ownerId}`,
+      JSON.stringify({ topicId: selectedTopicId, conceptId: selectedConceptId })
+    );
+  }, [isLoading, ownerId, selectedConceptId, selectedTopicId]);
 
   const selectedConcept = selectedConceptId
     ? concepts.find((concept) => concept.id === selectedConceptId) ?? null

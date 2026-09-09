@@ -2,6 +2,10 @@ import 'server-only';
 
 import type { ActiveLibrary, ActiveLibraryRole } from '@/lib/library-context';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
+import {
+  getOfficialStudyReadyQuestionCounts,
+  type StudyCandidateRow,
+} from '@/lib/study-candidates';
 
 type LibraryNode = {
   id: string;
@@ -335,20 +339,16 @@ export async function loadStudyPlannerInitialData({
   const conceptIds = [
     ...new Set(placements.map((placement) => placement.concept_id)),
   ];
-  const questionResult = conceptIds.length
-    ? await supabase
-        .from('questions')
-        .select('concept_id')
-        .eq('status', 'published')
-        .in('concept_id', conceptIds)
+  const candidateResult = conceptIds.length
+    ? await supabase.rpc('resolve_study_candidates', {
+        p_deck_id: activeDeck.id,
+      })
     : { data: [], error: null };
-  const questionCounts: Record<string, number> = {};
-
-  (questionResult.data || []).forEach((question) => {
-    if (!question.concept_id) return;
-    questionCounts[question.concept_id] =
-      (questionCounts[question.concept_id] || 0) + 1;
-  });
+  const questionCounts = candidateResult.error
+    ? {}
+    : getOfficialStudyReadyQuestionCounts(
+        (candidateResult.data || []) as StudyCandidateRow[]
+      );
 
   return {
     libraryId: activeLibrary.id,
@@ -413,8 +413,10 @@ export async function loadStudyPlannerInitialData({
     learnerProgressError: learnerProgressResult.error
       ? `Progress could not be loaded: ${learnerProgressResult.error.message}`
       : '',
-    loadError: personalMaterialError
-      ? `Personal study material could not be loaded: ${personalMaterialError.message}`
-      : '',
+    loadError: candidateResult.error
+      ? `Study-ready counts could not be loaded: ${candidateResult.error.message}`
+      : personalMaterialError
+        ? `Personal study material could not be loaded: ${personalMaterialError.message}`
+        : '',
   };
 }

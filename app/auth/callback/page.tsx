@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { getSafeInternalPath } from '@/lib/safe-internal-path';
 
 function AuthCallbackContent() {
   const router = useRouter();
@@ -40,9 +41,7 @@ function AuthCallbackContent() {
         throw new Error('Authentication link is missing its credentials.');
       }
       const next = recovery ? '/reset-password' : searchParams.get('next') || '/';
-      const destination = new URL(next, window.location.origin);
-      return destination.origin === window.location.origin
-        ? destination.pathname + destination.search + destination.hash : '/';
+      return getSafeInternalPath(next);
     }
     exchange.current ??= finishLogin();
     exchange.current.then((destination) => {

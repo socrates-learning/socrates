@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Archive, Folder, Library as LibraryIcon } from 'lucide-react';
 import { Header } from '@/components/Header';
 import { supabase } from '@/lib/supabase';
+import styles from './LibraryOrganizerClient.module.css';
 
 type LibraryGroup = {
   id: string;
@@ -477,6 +478,7 @@ export function LibraryOrganizerClient() {
     return (
       <div key={group.id}>
         <button
+          className={styles.hierarchyRow}
           type="button"
           onClick={() => {
             setSelectedGroupId(group.id);
@@ -492,15 +494,14 @@ export function LibraryOrganizerClient() {
             cursor: 'pointer',
             display: 'flex',
             gap: 8,
-            marginLeft: depth * 20,
-            padding: '8px 10px',
+            padding: `8px 10px 8px ${10 + Math.min(depth, 6) * 16}px`,
             textAlign: 'left',
-            width: `calc(100% - ${depth * 20}px)`,
+            width: '100%',
           }}
         >
           <Folder size={17} aria-hidden="true" />
-          <strong style={{ flex: 1 }}>{group.name}</strong>
-          <span className="muted" style={{ fontSize: 12 }}>
+          <strong className={styles.hierarchyName}>{group.name}</strong>
+          <span className={`${styles.hierarchyMeta} muted`}>
             Group{group.status !== 'active' ? ` · ${group.status}` : ''}
           </span>
         </button>
@@ -509,6 +510,7 @@ export function LibraryOrganizerClient() {
           const librarySelected = selectedLibraryId === library.id;
           return (
             <button
+              className={styles.hierarchyRow}
               key={library.id}
               type="button"
               onClick={() => {
@@ -527,15 +529,14 @@ export function LibraryOrganizerClient() {
                 cursor: 'pointer',
                 display: 'flex',
                 gap: 8,
-                marginLeft: (depth + 1) * 20,
-                padding: '8px 10px',
+                padding: `8px 10px 8px ${10 + Math.min(depth + 1, 6) * 16}px`,
                 textAlign: 'left',
-                width: `calc(100% - ${(depth + 1) * 20}px)`,
+                width: '100%',
               }}
             >
               <LibraryIcon size={16} aria-hidden="true" />
-              <span style={{ flex: 1 }}>{library.name}</span>
-              <span className="muted" style={{ fontSize: 12 }}>
+              <span className={styles.hierarchyName}>{library.name}</span>
+              <span className={`${styles.hierarchyMeta} muted`}>
                 Library{library.status !== 'active' ? ` · ${library.status}` : ''}
               </span>
             </button>
@@ -557,10 +558,9 @@ export function LibraryOrganizerClient() {
   return (
     <>
       <Header />
-      <main className="layout" style={{ gridTemplateColumns: '1fr' }}>
+      <main className={`${styles.page} layout`}>
         <section
-          className="stack"
-          style={{ margin: '0 auto', width: 'min(1240px, 100%)' }}
+          className={`${styles.shell} stack`}
         >
           <div
             className="panel"
@@ -596,15 +596,8 @@ export function LibraryOrganizerClient() {
             </div>
           )}
 
-          <div
-            style={{
-              alignItems: 'start',
-              display: 'grid',
-              gap: 18,
-              gridTemplateColumns: 'minmax(340px, 0.9fr) minmax(480px, 1.1fr)',
-            }}
-          >
-            <section className="panel">
+          <div className={styles.workspace}>
+            <section className={`${styles.treePanel} panel`}>
               <div style={{ marginBottom: 16 }}>
                 <h3 style={{ margin: 0 }}>Global Library hierarchy</h3>
                 <p className="muted" style={{ margin: '6px 0 0' }}>
@@ -654,7 +647,7 @@ export function LibraryOrganizerClient() {
               )}
             </section>
 
-            <div className="stack">
+            <div className={`${styles.operations} stack`}>
               <section className="panel">
                 <h3 style={{ marginTop: 0 }}>Group operations</h3>
                 <label style={labelStyle}>
@@ -836,7 +829,7 @@ export function LibraryOrganizerClient() {
               </section>
 
               {selectedLibrary && (
-                <section className="panel">
+                <section className={`${styles.selectedLibraryPanel} panel`}>
                   <h3 style={{ marginTop: 0 }}>Selected Library</h3>
                   <p className="muted">
                     Stable Library UUID: <code>{selectedLibrary.id}</code>

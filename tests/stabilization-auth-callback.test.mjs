@@ -39,6 +39,17 @@ async function callback({ query = '', hash = '', recovery = false, invalid = fal
       if (name === 'react/jsx-runtime') return { jsx() {}, jsxs() {} };
       if (name === 'next/navigation') return { useRouter: () => ({ replace: path => redirects.push(path) }), useSearchParams: () => new URLSearchParams(query) };
       if (name === '@/lib/supabase') return { supabase: { auth } };
+      if (name === '@/lib/safe-internal-path') return {
+        getSafeInternalPath(value, fallback = '/') {
+          if (!value || value !== value.trim() || !value.startsWith('/') || value.startsWith('//') || value.includes('\\')) return fallback;
+          try {
+            const url = new URL(value, 'https://socrates.example');
+            return url.origin === 'https://socrates.example' ? url.pathname + url.search + url.hash : fallback;
+          } catch {
+            return fallback;
+          }
+        },
+      };
       throw new Error(name);
     },
   };
@@ -76,7 +87,7 @@ test('legacy recovery hash is established exactly once before routing', async ()
   assert.deepEqual(result.redirects, ['/reset-password']);
 });
 test('callback destination cannot escape the current origin', async () => {
-  for (const next of ['//example.test/escape', '/\\example.test/escape', 'https://example.test/escape']) {
+  for (const next of ['//example.test/escape', '/\\example.test/escape', 'https://example.test/escape', 'javascript:alert(1)', 'data:text/html,escape']) {
     const result = await callback({ query: 'code=synthetic&next=' + encodeURIComponent(next) });
     assert.deepEqual(result.redirects, ['/']);
   }
