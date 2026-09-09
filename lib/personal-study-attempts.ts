@@ -33,6 +33,7 @@ export type PersonalStudyAttemptResult = {
 };
 
 export type RecordPersonalStudyAttemptInput = {
+  submissionId?: string;
   studySessionId: string;
   studyDeckId: string;
   personalCardId: string;
@@ -172,6 +173,7 @@ export async function recordPersonalStudyAttempt(
     p_personal_card_id: input.personalCardId,
     p_personal_concept_id: input.personalConceptId,
     p_result: input.result,
+    ...(input.submissionId ? { p_submission_id: input.submissionId } : {}),
   });
 
   if (error) {

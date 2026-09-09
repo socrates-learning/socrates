@@ -493,6 +493,8 @@ export function StudyPlanner({
   const [flagNote, setFlagNote] = useState('');
   const [flagError, setFlagError] = useState('');
   const [studyActionStatus, setStudyActionStatus] = useState('');
+  const [studySubmissionStatus, setStudySubmissionStatus] = useState<'idle' | 'saving' | 'save-error' | 'loading-next' | 'next-error'>('idle');
+  const studySubmission = useRef<{ id: string; response: Exclude<StudyResponse, null> } | null>(null);
   const studyResponseSaveLock = useRef(false);
   const studyCardFeedbackSaveLock = useRef(false);
   const studyCardFeedbackConfirmationTimer = useRef<number | null>(null);
@@ -1535,6 +1537,8 @@ export function StudyPlanner({
     setStudyResponse(null);
     resetStudyCardFeedback();
     studyResponseRecordedForCard.current = false;
+    studySubmission.current = null;
+    setStudySubmissionStatus('idle');
 
     try {
       const sessionId = await ensureStudySession();
@@ -1567,6 +1571,8 @@ export function StudyPlanner({
     studySessionIdRef.current = null;
     studySessionCreatePromiseRef.current = null;
     studyResponseRecordedForCard.current = false;
+    studySubmission.current = null;
+    setStudySubmissionStatus('idle');
     resetStudyCardFeedback();
     setStudyCandidate(null);
     setIsStudySequenceComplete(false);
@@ -1589,70 +1595,83 @@ export function StudyPlanner({
     void refreshLearnerProgress();
   }
 
+  async function loadNextStudyCard(sessionId: string) {
+    setStudySubmissionStatus('loading-next');
+    try {
+      const selectedCandidate = await selectNextStudyCandidate(supabase, sessionId);
+      // Ignore a request that finishes after Exit or a different session starts.
+      if (studySessionIdRef.current !== sessionId) return;
+      setStudyCandidate(selectedCandidate);
+      setIsStudySequenceComplete(!selectedCandidate);
+      setIsAnswerVisible(false);
+      setStudyFeedback(null);
+      setStudyResponse(null);
+      resetStudyCardFeedback();
+      studyResponseRecordedForCard.current = false;
+      studySubmission.current = null;
+      setStudySubmissionStatus('idle');
+    } catch (error) {
+      if (studySessionIdRef.current !== sessionId) return;
+      console.error('Unable to load the next Study card.', error);
+      setStudySubmissionStatus('next-error');
+    }
+  }
+
+  async function retryNextStudyCard() {
+    const sessionId = studySessionIdRef.current;
+    if (!sessionId || studyResponseSaveLock.current || !studyResponseRecordedForCard.current) return;
+    studyResponseSaveLock.current = true;
+    try {
+      await loadNextStudyCard(sessionId);
+    } finally {
+      studyResponseSaveLock.current = false;
+    }
+  }
+
   async function persistFinalStudyResponse(
     response: Exclude<StudyResponse, null>
   ) {
-    if (
-      studyResponseSaveLock.current ||
-      studyResponseRecordedForCard.current
-    ) return;
-
-    setStudyResponse(response);
-
+    if (studyResponseSaveLock.current || studyResponseRecordedForCard.current) return;
     if (!studyCandidate || !userId || !deck) return;
 
+    // Freeze both the identity and rating before sending. An uncertain outcome
+    // can only retry this exact response, never submit a second rating.
+    studySubmission.current ??= { id: crypto.randomUUID(), response };
+    const submission = studySubmission.current;
+    setStudyResponse(submission.response);
     studyResponseSaveLock.current = true;
+    setStudySubmissionStatus('saving');
+    const sessionId = studySessionIdRef.current;
 
     try {
-      const sessionId = await ensureStudySession();
-
-      if (!sessionId) return;
-
+      if (!sessionId) throw new Error('Study session is unavailable.');
       if (studyCandidate.kind === 'official') {
         const { error } = await supabase.rpc('record_study_session_attempt', {
           p_study_session_id: sessionId,
           p_question_id: studyCandidate.questionId,
           p_concept_id: studyCandidate.conceptId,
-          p_result: response,
+          p_result: submission.response,
+          p_submission_id: submission.id,
         });
-
-        if (error) {
-          console.error('Unable to record Study Mode response.', error);
-          return;
-        }
+        if (error) throw error;
       } else {
         await recordPersonalStudyAttempt(supabase, {
           studySessionId: sessionId,
           studyDeckId: deck.id,
           personalCardId: studyCandidate.cardId,
           personalConceptId: studyCandidate.personalConceptId,
-          result: response,
+          result: submission.response,
+          submissionId: submission.id,
         });
       }
-
+      if (studySessionIdRef.current !== sessionId) return;
       studyResponseRecordedForCard.current = true;
       void refreshLearnerProgress();
-
-      const selectedCandidate = await selectNextStudyCandidate(
-        supabase,
-        sessionId
-      );
-
-      if (!selectedCandidate) {
-        setStudyCandidate(null);
-        setIsStudySequenceComplete(true);
-      } else {
-        setStudyCandidate(selectedCandidate);
-        setIsStudySequenceComplete(false);
-      }
-
-      setIsAnswerVisible(false);
-      setStudyFeedback(null);
-      setStudyResponse(null);
-      resetStudyCardFeedback();
-      studyResponseRecordedForCard.current = false;
+      await loadNextStudyCard(sessionId);
     } catch (error) {
-      console.error('Unable to record Study Mode response.', error);
+      if (studySessionIdRef.current !== sessionId) return;
+      console.error('Unable to confirm Study Mode response.', error);
+      setStudySubmissionStatus('save-error');
     } finally {
       studyResponseSaveLock.current = false;
     }
@@ -3258,6 +3277,23 @@ if (mode === 'study') {
               </div>
             ) : (
               <>
+                {studySubmissionStatus !== 'idle' && (
+                  <div className="study-v2-submission-status" role="status" aria-live="polite">
+                    <p>{studySubmissionStatus === 'saving' ? 'Saving answer…'
+                      : studySubmissionStatus === 'loading-next' ? 'Answer saved. Loading next card…'
+                      : studySubmissionStatus === 'next-error' ? 'Answer saved. Unable to load next card.'
+                      : 'Unable to confirm your answer was saved. Retry the same answer safely.'}</p>
+                    {studySubmissionStatus === 'save-error' && (
+                      <button className="btn primary" type="button" onClick={() => {
+                        if (studySubmission.current) void persistFinalStudyResponse(studySubmission.current.response);
+                      }}>Retry answer</button>
+                    )}
+                    {studySubmissionStatus === 'next-error' && (
+                      <button className="btn primary" type="button" onClick={() => void retryNextStudyCard()}>Retry next card</button>
+                    )}
+                    <button className="btn" type="button" onClick={() => void leaveStudyMode('dashboard')}>Exit</button>
+                  </div>
+                )}
                 <div className="study-v2-answer-body">
                   <section
                     className="study-v2-answer-section"
@@ -3407,7 +3443,7 @@ if (mode === 'study') {
                       </form>
                     )}
                   </div>
-                ) : (
+                ) : studySubmissionStatus !== 'idle' ? null : (
                   <div className="study-v2-response-stage">
                     <div className="study-v2-response-toolbar">
                       <button
@@ -4326,6 +4362,20 @@ if (mode === 'study') {
             opacity: 1;
             transform: translateY(0);
           }
+        }
+
+        .study-v2-submission-status {
+          background: #f0f5ff;
+          border-bottom: 1px solid #dbe2ee;
+          padding: 16px 22px;
+        }
+
+        .study-v2-submission-status p {
+          margin: 0 0 12px;
+        }
+
+        .study-v2-submission-status button + button {
+          margin-left: 8px;
         }
 
         .study-v2-answer-body {
