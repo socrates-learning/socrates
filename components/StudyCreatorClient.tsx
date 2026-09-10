@@ -29,6 +29,7 @@ export type PersonalConcept = {
   topic_id: string;
   name: string;
   description: string | null;
+  source_reference: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -39,6 +40,7 @@ export type PersonalCard = {
   concept_id: string;
   question: string;
   answer: string;
+  source_reference: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -127,9 +129,11 @@ export function StudyCreatorClient({
   const [topicParentId, setTopicParentId] = useState('');
   const [conceptName, setConceptName] = useState('');
   const [conceptDescription, setConceptDescription] = useState('');
+  const [conceptSourceReference, setConceptSourceReference] = useState('');
   const [conceptTopicId, setConceptTopicId] = useState('');
   const [cardQuestion, setCardQuestion] = useState('');
   const [cardAnswer, setCardAnswer] = useState('');
+  const [cardSourceReference, setCardSourceReference] = useState('');
   const [cardConceptId, setCardConceptId] = useState('');
   const dialogRef = useRef<HTMLElement | null>(null);
   const modalOpenerRef = useRef<HTMLElement | null>(null);
@@ -146,12 +150,12 @@ export function StudyCreatorClient({
         .order('created_at'),
       supabase
         .from('personal_concepts')
-        .select('id, owner_id, topic_id, name, description, created_at, updated_at')
+        .select('id, owner_id, topic_id, name, description, source_reference, created_at, updated_at')
         .eq('owner_id', ownerId)
         .order('created_at'),
       supabase
         .from('personal_cards')
-        .select('id, owner_id, concept_id, question, answer, created_at, updated_at')
+        .select('id, owner_id, concept_id, question, answer, source_reference, created_at, updated_at')
         .eq('owner_id', ownerId)
         .order('created_at'),
       supabase
@@ -520,6 +524,7 @@ export function StudyCreatorClient({
     rememberModalOpener();
     setConceptName(record?.name ?? '');
     setConceptDescription(record?.description ?? '');
+    setConceptSourceReference(record?.source_reference ?? '');
     setConceptTopicId(
       record?.topic_id ??
         (defaultTopicId || selectedTopicId || topics[0]?.id || '')
@@ -533,6 +538,7 @@ export function StudyCreatorClient({
     rememberModalOpener();
     setCardQuestion(record?.question ?? '');
     setCardAnswer(record?.answer ?? '');
+    setCardSourceReference(record?.source_reference ?? '');
     setCardConceptId(record?.concept_id ?? (defaultConceptId || selectedConceptId || concepts[0]?.id || ''));
     setEditorModal({ kind: 'card', record });
   }
@@ -544,6 +550,7 @@ export function StudyCreatorClient({
       target.officialConceptId ? `${target.officialName} — My Notes` : ''
     );
     setConceptDescription('');
+    setConceptSourceReference('');
     setConceptTopicId('');
     setOverlayEditor(target);
   }
@@ -559,6 +566,7 @@ export function StudyCreatorClient({
         p_personal_topic_id: conceptTopicId,
         p_name: conceptName.trim(),
         p_description: conceptDescription.trim() || null,
+        p_source_reference: conceptSourceReference.trim() || null,
         p_library_node_id: overlayEditor.libraryNodeId,
         p_official_concept_id: overlayEditor.officialConceptId,
       }
@@ -666,6 +674,7 @@ export function StudyCreatorClient({
       topic_id: conceptTopicId,
       name: conceptName.trim(),
       description: conceptDescription.trim() || null,
+      source_reference: conceptSourceReference.trim() || null,
     };
     const result = editorModal.record
       ? await supabase
@@ -706,6 +715,7 @@ export function StudyCreatorClient({
       concept_id: cardConceptId,
       question: cardQuestion.trim(),
       answer: cardAnswer.trim(),
+      source_reference: cardSourceReference.trim() || null,
     };
     const result = editorModal.record
       ? await supabase
@@ -1185,6 +1195,12 @@ export function StudyCreatorClient({
                   <div><span>Concept name</span><strong>{selectedConcept.name}</strong></div>
                   <div><span>Topic</span><strong>{topicLabel(selectedConcept.topic_id)}</strong></div>
                   <div><span>Description</span><p>{selectedConcept.description || 'No description yet.'}</p></div>
+                  {selectedConcept.source_reference && (
+                    <div>
+                      <span>Source / Reference</span>
+                      <p className={styles.sourceReferenceText}>{selectedConcept.source_reference}</p>
+                    </div>
+                  )}
                   <p>{selectedConceptCards.length} personal Card{selectedConceptCards.length === 1 ? '' : 's'}</p>
                   <div className={styles.detailActions}>
                     <button className={styles.secondary} onClick={() => openConceptEditor(selectedConcept)} type="button">Edit Concept</button>
@@ -1263,6 +1279,7 @@ export function StudyCreatorClient({
               <form className={styles.modalForm} onSubmit={saveConcept}>
                 <label>Concept name<input autoFocus maxLength={160} onChange={(event) => setConceptName(event.target.value)} required value={conceptName} /></label>
                 <label>Short description <small>Optional</small><textarea maxLength={1000} onChange={(event) => setConceptDescription(event.target.value)} value={conceptDescription} /></label>
+                <label>Source / Reference <small>Textbook, lecture, URL, note, or other reference. Optional.</small><textarea onChange={(event) => setConceptSourceReference(event.target.value)} value={conceptSourceReference} /></label>
                 <label>Topic<select onChange={(event) => setConceptTopicId(event.target.value)} required value={conceptTopicId}><option value="">Choose a Topic</option>{orderedTopics.map((topic) => <option key={topic.id} value={topic.id}>{topicLabel(topic.id)}</option>)}</select></label>
                 <div className={styles.modalActions}><button className={styles.secondary} disabled={isSaving} onClick={closeEditor} type="button">Cancel</button><button className={styles.primary} disabled={isSaving} type="submit">{isSaving ? 'Saving…' : 'Save Concept'}</button></div>
               </form>
@@ -1272,6 +1289,7 @@ export function StudyCreatorClient({
               <form className={styles.modalForm} onSubmit={saveCard}>
                 <label>Question / Front<textarea autoFocus maxLength={10000} onChange={(event) => setCardQuestion(event.target.value)} required value={cardQuestion} /></label>
                 <label>Answer / Back<textarea maxLength={20000} onChange={(event) => setCardAnswer(event.target.value)} required value={cardAnswer} /></label>
+                <label>Source / Reference <small>Textbook, lecture, URL, note, or other reference. Optional.</small><textarea onChange={(event) => setCardSourceReference(event.target.value)} value={cardSourceReference} /></label>
                 <label>Concept<select onChange={(event) => setCardConceptId(event.target.value)} required value={cardConceptId}><option value="">Choose a Concept</option>{concepts.map((concept) => <option key={concept.id} value={concept.id}>{concept.name} — {topicLabel(concept.topic_id)}</option>)}</select></label>
                 <div className={styles.modalActions}><button className={styles.secondary} disabled={isSaving} onClick={closeEditor} type="button">Cancel</button><button className={styles.primary} disabled={isSaving} type="submit">{isSaving ? 'Saving…' : 'Save Card'}</button></div>
               </form>
@@ -1299,6 +1317,7 @@ export function StudyCreatorClient({
               </div>
               <label>Concept name<input autoFocus maxLength={160} onChange={(event) => setConceptName(event.target.value)} required value={conceptName} /></label>
               <label>Short description <small>Optional</small><textarea maxLength={1000} onChange={(event) => setConceptDescription(event.target.value)} value={conceptDescription} /></label>
+              <label>Source / Reference <small>Textbook, lecture, URL, note, or other reference. Optional.</small><textarea onChange={(event) => setConceptSourceReference(event.target.value)} value={conceptSourceReference} /></label>
               <label>Personal Topic <small>Canonical home</small><select onChange={(event) => setConceptTopicId(event.target.value)} required value={conceptTopicId}><option value="">Choose one of My Topics</option>{orderedTopics.map((topic) => <option key={topic.id} value={topic.id}>{topicLabel(topic.id)}</option>)}</select></label>
               {topics.length === 0 && <p className={styles.formWarning}>Create a visible personal Topic in My Topics before linking material to Socrates.</p>}
               <div className={styles.modalActions}><button className={styles.secondary} disabled={isSaving} onClick={closeOverlayEditor} type="button">Cancel</button><button className={styles.primary} disabled={isSaving || topics.length === 0} type="submit">{isSaving ? 'Saving…' : overlayEditor.openCardAfterSave ? 'Create & Continue' : 'Create My Concept'}</button></div>

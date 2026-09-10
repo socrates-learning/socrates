@@ -1704,6 +1704,11 @@
   line-height: 1.55;
 }
 
+.sourceReferenceText {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .officialDetailCard {
   background: #ffffff;
 }

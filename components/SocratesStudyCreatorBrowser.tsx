@@ -991,6 +991,14 @@ export function SocratesStudyCreatorBrowser({
                 <span>Description</span>
                 <p>{concept.description || 'No description yet.'}</p>
               </div>
+              {concept.source_reference && (
+                <div>
+                  <span>Source / Reference</span>
+                  <p className={styles.sourceReferenceText}>
+                    {concept.source_reference}
+                  </p>
+                </div>
+              )}
               {overlay && (
                 <div>
                   <span>Socrates connection</span>
@@ -1074,6 +1082,12 @@ export function SocratesStudyCreatorBrowser({
           <span>Answer / Back</span>
           <p>{card.answer}</p>
         </div>
+        {card.source_reference && (
+          <div>
+            <span>Source / Reference</span>
+            <p className={styles.sourceReferenceText}>{card.source_reference}</p>
+          </div>
+        )}
         <div>
           <span>Personal Concept</span>
           <strong>{concept.name}</strong>

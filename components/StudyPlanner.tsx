@@ -3513,24 +3513,17 @@ if (mode === 'study') {
                 <h1>{emptyStudyTitle}</h1>
                 <p>{emptyStudyMessage}</p>
                 <div className="study-v2-empty-actions">
+                  {studyStartFailure === 'error' && (
+                    <button type="button" onClick={() => void openStudyMode()}>
+                      Retry
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => void leaveStudyMode('dashboard')}
                   >
-                    Home
+                    Go Home
                   </button>
-                  {(role === 'editor' || role === 'admin') && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        void leaveStudyMode('dashboard').then(() => {
-                          router.push('/creator/concepts/new');
-                        });
-                      }}
-                    >
-                      Creator Studio
-                    </button>
-                  )}
                 </div>
               </div>
             ) : !isAnswerVisible ? (
