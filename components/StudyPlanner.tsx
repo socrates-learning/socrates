@@ -13,6 +13,7 @@ import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { usePathname, useRouter } from 'next/navigation';
 import { Header, HeaderSessionProvider } from '@/components/Header';
+import { MarkdownContent } from '@/components/MarkdownContent';
 import {
   getBootstrapErrorMessage,
   getHomeBootstrapView,
@@ -31,6 +32,10 @@ import {
   type StudyCandidate,
   type StudyCandidateRow,
 } from '@/lib/study-candidates';
+import {
+  loadOfficialStudyConceptReview,
+  type StudyConceptReview,
+} from '@/lib/study-concept-review';
 import { recordPersonalStudyAttempt } from '@/lib/personal-study-attempts';
 import {
   classifyStudySessionStart,
@@ -531,6 +536,11 @@ export function StudyPlanner({
   const [isFlagSaving, setIsFlagSaving] = useState(false);
   const [flagNote, setFlagNote] = useState('');
   const [flagError, setFlagError] = useState('');
+  const [isConceptReviewOpen, setIsConceptReviewOpen] = useState(false);
+  const [isConceptReviewLoading, setIsConceptReviewLoading] = useState(false);
+  const [conceptReview, setConceptReview] =
+    useState<StudyConceptReview | null>(null);
+  const [conceptReviewError, setConceptReviewError] = useState('');
   const [studyActionStatus, setStudyActionStatus] = useState('');
   const [studySubmissionStatus, setStudySubmissionStatus] = useState<'idle' | 'saving' | 'save-error' | 'loading-next' | 'next-error'>('idle');
   const studySubmission = useRef<{ id: string; response: Exclude<StudyResponse, null> } | null>(null);
@@ -541,6 +551,14 @@ export function StudyPlanner({
   const studyModeOpenLock = useRef(false);
   const studySessionIdRef = useRef<string | null>(null);
   const studySessionCreatePromiseRef = useRef<Promise<string | null> | null>(null);
+  const conceptReviewTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const conceptReviewDialogRef = useRef<HTMLElement | null>(null);
+  const conceptReviewRequestRef = useRef<{
+    key: string;
+    request: Promise<StudyConceptReview | null>;
+  } | null>(null);
+  const conceptReviewLoadedKeyRef = useRef<string | null>(null);
+  const conceptReviewRequestVersionRef = useRef(0);
   const authoredStudyQuestion = studyCandidate?.kind === 'official'
     ? {
         id: studyCandidate.questionId,
@@ -591,6 +609,13 @@ export function StudyPlanner({
 
     setIsAddToThisOpen(false);
     setIsFlagModalOpen(false);
+    setIsConceptReviewOpen(false);
+    setIsConceptReviewLoading(false);
+    setConceptReview(null);
+    setConceptReviewError('');
+    conceptReviewRequestRef.current = null;
+    conceptReviewLoadedKeyRef.current = null;
+    conceptReviewRequestVersionRef.current += 1;
     setCandidateFlag(null);
     setFlagNote('');
     setFlagError('');
@@ -634,6 +659,63 @@ export function StudyPlanner({
       isCurrent = false;
     };
   }, [studyCandidate, userId]);
+
+  useEffect(() => {
+    if (!isConceptReviewOpen) return;
+
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    const trigger = conceptReviewTriggerRef.current;
+    const dialog = conceptReviewDialogRef.current;
+    const focusableSelector =
+      'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+    const focusable = () =>
+      dialog
+        ? Array.from(dialog.querySelectorAll<HTMLElement>(focusableSelector))
+        : [];
+    const focusFrame = window.requestAnimationFrame(() => {
+      focusable()[0]?.focus();
+    });
+
+    function handleConceptReviewKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setIsConceptReviewOpen(false);
+        return;
+      }
+
+      if (event.key !== 'Tab') return;
+
+      const elements = focusable();
+      if (elements.length === 0) {
+        event.preventDefault();
+        dialog?.focus();
+        return;
+      }
+
+      const first = elements[0];
+      const last = elements[elements.length - 1];
+
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+
+    document.addEventListener('keydown', handleConceptReviewKeyDown);
+
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      document.removeEventListener('keydown', handleConceptReviewKeyDown);
+      if (trigger?.isConnected) {
+        trigger.focus();
+      } else {
+        previouslyFocused?.focus();
+      }
+    };
+  }, [isConceptReviewOpen]);
 
   useEffect(() => {
     if (!isAddToThisOpen && !isFlagModalOpen) return;
@@ -1245,6 +1327,67 @@ export function StudyPlanner({
     resetStudyCardFeedback();
     setStudyFeedback(null);
     setStudyResponse(null);
+  }
+
+  async function loadStudyConceptReview({ retry = false } = {}) {
+    const candidate = studyCandidate;
+
+    if (candidate?.kind !== 'official' || !activeLibrary?.id) return;
+
+    const requestKey = `${candidate.candidateId}:${candidate.conceptId}:${activeLibrary.id}`;
+
+    if (!retry && conceptReviewLoadedKeyRef.current === requestKey) return;
+
+    const existingRequest = conceptReviewRequestRef.current;
+    if (existingRequest?.key === requestKey) {
+      return;
+    }
+
+    const requestVersion = conceptReviewRequestVersionRef.current + 1;
+    conceptReviewRequestVersionRef.current = requestVersion;
+    setIsConceptReviewLoading(true);
+    setConceptReviewError('');
+
+    const request = loadOfficialStudyConceptReview(supabase, {
+      conceptId: candidate.conceptId,
+      libraryId: activeLibrary.id,
+    });
+    conceptReviewRequestRef.current = { key: requestKey, request };
+
+    try {
+      const review = await request;
+
+      if (conceptReviewRequestVersionRef.current !== requestVersion) return;
+
+      conceptReviewLoadedKeyRef.current = requestKey;
+      setConceptReview(review);
+      setConceptReviewError(
+        review
+          ? ''
+          : 'Concept review content is not available for this Study card.'
+      );
+    } catch (error) {
+      if (conceptReviewRequestVersionRef.current !== requestVersion) return;
+
+      console.error('Unable to load Study Concept review.', error);
+      setConceptReviewError(
+        'Concept review content could not be loaded. Please try again.'
+      );
+    } finally {
+      if (conceptReviewRequestRef.current?.request === request) {
+        conceptReviewRequestRef.current = null;
+      }
+      if (conceptReviewRequestVersionRef.current === requestVersion) {
+        setIsConceptReviewLoading(false);
+      }
+    }
+  }
+
+  function openStudyConceptReview() {
+    if (studyCandidate?.kind !== 'official' || !activeLibrary?.id) return;
+
+    setIsConceptReviewOpen(true);
+    void loadStudyConceptReview();
   }
 
   async function submitStudyCardFeedback() {
@@ -3223,6 +3366,12 @@ if (mode === 'study') {
   const studyAnswer = studyCandidate?.answer || null;
   const authoredStudyExplanation =
     authoredStudyQuestion?.explanation?.trim() || null;
+  const hasConceptReviewContent = Boolean(
+    conceptReview &&
+      (conceptReview.bodyMarkdown.trim() ||
+        conceptReview.summary?.trim() ||
+        conceptReview.whyItMatters?.trim())
+  );
   const hasStudyCandidate = Boolean(studyCandidate && studyAnswer);
   const officialCandidatePlacements = getOfficialCandidatePlacements(studyCandidate);
   const addToThisDestinationConcept = personalConcepts.find(
@@ -3410,6 +3559,15 @@ if (mode === 'study') {
                 )}
                 <div className="study-v2-answer-body">
                   <section
+                    className="study-v2-revealed-question"
+                    aria-labelledby="study-revealed-question-heading"
+                  >
+                    <p>Question</p>
+                    <h2 id="study-revealed-question-heading">
+                      {studyCandidate?.prompt}
+                    </h2>
+                  </section>
+                  <section
                     className="study-v2-answer-section"
                     aria-labelledby="study-answer-heading"
                   >
@@ -3424,6 +3582,17 @@ if (mode === 'study') {
                       <h2 id="study-explanation-heading">Explanation</h2>
                       <p>{authoredStudyExplanation}</p>
                     </section>
+                  )}
+                  {studyCandidate?.kind === 'official' && activeLibrary?.id && (
+                    <div className="study-v2-review-concept-action">
+                      <button
+                        ref={conceptReviewTriggerRef}
+                        type="button"
+                        onClick={openStudyConceptReview}
+                      >
+                        Review Concept
+                      </button>
+                    </div>
                   )}
                 </div>
 
@@ -3613,6 +3782,117 @@ if (mode === 'study') {
               </>
             )}
           </article>
+
+          {isConceptReviewOpen && studyCandidate?.kind === 'official' && (
+            <div
+              className="study-v2-modal-backdrop"
+              role="presentation"
+              onMouseDown={(event) => {
+                if (event.currentTarget === event.target) {
+                  setIsConceptReviewOpen(false);
+                }
+              }}
+            >
+              <section
+                aria-labelledby="study-concept-review-title"
+                aria-modal="true"
+                className="study-v2-modal study-v2-concept-review-modal"
+                ref={conceptReviewDialogRef}
+                role="dialog"
+                tabIndex={-1}
+              >
+                <div className="study-v2-modal-header">
+                  <h2 id="study-concept-review-title">Review Concept</h2>
+                  <button
+                    aria-label="Close Concept review"
+                    type="button"
+                    onClick={() => setIsConceptReviewOpen(false)}
+                  >
+                    ×
+                  </button>
+                </div>
+
+                <div
+                  aria-busy={isConceptReviewLoading}
+                  className="study-v2-concept-review-body"
+                >
+                  {isConceptReviewLoading ? (
+                    <p className="study-v2-concept-review-status" role="status">
+                      Loading Concept review…
+                    </p>
+                  ) : conceptReview ? (
+                    <>
+                      <h3>{conceptReview.name}</h3>
+
+                      {!hasConceptReviewContent && (
+                        <p className="study-v2-concept-review-empty">
+                          No Concept review content is available yet.
+                        </p>
+                      )}
+
+                      {conceptReview.summary?.trim() && (
+                        <section>
+                          <h4>Summary</h4>
+                          <p>{conceptReview.summary}</p>
+                        </section>
+                      )}
+
+                      {conceptReview.whyItMatters?.trim() && (
+                        <section>
+                          <h4>Why it matters</h4>
+                          <p>{conceptReview.whyItMatters}</p>
+                        </section>
+                      )}
+
+                      {conceptReview.bodyMarkdown.trim() && (
+                        <section className="study-v2-concept-review-content">
+                          <MarkdownContent markdown={conceptReview.bodyMarkdown} />
+                        </section>
+                      )}
+
+                      {conceptReview.sources.length > 0 && (
+                        <section className="study-v2-concept-review-sources">
+                          <h4>Sources</h4>
+                          {conceptReview.sources.map((source) => (
+                            <div key={source.id}>
+                              <strong>{source.title}</strong>
+                              {(source.author || source.sourceType) && (
+                                <p>
+                                  {[source.author, source.sourceType]
+                                    .filter(Boolean)
+                                    .join(' · ')}
+                                </p>
+                              )}
+                              {source.note && <p>{source.note}</p>}
+                              {source.url && (
+                                <a
+                                  href={source.url}
+                                  rel="noreferrer"
+                                  target="_blank"
+                                >
+                                  Open source
+                                </a>
+                              )}
+                            </div>
+                          ))}
+                        </section>
+                      )}
+                    </>
+                  ) : (
+                    <div className="study-v2-concept-review-status" role="alert">
+                      <p>{conceptReviewError}</p>
+                      <button
+                        type="button"
+                        onClick={() => void loadStudyConceptReview({ retry: true })}
+                      >
+                        Try again
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </section>
+            </div>
+          )}
 
           {isAddToThisOpen && studyCandidate && (
             <div
@@ -4260,6 +4540,116 @@ if (mode === 'study') {
           width: 100%;
         }
 
+        .study-v2-concept-review-modal {
+          display: flex;
+          flex-direction: column;
+          max-height: min(760px, calc(100dvh - 48px));
+          max-width: 760px;
+        }
+
+        .study-v2-concept-review-modal .study-v2-modal-header {
+          flex: 0 0 auto;
+        }
+
+        .study-v2-concept-review-body {
+          color: #334155;
+          flex: 1 1 auto;
+          line-height: 1.65;
+          min-height: 0;
+          overflow-y: auto;
+          overscroll-behavior: contain;
+          padding: 22px 26px 28px;
+          scrollbar-gutter: stable;
+        }
+
+        .study-v2-concept-review-body h3 {
+          color: #08143b;
+          font-family: Georgia, "Times New Roman", Times, serif;
+          font-size: clamp(25px, 4vw, 34px);
+          letter-spacing: -0.03em;
+          line-height: 1.2;
+          margin: 0 0 22px;
+        }
+
+        .study-v2-concept-review-body h4 {
+          color: #172554;
+          font-size: 17px;
+          margin: 0 0 8px;
+        }
+
+        .study-v2-concept-review-body > section {
+          border-top: 1px solid #e2e8f0;
+          margin-top: 20px;
+          padding-top: 18px;
+        }
+
+        .study-v2-concept-review-body p {
+          margin: 0;
+          overflow-wrap: anywhere;
+        }
+
+        .study-v2-concept-review-content .article-body > :first-child {
+          margin-top: 0;
+        }
+
+        .study-v2-concept-review-content .article-body > :last-child {
+          margin-bottom: 0;
+        }
+
+        .study-v2-concept-review-content img {
+          height: auto;
+          max-width: 100%;
+        }
+
+        .study-v2-concept-review-empty {
+          background: #f8fafc;
+          border: 1px dashed #cbd5e1;
+          border-radius: 8px;
+          color: #64748b;
+          padding: 14px;
+        }
+
+        .study-v2-concept-review-sources > div {
+          background: #f8fafc;
+          border: 1px solid #e2e8f0;
+          border-radius: 8px;
+          margin-top: 10px;
+          padding: 12px 14px;
+        }
+
+        .study-v2-concept-review-sources p {
+          color: #64748b;
+          font-size: 14px;
+          margin-top: 4px;
+        }
+
+        .study-v2-concept-review-sources a {
+          color: #0f5ee8;
+          display: inline-block;
+          font-weight: 750;
+          margin-top: 7px;
+          overflow-wrap: anywhere;
+        }
+
+        .study-v2-concept-review-status {
+          color: #475569;
+          margin: 0;
+          text-align: center;
+        }
+
+        .study-v2-concept-review-status button {
+          background: #0f5ee8;
+          border: 1px solid #0f5ee8;
+          border-radius: 999px;
+          color: #ffffff;
+          cursor: pointer;
+          font: inherit;
+          font-weight: 800;
+          margin-top: 14px;
+          min-height: 40px;
+          padding: 8px 16px;
+        }
+
         .study-v2-flag-modal {
           max-width: 520px;
         }
@@ -4504,9 +4894,37 @@ if (mode === 'study') {
         }
 
         .study-v2-answer-section,
-        .study-v2-explanation-section {
+        .study-v2-explanation-section,
+        .study-v2-revealed-question,
+        .study-v2-review-concept-action {
           margin: 0 auto;
           max-width: 680px;
+        }
+
+        .study-v2-revealed-question {
+          border-bottom: 1px solid #dbe2ee;
+          margin-bottom: 24px;
+          padding-bottom: 20px;
+        }
+
+        .study-v2-revealed-question > p {
+          color: #64748b;
+          font-size: 12px;
+          font-weight: 850;
+          letter-spacing: 0.08em;
+          margin: 0 0 7px;
+          text-transform: uppercase;
+        }
+
+        .study-v2-revealed-question h2 {
+          color: #334155;
+          font-family: Georgia, "Times New Roman", Times, serif;
+          font-size: clamp(17px, 2vw, 21px);
+          font-weight: 650;
+          letter-spacing: -0.015em;
+          line-height: 1.45;
+          margin: 0;
+          overflow-wrap: anywhere;
         }
 
         .study-v2-answer-section h1,
@@ -4547,6 +4965,30 @@ if (mode === 'study') {
           font-size: 18px;
           line-height: 1.65;
           margin: 0;
+        }
+
+        .study-v2-review-concept-action {
+          border-top: 1px solid #dbe2ee;
+          margin-top: 28px;
+          padding-top: 22px;
+        }
+
+        .study-v2-review-concept-action button {
+          background: #ffffff;
+          border: 1px solid #0f5ee8;
+          border-radius: 999px;
+          color: #0f5ee8;
+          cursor: pointer;
+          font: inherit;
+          font-weight: 800;
+          min-height: 42px;
+          padding: 9px 18px;
+        }
+
+        .study-v2-review-concept-action button:hover,
+        .study-v2-review-concept-action button:focus-visible {
+          background: #eff6ff;
+          outline: 0;
         }
 
         .study-v2-feedback-row {
@@ -4883,6 +5325,10 @@ if (mode === 'study') {
             font-size: 24px;
           }
 
+          .study-v2-concept-review-body {
+            padding: 18px 18px 22px;
+          }
+
           .study-v2-modal-form {
             gap: 12px;
             padding: 14px 16px 16px;
@@ -4992,6 +5438,10 @@ if (mode === 'study') {
 
           .study-v2-modal-backdrop {
             padding: 7px;
+          }
+
+          .study-v2-concept-review-modal {
+            max-height: calc(100dvh - 14px);
           }
 
           .study-v2-modal-footer button {
