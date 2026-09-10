@@ -1103,7 +1103,10 @@ export function SocratesStudyCreatorBrowser({
   }
 
   return (
-    <div className={styles.columns} data-study-creator-mode="browse">
+    <div
+      className={`${styles.columns} ${styles.browseColumns}`}
+      data-study-creator-mode="browse"
+    >
       <aside
         className={`${styles.column} ${styles.topicsColumn}`}
         aria-label="Unified Topic Tree"
@@ -1251,6 +1254,36 @@ export function SocratesStudyCreatorBrowser({
             </button>
           )}
         </div>
+        {selectedPersonalTopic && (
+          <div className={styles.contextCreationBar}>
+            <button
+              className={styles.primary}
+              onClick={() => onCreateConcept(selectedPersonalTopic.id)}
+              type="button"
+            >
+              ＋ New Personal Concept
+            </button>
+          </div>
+        )}
+        {selectedOfficialTopic && !normalizedSearch && (
+          <div className={styles.contextCreationBar}>
+            <button
+              className={styles.primary}
+              onClick={() =>
+                onAddConcept({
+                  libraryNodeId: selectedOfficialTopic.id,
+                  officialConceptId: null,
+                  officialName: selectedOfficialTopic.name,
+                  officialPath: topicPath,
+                  openCardAfterSave: false,
+                })
+              }
+              type="button"
+            >
+              ＋ Add My Concept Here
+            </button>
+          </div>
+        )}
         <div className={styles.contentListHeader}>
           <span>Name</span>
           <span>Type</span>
@@ -1332,13 +1365,6 @@ export function SocratesStudyCreatorBrowser({
         {selectedPersonalTopic && (
           <div className={styles.contextActions}>
             <button
-              className={styles.primary}
-              onClick={() => onCreateConcept(selectedPersonalTopic.id)}
-              type="button"
-            >
-              ＋ New Personal Concept
-            </button>
-            <button
               className={styles.secondary}
               onClick={() => onCreateTopic(selectedPersonalTopic.id)}
               type="button"
@@ -1351,25 +1377,6 @@ export function SocratesStudyCreatorBrowser({
               type="button"
             >
               Delete Topic
-            </button>
-          </div>
-        )}
-        {selectedOfficialTopic && !normalizedSearch && (
-          <div className={styles.contextActions}>
-            <button
-              className={styles.primary}
-              onClick={() =>
-                onAddConcept({
-                  libraryNodeId: selectedOfficialTopic.id,
-                  officialConceptId: null,
-                  officialName: selectedOfficialTopic.name,
-                  officialPath: topicPath,
-                  openCardAfterSave: false,
-                })
-              }
-              type="button"
-            >
-              ＋ Add My Concept Here
             </button>
           </div>
         )}

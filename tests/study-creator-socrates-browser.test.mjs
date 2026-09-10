@@ -19,6 +19,10 @@ const pageSource = await readFile(
   new URL('../app/study-creator/page.tsx', import.meta.url),
   'utf8'
 );
+const stylesSource = await readFile(
+  new URL('../components/StudyCreatorClient.module.css', import.meta.url),
+  'utf8'
+);
 
 const rows = [
   { id: 'nursing', name: 'Nursing', parent_id: null, sort_order: 0 },
@@ -100,4 +104,33 @@ test('official Concepts retain a single identity with every placement path', () 
   assert.match(pageSource, /existing\.placementNodeIds\.push/);
   assert.match(officialBrowserSource, /concept\.placementNodeIds\.map/);
   assert.match(officialBrowserSource, /officialPath\(officialTree, topicId\)/);
+});
+
+test('Browse keeps contextual creation above bounded sibling pane content', () => {
+  const creationAction = officialBrowserSource.indexOf('＋ Add My Concept Here');
+  const contentList = officialBrowserSource.indexOf(
+    '<div className={styles.contentListHeader}>'
+  );
+
+  assert.ok(creationAction >= 0);
+  assert.ok(contentList >= 0);
+  assert.ok(creationAction < contentList);
+  assert.match(officialBrowserSource, /styles\.browseColumns/);
+  assert.match(stylesSource, /\.browseColumns\s*{[^}]*height:/s);
+  assert.match(
+    stylesSource,
+    /\.browseColumns\s*>\s*\.column\s*{[^}]*min-height:\s*0;/s
+  );
+  assert.match(
+    stylesSource,
+    /\.unifiedTree\s*{[^}]*min-height:\s*0;[^}]*overflow-y:\s*auto;/s
+  );
+  assert.match(
+    stylesSource,
+    /\.unifiedContentList\s*{[^}]*min-height:\s*0;[^}]*overflow-y:\s*auto;/s
+  );
+  assert.match(
+    stylesSource,
+    /\.inspectorBody\s*{[^}]*min-height:\s*0;[^}]*overflow-y:\s*auto;/s
+  );
 });
