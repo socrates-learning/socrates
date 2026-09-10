@@ -1,6 +1,11 @@
 import Link from 'next/link';
 import { Header, HeaderSessionProvider } from '@/components/Header';
 import { LibrarySwitcher } from '@/components/LibrarySwitcher';
+import {
+  ResetStudyProgress,
+  type StudyProgressResetConcept,
+  type StudyProgressResetTopic,
+} from '@/components/ResetStudyProgress';
 import { resolveActiveLibraryContext } from '@/lib/library-context';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
 import { redirect } from 'next/navigation';
@@ -12,12 +17,21 @@ type AccessibleLibrary = {
   isPrimary: boolean;
 };
 
+type ResetPlacementRow = {
+  concepts:
+    | { id: string; name: string; status: string | null }
+    | { id: string; name: string; status: string | null }[]
+    | null;
+};
+
 export default async function AccountPage() {
   const context = await resolveActiveLibraryContext();
   if (!context.user) redirect('/login?next=/account');
 
   const supabase = await createSupabaseServerClient();
   let accessibleLibraries: AccessibleLibrary[] = [];
+  let resetConcepts: StudyProgressResetConcept[] = [];
+  let resetTopics: StudyProgressResetTopic[] = [];
 
   if (context.role === 'admin' || context.role === 'editor') {
     const { data } = await supabase
@@ -53,6 +67,45 @@ export default async function AccountPage() {
           ]
         : [];
     });
+  }
+
+  if (context.library) {
+    const [topicResult, placementResult] = await Promise.all([
+      supabase
+        .from('library_nodes')
+        .select('id, name, parent_id, sort_order')
+        .eq('library_id', context.library.id)
+        .order('sort_order')
+        .order('name'),
+      supabase
+        .from('concept_placements')
+        .select(`
+          library_nodes!inner(library_id),
+          concepts!inner(id, name, status)
+        `)
+        .eq('library_nodes.library_id', context.library.id)
+        .eq('concepts.status', 'published'),
+    ]);
+
+    resetTopics = (topicResult.data || []).map((topic) => ({
+      id: topic.id,
+      name: topic.name,
+      parentId: topic.parent_id,
+      sortOrder: topic.sort_order ?? 0,
+    }));
+
+    const conceptsById = new Map<string, StudyProgressResetConcept>();
+    for (const placement of (placementResult.data || []) as unknown as ResetPlacementRow[]) {
+      const concept = Array.isArray(placement.concepts)
+        ? placement.concepts[0]
+        : placement.concepts;
+      if (concept?.id && !conceptsById.has(concept.id)) {
+        conceptsById.set(concept.id, { id: concept.id, name: concept.name });
+      }
+    }
+    resetConcepts = Array.from(conceptsById.values()).sort((left, right) =>
+      left.name.localeCompare(right.name) || left.id.localeCompare(right.id)
+    );
   }
 
   return (
@@ -177,6 +230,12 @@ export default async function AccountPage() {
 
             <LibrarySwitcher context={context} returnTo="/account" />
           </section>
+
+          <ResetStudyProgress
+            concepts={resetConcepts}
+            library={context.library ? { id: context.library.id, name: context.library.name } : null}
+            topics={resetTopics}
+          />
         </section>
       </main>
     </HeaderSessionProvider>

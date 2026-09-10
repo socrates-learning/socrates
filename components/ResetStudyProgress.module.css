@@ -1,0 +1,225 @@
+.section h3,
+.section p {
+  margin: 0;
+}
+
+.section h3 {
+  margin-bottom: 6px;
+}
+
+.controls {
+  display: grid;
+  gap: 14px;
+}
+
+.scopeGroup {
+  border: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+}
+
+.scopeGroup legend,
+.targetLabel,
+.libraryTarget span {
+  color: #334155;
+  font-size: 14px;
+  font-weight: 800;
+  margin-bottom: 7px;
+}
+
+.scopeGroup legend {
+  width: 100%;
+}
+
+.scopeGroup label {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid #dbe3ef;
+  border-radius: 10px;
+  display: inline-flex;
+  gap: 8px;
+  min-height: 42px;
+  padding: 8px 12px;
+}
+
+.scopeGroup label:has(input:checked) {
+  background: #eef5ff;
+  border-color: #60a5fa;
+  color: #1d4ed8;
+}
+
+.scopeGroup input {
+  accent-color: #2563eb;
+  height: 18px;
+  margin: 0;
+  width: 18px;
+}
+
+.targetLabel {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  max-width: 560px;
+}
+
+.targetLabel select {
+  background: white;
+  color: #0f172a;
+  font-weight: 600;
+}
+
+.libraryTarget {
+  background: #f8fafc;
+  border: 1px solid #dbe3ef;
+  border-radius: 12px;
+  display: grid;
+  gap: 3px;
+  max-width: 560px;
+  padding: 12px 14px;
+}
+
+.libraryTarget span {
+  margin: 0;
+}
+
+.resetButton,
+.confirmButton {
+  background: #b91c1c;
+  border: 1px solid #991b1b;
+  border-radius: 10px;
+  color: white;
+  font: inherit;
+  font-weight: 800;
+  justify-self: start;
+  min-height: 44px;
+  padding: 10px 15px;
+}
+
+.resetButton:disabled,
+.confirmButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.success,
+.error {
+  border-radius: 10px;
+  padding: 11px 13px;
+}
+
+.success {
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #065f46;
+}
+
+.error {
+  background: #fff1f2;
+  border: 1px solid #fecdd3;
+  color: #9f1239;
+}
+
+.dialog {
+  border: 0;
+  border-radius: 18px;
+  box-shadow: 0 28px 80px rgb(15 23 42 / 30%);
+  color: #0f172a;
+  max-height: calc(100dvh - 32px);
+  max-width: min(620px, calc(100vw - 32px));
+  padding: 0;
+  width: 100%;
+}
+
+.dialog::backdrop {
+  background: rgb(15 23 42 / 58%);
+}
+
+.dialogBody {
+  display: grid;
+  gap: 16px;
+  overflow-y: auto;
+  padding: 24px;
+}
+
+.dialogBody h2,
+.dialogBody p,
+.dialogBody ul {
+  margin: 0;
+}
+
+.dialogBody h2 {
+  font-size: clamp(21px, 3vw, 26px);
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.dialogBody ul {
+  display: grid;
+  gap: 8px;
+  padding-left: 22px;
+}
+
+.eyebrow {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  margin-bottom: 6px !important;
+  text-transform: uppercase;
+}
+
+.warning {
+  color: #991b1b;
+  font-weight: 800;
+}
+
+.dialogActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.dialogActions button {
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  font: inherit;
+  font-weight: 800;
+  min-height: 44px;
+  padding: 10px 15px;
+}
+
+.dialogActions button:not(.confirmButton) {
+  background: white;
+  color: #0f172a;
+}
+
+@media (max-width: 520px) {
+  .scopeGroup {
+    display: grid;
+  }
+
+  .scopeGroup label {
+    width: 100%;
+  }
+
+  .dialog {
+    max-width: calc(100vw - 20px);
+  }
+
+  .dialogBody {
+    padding: 18px;
+  }
+
+  .dialogActions {
+    display: grid;
+  }
+
+  .dialogActions button,
+  .resetButton {
+    width: 100%;
+  }
+}
