@@ -135,11 +135,33 @@ export default async function StudyCreatorPage() {
       });
     });
 
+    const conceptIds = Array.from(conceptsById.keys());
+    const questionResult = conceptIds.length
+      ? await supabase
+          .from('questions')
+          .select(
+            'id, concept_id, prompt, explanation, difficulty, testing_angle, question_type, status, sort_order, created_at'
+          )
+          .in('concept_id', conceptIds)
+          .eq('status', 'published')
+          .order('sort_order')
+          .order('created_at')
+          .order('id')
+      : { data: [], error: null };
+
+    if (questionResult.error && process.env.NODE_ENV !== 'production') {
+      console.error(
+        'Failed to load Study Creator Socrates Questions:',
+        questionResult.error
+      );
+    }
+
     officialBrowser = {
       libraryId: activeLibrary.id,
       libraryName: activeLibrary.name,
       nodes: nodeRows ?? [],
       concepts: Array.from(conceptsById.values()),
+      questions: questionResult.data ?? [],
     };
   }
 

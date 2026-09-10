@@ -19,7 +19,9 @@ test('migration creates owner-global collections and Card-only memberships', () 
 });
 
 test('Study Creator adds Personal Decks as a peer without changing study selection', () => {
-  assert.match(client, /'mine' \| 'socrates' \| 'decks'/);
+  assert.match(client, /'socrates' \| 'flagged' \| 'decks'/);
+  assert.match(client, />\s*Browse\s*<\/button>/);
+  assert.match(client, />\s*Flagged\s*<\/button>/);
   assert.match(client, />\s*Personal Decks\s*<\/button>/);
   assert.match(client, /<PersonalDecksBrowser/);
   assert.doesNotMatch(browser, /study_decks|resolve_study_candidates|library_id/);
@@ -42,11 +44,12 @@ test('Personal Deck content is grouped Topic then Concept', () => {
   assert.match(browser, /Search available personal material/);
 });
 
-test('Study Creator mode switch remains a peer while Set Up Deck owns selection', () => {
-  assert.match(client, /'mine' \| 'socrates' \| 'decks'/);
-  assert.match(client, /My Topics/);
-  assert.match(client, /Socrates/);
+test('Study Creator keeps Browse, Flagged, and Personal Decks separate from Set Up Deck selection', () => {
+  assert.match(client, />\s*Browse\s*<\/button>/);
+  assert.match(client, />\s*Flagged\s*<\/button>/);
   assert.match(client, /Personal Decks/);
+  assert.doesNotMatch(client, />\s*My Topics\s*<\/button>/);
+  assert.doesNotMatch(client, />\s*Socrates\s*<\/button>/);
   assert.doesNotMatch(browser, /study_deck_personal_collection_selections/);
   assert.match(planner, /study_deck_personal_collection_selections/);
 });

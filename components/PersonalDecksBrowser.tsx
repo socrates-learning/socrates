@@ -247,7 +247,7 @@ export function PersonalDecksBrowser({ ownerId, material }: Props) {
       </div>}
       <div className={styles.columns} aria-label="Personal Decks workspace">
         <section className={styles.pane} aria-label="Personal Deck list">
-          <div className={styles.heading}><div><p>Collections</p><h2>Personal Decks</h2></div><span>Private</span></div>
+          <div className={styles.heading}><div><h2>1. Personal Decks</h2><p>Organize your personal Cards into focused collections.</p></div><span>Private</span></div>
           <button className={styles.primaryWide} onClick={() => openDialog({ kind: 'create' })} type="button">＋ New Personal Deck</button>
           <label className={styles.search}><span>⌕</span><span className={styles.srOnly}>Search Personal Decks</span><input aria-label="Search Personal Decks" onChange={(event) => setDeckSearch(event.target.value)} placeholder="Search decks…" value={deckSearch} /></label>
           <div className={styles.deckList}>
@@ -263,7 +263,7 @@ export function PersonalDecksBrowser({ ownerId, material }: Props) {
         </section>
 
         <section className={styles.pane} aria-label="Selected Personal Deck contents">
-          <div className={styles.heading}><div><p>Deck contents</p><h2>{selected?.name ?? 'Choose a deck'}</h2></div>{selected && <span>{selectedCardIds.size} Card{selectedCardIds.size === 1 ? '' : 's'}</span>}</div>
+          <div className={styles.heading}><div><h2>2. Deck Contents</h2><p>{selected?.name ?? 'Choose a Personal Deck to view its Cards.'}</p></div>{selected && <span>{selectedCardIds.size} Card{selectedCardIds.size === 1 ? '' : 's'}</span>}</div>
           <label className={styles.search}><span>⌕</span><span className={styles.srOnly}>Search selected deck</span><input aria-label="Search selected Personal Deck" disabled={!selected} onChange={(event) => setContentSearch(event.target.value)} placeholder="Filter this deck…" value={contentSearch} /></label>
           <div className={styles.scrollPane}>
             {deckGroups.map((group) => <section className={styles.topicGroup} key={group.topic.id}><h3>{topicPath(group.topic.id)}</h3>{[...group.concepts.values()].map(({ concept, cards }) => <div className={styles.conceptGroup} key={concept.id}><h4>{concept.name}<span>{cards.length}</span></h4>{cards.map((card) => <article className={styles.card} key={card.id}><div><strong>{card.question}</strong><p>{card.answer}</p></div><button aria-label={`Remove ${card.question} from ${selected?.name}`} disabled={isSaving} onClick={() => removeCard(card)} type="button">Remove</button></article>)}</div>)}</section>)}
@@ -273,7 +273,7 @@ export function PersonalDecksBrowser({ ownerId, material }: Props) {
         </section>
 
         <section className={styles.pane} aria-label="Available personal material">
-          <div className={styles.heading}><div><p>My Topics</p><h2>Available material</h2></div><span>{material.cards.length} Cards</span></div>
+          <div className={styles.heading}><div><h2>3. Available Cards</h2><p>Choose from your personal Topics and Concepts.</p></div><span>{material.cards.length} Cards</span></div>
           <p className={styles.explainer}>“Add all current Cards” is a one-time snapshot. Cards created later are not added automatically.</p>
           <label className={styles.search}><span>⌕</span><span className={styles.srOnly}>Search available material</span><input aria-label="Search available personal material" onChange={(event) => setAvailableSearch(event.target.value)} placeholder="Search Topics, Concepts, Cards…" value={availableSearch} /></label>
           <div className={styles.scrollPane}>

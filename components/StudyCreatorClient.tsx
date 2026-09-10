@@ -5,8 +5,10 @@ import { supabase } from '@/lib/supabase';
 import {
   SocratesStudyCreatorBrowser,
   type OfficialBrowserData,
+  type UnifiedBrowseFilter,
 } from './SocratesStudyCreatorBrowser';
 import { PersonalDecksBrowser } from './PersonalDecksBrowser';
+import { StudyCreatorFlaggedBrowser } from './StudyCreatorFlaggedBrowser';
 import { StudyCreatorIcon as Icon } from './StudyCreatorIcon';
 import { resolveStudyCreatorSelection } from '@/lib/study-creator-context';
 import styles from './StudyCreatorClient.module.css';
@@ -101,7 +103,11 @@ export function StudyCreatorClient({
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
-  const [browseMode, setBrowseMode] = useState<'mine' | 'socrates' | 'decks'>('mine');
+  const [browseMode, setBrowseMode] = useState<
+    'mine' | 'socrates' | 'flagged' | 'decks'
+  >('socrates');
+  const [browseSearch, setBrowseSearch] = useState('');
+  const [browseFilter, setBrowseFilter] = useState<UnifiedBrowseFilter>('all');
 
   const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null);
   const [selectedConceptId, setSelectedConceptId] = useState<string | null>(null);
@@ -505,13 +511,19 @@ export function StudyCreatorClient({
     setEditorModal({ kind: 'topic', record });
   }
 
-  function openConceptEditor(record: PersonalConcept | null) {
+  function openConceptEditor(
+    record: PersonalConcept | null,
+    defaultTopicId = ''
+  ) {
     clearFeedback();
     closeMenus();
     rememberModalOpener();
     setConceptName(record?.name ?? '');
     setConceptDescription(record?.description ?? '');
-    setConceptTopicId(record?.topic_id ?? selectedTopicId ?? topics[0]?.id ?? '');
+    setConceptTopicId(
+      record?.topic_id ??
+        (defaultTopicId || selectedTopicId || topics[0]?.id || '')
+    );
     setEditorModal({ kind: 'concept', record });
   }
 
@@ -902,42 +914,93 @@ export function StudyCreatorClient({
       <section className={styles.workspace} aria-label="Study Creator workspace">
         <header className={styles.workspaceHeader}>
           <div>
-            <p>{browseMode === 'mine' ? 'Private to your account' : browseMode === 'socrates' ? 'Socrates library · Official content read only' : 'Owner-global · Cards stay in My Topics'}</p>
             <h1>Study Creator</h1>
-          </div>
-          <div className={styles.contextSwitch} aria-label="Browse material" role="group">
-            <button
-              aria-pressed={browseMode === 'mine'}
-              className={browseMode === 'mine' ? styles.activeContext : ''}
-              onClick={() => setBrowseMode('mine')}
-              type="button"
-            >
-              My Topics
-            </button>
-            <button
-              aria-pressed={browseMode === 'socrates'}
-              className={browseMode === 'socrates' ? styles.activeContext : ''}
-              onClick={() => setBrowseMode('socrates')}
-              type="button"
-            >
-              Socrates
-            </button>
-            <button
-              aria-pressed={browseMode === 'decks'}
-              className={browseMode === 'decks' ? styles.activeContext : ''}
-              onClick={() => setBrowseMode('decks')}
-              type="button"
-            >
-              Personal Decks
-            </button>
+            <p>Build on Socrates with study material of your own.</p>
           </div>
         </header>
+        <nav className={styles.contextSwitch} aria-label="Study Creator sections" role="tablist">
+          <button
+            aria-selected={browseMode === 'socrates'}
+            className={browseMode === 'socrates' ? styles.activeContext : ''}
+            onClick={() => setBrowseMode('socrates')}
+            role="tab"
+            type="button"
+          >
+            Browse
+          </button>
+          <button
+            aria-selected={browseMode === 'flagged'}
+            className={browseMode === 'flagged' ? styles.activeContext : ''}
+            onClick={() => setBrowseMode('flagged')}
+            role="tab"
+            type="button"
+          >
+            Flagged
+          </button>
+          <button
+            aria-selected={browseMode === 'decks'}
+            className={browseMode === 'decks' ? styles.activeContext : ''}
+            onClick={() => setBrowseMode('decks')}
+            role="tab"
+            type="button"
+          >
+            Personal Decks
+          </button>
+        </nav>
 
         {(message || error) && (
           <div className={`${styles.notice} ${error ? styles.noticeError : ''}`} role={error ? 'alert' : 'status'}>
             <span>{error || message}</span>
             <button aria-label="Dismiss message" onClick={clearFeedback} type="button">×</button>
           </div>
+        )}
+
+        {browseMode === 'socrates' && (
+          <>
+            <div className={styles.browseToolbar}>
+              <details className={styles.newMenu}>
+                <summary>＋ New</summary>
+                <div>
+                  <button onClick={() => openTopicEditor(null)} type="button">New Custom Topic</button>
+                  <button disabled={!topics.length} onClick={() => openConceptEditor(null)} type="button">New Personal Concept</button>
+                  <button disabled={!concepts.length} onClick={() => openCardEditor(null)} type="button">New Personal Card</button>
+                  <button onClick={() => setBrowseMode('decks')} type="button">New Personal Deck</button>
+                </div>
+              </details>
+              <label className={styles.unifiedSearch}>
+                <span aria-hidden="true"><Icon name="search" /></span>
+                <input
+                  aria-label="Search all Socrates and personal material"
+                  onChange={(event) => setBrowseSearch(event.target.value)}
+                  placeholder="Search all your Socrates and personal material..."
+                  type="search"
+                  value={browseSearch}
+                />
+              </label>
+              <label className={styles.filterControl}>
+                <Icon name="filter" />
+                <span>Filters</span>
+                <select
+                  aria-label="Filter Study Creator material"
+                  onChange={(event) => setBrowseFilter(event.target.value as UnifiedBrowseFilter)}
+                  value={browseFilter}
+                >
+                  <option value="all">All material</option>
+                  <option value="official">Socrates (Official)</option>
+                  <option value="personal">Mine (Personal)</option>
+                  <option value="concepts">Concepts</option>
+                  <option value="cards">Cards and Questions</option>
+                </select>
+              </label>
+            </div>
+            <div className={styles.unifiedInfoBar}>
+              <p>This is a unified view of all Socrates content and your personal material.</p>
+              <div aria-label="Ownership legend">
+                <span><i className={styles.officialOwnerMark}>S</i> Socrates (Official)</span>
+                <span><i className={styles.personalOwnerMark}>M</i> Mine (Personal)</span>
+              </div>
+            </div>
+          </>
         )}
 
         {browseMode === 'mine' ? (
@@ -1135,13 +1198,32 @@ export function StudyCreatorClient({
         ) : browseMode === 'socrates' ? (
           <SocratesStudyCreatorBrowser
             data={officialBrowser}
+            filter={browseFilter}
             material={{ topics, concepts, cards, overlays }}
             onAddCard={addCardForOfficialConcept}
             onAddConcept={openOverlayEditor}
+            onCreateCard={(conceptId) => openCardEditor(null, conceptId)}
+            onCreateConcept={(topicId) => {
+              setSelectedTopicId(topicId);
+              openConceptEditor(null, topicId);
+            }}
+            onCreateTopic={(parentId) => openTopicEditor(null, parentId)}
+            onDeleteCard={(card) => requestDelete({ kind: 'card', record: card })}
+            onDeleteConcept={(concept) => requestDelete({ kind: 'concept', record: concept })}
+            onDeleteTopic={(topic) => requestDelete({ kind: 'topic', record: topic })}
             onDetach={(overlay) => {
               rememberModalOpener();
               setDetachTarget(overlay);
             }}
+            onEditCard={openCardEditor}
+            onEditConcept={openConceptEditor}
+            onEditTopic={openTopicEditor}
+            search={browseSearch}
+          />
+        ) : browseMode === 'flagged' ? (
+          <StudyCreatorFlaggedBrowser
+            material={{ topics, concepts, cards, overlays }}
+            ownerId={ownerId}
           />
         ) : (
           <PersonalDecksBrowser

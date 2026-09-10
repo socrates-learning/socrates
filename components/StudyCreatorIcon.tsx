@@ -5,6 +5,8 @@ type IconName =
   | 'card'
   | 'chevron-down'
   | 'chevron-right'
+  | 'filter'
+  | 'flag'
   | 'folder'
   | 'more'
   | 'pencil'
@@ -17,6 +19,8 @@ export function StudyCreatorIcon({ name }: { name: IconName }) {
     card: <><path d="M6 2.75h8l4 4V21.25H6z" /><path d="M14 2.75v4h4M9 12h6M9 16h6" /></>,
     'chevron-down': <path d="m7 9.5 5 5 5-5" />,
     'chevron-right': <path d="m9.5 7 5 5-5 5" />,
+    filter: <><path d="M4 6h16M7 12h10M10 18h4" /><circle cx="8" cy="6" r="1.5" /><circle cx="15" cy="12" r="1.5" /><circle cx="12" cy="18" r="1.5" /></>,
+    flag: <><path d="M5 21V4" /><path d="M5 5h10l-1.5 3L16 12H5" /></>,
     folder: <path d="M3 6.5h6l2-2h4.5A2.5 2.5 0 0 1 18 7v1H5.5A2.5 2.5 0 0 0 3 10.5zm0 4A2.5 2.5 0 0 1 5.5 8H21l-2 11.5H3z" />,
     more: <><circle cx="5" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /></>,
     pencil: <><path d="m4 20 4.25-1 10.5-10.5-3.25-3.25L5 15.75z" /><path d="m13.75 7 3.25 3.25" /></>,

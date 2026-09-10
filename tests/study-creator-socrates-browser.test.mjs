@@ -42,9 +42,12 @@ test('shared Topic utilities preserve arbitrary-depth paths and search ancestors
   );
 });
 
-test('My Topics remains the default and personal CRUD stays on personal tables', () => {
-  assert.match(componentSource, /useState<'mine' \| 'socrates' \| 'decks'>\('mine'\)/);
-  assert.match(componentSource, /browseMode === 'mine'/);
+test('Browse is the default and personal CRUD stays on personal tables', () => {
+  assert.match(componentSource, />\('socrates'\);/);
+  assert.match(componentSource, />\s*Browse\s*<\/button>/);
+  assert.match(componentSource, />\s*Flagged\s*<\/button>/);
+  assert.doesNotMatch(componentSource, />\s*My Topics\s*<\/button>/);
+  assert.doesNotMatch(componentSource, />\s*Socrates\s*<\/button>/);
   assert.match(componentSource, /\.from\('personal_topics'\)/);
   assert.match(componentSource, /\.from\('personal_concepts'\)/);
   assert.match(componentSource, /\.from\('personal_cards'\)/);
@@ -59,22 +62,42 @@ test('Socrates data loading is active-Library scoped and published-only', () => 
   assert.match(pageSource, /\.eq\('library_nodes\.library_id', activeLibrary\.id\)/);
   assert.doesNotMatch(pageSource, /\.in\('library_node_id', nodeIds\)/);
   assert.match(pageSource, /\.eq\('concepts\.status', 'published'\)/);
+  assert.match(pageSource, /\.from\('questions'\)/);
+  assert.match(pageSource, /\.eq\('status', 'published'\)/);
 });
 
-test('Socrates browser keeps official content read-only and delegates personal actions', () => {
+test('unified browser keeps official content read-only and composes the personal layer', () => {
   assert.doesNotMatch(officialBrowserSource, /\.from\(/);
   assert.doesNotMatch(officialBrowserSource, /personal_concept_official_placements/);
   assert.doesNotMatch(officialBrowserSource, /Delete official|Edit official|Reorder/);
-  assert.match(officialBrowserSource, /Read only/);
+  assert.match(officialBrowserSource, /Socrates \(Official\)/);
+  assert.match(officialBrowserSource, /Mine \(Personal\)/);
+  assert.match(officialBrowserSource, /My Custom Topics/);
+  assert.match(officialBrowserSource, /Your Content for This Concept/);
   assert.match(officialBrowserSource, /Add My Concept/);
   assert.match(officialBrowserSource, /Add My Card/);
-  assert.match(componentSource, /aria-pressed=\{browseMode === 'socrates'\}/);
-  assert.match(officialBrowserSource, /aria-label="Socrates Topic Tree"/);
+  assert.match(componentSource, /aria-selected=\{browseMode === 'socrates'\}/);
+  assert.match(componentSource, /role="tablist"/);
+  assert.match(officialBrowserSource, /1\. Topic Tree/);
+  assert.match(officialBrowserSource, /2\. Concepts &amp; Cards/);
+  assert.match(officialBrowserSource, /3\. Details/);
+  assert.match(officialBrowserSource, /aria-label="Official and personal Topic Tree"/);
+});
+
+test('a non-empty Browse search spans loaded official and personal material', () => {
+  assert.match(officialBrowserSource, /if \(normalizedSearch\)/);
+  assert.match(officialBrowserSource, /officialConcepts\.forEach/);
+  assert.match(officialBrowserSource, /material\.concepts\.forEach/);
+  assert.match(officialBrowserSource, /Search Results/);
+  assert.match(
+    officialBrowserSource,
+    /No Socrates or personal material matches this search\./
+  );
 });
 
 test('official Concepts retain a single identity with every placement path', () => {
   assert.match(pageSource, /const conceptsById = new Map/);
   assert.match(pageSource, /existing\.placementNodeIds\.push/);
   assert.match(officialBrowserSource, /concept\.placementNodeIds\.map/);
-  assert.match(officialBrowserSource, /selectedConceptPaths\.map/);
+  assert.match(officialBrowserSource, /officialPath\(officialTree, topicId\)/);
 });

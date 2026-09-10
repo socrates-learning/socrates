@@ -37,8 +37,9 @@ test('RPC validates owned home, accessible Library, and published exact placemen
 test('official actions are contextual and ownership-labelled', () => {
   assert.match(browserSource, /Add My Concept/);
   assert.match(browserSource, /Add My Card/);
-  assert.match(browserSource, /Mine · Private/);
-  assert.match(browserSource, /Socrates stays unchanged/);
+  assert.match(browserSource, /Mine \(Personal\)/);
+  assert.match(browserSource, /Socrates \(Official\)/);
+  assert.match(browserSource, /Your Content for This Concept/);
   assert.doesNotMatch(browserSource, /\.from\(/);
 });
 
