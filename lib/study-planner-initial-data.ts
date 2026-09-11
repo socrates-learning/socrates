@@ -2,10 +2,6 @@ import 'server-only';
 
 import type { ActiveLibrary, ActiveLibraryRole } from '@/lib/library-context';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
-import {
-  getOfficialStudyReadyQuestionCounts,
-  type StudyCandidateRow,
-} from '@/lib/study-candidates';
 
 type LibraryNode = {
   id: string;
@@ -74,10 +70,26 @@ type PersonalCollection = {
 type PersonalCollectionRow = {
   id: string;
   name: string;
-  personal_collection_cards:
-    | { count: number }[]
-    | { count: number }
-    | null;
+  card_count: number;
+};
+
+type HomeStudyBootstrapResponse = {
+  available_libraries: ActiveLibrary[];
+  nodes: LibraryNode[];
+  placements: Placement[];
+  official_question_counts: Record<string, number>;
+  selected_node_ids: string[];
+  excluded_node_ids: string[];
+  node_preferences: Record<string, number>;
+  concept_overrides: Record<string, 'included' | 'excluded'>;
+  resolved_concepts: StudyDeckConcept[];
+  personal_topics: PersonalTopic[];
+  personal_concepts: PersonalConcept[];
+  personal_cards: PersonalCard[];
+  selected_personal_topic_ids: string[];
+  personal_collections: PersonalCollectionRow[];
+  selected_personal_collection_ids: string[];
+  learner_progress: LearnerProgressResponse;
 };
 
 type LearnerProgressMetric = {
@@ -184,33 +196,18 @@ function emptyInitialData(
 
 export async function loadStudyPlannerInitialData({
   activeLibrary,
-  role,
 }: {
   activeLibrary: ActiveLibrary;
   role: ActiveLibraryRole;
 }): Promise<StudyPlannerInitialData> {
   const supabase = await createSupabaseServerClient();
-  const availableLibrariesPromise =
-    role === 'editor' || role === 'admin'
-      ? supabase
-          .from('libraries')
-          .select('id, name, slug, description, status')
-          .eq('status', 'active')
-          .order('name')
-      : Promise.resolve({ data: [activeLibrary], error: null });
-  const [availableLibrariesResult, deckResult] = await Promise.all([
-    availableLibrariesPromise,
-    supabase.rpc('get_or_create_active_study_deck', {
-      p_library_id: activeLibrary.id,
-    }),
-  ]);
-  const availableLibraries = availableLibrariesResult.data?.length
-    ? (availableLibrariesResult.data as ActiveLibrary[])
-    : [activeLibrary];
+  const deckResult = await supabase.rpc('get_or_create_active_study_deck', {
+    p_library_id: activeLibrary.id,
+  });
 
   if (deckResult.error || !deckResult.data) {
     return {
-      ...emptyInitialData(activeLibrary, availableLibraries),
+      ...emptyInitialData(activeLibrary),
       loadError: `Unable to load your deck: ${
         deckResult.error?.message || 'No active deck found.'
       }`,
@@ -218,213 +215,54 @@ export async function loadStudyPlannerInitialData({
   }
 
   const activeDeck = deckResult.data as StudyDeck;
-  const [
-    nodeResult,
-    selectedNodesResult,
-    excludedNodesResult,
-    overridesResult,
-    preferenceResult,
-    resolvedResult,
-    learnerProgressResult,
-    personalTopicsResult,
-    personalConceptsResult,
-    personalCardsResult,
-    personalSelectionsResult,
-    personalCollectionsResult,
-    personalCollectionSelectionsResult,
-    placementResult,
-  ] = await Promise.all([
-    supabase
-      .from('library_nodes')
-      .select('id, name, node_type, parent_id')
-      .eq('library_id', activeLibrary.id)
-      .order('name'),
-    supabase
-      .from('user_study_node_selections')
-      .select('node_id')
-      .eq('deck_id', activeDeck.id),
-    supabase
-      .from('study_deck_node_exclusions')
-      .select('node_id')
-      .eq('deck_id', activeDeck.id),
-    supabase
-      .from('user_study_concept_overrides')
-      .select('concept_id, selection_state')
-      .eq('deck_id', activeDeck.id),
-    supabase
-      .from('study_deck_node_preferences')
-      .select('library_node_id, new_mastery_balance')
-      .eq('deck_id', activeDeck.id),
-    supabase.rpc('resolve_study_deck', {
-      p_deck_id: activeDeck.id,
-    }),
-    supabase.rpc('get_library_learner_progress', {
-      p_library_id: activeLibrary.id,
-    }),
-    supabase
-      .from('personal_topics')
-      .select('id, parent_id, name, sort_order')
-      .order('sort_order')
-      .order('name'),
-    supabase
-      .from('personal_concepts')
-      .select('id, topic_id, name')
-      .order('name'),
-    supabase
-      .from('personal_cards')
-      .select('id, concept_id')
-      .order('created_at'),
-    supabase
-      .from('study_deck_personal_topic_selections')
-      .select('personal_topic_id')
-      .eq('deck_id', activeDeck.id),
-    supabase
-      .from('personal_collections')
-      .select('id, name, personal_collection_cards(count)')
-      .order('name'),
-    supabase
-      .from('study_deck_personal_collection_selections')
-      .select('personal_collection_id')
-      .eq('deck_id', activeDeck.id),
-    supabase
-      .from('concept_placements')
-      .select(
-        `
-        concept_id,
-        library_node_id,
-        library_nodes!inner (library_id),
-        concepts!inner (
-          id,
-          name,
-          concept_type,
-          summary,
-          status
-        )
-      `
-      )
-      .eq('library_nodes.library_id', activeLibrary.id)
-      .eq('concepts.status', 'published'),
-  ]);
+  const { data, error } = await supabase.rpc('get_home_study_bootstrap', {
+    p_library_id: activeLibrary.id,
+    p_deck_id: activeDeck.id,
+  });
 
-  if (nodeResult.error) {
+  if (error || !data) {
     return {
-      ...emptyInitialData(activeLibrary, availableLibraries),
+      ...emptyInitialData(activeLibrary),
       deck: activeDeck,
-      loadError: `Unable to load topics: ${nodeResult.error.message}`,
+      loadError: `Unable to load Home study data: ${
+        error?.message || 'No bootstrap data returned.'
+      }`,
     };
   }
 
-  if (preferenceResult.error) {
-    return {
-      ...emptyInitialData(activeLibrary, availableLibraries),
-      deck: activeDeck,
-      loadError: `Unable to load deck preferences: ${preferenceResult.error.message}`,
-    };
-  }
-
-  const personalMaterialError =
-    personalTopicsResult.error ||
-    personalConceptsResult.error ||
-    personalCardsResult.error ||
-    personalSelectionsResult.error ||
-    personalCollectionsResult.error ||
-    personalCollectionSelectionsResult.error;
-
-  const nodes = (nodeResult.data || []) as LibraryNode[];
-  if (placementResult.error) {
-    return {
-      ...emptyInitialData(activeLibrary, availableLibraries),
-      deck: activeDeck,
-      nodes,
-      loadError: `Unable to load deck concepts: ${placementResult.error.message}`,
-    };
-  }
-
-  const placements = (placementResult.data || []) as unknown as Placement[];
-  const conceptIds = [
-    ...new Set(placements.map((placement) => placement.concept_id)),
-  ];
-  const candidateResult = conceptIds.length
-    ? await supabase.rpc('resolve_study_candidates', {
-        p_deck_id: activeDeck.id,
-      })
-    : { data: [], error: null };
-  const questionCounts = candidateResult.error
-    ? {}
-    : getOfficialStudyReadyQuestionCounts(
-        (candidateResult.data || []) as StudyCandidateRow[]
-      );
+  const bootstrap = data as unknown as HomeStudyBootstrapResponse;
+  const availableLibraries = bootstrap.available_libraries?.length
+    ? bootstrap.available_libraries
+    : [activeLibrary];
 
   return {
     libraryId: activeLibrary.id,
     availableLibraries,
     deck: activeDeck,
-    nodes,
-    placements,
-    questionCounts,
-    selectedNodeIds: (selectedNodesResult.data || []).map(
-      (selection) => selection.node_id
+    nodes: bootstrap.nodes || [],
+    placements: bootstrap.placements || [],
+    questionCounts: bootstrap.official_question_counts || {},
+    selectedNodeIds: bootstrap.selected_node_ids || [],
+    excludedNodeIds: bootstrap.excluded_node_ids || [],
+    nodePreferences: bootstrap.node_preferences || {},
+    conceptOverrides: bootstrap.concept_overrides || {},
+    resolvedConcepts: bootstrap.resolved_concepts || [],
+    personalTopics: bootstrap.personal_topics || [],
+    personalConcepts: bootstrap.personal_concepts || [],
+    personalCards: bootstrap.personal_cards || [],
+    selectedPersonalTopicIds: bootstrap.selected_personal_topic_ids || [],
+    personalCollections: (bootstrap.personal_collections || []).map(
+      (collection) => ({
+        id: collection.id,
+        name: collection.name,
+        cardCount: Number(collection.card_count || 0),
+      })
     ),
-    excludedNodeIds: (excludedNodesResult.data || []).map(
-      (exclusion) => exclusion.node_id
-    ),
-    nodePreferences: Object.fromEntries(
-      (preferenceResult.data || []).map((preference) => [
-        preference.library_node_id,
-        Number(preference.new_mastery_balance),
-      ])
-    ),
-    conceptOverrides: Object.fromEntries(
-      (overridesResult.data || []).map((override) => [
-        override.concept_id,
-        override.selection_state as 'included' | 'excluded',
-      ])
-    ),
-    resolvedConcepts: (resolvedResult.data || []) as StudyDeckConcept[],
-    personalTopics: personalTopicsResult.error
-      ? []
-      : ((personalTopicsResult.data || []) as PersonalTopic[]),
-    personalConcepts: personalConceptsResult.error
-      ? []
-      : ((personalConceptsResult.data || []) as PersonalConcept[]),
-    personalCards: personalCardsResult.error
-      ? []
-      : ((personalCardsResult.data || []) as PersonalCard[]),
-    selectedPersonalTopicIds: personalSelectionsResult.error
-      ? []
-      : (personalSelectionsResult.data || []).map(
-          (selection) => selection.personal_topic_id
-        ),
-    personalCollections: personalCollectionsResult.error
-      ? []
-      : ((personalCollectionsResult.data || []) as unknown as PersonalCollectionRow[]).map(
-          (collection) => {
-            const count = Array.isArray(collection.personal_collection_cards)
-              ? collection.personal_collection_cards[0]?.count
-              : collection.personal_collection_cards?.count;
-            return {
-              id: collection.id,
-              name: collection.name,
-              cardCount: Number(count || 0),
-            };
-          }
-        ),
-    selectedPersonalCollectionIds: personalCollectionSelectionsResult.error
-      ? []
-      : (personalCollectionSelectionsResult.data || []).map(
-          (selection) => selection.personal_collection_id
-        ),
+    selectedPersonalCollectionIds:
+      bootstrap.selected_personal_collection_ids || [],
     learnerProgress:
-      learnerProgressResult.error || !learnerProgressResult.data
-        ? emptyLearnerProgress(activeLibrary.id)
-        : (learnerProgressResult.data as unknown as LearnerProgressResponse),
-    learnerProgressError: learnerProgressResult.error
-      ? `Progress could not be loaded: ${learnerProgressResult.error.message}`
-      : '',
-    loadError: candidateResult.error
-      ? `Study-ready counts could not be loaded: ${candidateResult.error.message}`
-      : personalMaterialError
-        ? `Personal study material could not be loaded: ${personalMaterialError.message}`
-        : '',
+      bootstrap.learner_progress || emptyLearnerProgress(activeLibrary.id),
+    learnerProgressError: '',
+    loadError: '',
   };
 }

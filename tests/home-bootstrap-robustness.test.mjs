@@ -201,10 +201,12 @@ test('Set Up Deck loads and persists compact Personal Deck selections', () => {
     'utf8'
   );
 
+  assert.match(studyPlannerSource, /personal_collections/);
+  assert.match(studyPlannerSource, /personal_collection_cards\(count\)/);
+  assert.match(studyPlannerSource, /study_deck_personal_collection_selections/);
+  assert.match(initialDataSource, /personal_collections/);
+  assert.match(initialDataSource, /selected_personal_collection_ids/);
   for (const source of [studyPlannerSource, initialDataSource]) {
-    assert.match(source, /personal_collections/);
-    assert.match(source, /personal_collection_cards\(count\)/);
-    assert.match(source, /study_deck_personal_collection_selections/);
     assert.match(source, /selectedPersonalCollectionIds/);
   }
   assert.match(studyPlannerSource, /Personal Decks/);
@@ -219,20 +221,33 @@ test('Set Up Deck loads and persists compact Personal Deck selections', () => {
 test('large Library placement loading stays bounded by Library identity', () => {
   const sources = [
     readFileSync(new URL('../components/StudyPlanner.tsx', import.meta.url), 'utf8'),
-    readFileSync(
-      new URL('../lib/study-planner-initial-data.ts', import.meta.url),
-      'utf8'
-    ),
+    readFileSync(new URL('../supabase/091_home_study_bootstrap.sql', import.meta.url), 'utf8'),
   ];
 
   for (const source of sources) {
-    assert.match(source, /library_nodes!inner \(library_id\)/);
-    assert.match(
-      source,
-      /\.eq\('library_nodes\.library_id', activeLibrary\.id\)/
-    );
+    assert.match(source, /library_nodes/);
     assert.doesNotMatch(source, /\.in\('library_node_id', nodeIds\)/);
   }
+});
+
+test('server Home bootstrap uses one consolidated post-deck RPC', () => {
+  const initialDataSource = readFileSync(
+    new URL('../lib/study-planner-initial-data.ts', import.meta.url),
+    'utf8'
+  );
+  const migration = readFileSync(
+    new URL('../supabase/091_home_study_bootstrap.sql', import.meta.url),
+    'utf8'
+  );
+
+  assert.match(initialDataSource, /get_or_create_active_study_deck/);
+  assert.match(initialDataSource, /get_home_study_bootstrap/);
+  assert.doesNotMatch(initialDataSource, /resolve_study_candidates/);
+  assert.doesNotMatch(initialDataSource, /\.from\('library_nodes'\)/);
+  assert.match(migration, /public\.resolve_study_deck\(target_deck\.id\)/);
+  assert.match(migration, /public\.resolve_study_candidates\(target_deck\.id\)/);
+  assert.match(migration, /count\(distinct candidate\.official_question_id\)/);
+  assert.doesNotMatch(migration, /'prompt'/);
 });
 
 test('Phase 1 UX keeps direct Study, nearby Cram, and Exit-to-Home behavior', () => {
