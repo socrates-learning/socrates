@@ -2,6 +2,7 @@ import 'server-only';
 
 import type { ActiveLibrary, ActiveLibraryRole } from '@/lib/library-context';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
+import type { ServerTimingRecorder } from '@/lib/request-performance';
 
 type LibraryNode = {
   id: string;
@@ -90,6 +91,11 @@ type HomeStudyBootstrapResponse = {
   personal_collections: PersonalCollectionRow[];
   selected_personal_collection_ids: string[];
   learner_progress: LearnerProgressResponse;
+};
+
+type ExistingHomeStudyBootstrapResponse = {
+  deck: StudyDeck | null;
+  bootstrap: HomeStudyBootstrapResponse | null;
 };
 
 type LearnerProgressMetric = {
@@ -196,41 +202,81 @@ function emptyInitialData(
 
 export async function loadStudyPlannerInitialData({
   activeLibrary,
+  timing,
 }: {
   activeLibrary: ActiveLibrary;
   role: ActiveLibraryRole;
+  timing?: ServerTimingRecorder;
 }): Promise<StudyPlannerInitialData> {
   const supabase = await createSupabaseServerClient();
-  const deckResult = await supabase.rpc('get_or_create_active_study_deck', {
-    p_library_id: activeLibrary.id,
-  });
+  const loadExistingBootstrap = () =>
+    supabase.rpc('get_existing_home_study_bootstrap', {
+      p_library_id: activeLibrary.id,
+    });
+  const existingResult = timing
+    ? await timing.measure('existing_deck_bootstrap', loadExistingBootstrap)
+    : await loadExistingBootstrap();
 
-  if (deckResult.error || !deckResult.data) {
+  if (existingResult.error || !existingResult.data) {
     return {
       ...emptyInitialData(activeLibrary),
       loadError: `Unable to load your deck: ${
-        deckResult.error?.message || 'No active deck found.'
+        existingResult.error?.message || 'No Home bootstrap result returned.'
       }`,
     };
   }
 
-  const activeDeck = deckResult.data as StudyDeck;
-  const { data, error } = await supabase.rpc('get_home_study_bootstrap', {
-    p_library_id: activeLibrary.id,
-    p_deck_id: activeDeck.id,
-  });
+  const existing = existingResult.data as unknown as ExistingHomeStudyBootstrapResponse;
+  let activeDeck = existing.deck;
+  let bootstrap = existing.bootstrap;
 
-  if (error || !data) {
+  if (!activeDeck) {
+    const createDeck = () =>
+      supabase.rpc('get_or_create_active_study_deck', {
+        p_library_id: activeLibrary.id,
+      });
+    const deckResult = timing
+      ? await timing.measure('active_deck_create', createDeck)
+      : await createDeck();
+
+    if (deckResult.error || !deckResult.data) {
+      return {
+        ...emptyInitialData(activeLibrary),
+        loadError: `Unable to load your deck: ${
+          deckResult.error?.message || 'No active deck found.'
+        }`,
+      };
+    }
+
+    activeDeck = deckResult.data as StudyDeck;
+    const loadBootstrap = () => supabase.rpc('get_home_study_bootstrap', {
+      p_library_id: activeLibrary.id,
+      p_deck_id: activeDeck?.id,
+    });
+    const bootstrapResult = timing
+      ? await timing.measure('bootstrap_after_create', loadBootstrap)
+      : await loadBootstrap();
+
+    if (bootstrapResult.error || !bootstrapResult.data) {
+      return {
+        ...emptyInitialData(activeLibrary),
+        deck: activeDeck,
+        loadError: `Unable to load Home study data: ${
+          bootstrapResult.error?.message || 'No bootstrap data returned.'
+        }`,
+      };
+    }
+
+    bootstrap = bootstrapResult.data as unknown as HomeStudyBootstrapResponse;
+  }
+
+  if (!bootstrap) {
     return {
       ...emptyInitialData(activeLibrary),
       deck: activeDeck,
-      loadError: `Unable to load Home study data: ${
-        error?.message || 'No bootstrap data returned.'
-      }`,
+      loadError: 'Unable to load Home study data: No bootstrap data returned.',
     };
   }
-
-  const bootstrap = data as unknown as HomeStudyBootstrapResponse;
   const availableLibraries = bootstrap.available_libraries?.length
     ? bootstrap.available_libraries
     : [activeLibrary];

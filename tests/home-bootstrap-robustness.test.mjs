@@ -240,6 +240,7 @@ test('server Home bootstrap uses one consolidated post-deck RPC', () => {
     'utf8'
   );
 
+  assert.match(initialDataSource, /get_existing_home_study_bootstrap/);
   assert.match(initialDataSource, /get_or_create_active_study_deck/);
   assert.match(initialDataSource, /get_home_study_bootstrap/);
   assert.doesNotMatch(initialDataSource, /resolve_study_candidates/);
@@ -248,6 +249,44 @@ test('server Home bootstrap uses one consolidated post-deck RPC', () => {
   assert.match(migration, /public\.resolve_study_candidates\(target_deck\.id\)/);
   assert.match(migration, /count\(distinct candidate\.official_question_id\)/);
   assert.doesNotMatch(migration, /'prompt'/);
+});
+
+test('existing Home decks use one read-only bootstrap round trip with a safe creation fallback', () => {
+  const initialDataSource = readFileSync(
+    new URL('../lib/study-planner-initial-data.ts', import.meta.url),
+    'utf8'
+  );
+  const migration = readFileSync(
+    new URL('../supabase/092_existing_deck_home_bootstrap.sql', import.meta.url),
+    'utf8'
+  );
+
+  assert.match(initialDataSource, /get_existing_home_study_bootstrap/);
+  assert.match(initialDataSource, /if \(!activeDeck\)/);
+  assert.match(initialDataSource, /active_deck_create/);
+  assert.match(initialDataSource, /bootstrap_after_create/);
+  assert.match(migration, /language plpgsql[\s\S]*?stable[\s\S]*?security definer/);
+  assert.match(migration, /set search_path = ''/);
+  assert.match(migration, /public\.get_home_study_bootstrap\(/);
+  assert.doesNotMatch(migration, /insert into public\.study_decks/i);
+  assert.doesNotMatch(migration, /update public\.study_decks/i);
+  assert.doesNotMatch(migration, /delete from public\.study_decks/i);
+});
+
+test('authenticated request instrumentation is timing-only and uses verified claims', () => {
+  const proxySource = readFileSync(new URL('../proxy.ts', import.meta.url), 'utf8');
+  const homeSource = readFileSync(new URL('../app/page.tsx', import.meta.url), 'utf8');
+  const timingSource = readFileSync(
+    new URL('../lib/request-performance.ts', import.meta.url),
+    'utf8'
+  );
+
+  assert.match(proxySource, /supabase\.auth\.getClaims\(\)/);
+  assert.doesNotMatch(proxySource, /supabase\.auth\.getUser\(\)/);
+  assert.match(proxySource, /Server-Timing/);
+  assert.match(homeSource, /after\(\(\) => timing\.log/);
+  assert.match(timingSource, /socrates_server_timing/);
+  assert.doesNotMatch(timingSource, /email|userId|token|content/i);
 });
 
 test('Phase 1 UX keeps direct Study, nearby Cram, and Exit-to-Home behavior', () => {

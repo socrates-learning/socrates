@@ -2,6 +2,7 @@ import { cookies } from 'next/headers';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
 import { getVerifiedRequestAuthContext } from '@/lib/server-auth-context';
 import { getSoleAccessibleLibrary } from '@/lib/home-bootstrap';
+import type { ServerTimingRecorder } from '@/lib/request-performance';
 
 export const ACTIVE_LIBRARY_COOKIE = 'socrates_active_library';
 
@@ -52,8 +53,10 @@ function normalizeLibrary(library: ActiveLibrary | null): ActiveLibrary | null {
 
 export async function resolveActiveLibraryContext({
   requestedSlug,
+  timing,
 }: {
   requestedSlug?: string | null;
+  timing?: ServerTimingRecorder;
 } = {}): Promise<ActiveLibraryContext> {
   const supabase = await createSupabaseServerClient();
   const cookieStore = await cookies();
@@ -125,26 +128,29 @@ export async function resolveActiveLibraryContext({
     (slug, index, values): slug is string =>
       isValidLibrarySlug(slug) && values.indexOf(slug) === index
   );
-  const [roleResult, membershipResult, candidateLibraryResult] = await Promise.all([
-    requestAuth
-      ? Promise.resolve({ data: { role: requestAuth.role } })
-      : supabase
-          .from('user_roles')
-          .select('role')
-          .eq('user_id', authenticatedUserId)
-          .maybeSingle(),
-    supabase
-      .from('user_libraries')
-      .select('library_id, is_primary, libraries(id, name, slug, description, status)')
-      .eq('user_id', authenticatedUserId),
-    candidateSlugs.length
-      ? supabase
-          .from('libraries')
-          .select('id, name, slug, description, status')
-          .eq('status', 'active')
-          .in('slug', candidateSlugs)
-      : Promise.resolve({ data: [] }),
-  ]);
+  const loadAccessContext = () => Promise.all([
+      requestAuth
+        ? Promise.resolve({ data: { role: requestAuth.role } })
+        : supabase
+            .from('user_roles')
+            .select('role')
+            .eq('user_id', authenticatedUserId)
+            .maybeSingle(),
+      supabase
+        .from('user_libraries')
+        .select('library_id, is_primary, libraries(id, name, slug, description, status)')
+        .eq('user_id', authenticatedUserId),
+      candidateSlugs.length
+        ? supabase
+            .from('libraries')
+            .select('id, name, slug, description, status')
+            .eq('status', 'active')
+            .in('slug', candidateSlugs)
+        : Promise.resolve({ data: [] }),
+    ]);
+  const [roleResult, membershipResult, candidateLibraryResult] = timing
+    ? await timing.measure('library_access', loadAccessContext)
+    : await loadAccessContext();
   const roleData = roleResult.data;
   const roleValue = roleData?.role;
   const role: ActiveLibraryRole =
@@ -242,12 +248,15 @@ export async function resolveActiveLibraryContext({
       };
     }
 
-    const { data: activeLibraryRows } = await supabase
-      .from('libraries')
-      .select('id, name, slug, description, status')
-      .eq('status', 'active')
-      .order('name')
-      .limit(2);
+    const loadStaffFallback = () => supabase
+        .from('libraries')
+        .select('id, name, slug, description, status')
+        .eq('status', 'active')
+        .order('name')
+        .limit(2);
+    const { data: activeLibraryRows } = timing
+      ? await timing.measure('library_staff_fallback', loadStaffFallback)
+      : await loadStaffFallback();
     const soleActiveLibrary = getSoleAccessibleLibrary(
       (activeLibraryRows || []).flatMap((library) => {
         const normalized = normalizeLibrary(library as ActiveLibrary | null);
