@@ -84,6 +84,16 @@ type UnifiedStudyCandidateRow = StudyCandidateRow & {
   debug?: Record<string, unknown>;
 };
 
+type StudySessionStartupRow = {
+  session_id: string;
+  candidate: UnifiedStudyCandidateRow;
+};
+
+export type StudySessionStartup = {
+  sessionId: string;
+  candidate: StudyCandidate;
+};
+
 function requireValue(
   value: string | null,
   field: keyof StudyCandidateRow,
@@ -238,6 +248,37 @@ export async function selectNextStudyCandidate(
   if (!data) return null;
 
   return adaptStudyCandidateRow(data as UnifiedStudyCandidateRow);
+}
+
+export async function startStudySessionWithCandidate(
+  supabase: SupabaseClient,
+  deckId: string,
+  newMasteryBalance: number,
+  sessionRequestId: string
+): Promise<StudySessionStartup> {
+  const { data, error } = await supabase.rpc(
+    'start_study_session_with_candidate',
+    {
+      p_study_deck_id: deckId,
+      p_new_mastery_balance: newMasteryBalance,
+      p_session_id: sessionRequestId,
+      p_include_debug: false,
+    }
+  );
+
+  if (error) {
+    throw new Error(error.message || 'Unable to start Study Mode.');
+  }
+
+  const row = data as StudySessionStartupRow | null;
+  if (!row?.session_id || !row.candidate) {
+    throw new Error('Study startup returned an incomplete response.');
+  }
+
+  return {
+    sessionId: row.session_id,
+    candidate: adaptStudyCandidateRow(row.candidate),
+  };
 }
 
 export async function selectNextUnansweredPersonalCandidate(

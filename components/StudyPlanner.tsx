@@ -29,8 +29,10 @@ import type { StudyPlannerInitialData } from '@/lib/study-planner-initial-data';
 import {
   getOfficialStudyReadyQuestionCounts,
   selectNextStudyCandidate,
+  startStudySessionWithCandidate,
   type StudyCandidate,
   type StudyCandidateRow,
+  type StudySessionStartup,
 } from '@/lib/study-candidates';
 import {
   loadOfficialStudyConceptReview,
@@ -38,7 +40,7 @@ import {
 } from '@/lib/study-concept-review';
 import { recordPersonalStudyAttempt } from '@/lib/personal-study-attempts';
 import {
-  classifyStudySessionStart,
+  EMPTY_STUDY_DECK_ERROR,
   type StudySessionStartOutcome,
 } from '@/lib/study-session-start';
 import type { ReactNode } from 'react';
@@ -550,7 +552,9 @@ export function StudyPlanner({
   const studyResponseRecordedForCard = useRef(false);
   const studyModeOpenLock = useRef(false);
   const studySessionIdRef = useRef<string | null>(null);
-  const studySessionCreatePromiseRef = useRef<Promise<string | null> | null>(null);
+  const studySessionCreatePromiseRef =
+    useRef<Promise<StudySessionStartup | null> | null>(null);
+  const studySessionStartRequestIdRef = useRef<string | null>(null);
   const conceptReviewTriggerRef = useRef<HTMLButtonElement | null>(null);
   const conceptReviewDialogRef = useRef<HTMLElement | null>(null);
   const conceptReviewRequestRef = useRef<{
@@ -1254,8 +1258,16 @@ export function StudyPlanner({
     }
   }
 
-  async function ensureStudySession() {
-    if (studySessionIdRef.current) return studySessionIdRef.current;
+  async function ensureStudySessionWithCandidate() {
+    if (studySessionIdRef.current) {
+      const selectedCandidate = await selectNextStudyCandidate(
+        supabase,
+        studySessionIdRef.current
+      );
+      return selectedCandidate
+        ? { sessionId: studySessionIdRef.current, candidate: selectedCandidate }
+        : null;
+    }
     if (studySessionCreatePromiseRef.current) {
       return studySessionCreatePromiseRef.current;
     }
@@ -1271,27 +1283,37 @@ export function StudyPlanner({
               selectedBalances.length
           )
         : 50;
-      const { data, error } = await supabase.rpc('start_study_session', {
-        p_study_deck_id: deck.id,
-        p_new_mastery_balance: sessionBalance,
-      });
-      const outcome = classifyStudySessionStart(data as string | null, error);
+      const requestId =
+        studySessionStartRequestIdRef.current ?? window.crypto.randomUUID();
+      studySessionStartRequestIdRef.current = requestId;
 
-      if (outcome.kind === 'empty-deck') {
-        setStudyStartFailure('empty-deck');
+      try {
+        const startup = await startStudySessionWithCandidate(
+          supabase,
+          deck.id,
+          sessionBalance,
+          requestId
+        );
+        if (studySessionStartRequestIdRef.current === requestId) {
+          setStudyStartFailure(null);
+          studySessionIdRef.current = startup.sessionId;
+          studySessionStartRequestIdRef.current = null;
+        }
+        return startup;
+      } catch (error) {
+        const isEmptyDeck =
+          error instanceof Error && error.message === EMPTY_STUDY_DECK_ERROR;
+        if (studySessionStartRequestIdRef.current === requestId) {
+          setStudyStartFailure(isEmptyDeck ? 'empty-deck' : 'error');
+          if (isEmptyDeck) {
+            studySessionStartRequestIdRef.current = null;
+          }
+        }
+        if (!isEmptyDeck) {
+          console.error('Unable to start Study Mode session.', error);
+        }
         return null;
       }
-
-      if (outcome.kind === 'error') {
-        setStudyStartFailure('error');
-        console.error('Unable to start Study Mode session.', error);
-        return null;
-      }
-
-      setStudyStartFailure(null);
-      const sessionId = outcome.sessionId;
-      studySessionIdRef.current = sessionId;
-      return sessionId;
     })();
 
     studySessionCreatePromiseRef.current = createPromise;
@@ -1758,16 +1780,10 @@ export function StudyPlanner({
     setStudySubmissionStatus('idle');
 
     try {
-      const sessionId = await ensureStudySession();
+      const startup = await ensureStudySessionWithCandidate();
 
-      if (sessionId) {
-        const selectedCandidate = await selectNextStudyCandidate(
-          supabase,
-          sessionId
-        );
-        if (selectedCandidate) {
-          setStudyCandidate(selectedCandidate);
-        }
+      if (startup) {
+        setStudyCandidate(startup.candidate);
       }
     } catch (error) {
       setStudyStartFailure('error');
@@ -1782,11 +1798,14 @@ export function StudyPlanner({
     const pendingSession =
       studySessionIdRef.current ||
       (studySessionCreatePromiseRef.current
-        ? studySessionCreatePromiseRef.current
-        : null);
+        ? studySessionCreatePromiseRef.current.then(
+            (startup) => startup?.sessionId ?? null
+          )
+        : studySessionStartRequestIdRef.current);
 
     studySessionIdRef.current = null;
     studySessionCreatePromiseRef.current = null;
+    studySessionStartRequestIdRef.current = null;
     studyResponseRecordedForCard.current = false;
     studySubmission.current = null;
     setStudySubmissionStatus('idle');

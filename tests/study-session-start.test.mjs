@@ -33,8 +33,12 @@ test('a missing session ID without the domain exception remains an error', () =>
 });
 
 test('Personal-Deck-only eligibility reaches the unchanged session start contract', () => {
-  const migration = readFileSync(
+  const personalDeckMigration = readFileSync(
     new URL('../supabase/080_personal_collection_study_selections.sql', import.meta.url),
+    'utf8'
+  );
+  const startupMigration = readFileSync(
+    new URL('../supabase/093_study_startup_selector_hardening.sql', import.meta.url),
     'utf8'
   );
   const planner = readFileSync(
@@ -42,11 +46,14 @@ test('Personal-Deck-only eligibility reaches the unchanged session start contrac
     'utf8'
   );
 
-  assert.match(migration, /eligible_personal_cards as/);
-  assert.match(migration, /study_deck_personal_collection_selections/);
-  assert.match(migration, /union[\s\S]*select membership\.personal_card_id/);
-  assert.match(planner, /supabase\.rpc\('start_study_session'/);
-  assert.doesNotMatch(migration, /create or replace function public\.start_study_session/);
+  assert.match(personalDeckMigration, /eligible_personal_cards as/);
+  assert.match(personalDeckMigration, /study_deck_personal_collection_selections/);
+  assert.match(personalDeckMigration, /union[\s\S]*select membership\.personal_card_id/);
+  assert.match(startupMigration, /create or replace function public\.start_study_session_with_candidate/);
+  assert.match(startupMigration, /public\.select_next_study_candidate\(/);
+  assert.match(planner, /startStudySessionWithCandidate\(/);
+  assert.doesNotMatch(planner, /supabase\.rpc\('start_study_session'/);
+  assert.doesNotMatch(personalDeckMigration, /create or replace function public\.start_study_session/);
 });
 
 test('empty Personal Deck membership cannot emit a false personal candidate', () => {
