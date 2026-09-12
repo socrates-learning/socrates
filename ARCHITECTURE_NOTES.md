@@ -24,3 +24,17 @@ The user's mastery belongs to the concept itself, not one folder path. This prev
 ## Why this matters
 
 The app should never assume we already know every future category. Users need to add their own organization without changing the database design.
+
+## Unified Creator Studio cutover prerequisite
+
+The existing staff Creator Studio and learner Study Creator remain separate,
+parallel routes until the unified experience reaches full feature and security
+parity. The shared UI layer must preserve source-qualified official and personal
+identities; it must never merge their storage, ownership, write paths, or RLS.
+
+Before any future learner-capable `/creator` parent route exposes its current
+descendants, audit and harden legacy Article draft write policies if Articles
+remain staff-only official authoring. Route-level staff checks are not a
+substitute for table/RPC authorization. Do not expose Article Editor or Library
+Organizer descendants to learners until that database authorization gate has
+passed.
