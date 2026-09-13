@@ -2,6 +2,8 @@ import { redirect, notFound } from 'next/navigation';
 import { CreatorStudioV2Client } from '@/components/CreatorStudioV2Client';
 import { buildConceptTopicTree } from '@/lib/concept-topic-tree';
 import { resolveActiveLibraryContext } from '@/lib/library-context';
+import { getServerCreatorCapabilityManifest } from '@/lib/server-creator-capabilities';
+import { loadCreatorPersonalContent } from '@/lib/creator-personal-content';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
 
 export default async function EditConceptPage({
@@ -12,8 +14,12 @@ export default async function EditConceptPage({
   const { id } = await params;
   const context = await resolveActiveLibraryContext();
   if (!context.library) redirect('/');
+  const capabilities = await getServerCreatorCapabilityManifest({
+    activeLibraryContext: context,
+  });
+  if (!capabilities) redirect(`/login?next=/creator/concepts/${id}`);
   const supabase = await createSupabaseServerClient();
-  const [{ data: activeLibrary }, { data: concept }] = await Promise.all([
+  const [{ data: activeLibrary }, { data: concept }, personalContent] = await Promise.all([
     supabase
       .from('libraries')
       .select('id, library_nodes(id, name, parent_id, sort_order)')
@@ -25,6 +31,7 @@ export default async function EditConceptPage({
       .select('id, name, body_markdown')
       .eq('id', id)
       .maybeSingle(),
+    loadCreatorPersonalContent(supabase, capabilities.subject.userId),
   ]);
 
   if (!activeLibrary || !concept) notFound();
@@ -95,6 +102,8 @@ export default async function EditConceptPage({
     <CreatorStudioV2Client
       key={activeLibrary.id}
       activeLibraryId={activeLibrary.id}
+      creatorCapabilities={capabilities}
+      initialPersonalContent={personalContent}
       initialTopics={buildConceptTopicTree(nodes || [])}
       initialConcept={{
         id: concept.id,

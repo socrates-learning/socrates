@@ -21,6 +21,15 @@ for (const route of ['new','[id]']) {
     '@/components/CreatorStudioV2Client':{CreatorStudioV2Client:'editor'},
     '@/lib/concept-topic-tree':{buildConceptTopicTree},
     '@/lib/library-context':{resolveActiveLibraryContext:async()=>({library:{id:library}})},
+    '@/lib/server-creator-capabilities':{
+      getServerCreatorCapabilityManifest:async({activeLibraryContext})=>({
+        subject:{userId:'editor-user',role:'editor'},
+        library:{activeLibraryId:activeLibraryContext.library.id},
+      }),
+    },
+    '@/lib/creator-personal-content':{
+      loadCreatorPersonalContent:async(_supabase,ownerId)=>({ownerId,topics:[],concepts:[],cards:[],overlays:[]}),
+    },
     '@/lib/supabase-server':{createSupabaseServerClient:async()=>database},
     'react/jsx-runtime':{jsx:(_type,props)=>props},
    };
@@ -28,6 +37,8 @@ for (const route of ['new','[id]']) {
    vm.runInNewContext(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText,{exports,require:name=>modules[name]});
    const result=await exports.default({params:Promise.resolve({id:'concept'})});
    assert.equal(result.activeLibraryId,library);
+   assert.equal(result.creatorCapabilities.library.activeLibraryId,library);
+   assert.equal(result.initialPersonalContent.ownerId,'editor-user');
    assert.equal(result.initialTopics[0].id,`${library}-topic`);
    assert.ok(calls.some(([table,column,value])=>table==='libraries'&&column==='id'&&value===library));
    assert.ok(!calls.some(([,column])=>column==='slug'));

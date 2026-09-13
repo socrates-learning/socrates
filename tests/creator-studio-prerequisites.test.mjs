@@ -10,6 +10,10 @@ const creatorStyles = readFileSync(
   new URL('../components/CreatorStudioV2Client.module.css', import.meta.url),
   'utf8'
 );
+const creatorRuntimeSource = readFileSync(
+  new URL('../lib/creator-studio-runtime.ts', import.meta.url),
+  'utf8'
+);
 const migrationSource = readFileSync(
   new URL(
     '../supabase/074_creator_studio_prerequisite_authoring.sql',
@@ -24,7 +28,8 @@ test('prerequisite authoring is contained inside the existing Concept flow', () 
   assert.match(creatorSource, /renderPrerequisiteBrowseTopic/);
   assert.match(creatorSource, /Linked prerequisites/);
   assert.match(creatorSource, /No graph\s+drawing required\./);
-  assert.match(creatorSource, /save_concept_with_prerequisites/);
+  assert.match(creatorSource, /type: 'save-concept'/);
+  assert.match(creatorRuntimeSource, /save_concept_with_prerequisites/);
   assert.match(creatorStyles, /\.prerequisitesSection/);
   assert.match(creatorStyles, /@media \(max-width: 520px\)/);
 });

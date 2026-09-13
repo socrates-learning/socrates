@@ -261,12 +261,13 @@ test('shared presentation primitives retain explicit accessibility semantics', (
   assert.match(primitiveSource, /role="menu"/);
 });
 
-test('existing Creator routes and clients remain separate and do not import the foundation', () => {
+test('existing Creator routes stay separate while the real Creator uses only the authority foundation', () => {
   assert.match(creatorLayoutSource, /role !== 'admin' && role !== 'editor'/);
   assert.match(
     studyCreatorPageSource,
     /roleData\?\.role !== 'learner'[\s\S]*roleData\?\.role !== 'editor'[\s\S]*roleData\?\.role !== 'admin'/
   );
-  assert.doesNotMatch(creatorClientSource, /CreatorPresentationPrimitives|creator-capabilities/);
+  assert.match(creatorClientSource, /creator-studio-runtime/);
+  assert.doesNotMatch(creatorClientSource, /CreatorPresentationPrimitives/);
   assert.doesNotMatch(studyCreatorClientSource, /CreatorPresentationPrimitives|creator-capabilities/);
 });

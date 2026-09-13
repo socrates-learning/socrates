@@ -43,6 +43,7 @@ function editor({ editing = false, response, references = [] } = {}) {
       return slots[index];
     },
     useMemo: fn => fn(),
+    useCallback: fn => fn,
     useEffect: () => {},
   };
   const database = {
@@ -72,10 +73,39 @@ function editor({ editing = false, response, references = [] } = {}) {
     'lucide-react': {},
     '@/components/Header': {},
     '@/components/MarkdownContent': {},
+    '@/components/creator/CreatorStudioChrome': {
+      CreatorStudioLocalHeader() {},
+      CreatorStudioSaveToolbar() {},
+      CreatorStudioTabs() {},
+    },
     '@/lib/concept-topic-tree': { buildConceptTopicTree },
     '@/lib/supabase': { supabase: database },
     '@/lib/safe-navigation': {},
     '@/lib/tag-catalog-invalidation': { broadcastTagCatalogUsageInvalidation() {} },
+    '@/lib/creator-capabilities': {},
+    '@/lib/creator-command-contracts': { resolveCreatorCommandRoute: () => 'personal-owner-write' },
+    '@/lib/creator-entity-contracts': { createCreatorEntityKey: (source, kind, id) => `${source}:${kind}:${id}` },
+    '@/lib/creator-studio-runtime': {
+      createOfficialConceptEditorState: (id, libraryId) => id ? { mode: 'official-concept', identity: { id }, libraryId } : { mode: 'new-official-concept', libraryId },
+      createOfficialQuestionEditorState: (id, libraryId) => id ? { mode: 'official-question', identity: { id }, libraryId } : { mode: 'new-official-question', libraryId },
+      createOfficialCreatorPresentationAuthority: () => ({}),
+      createOfficialConceptIdentity: id => ({ id }),
+      createOfficialQuestionIdentity: id => ({ id }),
+      createOfficialTopicIdentity: id => ({ id }),
+      createPersonalConceptEditorState: (id, ownerId) => id ? { mode: 'personal-concept', identity: { id }, ownerId } : { mode: 'new-personal-concept', ownerId },
+      createPersonalCardEditorState: (id, ownerId) => id ? { mode: 'personal-card', identity: { id }, ownerId } : { mode: 'new-personal-card', ownerId },
+      officialConceptId: state => state.mode === 'official-concept' ? state.identity.id : null,
+      officialQuestionId: state => state.mode === 'official-question' ? state.identity.id : null,
+      personalConceptId: state => state.mode === 'personal-concept' ? state.identity.id : null,
+      personalCardId: state => state.mode === 'personal-card' ? state.identity.id : null,
+      conceptEditorIdentityKey: state => state.identity ? `${state.mode}:${state.identity.id}` : state.mode,
+      questionEditorIdentityKey: state => state.identity ? `${state.mode}:${state.identity.id}` : state.mode,
+      isConceptEditorIdentity: (state, source, id) => source === 'official' ? state.mode === 'official-concept' && state.identity.id === id : state.mode === 'personal-concept' && state.identity.id === id,
+      isQuestionEditorIdentity: (state, source, id) => source === 'official' ? state.mode === 'official-question' && state.identity.id === id : state.mode === 'personal-card' && state.identity.id === id,
+      tryAcquireMutationLock: lock => lock.current ? false : (lock.current = true),
+      releaseMutationLock: lock => { lock.current = false; },
+      resolveOfficialCreatorCommand: command => ({ rpc: command.type === 'save-concept' ? 'save_concept_with_prerequisites' : command.type === 'save-question' ? 'save_question_with_relationships_v2' : command.type === 'inspect-delete' ? 'get_development_delete_summary' : command.type === 'delete-content' ? 'delete_development_content' : '' }),
+    },
     './CreatorAlgorithmDiagnostics': {},
     './CreatorStudioV2Client.module.css': { default: {} },
   };
@@ -87,9 +117,26 @@ function editor({ editing = false, response, references = [] } = {}) {
   vm.runInNewContext(compiled, context);
   const props = {
     activeLibraryId: 'library',
+    creatorCapabilities: {
+      subject: { userId: 'owner', role: 'editor' },
+      library: { activeLibraryId: 'library', canAccessActiveLibrary: true, canManageActiveLibrary: true },
+      official: {
+        browsePublished: true, readUnpublished: true, saveConcept: true, saveQuestion: true,
+        publishContent: true, manageTopicTree: true, manageTags: true,
+        managePrerequisites: true, manageFormalSources: true,
+        manageLibraries: true, manageArticles: true,
+      },
+      personal: {
+        createTopic: true, createConcept: true, createCard: true,
+        editOwnContent: true, deleteOwnContent: true,
+        createOfficialContextOverlay: true, managePersonalDecks: true, manageFlags: true,
+      },
+      administration: { manageUsersAndRoles: false, manageLibraryMemberships: false },
+    },
     initialTopics: [{ id: 'topic', name: 'Topic', children: [] }],
     initialConcept: { id: editing ? 'existing-concept' : null, name: '', bodyMarkdown: '', placementIds: ['topic'] },
     initialReferences: references,
+    initialPersonalContent: { ownerId: 'owner', topics: [], concepts: [], cards: [], overlays: [] },
   };
   function render() { cursor = 0; const tree = context.exports.CreatorStudioV2Client(props); return { ...api, tree }; }
   return { render, calls, orders, routes };
