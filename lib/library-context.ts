@@ -290,6 +290,7 @@ export async function resolveActiveLibraryContext({
   }
 
   const soleMembership = getSoleAccessibleLibrary(memberships);
+  const canSwitch = memberships.length > 1;
 
   if (requestedSlug) {
     const requestedMembership = requestedLibrary
@@ -303,21 +304,35 @@ export async function resolveActiveLibraryContext({
       role,
       user: resolvedUser,
       source: requestedMembership ? 'url' : 'none',
-      canSwitch: false,
+      canSwitch,
       hasMembership,
-      needsSelection: !primaryMembership,
+      needsSelection: !requestedMembership && !primaryMembership && !soleMembership,
       isUnauthorized: Boolean(requestedLibrary && !requestedMembership),
     };
   }
 
+  const cookieMembership = cookieLibrary
+    ? memberships.find(
+        (membership) => membership.library.id === cookieLibrary.id
+      )
+    : null;
+  const resolvedMembership =
+    cookieMembership || primaryMembership || soleMembership;
+
   return {
-    library: primaryMembership?.library || soleMembership?.library || null,
+    library: resolvedMembership?.library || null,
     role,
     user: resolvedUser,
-    source: primaryMembership ? 'primary' : soleMembership ? 'fallback' : 'none',
-    canSwitch: false,
+    source: cookieMembership
+      ? 'cookie'
+      : primaryMembership
+        ? 'primary'
+        : soleMembership
+          ? 'fallback'
+          : 'none',
+    canSwitch,
     hasMembership,
-    needsSelection: !primaryMembership && !soleMembership,
+    needsSelection: !resolvedMembership,
     isUnauthorized: false,
   };
 }

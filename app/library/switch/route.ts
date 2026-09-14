@@ -19,7 +19,8 @@ export async function POST(request: NextRequest) {
     .eq('user_id', user.id)
     .maybeSingle();
 
-  if (roleData?.role !== 'admin' && roleData?.role !== 'editor') {
+  const role = roleData?.role;
+  if (role !== 'admin' && role !== 'editor' && role !== 'learner') {
     return new NextResponse('Access denied', { status: 403 });
   }
 
@@ -33,13 +34,26 @@ export async function POST(request: NextRequest) {
 
   const { data: library } = await supabase
     .from('libraries')
-    .select('slug, status')
+    .select('id, slug, status')
     .eq('slug', librarySlug)
     .eq('status', 'active')
     .maybeSingle();
 
   if (!library?.slug) {
     return new NextResponse('Library not found', { status: 404 });
+  }
+
+  if (role === 'learner') {
+    const { data: membership } = await supabase
+      .from('user_libraries')
+      .select('library_id')
+      .eq('user_id', user.id)
+      .eq('library_id', library.id)
+      .maybeSingle();
+
+    if (!membership) {
+      return new NextResponse('Library access denied', { status: 403 });
+    }
   }
 
   const redirectPath = getSafeInternalPath(

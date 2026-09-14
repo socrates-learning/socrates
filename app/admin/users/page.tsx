@@ -31,13 +31,21 @@ export default function AdminUsersPage() {
     loadUsers();
   }, []);
 
-  async function updateRole(email: string, role: string) {
+  async function updateRole(
+    email: string,
+    role: string,
+    currentRole: string | null
+  ) {
     setStatus(`Updating ${email}...`);
 
-    const { error } = await supabase.rpc('set_user_role_by_email', {
-      target_email: email,
-      new_role: role,
-    });
+    const { error } = role === 'learner' && !currentRole
+      ? await supabase.rpc('provision_invited_learner', {
+          target_email: email,
+        })
+      : await supabase.rpc('set_user_role_by_email', {
+          target_email: email,
+          new_role: role,
+        });
 
     if (error) {
       setStatus(`Error: ${error.message}`);
@@ -73,7 +81,7 @@ export default function AdminUsersPage() {
                   defaultValue={user.role || ''}
                   onChange={(event) => {
                     if (event.target.value) {
-                      updateRole(user.email, event.target.value);
+                      updateRole(user.email, event.target.value, user.role);
                     }
                   }}
                 >

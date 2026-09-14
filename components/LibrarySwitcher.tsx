@@ -11,13 +11,29 @@ export async function LibrarySwitcher({
   if (!context.canSwitch) return null;
 
   const supabase = await createSupabaseServerClient();
-  const { data: libraries } = await supabase
-    .from('libraries')
-    .select('id, name, slug')
-    .eq('status', 'active')
-    .order('name');
+  const libraries = context.role === 'admin' || context.role === 'editor'
+    ? (
+        await supabase
+          .from('libraries')
+          .select('id, name, slug')
+          .eq('status', 'active')
+          .order('name')
+      ).data || []
+    : (
+        await supabase
+          .from('user_libraries')
+          .select('libraries!inner(id, name, slug, status)')
+          .eq('user_id', context.user?.id || '')
+          .eq('libraries.status', 'active')
+      ).data?.flatMap((membership) => {
+        const value = Array.isArray(membership.libraries)
+          ? membership.libraries[0]
+          : membership.libraries;
 
-  if (!libraries?.length) return null;
+        return value ? [{ id: value.id, name: value.name, slug: value.slug }] : [];
+      }).sort((left, right) => left.name.localeCompare(right.name)) || [];
+
+  if (!libraries.length) return null;
 
   return (
     <form
