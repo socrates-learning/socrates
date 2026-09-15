@@ -3,6 +3,7 @@ import { Header } from '@/components/Header';
 import { LibrarySwitcher } from '@/components/LibrarySwitcher';
 import { resolveActiveLibraryContext } from '@/lib/library-context';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
+import { requireStaffCreatorRoute } from '@/lib/server-creator-route-access';
 
 type LibraryNode = {
   id: string;
@@ -58,6 +59,7 @@ function getCategoryPath(nodeId: string, nodes: LibraryNode[]) {
 }
 
 export default async function ManageArticlesPage() {
+  await requireStaffCreatorRoute();
   const activeLibraryContext = await resolveActiveLibraryContext();
   const activeLibrary = activeLibraryContext.library;
   const supabase = await createSupabaseServerClient();

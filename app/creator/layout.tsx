@@ -1,6 +1,8 @@
 import { Header, HeaderSessionProvider } from '@/components/Header';
-import { createSupabaseServerClient } from '@/lib/supabase-server';
-import { getVerifiedRequestAuthContext } from '@/lib/server-auth-context';
+import {
+  canActorAccessSharedCreator,
+  getServerCreatorRouteActor,
+} from '@/lib/server-creator-route-access';
 import { redirect } from 'next/navigation';
 
 export default async function CreatorLayout({
@@ -8,29 +10,11 @@ export default async function CreatorLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const requestAuth = await getVerifiedRequestAuthContext();
-  let email = requestAuth?.email ?? null;
-  let role = requestAuth?.role ?? null;
+  const actor = await getServerCreatorRouteActor();
+  if (!actor) redirect('/login');
+  const { email, role } = actor;
 
-  if (!requestAuth) {
-    const supabase = await createSupabaseServerClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) redirect('/login');
-
-    const { data: roleData } = await supabase
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', user.id)
-      .maybeSingle();
-
-    email = user.email ?? 'Account';
-    role = roleData?.role ?? null;
-  }
-
-  if (role !== 'admin' && role !== 'editor') {
+  if (!canActorAccessSharedCreator(actor)) {
     return (
       <HeaderSessionProvider
         email={email ?? 'Account'}

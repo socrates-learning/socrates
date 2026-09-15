@@ -14,6 +14,10 @@ import {
   REQUEST_ID_HEADER,
   type ServerTimingEntry,
 } from '@/lib/request-performance';
+import {
+  canAccessCreatorRoute,
+  CREATOR_LEARNER_ALLOWLIST_ENV,
+} from '@/lib/creator-route-access';
 
 const PUBLIC_PATHS = [
   '/login',
@@ -176,8 +180,12 @@ export async function proxy(request: NextRequest) {
 
   if (
     (pathname === '/creator' || pathname.startsWith('/creator/')) &&
-    role !== 'editor' &&
-    role !== 'admin'
+    !canAccessCreatorRoute({
+      pathname,
+      role,
+      userId,
+      learnerAllowlist: process.env[CREATOR_LEARNER_ALLOWLIST_ENV],
+    })
   ) {
     const homeUrl = request.nextUrl.clone();
     homeUrl.pathname = '/';

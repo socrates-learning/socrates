@@ -4,12 +4,14 @@ import { Header } from '@/components/Header';
 import { LibrarySwitcher } from '@/components/LibrarySwitcher';
 import { resolveActiveLibraryContext } from '@/lib/library-context';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
+import { requireStaffCreatorRoute } from '@/lib/server-creator-route-access';
 
 export default async function EditArticlePage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
+  await requireStaffCreatorRoute();
   const { id } = await params;
   const activeLibraryContext = await resolveActiveLibraryContext();
   const activeLibrary = activeLibraryContext.library;

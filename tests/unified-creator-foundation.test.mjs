@@ -261,8 +261,9 @@ test('shared presentation primitives retain explicit accessibility semantics', (
   assert.match(primitiveSource, /role="menu"/);
 });
 
-test('existing Creator routes stay separate while the real Creator uses only the authority foundation', () => {
-  assert.match(creatorLayoutSource, /role !== 'admin' && role !== 'editor'/);
+test('Study Creator stays separate while canonical Creator uses server route authority', () => {
+  assert.match(creatorLayoutSource, /canActorAccessSharedCreator\(actor\)/);
+  assert.match(creatorLayoutSource, /getServerCreatorRouteActor\(\)/);
   assert.match(
     studyCreatorPageSource,
     /roleData\?\.role !== 'learner'[\s\S]*roleData\?\.role !== 'editor'[\s\S]*roleData\?\.role !== 'admin'/

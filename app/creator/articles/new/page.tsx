@@ -3,8 +3,10 @@ import { Header } from '@/components/Header';
 import { LibrarySwitcher } from '@/components/LibrarySwitcher';
 import { resolveActiveLibraryContext } from '@/lib/library-context';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
+import { requireStaffCreatorRoute } from '@/lib/server-creator-route-access';
 
 export default async function NewArticlePage() {
+  await requireStaffCreatorRoute();
   const activeLibraryContext = await resolveActiveLibraryContext();
   const activeLibrary = activeLibraryContext.library;
   const supabase = await createSupabaseServerClient();
