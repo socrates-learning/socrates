@@ -4,6 +4,10 @@ import test from 'node:test';
 import vm from 'node:vm';
 import ts from 'typescript';
 import { buildConceptTopicTree } from '../lib/concept-topic-tree.ts';
+import {
+  composeUnifiedCreatorTopicTree,
+  flattenUnifiedCreatorTopics,
+} from '../lib/creator-unified-topic-tree.ts';
 
 // Execute the actual component's save handlers with in-memory hooks and database
 // responses. Effects are intentionally excluded: these are transaction/state
@@ -86,6 +90,10 @@ function editor({ editing = false, response, references = [] } = {}) {
     '@/lib/creator-capabilities': {},
     '@/lib/creator-command-contracts': { resolveCreatorCommandRoute: () => 'personal-owner-write' },
     '@/lib/creator-entity-contracts': { createCreatorEntityKey: (source, kind, id) => `${source}:${kind}:${id}` },
+    '@/lib/creator-unified-topic-tree': {
+      composeUnifiedCreatorTopicTree,
+      flattenUnifiedCreatorTopics,
+    },
     '@/lib/creator-studio-runtime': {
       createOfficialConceptEditorState: (id, libraryId) => id ? { mode: 'official-concept', identity: { id }, libraryId } : { mode: 'new-official-concept', libraryId },
       createOfficialQuestionEditorState: (id, libraryId) => id ? { mode: 'official-question', identity: { id }, libraryId } : { mode: 'new-official-question', libraryId },
@@ -137,7 +145,7 @@ function editor({ editing = false, response, references = [] } = {}) {
     initialTopics: [{ id: 'topic', name: 'Topic', children: [] }],
     initialConcept: { id: editing ? 'existing-concept' : null, name: '', bodyMarkdown: '', placementIds: ['topic'] },
     initialReferences: references,
-    initialPersonalContent: { ownerId: 'owner', topics: [], concepts: [], cards: [], overlays: [] },
+    initialPersonalContent: { ownerId: 'owner', topics: [], concepts: [], cards: [], overlays: [], topicPlacements: [] },
   };
   function render() { cursor = 0; const tree = context.exports.CreatorStudioV2Client(props); return { ...api, tree }; }
   return { render, calls, orders, routes };

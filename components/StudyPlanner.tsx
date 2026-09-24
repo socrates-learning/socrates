@@ -218,12 +218,17 @@ const learnerNavItems: Array<{
   { href: '/admin/users', icon: 'admin', label: 'Admin' },
 ];
 
-const homeRailItems: Array<{ label: string; icon: string; href?: string }> = [
-  { label: 'Study Creator', icon: 'edit', href: '/study-creator' },
-  { label: 'Stats', icon: 'bars' },
-  { label: 'Account Settings', icon: 'gear', href: '/account' },
-  { label: 'Menu', icon: 'people' },
-];
+function createHomeRailItems(homeCreatorEntry: {
+  label: 'Creator Studio' | 'Study Creator';
+  href: '/creator' | '/study-creator';
+}): Array<{ label: string; icon: string; href?: string }> {
+  return [
+    { ...homeCreatorEntry, icon: 'edit' },
+    { label: 'Stats', icon: 'bars' },
+    { label: 'Account Settings', icon: 'gear', href: '/account' },
+    { label: 'Menu', icon: 'people' },
+  ];
+}
 
 const CreatorAlgorithmDiagnostics = dynamic(
   () =>
@@ -399,10 +404,15 @@ function getNodePath(node: LibraryNode, nodesById: Map<string, LibraryNode>) {
 
 export function StudyPlanner({
   activeLibrary,
+  homeCreatorEntry = { label: 'Study Creator', href: '/study-creator' },
   initialDeckData,
   initialSession,
 }: {
   activeLibrary: ActiveLibrary | null;
+  homeCreatorEntry?: {
+    label: 'Creator Studio' | 'Study Creator';
+    href: '/creator' | '/study-creator';
+  };
   initialDeckData?: StudyPlannerInitialData;
   initialSession?: {
     userId: string;
@@ -413,6 +423,7 @@ export function StudyPlanner({
 }) {
   const router = useRouter();
   const pathname = usePathname();
+  const homeRailItems = createHomeRailItems(homeCreatorEntry);
   const initialRootNodeId =
     initialDeckData?.nodes.find((node) => node.parent_id === null)?.id || null;
   const initialPersonalRootTopicIds =
@@ -5486,7 +5497,9 @@ if (mode === 'study') {
                     href={item.href}
                     key={item.label}
                     onClick={
-                      item.href.startsWith('/creator/') ? handleCreatorClick : undefined
+                      item.href === '/creator' || item.href.startsWith('/creator/')
+                        ? handleCreatorClick
+                        : undefined
                     }
                   >
                     {content}

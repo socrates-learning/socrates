@@ -1,5 +1,3 @@
-import { redirect } from 'next/navigation';
+import NewConceptPage from '@/app/creator/concepts/new/page';
 
-export default function CreatorPage() {
-  redirect('/creator/concepts/new');
-}
+export default NewConceptPage;

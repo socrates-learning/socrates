@@ -5,6 +5,11 @@ export const CREATOR_LEARNER_ALLOWLIST_ENV =
 
 export type CreatorRouteScope = 'outside' | 'shared' | 'staff';
 
+export type HomeCreatorEntry = Readonly<{
+  label: 'Creator Studio' | 'Study Creator';
+  href: '/creator' | '/study-creator';
+}>;
+
 type CreatorRouteAccessInput = {
   pathname: string;
   role: CreatorRouteRole;
@@ -69,6 +74,23 @@ export function canAccessSharedCreator({
 
   const parsed = parseCreatorLearnerAllowlist(learnerAllowlist);
   return parsed.valid && parsed.userIds.has(userId.toLowerCase());
+}
+
+export function resolveHomeCreatorEntry({
+  learnerAllowlist,
+  role,
+  userId,
+}: Omit<CreatorRouteAccessInput, 'pathname'>): HomeCreatorEntry {
+  if (
+    role === 'learner' &&
+    canAccessSharedCreator({ learnerAllowlist, role, userId })
+  ) {
+    return { label: 'Creator Studio', href: '/creator' };
+  }
+
+  // Staff already retain the canonical Creator Studio entry in global
+  // navigation. Non-cohort learners retain the deployed Study Creator route.
+  return { label: 'Study Creator', href: '/study-creator' };
 }
 
 export function canAccessCreatorRoute({

@@ -7,6 +7,7 @@ import {
   canAccessSharedCreator,
   classifyCreatorRoute,
   parseCreatorLearnerAllowlist,
+  resolveHomeCreatorEntry,
 } from '../lib/creator-route-access.ts';
 
 const learnerA = '11111111-1111-4111-8111-111111111111';
@@ -120,6 +121,36 @@ test('removing a learner from configuration immediately restores denial', () => 
   assert.equal(canAccessSharedCreator({
     role: 'learner', userId: learnerA, learnerAllowlist: learnerB,
   }), false);
+});
+
+test('Home reuses server Creator authorization without duplicating the cohort in client code', () => {
+  assert.deepEqual(resolveHomeCreatorEntry({
+    role: 'learner', userId: learnerA, learnerAllowlist: allowlist,
+  }), { label: 'Creator Studio', href: '/creator' });
+  assert.deepEqual(resolveHomeCreatorEntry({
+    role: 'learner', userId: learnerB, learnerAllowlist: allowlist,
+  }), { label: 'Study Creator', href: '/study-creator' });
+  for (const role of ['editor', 'admin']) {
+    assert.deepEqual(resolveHomeCreatorEntry({
+      role, userId: learnerA, learnerAllowlist: allowlist,
+    }), { label: 'Study Creator', href: '/study-creator' });
+  }
+
+  const homeSource = readFileSync(new URL('../app/page.tsx', import.meta.url), 'utf8');
+  const plannerSource = readFileSync(
+    new URL('../components/StudyPlanner.tsx', import.meta.url), 'utf8'
+  );
+  assert.match(homeSource, /resolveHomeCreatorEntry/);
+  assert.doesNotMatch(plannerSource, /SOCRATES_CREATOR_LEARNER_USER_IDS/);
+});
+
+test('canonical /creator entry renders the existing new-Concept page without a redirect bootstrap', () => {
+  const source = readFileSync(
+    new URL('../app/creator/page.tsx', import.meta.url),
+    'utf8'
+  );
+  assert.match(source, /NewConceptPage/);
+  assert.doesNotMatch(source, /redirect\(/);
 });
 
 test('proxy and parent layout use the same central authorization helper', () => {

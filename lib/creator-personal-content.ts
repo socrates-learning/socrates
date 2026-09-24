@@ -42,23 +42,46 @@ export type CreatorPersonalOverlay = {
   updated_at: string;
 };
 
+export type CreatorPersonalTopicPlacement = {
+  id: string;
+  owner_id: string;
+  personal_topic_id: string;
+  library_node_id: string;
+  created_at: string;
+  updated_at: string;
+};
+
 export type CreatorPersonalContent = {
   ownerId: string;
   topics: CreatorPersonalTopic[];
   concepts: CreatorPersonalConcept[];
   cards: CreatorPersonalCard[];
   overlays: CreatorPersonalOverlay[];
+  topicPlacements: CreatorPersonalTopicPlacement[];
 };
 
 export function emptyCreatorPersonalContent(ownerId: string): CreatorPersonalContent {
-  return { ownerId, topics: [], concepts: [], cards: [], overlays: [] };
+  return {
+    ownerId,
+    topics: [],
+    concepts: [],
+    cards: [],
+    overlays: [],
+    topicPlacements: [],
+  };
 }
 
 export async function loadCreatorPersonalContent(
   supabase: SupabaseClient,
   ownerId: string
 ): Promise<CreatorPersonalContent> {
-  const [topicResult, conceptResult, cardResult, overlayResult] = await Promise.all([
+  const [
+    topicResult,
+    conceptResult,
+    cardResult,
+    overlayResult,
+    topicPlacementResult,
+  ] = await Promise.all([
     supabase
       .from('personal_topics')
       .select('id, owner_id, parent_id, name, sort_order, created_at, updated_at')
@@ -80,6 +103,12 @@ export async function loadCreatorPersonalContent(
       .select('id, owner_id, personal_concept_id, library_node_id, official_concept_id, created_at, updated_at')
       .eq('owner_id', ownerId)
       .order('created_at'),
+    supabase
+      .from('personal_topic_official_placements')
+      .select('id, owner_id, personal_topic_id, library_node_id, created_at, updated_at')
+      .eq('owner_id', ownerId)
+      .order('created_at')
+      .order('id'),
   ]);
 
   const error = [
@@ -87,6 +116,7 @@ export async function loadCreatorPersonalContent(
     conceptResult.error,
     cardResult.error,
     overlayResult.error,
+    topicPlacementResult.error,
   ].find(Boolean);
   if (error) throw new Error(`Unable to load personal Creator material: ${error.message}`);
 
@@ -95,6 +125,7 @@ export async function loadCreatorPersonalContent(
     ...(conceptResult.data ?? []),
     ...(cardResult.data ?? []),
     ...(overlayResult.data ?? []),
+    ...(topicPlacementResult.data ?? []),
   ];
   if (ownerScopedRows.some((row) => row.owner_id !== ownerId)) {
     throw new Error('Personal Creator material crossed the authenticated owner boundary.');
@@ -106,5 +137,6 @@ export async function loadCreatorPersonalContent(
     concepts: (conceptResult.data ?? []) as CreatorPersonalConcept[],
     cards: (cardResult.data ?? []) as CreatorPersonalCard[],
     overlays: (overlayResult.data ?? []) as CreatorPersonalOverlay[],
+    topicPlacements: (topicPlacementResult.data ?? []) as CreatorPersonalTopicPlacement[],
   };
 }

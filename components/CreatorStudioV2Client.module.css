@@ -479,11 +479,15 @@
   font-size: 0.84rem;
 }
 
-.personalTreeDivider {
+.unplacedTopicsLabel {
+  display: flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 7px;
   margin: 10px 8px 6px;
   border-top: 1px solid #d8e1ef;
   padding: 10px 6px 2px;
-  color: #247044;
+  color: #52647a;
   font-size: 0.76rem;
   font-weight: 800;
 }

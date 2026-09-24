@@ -48,7 +48,13 @@ import type {
   CreatorPersonalContent,
   CreatorPersonalOverlay,
   CreatorPersonalTopic,
+  CreatorPersonalTopicPlacement,
 } from '@/lib/creator-personal-content';
+import {
+  composeUnifiedCreatorTopicTree,
+  flattenUnifiedCreatorTopics,
+  type UnifiedCreatorTopicNode,
+} from '@/lib/creator-unified-topic-tree';
 import {
   createOfficialConceptEditorState,
   createOfficialConceptIdentity,
@@ -223,7 +229,17 @@ type MarkdownFormat =
   | 'numbered-list'
   | 'link'
   | 'quote';
-type DialogMode = 'add' | 'add-personal-root' | 'rename' | 'move' | null;
+type DialogMode = 'add' | 'add-personal' | 'rename' | 'move' | null;
+type PersonalTopicCreationContext = Readonly<{
+  parentPersonalTopicId: string | null;
+  officialLibraryNodeId: string | null;
+}>;
+type CreatedPersonalTopicRow = CreatorPersonalTopic & {
+  placement_id: string | null;
+  library_node_id: string | null;
+  placement_created_at: string | null;
+  placement_updated_at: string | null;
+};
 type StatusTone = 'error' | 'success' | 'info';
 type Status = { tone: StatusTone; message: string } | null;
 type SaveFeedback = 'saving' | 'saved' | null;
@@ -241,10 +257,6 @@ type CreatorStudioV2ClientProps = {
   initialConcept?: InitialConcept;
   initialReferences?: Reference[];
   initialPersonalContent: CreatorPersonalContent;
-};
-
-type PersonalTopicNode = CreatorPersonalTopic & {
-  children: PersonalTopicNode[];
 };
 
 type CreationSource = 'official' | 'personal';
@@ -623,33 +635,6 @@ function personalCardMatchesQuestionSearch(
       .includes(query);
 }
 
-function buildPersonalTopicTree(topics: CreatorPersonalTopic[]): PersonalTopicNode[] {
-  const nodes = new Map(
-    topics.map((topic) => [topic.id, { ...topic, children: [] as PersonalTopicNode[] }])
-  );
-  const roots: PersonalTopicNode[] = [];
-
-  for (const topic of topics) {
-    const node = nodes.get(topic.id);
-    if (!node) continue;
-    const parent = topic.parent_id ? nodes.get(topic.parent_id) : null;
-    if (parent) parent.children.push(node);
-    else roots.push(node);
-  }
-
-  const sortNodes = (items: PersonalTopicNode[]) => {
-    items.sort(
-      (left, right) =>
-        left.sort_order - right.sort_order ||
-        left.name.localeCompare(right.name) ||
-        left.id.localeCompare(right.id)
-    );
-    items.forEach((item) => sortNodes(item.children));
-  };
-  sortNodes(roots);
-  return roots;
-}
-
 function personalTopicPath(
   topics: CreatorPersonalTopic[],
   topicId: string
@@ -751,6 +736,9 @@ export function CreatorStudioV2Client({
   const [personalOverlays, setPersonalOverlays] = useState(
     initialPersonalContent.overlays
   );
+  const [personalTopicPlacements, setPersonalTopicPlacements] = useState(
+    initialPersonalContent.topicPlacements
+  );
   const [conceptCreationSource, setConceptCreationSource] = useState<CreationSource>(
     creatorCapabilities.official.saveConcept ? 'official' : 'personal'
   );
@@ -804,6 +792,8 @@ export function CreatorStudioV2Client({
   const [dialogMode, setDialogMode] = useState<DialogMode>(null);
   const topicDialogReturnFocusRef = useRef<HTMLElement | null>(null);
   const [nameDraft, setNameDraft] = useState('');
+  const [personalTopicCreationContext, setPersonalTopicCreationContext] =
+    useState<PersonalTopicCreationContext | null>(null);
   const [moveDestinationId, setMoveDestinationId] = useState('');
   const [status, setStatus] = useState<Status>(null);
   const [references, setReferences] = useState<Reference[]>(initialReferences);
@@ -1739,9 +1729,24 @@ export function CreatorStudioV2Client({
   }, [activeLibraryId, questionConceptId]);
 
   const rootTopicId = topics[0]?.id || ROOT_TOPIC_ID;
-  const personalTopicTree = useMemo(
-    () => buildPersonalTopicTree(personalTopics),
-    [personalTopics]
+  const unifiedTopicComposition = useMemo(
+    () =>
+      composeUnifiedCreatorTopicTree({
+        officialTopics: topics,
+        ownerId: initialPersonalContent.ownerId,
+        personalTopics,
+        topicPlacements: personalTopicPlacements,
+      }),
+    [
+      initialPersonalContent.ownerId,
+      personalTopicPlacements,
+      personalTopics,
+      topics,
+    ]
+  );
+  const unifiedOfficialTopicRows = useMemo(
+    () => flattenUnifiedCreatorTopics(unifiedTopicComposition.officialRoots),
+    [unifiedTopicComposition.officialRoots]
   );
   const personalTopicById = useMemo(
     () => new Map(personalTopics.map((topic) => [topic.id, topic])),
@@ -1801,6 +1806,22 @@ export function CreatorStudioV2Client({
     }
     return personalTopics.filter((topic) => !blocked.has(topic.id));
   }, [activePersonalTopicId, personalTopics]);
+  const activePersonalTopicPlacement = activePersonalTopicId
+    ? personalTopicPlacements.find(
+        (placement) => placement.personal_topic_id === activePersonalTopicId
+      ) || null
+    : null;
+  const personalRootPlacementDestinations = useMemo(
+    () =>
+      unifiedOfficialTopicRows
+        .filter((topic) => topic.source === 'official')
+        .map((topic) => ({
+          id: topic.id,
+          key: topic.key,
+          label: topic.name,
+        })),
+    [unifiedOfficialTopicRows]
+  );
   const normalizedContentConceptSearch = contentConceptSearch
     .trim()
     .toLocaleLowerCase();
@@ -1838,7 +1859,20 @@ export function CreatorStudioV2Client({
 
     personalConcepts.forEach((personalConcept) => {
       const key = createCreatorEntityKey('personal', 'concept', personalConcept.id);
-      const canonicalPath = personalTopicPath(personalTopics, personalConcept.topic_id)
+      const canonicalTopics = personalTopicPath(
+        personalTopics,
+        personalConcept.topic_id
+      );
+      const rootPlacement = canonicalTopics[0]
+        ? personalTopicPlacements.find(
+            (placement) =>
+              placement.personal_topic_id === canonicalTopics[0].id
+          )
+        : null;
+      const officialTopicPath = rootPlacement
+        ? findTopicPath(topics, rootPlacement.library_node_id) || []
+        : [];
+      const canonicalPath = [...officialTopicPath, ...canonicalTopics]
         .map((topic) => topic.name)
         .join(' > ');
       const overlay = overlayByPersonalConceptId.get(personalConcept.id);
@@ -1871,6 +1905,7 @@ export function CreatorStudioV2Client({
     normalizedContentConceptSearch,
     overlayByPersonalConceptId,
     personalConcepts,
+    personalTopicPlacements,
     personalTopics,
     questionConceptsByTopicId,
     topics,
@@ -2914,41 +2949,90 @@ export function CreatorStudioV2Client({
     setDialogMode('add');
   }
 
-  function openPersonalRootTopicDialog() {
+  function openPersonalTopicDialog() {
     topicDialogReturnFocusRef.current =
       document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setPersonalTopicCreationContext({
+      parentPersonalTopicId: activePersonalTopic?.id || null,
+      officialLibraryNodeId: activePersonalTopic ? null : activeTopic?.id || null,
+    });
     setNameDraft('');
-    setDialogMode('add-personal-root');
+    setDialogMode('add-personal');
   }
 
-  async function createPersonalRootTopic(name: string): Promise<boolean> {
+  async function createPersonalTopic(
+    name: string,
+    context: PersonalTopicCreationContext
+  ): Promise<boolean> {
     const ownerId = initialPersonalContent.ownerId;
     resolveCreatorCommandRoute(
       {
         type: 'create-topic',
         target: 'personal',
         ownerId,
-        parentTopicKey: null,
+        parentTopicKey: context.parentPersonalTopicId
+          ? createCreatorEntityKey(
+              'personal',
+              'topic',
+              context.parentPersonalTopicId
+            )
+          : null,
       },
       creatorCapabilities
     );
+    const siblingCount = context.parentPersonalTopicId
+      ? personalTopics.filter(
+          (topic) => topic.parent_id === context.parentPersonalTopicId
+        ).length
+      : personalTopics.filter((topic) => {
+          if (topic.parent_id !== null) return false;
+          const placement = personalTopicPlacements.find(
+            (item) => item.personal_topic_id === topic.id
+          );
+          return (
+            (placement?.library_node_id || null) ===
+            context.officialLibraryNodeId
+          );
+        }).length;
     setIsMutatingTopic(true);
-    const { data, error } = await supabase
-      .from('personal_topics')
-      .insert({ owner_id: ownerId, parent_id: null, name, sort_order: 0 })
-      .select('*')
+    const { data, error } = await supabase.rpc('create_personal_topic', {
+      p_name: name,
+      p_parent_personal_topic_id: context.parentPersonalTopicId,
+      p_official_library_node_id: context.officialLibraryNodeId,
+      p_sort_order: siblingCount,
+    })
       .single();
     if (error) {
       setIsMutatingTopic(false);
       showStatus('error', error.message);
       return false;
     }
-    const saved = data as CreatorPersonalTopic;
+    const saved = data as CreatedPersonalTopicRow;
     setPersonalTopics((current) => [...current, saved]);
+    if (saved.placement_id && saved.library_node_id) {
+      const placement: CreatorPersonalTopicPlacement = {
+        id: saved.placement_id,
+        owner_id: saved.owner_id,
+        personal_topic_id: saved.id,
+        library_node_id: saved.library_node_id,
+        created_at: saved.placement_created_at || saved.created_at,
+        updated_at: saved.placement_updated_at || saved.updated_at,
+      };
+      setPersonalTopicPlacements((current) => [
+        ...current.filter((item) => item.personal_topic_id !== saved.id),
+        placement,
+      ]);
+      setExpandedTopicIds((current) =>
+        new Set(current).add(saved.library_node_id as string)
+      );
+    }
     setActivePersonalTopicId(saved.id);
     setPersonalConceptTopicId(saved.id);
+    setExpandedPersonalTopicIds((current) =>
+      new Set(current).add(saved.parent_id || saved.id)
+    );
     setIsMutatingTopic(false);
-    showStatus('success', 'Personal Topic created.');
+    showStatus('success', 'Topic created.');
     return true;
   }
 
@@ -2980,7 +3064,21 @@ export function CreatorStudioV2Client({
       document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setMoveDestinationId(
       activePersonalTopic
-        ? personalMoveDestinations[0]?.id ?? ''
+        ? activePersonalTopic.parent_id === null
+          ? activePersonalTopicPlacement
+            ? createCreatorEntityKey(
+                'official',
+                'topic',
+                activePersonalTopicPlacement.library_node_id
+              )
+            : 'unplaced'
+          : personalMoveDestinations[0]
+            ? createCreatorEntityKey(
+                'personal',
+                'topic',
+                personalMoveDestinations[0].id
+              )
+            : ''
         : moveDestinations[0]?.id ?? ''
     );
     setDialogMode('move');
@@ -2989,6 +3087,7 @@ export function CreatorStudioV2Client({
   function closeTopicDialog() {
     const returnFocusTarget = topicDialogReturnFocusRef.current;
     setDialogMode(null);
+    setPersonalTopicCreationContext(null);
     topicDialogReturnFocusRef.current = null;
     window.requestAnimationFrame(() => returnFocusTarget?.focus());
   }
@@ -3000,8 +3099,14 @@ export function CreatorStudioV2Client({
       return;
     }
 
-    if (dialogMode === 'add-personal-root') {
-      const saved = await createPersonalRootTopic(name);
+    if (dialogMode === 'add-personal') {
+      const saved = await createPersonalTopic(
+        name,
+        personalTopicCreationContext || {
+          parentPersonalTopicId: null,
+          officialLibraryNodeId: null,
+        }
+      );
       if (!saved) return;
       closeTopicDialog();
       setNameDraft('');
@@ -3040,20 +3145,17 @@ export function CreatorStudioV2Client({
         creatorCapabilities
       );
       setIsMutatingTopic(true);
-      const result = dialogMode === 'add'
-        ? await supabase
-            .from('personal_topics')
-            .insert({
-              owner_id: ownerId,
-              parent_id: activePersonalTopic.id,
-              name,
-              sort_order: personalTopics.filter(
-                (topic) => topic.parent_id === activePersonalTopic.id
-              ).length,
-            })
-            .select('*')
-            .single()
-        : await supabase
+      if (dialogMode === 'add') {
+        const saved = await createPersonalTopic(name, {
+          parentPersonalTopicId: activePersonalTopic.id,
+          officialLibraryNodeId: null,
+        });
+        if (!saved) return;
+        closeTopicDialog();
+        setNameDraft('');
+        return;
+      }
+      const result = await supabase
             .from('personal_topics')
             .update({ name })
             .eq('id', activePersonalTopic.id)
@@ -3078,7 +3180,7 @@ export function CreatorStudioV2Client({
       closeTopicDialog();
       setNameDraft('');
       setIsMutatingTopic(false);
-      showStatus('success', dialogMode === 'add' ? 'Personal Topic created.' : 'Personal Topic renamed.');
+      showStatus('success', 'Personal Topic renamed.');
       return;
     }
 
@@ -3230,11 +3332,6 @@ export function CreatorStudioV2Client({
       return;
     }
     if (activePersonalTopic) {
-      const destination = personalTopicById.get(moveDestinationId);
-      if (!destination) {
-        showStatus('error', 'The selected destination is unavailable.');
-        return;
-      }
       resolveCreatorCommandRoute(
         {
           type: 'update-topic',
@@ -3249,9 +3346,82 @@ export function CreatorStudioV2Client({
         creatorCapabilities
       );
       setIsMutatingTopic(true);
+      if (activePersonalTopic.parent_id === null) {
+        const officialNodeId = moveDestinationId === 'unplaced'
+          ? null
+          : moveDestinationId.startsWith('official:topic:')
+            ? moveDestinationId.slice('official:topic:'.length)
+            : null;
+        if (moveDestinationId !== 'unplaced' && !officialNodeId) {
+          setIsMutatingTopic(false);
+          showStatus('error', 'The selected official destination is unavailable.');
+          return;
+        }
+        const { data, error } = await supabase
+          .rpc('set_personal_topic_official_placement', {
+            p_personal_topic_id: activePersonalTopic.id,
+            p_library_node_id: officialNodeId,
+          })
+          .single();
+        if (error) {
+          setIsMutatingTopic(false);
+          showStatus('error', error.message);
+          return;
+        }
+        const placementResult = data as {
+          owner_id: string;
+          placement_id: string | null;
+          personal_topic_id: string;
+          library_node_id: string | null;
+          created_at: string | null;
+          updated_at: string | null;
+        };
+        setPersonalTopicPlacements((current) => {
+          const withoutActive = current.filter(
+            (placement) =>
+              placement.personal_topic_id !== activePersonalTopic.id
+          );
+          if (!placementResult.placement_id || !placementResult.library_node_id) {
+            return withoutActive;
+          }
+          return [
+            ...withoutActive,
+            {
+              id: placementResult.placement_id,
+              owner_id: placementResult.owner_id,
+              personal_topic_id: placementResult.personal_topic_id,
+              library_node_id: placementResult.library_node_id,
+              created_at: placementResult.created_at || new Date().toISOString(),
+              updated_at: placementResult.updated_at || new Date().toISOString(),
+            },
+          ];
+        });
+        if (officialNodeId) {
+          setExpandedTopicIds((current) => new Set(current).add(officialNodeId));
+        }
+        closeTopicDialog();
+        setIsMutatingTopic(false);
+        showStatus(
+          'success',
+          officialNodeId
+            ? `Moved “${activePersonalTopic.name}” beneath the selected official Topic.`
+            : `Removed “${activePersonalTopic.name}” from the official tree. Its content was preserved.`
+        );
+        return;
+      }
+
+      const destinationId = moveDestinationId.startsWith('personal:topic:')
+        ? moveDestinationId.slice('personal:topic:'.length)
+        : '';
+      const destination = personalTopicById.get(destinationId);
+      if (!destination) {
+        setIsMutatingTopic(false);
+        showStatus('error', 'The selected destination is unavailable.');
+        return;
+      }
       const { data, error } = await supabase
         .from('personal_topics')
-        .update({ parent_id: destination.id })
+        .update({ parent_id: destinationId })
         .eq('id', activePersonalTopic.id)
         .eq('owner_id', initialPersonalContent.ownerId)
         .select('*')
@@ -3373,6 +3543,12 @@ export function CreatorStudioV2Client({
       }
       setPersonalTopics((current) =>
         current.filter((topic) => topic.id !== activePersonalTopic.id)
+      );
+      setPersonalTopicPlacements((current) =>
+        current.filter(
+          (placement) =>
+            placement.personal_topic_id !== activePersonalTopic.id
+        )
       );
       setActivePersonalTopicId(null);
       setDialogMode(null);
@@ -4983,10 +5159,42 @@ export function CreatorStudioV2Client({
     setIsSavingQuestion(false);
   }
 
-  function renderQuestionTopic(topic: Topic, depth = 0) {
+  function unifiedTopicMatchesSearch(topic: UnifiedCreatorTopicNode): boolean {
+    if (!normalizedSearch) return true;
+    if (topic.source === 'official' && searchIds.has(topic.id)) return true;
+    if (
+      topic.source === 'personal' &&
+      (topic.name.toLocaleLowerCase().includes(normalizedSearch) ||
+        (personalConceptsByTopicId.get(topic.id) || []).some((item) =>
+          item.name.toLocaleLowerCase().includes(normalizedSearch)
+        ))
+    ) {
+      return true;
+    }
+    return topic.children.some(unifiedTopicMatchesSearch);
+  }
+
+  function unifiedTopicHasNeedsQuestions(topic: UnifiedCreatorTopicNode): boolean {
+    if (topic.source === 'personal') return true;
+    return (
+      needsQuestionTopicIds.has(topic.id) ||
+      topic.children.some(unifiedTopicHasNeedsQuestions)
+    );
+  }
+
+  function renderUnifiedQuestionTopic(
+    topic: UnifiedCreatorTopicNode,
+    depth = 0
+  ) {
+    return topic.source === 'personal'
+      ? renderPersonalQuestionTopic(topic, depth)
+      : renderQuestionTopic(topic, depth);
+  }
+
+  function renderQuestionTopic(topic: UnifiedCreatorTopicNode, depth = 0) {
     const searching = Boolean(normalizedSearch);
-    if (searching && !searchIds.has(topic.id)) return null;
-    if (needsQuestionsOnly && !needsQuestionTopicIds.has(topic.id)) return null;
+    if (searching && !unifiedTopicMatchesSearch(topic)) return null;
+    if (needsQuestionsOnly && !unifiedTopicHasNeedsQuestions(topic)) return null;
     const hasChildren = topic.children.length > 0;
     const directConcepts = (questionConceptsByTopicId[topic.id] || []).filter(
       (conceptOption) =>
@@ -4999,11 +5207,9 @@ export function CreatorStudioV2Client({
         const item = personalConceptById.get(overlay.personal_concept_id);
         return item ? [item] : [];
       });
-    const hasSearchVisibleChild = topic.children.some((child) =>
-      searchIds.has(child.id)
-    );
-    const hasNeedsQuestionsVisibleChild = topic.children.some((child) =>
-      needsQuestionTopicIds.has(child.id)
+    const hasSearchVisibleChild = topic.children.some(unifiedTopicMatchesSearch);
+    const hasNeedsQuestionsVisibleChild = topic.children.some(
+      unifiedTopicHasNeedsQuestions
     );
     const isExpanded = needsQuestionsOnly
       ? directConcepts.length > 0 || hasNeedsQuestionsVisibleChild
@@ -5017,7 +5223,7 @@ export function CreatorStudioV2Client({
       conceptCountInBranch > 0 || personalOverlayConcepts.length > 0;
 
     return (
-      <div className={styles.topicBranch} key={`question-${topic.id}`}>
+      <div className={styles.topicBranch} key={`question-${topic.key}`}>
         <div
           className={`${styles.topicRow} ${isActive ? styles.activeTopicRow : ''}`}
           style={{
@@ -5154,7 +5360,9 @@ export function CreatorStudioV2Client({
         )}
         {hasChildren && isExpanded && (
           <div className={depth > 0 ? styles.nestedTopics : undefined}>
-            {topic.children.map((child) => renderQuestionTopic(child, depth + 1))}
+            {topic.children.map((child) =>
+              renderUnifiedQuestionTopic(child, depth + 1)
+            )}
           </div>
         )}
       </div>
@@ -5289,7 +5497,19 @@ export function CreatorStudioV2Client({
     );
   }
 
-  function renderConceptBrowseTopic(topic: Topic, depth = 0) {
+  function renderUnifiedConceptBrowseTopic(
+    topic: UnifiedCreatorTopicNode,
+    depth = 0
+  ) {
+    return topic.source === 'personal'
+      ? renderPersonalConceptBrowseTopic(topic, depth)
+      : renderConceptBrowseTopic(topic, depth);
+  }
+
+  function renderConceptBrowseTopic(
+    topic: UnifiedCreatorTopicNode,
+    depth = 0
+  ) {
     const directConcepts = questionConceptsByTopicId[topic.id] || [];
     const personalOverlayConcepts = personalOverlays
       .filter((overlay) => overlay.library_node_id === topic.id)
@@ -5306,7 +5526,7 @@ export function CreatorStudioV2Client({
     const isExpanded = expandedBrowseTopicIds.has(topic.id);
 
     return (
-      <div className={styles.conceptBrowseBranch} key={`browse-${topic.id}`}>
+      <div className={styles.conceptBrowseBranch} key={`browse-${topic.key}`}>
         <button
           className={styles.conceptBrowseTopicRow}
           type="button"
@@ -5374,7 +5594,7 @@ export function CreatorStudioV2Client({
               </button>
             ))}
             {topic.children.map((child) =>
-              renderConceptBrowseTopic(child, depth + 1)
+              renderUnifiedConceptBrowseTopic(child, depth + 1)
             )}
           </div>
         )}
@@ -5382,7 +5602,7 @@ export function CreatorStudioV2Client({
     );
   }
 
-  function personalTopicMatches(topic: PersonalTopicNode): boolean {
+  function personalTopicMatches(topic: UnifiedCreatorTopicNode): boolean {
     if (!normalizedSearch) return true;
     if (topic.name.toLocaleLowerCase().includes(normalizedSearch)) return true;
     if (
@@ -5393,7 +5613,7 @@ export function CreatorStudioV2Client({
     return topic.children.some(personalTopicMatches);
   }
 
-  function renderPersonalTopic(topic: PersonalTopicNode, depth = 0) {
+  function renderPersonalTopic(topic: UnifiedCreatorTopicNode, depth = 0) {
     if (!personalTopicMatches(topic)) return null;
     const hasChildren = topic.children.length > 0;
     const isExpanded = normalizedSearch
@@ -5433,7 +5653,7 @@ export function CreatorStudioV2Client({
             className={styles.topicActivationButton}
             type="button"
             aria-pressed={isActive}
-            aria-label={`Make personal Topic ${topic.name} active`}
+                          aria-label={`Make ${topic.name} (Mine) active`}
             onClick={() => {
               setActivePersonalTopicId(topic.id);
               setPersonalConceptTopicId(topic.id);
@@ -5459,7 +5679,7 @@ export function CreatorStudioV2Client({
     );
   }
 
-  function renderPersonalConceptBrowseTopic(topic: PersonalTopicNode, depth = 0) {
+  function renderPersonalConceptBrowseTopic(topic: UnifiedCreatorTopicNode, depth = 0) {
     const directConcepts = personalConceptsByTopicId.get(topic.id) || [];
     const canExpand = topic.children.length > 0 || directConcepts.length > 0;
     const isExpanded = expandedPersonalTopicIds.has(topic.id);
@@ -5513,13 +5733,18 @@ export function CreatorStudioV2Client({
     );
   }
 
-  function renderPersonalQuestionTopic(topic: PersonalTopicNode, depth = 0) {
+  function renderPersonalQuestionTopic(topic: UnifiedCreatorTopicNode, depth = 0) {
+    if (normalizedSearch && !personalTopicMatches(topic)) return null;
     const directConcepts = personalConceptsByTopicId.get(topic.id) || [];
     const hasChildren = topic.children.length > 0;
     const isExpanded = expandedPersonalTopicIds.has(topic.id);
+    const isActive = activePersonalTopicId === topic.id;
     return (
       <div className={styles.topicBranch} key={`personal-question-${topic.id}`}>
-        <div className={styles.topicRow} style={{ paddingLeft: `${12 + depth * 38}px` }}>
+        <div
+          className={`${styles.topicRow} ${isActive ? styles.activeTopicRow : ''}`}
+          style={{ paddingLeft: `${12 + depth * 38}px` }}
+        >
           <button
             className={styles.expandButton}
             type="button"
@@ -5568,17 +5793,23 @@ export function CreatorStudioV2Client({
     );
   }
 
-  function renderTopic(topic: Topic, depth = 0) {
+  function renderUnifiedTopic(topic: UnifiedCreatorTopicNode, depth = 0) {
+    return topic.source === 'personal'
+      ? renderPersonalTopic(topic, depth)
+      : renderTopic(topic, depth);
+  }
+
+  function renderTopic(topic: UnifiedCreatorTopicNode, depth = 0) {
     const searching = Boolean(normalizedSearch);
-    if (searching && !searchIds.has(topic.id)) return null;
+    if (searching && !unifiedTopicMatchesSearch(topic)) return null;
     const hasChildren = topic.children.length > 0;
-    const hasVisibleChild = topic.children.some((child) => searchIds.has(child.id));
+    const hasVisibleChild = topic.children.some(unifiedTopicMatchesSearch);
     const isExpanded = searching ? hasVisibleChild : expandedTopicIds.has(topic.id);
     const isActive = !activePersonalTopicId && activeTopicId === topic.id;
     const isChecked = selectedTopicIds.has(topic.id);
 
     return (
-      <div className={styles.topicBranch} key={topic.id}>
+      <div className={styles.topicBranch} key={topic.key}>
         <div
           className={`${styles.topicRow} ${isActive ? styles.activeTopicRow : ''}`}
           style={{ paddingLeft: `${12 + depth * 38}px` }}
@@ -5631,7 +5862,7 @@ export function CreatorStudioV2Client({
         </div>
         {hasChildren && isExpanded && (
           <div className={depth > 0 ? styles.nestedTopics : undefined}>
-            {topic.children.map((child) => renderTopic(child, depth + 1))}
+            {topic.children.map((child) => renderUnifiedTopic(child, depth + 1))}
           </div>
         )}
       </div>
@@ -6069,11 +6300,23 @@ export function CreatorStudioV2Client({
                       </button>
                     </div>
                     <div className={styles.conceptBrowseTree}>
-                      {topics.map((topic) => renderConceptBrowseTopic(topic))}
-                      {personalTopicTree.length > 0 && (
-                        <div className={styles.personalTreeDivider}>Mine · Personal Topics</div>
+                      {unifiedTopicComposition.officialRoots.map((topic) =>
+                        renderUnifiedConceptBrowseTopic(topic)
                       )}
-                      {personalTopicTree.map((topic) =>
+                      {unifiedTopicComposition.unplacedPersonalRoots.length > 0 && (
+                        <div className={styles.unplacedTopicsLabel}>
+                          Unplaced <span className={styles.sourceBadge} data-source="personal">Mine</span>
+                        </div>
+                      )}
+                      {unifiedTopicComposition.unplacedPersonalRoots.map((topic) =>
+                        renderPersonalConceptBrowseTopic(topic)
+                      )}
+                      {unifiedTopicComposition.otherLibraryPersonalRoots.length > 0 && (
+                        <div className={styles.unplacedTopicsLabel}>
+                          Other Library <span className={styles.sourceBadge} data-source="personal">Mine</span>
+                        </div>
+                      )}
+                      {unifiedTopicComposition.otherLibraryPersonalRoots.map((topic) =>
                         renderPersonalConceptBrowseTopic(topic)
                       )}
                     </div>
@@ -6197,8 +6440,8 @@ export function CreatorStudioV2Client({
                 <button className={styles.toolButton} type="button" onClick={openAddDialog} disabled={(!activePersonalTopic && !creatorAuthority.canManageTopicTree) || isMutatingTopic}>
                   <Plus size={18} /> Add Subtopic
                 </button>
-                <button className={styles.toolButton} type="button" onClick={openPersonalRootTopicDialog} disabled={isMutatingTopic}>
-                  <Plus size={18} /> New Personal Topic
+                <button className={styles.toolButton} type="button" onClick={openPersonalTopicDialog} disabled={isMutatingTopic}>
+                  <Plus size={18} /> New Topic
                 </button>
                 <button className={styles.toolButton} type="button" onClick={openRenameDialog} disabled={(!activePersonalTopic && !creatorAuthority.canManageTopicTree) || isMutatingTopic}>
                   <Pencil size={17} /> Rename
@@ -6221,11 +6464,31 @@ export function CreatorStudioV2Client({
                           value={moveDestinationId}
                           onChange={(event) => setMoveDestinationId(event.target.value)}
                         >
-                          {(activePersonalTopic ? personalMoveDestinations : moveDestinations).map((destination) => (
-                            <option key={destination.id} value={destination.id}>
-                              {'label' in destination ? destination.label : destination.name}
-                            </option>
-                          ))}
+                          {activePersonalTopic?.parent_id === null ? (
+                            <>
+                              <option value="unplaced">Unplaced — keep this branch</option>
+                              {personalRootPlacementDestinations.map((destination) => (
+                                <option key={destination.key} value={destination.key}>
+                                  {destination.label}
+                                </option>
+                              ))}
+                            </>
+                          ) : activePersonalTopic ? (
+                            personalMoveDestinations.map((destination) => (
+                              <option
+                                key={destination.id}
+                                value={createCreatorEntityKey('personal', 'topic', destination.id)}
+                              >
+                                {destination.name}
+                              </option>
+                            ))
+                          ) : (
+                            moveDestinations.map((destination) => (
+                              <option key={destination.id} value={destination.id}>
+                                {destination.label}
+                              </option>
+                            ))
+                          )}
                         </select>
                       </label>
                       <div className={styles.dialogActions}>
@@ -6240,8 +6503,12 @@ export function CreatorStudioV2Client({
                   ) : (
                     <>
                       <label>
-                        {dialogMode === 'add-personal-root'
-                          ? 'New personal Topic'
+                        {dialogMode === 'add-personal'
+                          ? activePersonalTopic
+                            ? `New Topic beneath ${activePersonalTopic.name}`
+                            : activeTopic
+                              ? `New Topic beneath ${activeTopic.name}`
+                              : 'New unplaced Topic'
                           : dialogMode === 'add'
                             ? `Add Subtopic beneath ${activePersonalTopic?.name || activeTopic?.name}`
                             : `Rename “${activePersonalTopic?.name || activeTopic?.name}”`}
@@ -6252,7 +6519,7 @@ export function CreatorStudioV2Client({
                           onKeyDown={(event) => {
                             if (event.key === 'Enter' && !isMutatingTopic) saveNameDialog();
                           }}
-                          placeholder={dialogMode === 'add-personal-root' ? 'Personal Topic name' : dialogMode === 'add' ? 'Subtopic name' : 'Topic name'}
+                          placeholder={dialogMode === 'add-personal' ? 'Topic name' : dialogMode === 'add' ? 'Subtopic name' : 'Topic name'}
                         />
                       </label>
                       <div className={styles.dialogActions}>
@@ -6269,13 +6536,30 @@ export function CreatorStudioV2Client({
               )}
 
               <div className={styles.treeViewport} aria-label="Topic Tree">
-                {topics.map((topic) => renderTopic(topic))}
-                <div className={styles.personalTreeDivider}>Mine · Personal Topics</div>
-                {personalTopicTree.map((topic) => renderPersonalTopic(topic))}
-                {!personalTopicTree.length && (
-                  <p className={styles.emptySelection}>No personal Topics yet.</p>
+                {unifiedTopicComposition.officialRoots.map((topic) =>
+                  renderUnifiedTopic(topic)
                 )}
-                {normalizedSearch && searchIds.size === 0 && (
+                {unifiedTopicComposition.unplacedPersonalRoots.length > 0 && (
+                  <div className={styles.unplacedTopicsLabel}>
+                    Unplaced <span className={styles.sourceBadge} data-source="personal">Mine</span>
+                  </div>
+                )}
+                {unifiedTopicComposition.unplacedPersonalRoots.map((topic) =>
+                  renderPersonalTopic(topic)
+                )}
+                {unifiedTopicComposition.otherLibraryPersonalRoots.length > 0 && (
+                  <div className={styles.unplacedTopicsLabel}>
+                    Other Library <span className={styles.sourceBadge} data-source="personal">Mine</span>
+                  </div>
+                )}
+                {unifiedTopicComposition.otherLibraryPersonalRoots.map((topic) =>
+                  renderPersonalTopic(topic)
+                )}
+                {normalizedSearch && ![
+                  ...unifiedTopicComposition.officialRoots,
+                  ...unifiedTopicComposition.unplacedPersonalRoots,
+                  ...unifiedTopicComposition.otherLibraryPersonalRoots,
+                ].some(unifiedTopicMatchesSearch) && (
                   <div className={styles.emptyTree}>No topics match “{searchQuery.trim()}”.</div>
                 )}
               </div>
@@ -7766,10 +8050,10 @@ export function CreatorStudioV2Client({
                     <button
                       className={styles.toolButton}
                       type="button"
-                      onClick={openPersonalRootTopicDialog}
+                      onClick={openPersonalTopicDialog}
                       disabled={isMutatingTopic}
                     >
-                      <Plus size={18} /> New Personal Topic
+                      <Plus size={18} /> New Topic
                     </button>
                     <button
                       className={styles.toolButton}
@@ -7813,14 +8097,31 @@ export function CreatorStudioV2Client({
                                 setMoveDestinationId(event.target.value)
                               }
                             >
-                              {(activePersonalTopic ? personalMoveDestinations : moveDestinations).map((destination) => (
-                                <option
-                                  key={destination.id}
-                                  value={destination.id}
-                                >
-                                  {'label' in destination ? destination.label : destination.name}
-                                </option>
-                              ))}
+                              {activePersonalTopic?.parent_id === null ? (
+                                <>
+                                  <option value="unplaced">Unplaced — keep this branch</option>
+                                  {personalRootPlacementDestinations.map((destination) => (
+                                    <option key={destination.key} value={destination.key}>
+                                      {destination.label}
+                                    </option>
+                                  ))}
+                                </>
+                              ) : activePersonalTopic ? (
+                                personalMoveDestinations.map((destination) => (
+                                  <option
+                                    key={destination.id}
+                                    value={createCreatorEntityKey('personal', 'topic', destination.id)}
+                                  >
+                                    {destination.name}
+                                  </option>
+                                ))
+                              ) : (
+                                moveDestinations.map((destination) => (
+                                  <option key={destination.id} value={destination.id}>
+                                    {destination.label}
+                                  </option>
+                                ))
+                              )}
                             </select>
                           </label>
                           <div className={styles.dialogActions}>
@@ -7844,8 +8145,12 @@ export function CreatorStudioV2Client({
                       ) : (
                         <>
                           <label>
-                            {dialogMode === 'add-personal-root'
-                              ? 'New personal Topic'
+                            {dialogMode === 'add-personal'
+                              ? activePersonalTopic
+                                ? `New Topic beneath ${activePersonalTopic.name}`
+                                : activeTopic
+                                  ? `New Topic beneath ${activeTopic.name}`
+                                  : 'New unplaced Topic'
                               : dialogMode === 'add'
                                 ? `Add Subtopic beneath ${activePersonalTopic?.name || activeTopic?.name}`
                                 : `Rename “${activePersonalTopic?.name || activeTopic?.name}”`}
@@ -7864,8 +8169,8 @@ export function CreatorStudioV2Client({
                                 }
                               }}
                               placeholder={
-                                dialogMode === 'add-personal-root'
-                                  ? 'Personal Topic name'
+                                dialogMode === 'add-personal'
+                                  ? 'Topic name'
                                   : dialogMode === 'add'
                                     ? 'Subtopic name'
                                     : 'Topic name'
@@ -7900,10 +8205,30 @@ export function CreatorStudioV2Client({
                     id="question-concept-browser"
                     aria-label="Question Topic Tree"
                   >
-                    {topics.map((topic) => renderQuestionTopic(topic))}
-                    <div className={styles.personalTreeDivider}>Mine · Personal Topics</div>
-                    {personalTopicTree.map((topic) => renderPersonalQuestionTopic(topic))}
-                    {normalizedSearch && searchIds.size === 0 && (
+                    {unifiedTopicComposition.officialRoots.map((topic) =>
+                      renderUnifiedQuestionTopic(topic)
+                    )}
+                    {unifiedTopicComposition.unplacedPersonalRoots.length > 0 && (
+                      <div className={styles.unplacedTopicsLabel}>
+                        Unplaced <span className={styles.sourceBadge} data-source="personal">Mine</span>
+                      </div>
+                    )}
+                    {unifiedTopicComposition.unplacedPersonalRoots.map((topic) =>
+                      renderPersonalQuestionTopic(topic)
+                    )}
+                    {unifiedTopicComposition.otherLibraryPersonalRoots.length > 0 && (
+                      <div className={styles.unplacedTopicsLabel}>
+                        Other Library <span className={styles.sourceBadge} data-source="personal">Mine</span>
+                      </div>
+                    )}
+                    {unifiedTopicComposition.otherLibraryPersonalRoots.map((topic) =>
+                      renderPersonalQuestionTopic(topic)
+                    )}
+                    {normalizedSearch && ![
+                      ...unifiedTopicComposition.officialRoots,
+                      ...unifiedTopicComposition.unplacedPersonalRoots,
+                      ...unifiedTopicComposition.otherLibraryPersonalRoots,
+                    ].some(unifiedTopicMatchesSearch) && (
                       <div className={styles.emptyTree}>
                         No topics match “{searchQuery.trim()}”.
                       </div>

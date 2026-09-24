@@ -50,6 +50,11 @@ function personalRows(ownerId = 'learner-owner') {
       library_node_id: 'node-a', official_concept_id: 'official-concept-a',
       created_at: '2026-01-01', updated_at: '2026-01-01',
     }],
+    personal_topic_official_placements: [{
+      id: 'topic-placement-a', owner_id: ownerId, personal_topic_id: 'topic-a',
+      library_node_id: 'node-a',
+      created_at: '2026-01-01', updated_at: '2026-01-01',
+    }],
   };
 }
 
@@ -71,7 +76,7 @@ function loaderDatabase(rows) {
   };
 }
 
-test('personal bootstrap is four bounded owner-scoped reads with no per-item wave', async () => {
+test('personal bootstrap is five bounded owner-scoped reads with no per-item wave', async () => {
   const database = loaderDatabase(personalRows());
   const loaded = await loadCreatorPersonalContent(database, 'learner-owner');
 
@@ -80,17 +85,27 @@ test('personal bootstrap is four bounded owner-scoped reads with no per-item wav
   assert.equal(loaded.concepts.length, 1);
   assert.equal(loaded.cards.length, 1);
   assert.equal(loaded.overlays.length, 1);
+  assert.equal(loaded.topicPlacements.length, 1);
   assert.deepEqual(
     [...new Set(database.calls.filter((call) => call.operation === 'select').map((call) => call.table))].sort(),
-    ['personal_cards', 'personal_concept_official_placements', 'personal_concepts', 'personal_topics']
+    ['personal_cards', 'personal_concept_official_placements', 'personal_concepts', 'personal_topic_official_placements', 'personal_topics']
   );
-  assert.equal(database.calls.filter((call) => call.operation === 'select').length, 4);
-  assert.equal(database.calls.filter((call) => call.operation === 'eq' && call.column === 'owner_id' && call.value === 'learner-owner').length, 4);
+  assert.equal(database.calls.filter((call) => call.operation === 'select').length, 5);
+  assert.equal(database.calls.filter((call) => call.operation === 'eq' && call.column === 'owner_id' && call.value === 'learner-owner').length, 5);
 });
 
 test('personal bootstrap fails closed if a backend response crosses the owner boundary', async () => {
   const rows = personalRows('learner-owner');
   rows.personal_cards[0].owner_id = 'second-learner';
+  await assert.rejects(
+    loadCreatorPersonalContent(loaderDatabase(rows), 'learner-owner'),
+    /crossed the authenticated owner boundary/
+  );
+});
+
+test('personal Topic placement bootstrap fails closed across the owner boundary', async () => {
+  const rows = personalRows('learner-owner');
+  rows.personal_topic_official_placements[0].owner_id = 'second-learner';
   await assert.rejects(
     loadCreatorPersonalContent(loaderDatabase(rows), 'learner-owner'),
     /crossed the authenticated owner boundary/
@@ -178,7 +193,10 @@ test('personal Concept and Card reuse the existing Content and Questions workspa
     assert.match(creatorSource, new RegExp(`'${tab}'`));
   }
   assert.doesNotMatch(creatorSource, /Browse\s*\|\s*Mine|Personal Decks|Flagged/);
-  assert.doesNotMatch(creatorSource, /creator-unified|UnifiedCreatorPrototypeClient/);
+  assert.doesNotMatch(
+    creatorSource,
+    /UnifiedCreatorPrototypeClient|from '@\/lib\/unified-creator-prototype'/
+  );
 });
 
 test('creation source is explicit and personal unsupported metadata is never fabricated', () => {

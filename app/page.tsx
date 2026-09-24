@@ -9,6 +9,10 @@ import {
   readProxyTiming,
   REQUEST_ID_HEADER,
 } from '@/lib/request-performance';
+import {
+  CREATOR_LEARNER_ALLOWLIST_ENV,
+  resolveHomeCreatorEntry,
+} from '@/lib/creator-route-access';
 
 export default async function Home() {
   const requestHeaders = await headers();
@@ -30,6 +34,16 @@ export default async function Home() {
         )
       : undefined;
   const inheritedTiming = readProxyTiming(requestHeaders);
+  const homeCreatorEntry = activeLibraryContext.user
+    ? resolveHomeCreatorEntry({
+        userId: activeLibraryContext.user.id,
+        role:
+          activeLibraryContext.role === 'anonymous'
+            ? 'learner'
+            : activeLibraryContext.role,
+        learnerAllowlist: process.env[CREATOR_LEARNER_ALLOWLIST_ENV],
+      })
+    : { label: 'Study Creator' as const, href: '/study-creator' as const };
   const content = timing.measureSync('home_assembly', () => (
     activeLibraryContext.needsSelection ? (
       <main style={{ padding: 24 }}>
@@ -44,6 +58,7 @@ export default async function Home() {
     ) : (
       <StudyPlanner
         activeLibrary={activeLibrary}
+        homeCreatorEntry={homeCreatorEntry}
         initialDeckData={initialDeckData}
         initialSession={
           activeLibraryContext.user

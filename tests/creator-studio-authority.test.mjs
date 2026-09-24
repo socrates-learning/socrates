@@ -408,7 +408,10 @@ test('current real Creator Studio activates personal states inside the same shar
   assert.match(creatorSource, /personal_concepts/);
   assert.match(creatorSource, /personal_cards/);
   assert.match(creatorSource, /personal_concept_official_placements/);
-  assert.doesNotMatch(creatorSource, /creator-unified|CreatorPresentationPrimitives/);
+  assert.doesNotMatch(
+    creatorSource,
+    /UnifiedCreatorPrototypeClient|@\/lib\/unified-creator-prototype/
+  );
 });
 
 test('personal Concept, Card, and Topic editor states retain source-qualified identity', () => {
