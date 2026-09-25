@@ -43,7 +43,7 @@ export default async function Home() {
             : activeLibraryContext.role,
         learnerAllowlist: process.env[CREATOR_LEARNER_ALLOWLIST_ENV],
       })
-    : { label: 'Study Creator' as const, href: '/study-creator' as const };
+    : { label: 'Creator Studio' as const, href: '/creator' as const };
   const content = timing.measureSync('home_assembly', () => (
     activeLibraryContext.needsSelection ? (
       <main style={{ padding: 24 }}>

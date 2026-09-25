@@ -4,6 +4,7 @@ import test from 'node:test';
 import {
   composeUnifiedCreatorTopicTree,
   flattenUnifiedCreatorTopics,
+  shouldShowPersonalCreatorTopics,
 } from '../lib/creator-unified-topic-tree.ts';
 
 const ownerId = '11111111-1111-4111-8111-111111111111';
@@ -50,6 +51,24 @@ const officialTopics = [
   },
   { id: otherOfficialId, name: 'Second official root', children: [] },
 ];
+
+test('Creator tree presentation keeps learner composition and defaults staff to official', () => {
+  assert.equal(shouldShowPersonalCreatorTopics({
+    role: 'learner', creationSource: 'personal', editorSource: 'official',
+  }), true);
+
+  for (const role of ['editor', 'admin']) {
+    assert.equal(shouldShowPersonalCreatorTopics({
+      role, creationSource: 'official', editorSource: 'official',
+    }), false);
+    assert.equal(shouldShowPersonalCreatorTopics({
+      role, creationSource: 'personal', editorSource: 'official',
+    }), true);
+    assert.equal(shouldShowPersonalCreatorTopics({
+      role, creationSource: 'official', editorSource: 'personal',
+    }), true);
+  }
+});
 
 test('placed roots compose beneath the exact official node and descendants follow parent_id', () => {
   const personalTopics = [

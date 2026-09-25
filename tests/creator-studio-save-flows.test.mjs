@@ -7,6 +7,7 @@ import { buildConceptTopicTree } from '../lib/concept-topic-tree.ts';
 import {
   composeUnifiedCreatorTopicTree,
   flattenUnifiedCreatorTopics,
+  shouldShowPersonalCreatorTopics,
 } from '../lib/creator-unified-topic-tree.ts';
 
 // Execute the actual component's save handlers with in-memory hooks and database
@@ -92,6 +93,7 @@ function editor({ editing = false, response, references = [] } = {}) {
     '@/lib/creator-unified-topic-tree': {
       composeUnifiedCreatorTopicTree,
       flattenUnifiedCreatorTopics,
+      shouldShowPersonalCreatorTopics,
     },
     '@/lib/creator-studio-runtime': {
       createOfficialConceptEditorState: (id, libraryId) => id ? { mode: 'official-concept', identity: { id }, libraryId } : { mode: 'new-official-concept', libraryId },

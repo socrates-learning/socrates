@@ -168,6 +168,18 @@ test('staff personal commands remain on personal routes while official authority
   }
 });
 
+test('staff official tree filtering is presentation-only and preserves personal owner data', () => {
+  assert.match(creatorSource, /const unifiedTopicComposition = useMemo/);
+  assert.match(creatorSource, /const officialOnlyTopicComposition = useMemo/);
+  assert.match(creatorSource, /personalTopics: \[\]/);
+  assert.match(creatorSource, /topicPlacements: \[\]/);
+  assert.match(creatorSource, /shouldShowPersonalCreatorTopics/);
+  assert.match(creatorSource, /const visibleTopicComposition = showPersonalCreatorTopics/);
+  assert.match(creatorSource, /setPersonalTopics/);
+  assert.match(creatorSource, /setPersonalTopicPlacements/);
+  assert.doesNotMatch(creatorSource, /delete\(\)[\s\S]{0,80}officialOnlyTopicComposition/);
+});
+
 test('real Creator routes server-load personal data and pass one owner-qualified bootstrap', () => {
   for (const source of [newPageSource, editPageSource]) {
     assert.match(source, /loadCreatorPersonalContent/);

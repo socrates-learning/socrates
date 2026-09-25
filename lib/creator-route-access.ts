@@ -6,8 +6,8 @@ export const CREATOR_LEARNER_ALLOWLIST_ENV =
 export type CreatorRouteScope = 'outside' | 'shared' | 'staff';
 
 export type HomeCreatorEntry = Readonly<{
-  label: 'Creator Studio' | 'Study Creator';
-  href: '/creator' | '/study-creator';
+  label: 'Creator Studio';
+  href: '/creator';
 }>;
 
 type CreatorRouteAccessInput = {
@@ -76,21 +76,13 @@ export function canAccessSharedCreator({
   return parsed.valid && parsed.userIds.has(userId.toLowerCase());
 }
 
-export function resolveHomeCreatorEntry({
-  learnerAllowlist,
-  role,
-  userId,
-}: Omit<CreatorRouteAccessInput, 'pathname'>): HomeCreatorEntry {
-  if (
-    role === 'learner' &&
-    canAccessSharedCreator({ learnerAllowlist, role, userId })
-  ) {
-    return { label: 'Creator Studio', href: '/creator' };
-  }
-
-  // Staff already retain the canonical Creator Studio entry in global
-  // navigation. Non-cohort learners retain the deployed Study Creator route.
-  return { label: 'Study Creator', href: '/study-creator' };
+export function resolveHomeCreatorEntry(
+  input: Omit<CreatorRouteAccessInput, 'pathname'>
+): HomeCreatorEntry {
+  void input;
+  // Creator route authorization remains centralized in canAccessCreatorRoute.
+  // Home no longer advertises the legacy Study Creator compatibility route.
+  return { label: 'Creator Studio', href: '/creator' };
 }
 
 export function canAccessCreatorRoute({

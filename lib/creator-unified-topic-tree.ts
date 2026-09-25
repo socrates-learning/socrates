@@ -41,6 +41,25 @@ export type UnifiedCreatorTopicComposition = Readonly<{
   otherLibraryPersonalRoots: readonly UnifiedCreatorTopicNode[];
 }>;
 
+export function shouldShowPersonalCreatorTopics({
+  creationSource,
+  editorSource,
+  role,
+}: {
+  creationSource: 'official' | 'personal';
+  editorSource: 'official' | 'personal';
+  role: 'learner' | 'editor' | 'admin';
+}): boolean {
+  // Learners keep the existing unified official + personal tree. Staff default
+  // to the official tree, but their existing personal authoring mode remains
+  // available whenever they deliberately choose or open personal material.
+  return (
+    role === 'learner' ||
+    creationSource === 'personal' ||
+    editorSource === 'personal'
+  );
+}
+
 function comparePersonalTopics(
   left: CreatorPersonalTopic,
   right: CreatorPersonalTopic

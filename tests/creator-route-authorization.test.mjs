@@ -123,17 +123,17 @@ test('removing a learner from configuration immediately restores denial', () => 
   }), false);
 });
 
-test('Home reuses server Creator authorization without duplicating the cohort in client code', () => {
+test('Home advertises canonical Creator while route authorization remains server-controlled', () => {
   assert.deepEqual(resolveHomeCreatorEntry({
     role: 'learner', userId: learnerA, learnerAllowlist: allowlist,
   }), { label: 'Creator Studio', href: '/creator' });
   assert.deepEqual(resolveHomeCreatorEntry({
     role: 'learner', userId: learnerB, learnerAllowlist: allowlist,
-  }), { label: 'Study Creator', href: '/study-creator' });
+  }), { label: 'Creator Studio', href: '/creator' });
   for (const role of ['editor', 'admin']) {
     assert.deepEqual(resolveHomeCreatorEntry({
       role, userId: learnerA, learnerAllowlist: allowlist,
-    }), { label: 'Study Creator', href: '/study-creator' });
+    }), { label: 'Creator Studio', href: '/creator' });
   }
 
   const homeSource = readFileSync(new URL('../app/page.tsx', import.meta.url), 'utf8');
@@ -142,6 +142,8 @@ test('Home reuses server Creator authorization without duplicating the cohort in
   );
   assert.match(homeSource, /resolveHomeCreatorEntry/);
   assert.doesNotMatch(plannerSource, /SOCRATES_CREATOR_LEARNER_USER_IDS/);
+  assert.match(plannerSource, /homeCreatorEntry = \{ label: 'Creator Studio', href: '\/creator' \}/);
+  assert.doesNotMatch(plannerSource, /homeCreatorEntry = \{ label: 'Study Creator'/);
 });
 
 test('canonical /creator entry renders the existing new-Concept page without a redirect bootstrap', () => {

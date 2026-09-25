@@ -25,6 +25,10 @@ const headerSource = readFileSync(
   new URL('../components/Header.tsx', import.meta.url),
   'utf8'
 );
+const sidebarSource = readFileSync(
+  new URL('../components/Sidebar.tsx', import.meta.url),
+  'utf8'
+);
 
 test('Content keeps keyword search and adds Topic Tree browsing', () => {
   assert.match(creatorSource, /placeholder="Search concepts"/);
@@ -139,4 +143,17 @@ test('global and in-page Home navigation resolve to the canonical dashboard', ()
     studyPlannerSource,
     /function handleHomeClick[\s\S]*?window\.history\.pushState\([\s\S]*?window\.location\.pathname \+ window\.location\.search[\s\S]*?setMode\('dashboard'\)/
   );
+});
+
+test('Home uses canonical Creator navigation without duplicating the admin header action', () => {
+  assert.match(
+    studyPlannerSource,
+    /homeCreatorEntry = \{ label: 'Creator Studio', href: '\/creator' \}/
+  );
+  assert.match(
+    studyPlannerSource,
+    /item\.icon === 'creator'[\s\S]*?classPrefix === 'home-v2' && mode !== 'stats'/
+  );
+  assert.match(sidebarSource, /href="\/creator"[\s\S]*?Creator Studio/);
+  assert.doesNotMatch(sidebarSource, /href="\/study-creator"/);
 });

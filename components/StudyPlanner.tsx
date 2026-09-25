@@ -219,8 +219,8 @@ const learnerNavItems: Array<{
 ];
 
 function createHomeRailItems(homeCreatorEntry: {
-  label: 'Creator Studio' | 'Study Creator';
-  href: '/creator' | '/study-creator';
+  label: 'Creator Studio';
+  href: '/creator';
 }): Array<{ label: string; icon: string; href?: string }> {
   return [
     { ...homeCreatorEntry, icon: 'edit' },
@@ -404,14 +404,14 @@ function getNodePath(node: LibraryNode, nodesById: Map<string, LibraryNode>) {
 
 export function StudyPlanner({
   activeLibrary,
-  homeCreatorEntry = { label: 'Study Creator', href: '/study-creator' },
+  homeCreatorEntry = { label: 'Creator Studio', href: '/creator' },
   initialDeckData,
   initialSession,
 }: {
   activeLibrary: ActiveLibrary | null;
   homeCreatorEntry?: {
-    label: 'Creator Studio' | 'Study Creator';
-    href: '/creator' | '/study-creator';
+    label: 'Creator Studio';
+    href: '/creator';
   };
   initialDeckData?: StudyPlannerInitialData;
   initialSession?: {
@@ -2014,7 +2014,12 @@ export function StudyPlanner({
 
         <nav className={`${classPrefix}-nav`} aria-label="Socrates learner navigation">
           {learnerNavItems.map((item) => {
-            if (item.icon === 'creator' && !isEditor) return null;
+            if (
+              item.icon === 'creator' &&
+              (!isEditor || (classPrefix === 'home-v2' && mode !== 'stats'))
+            ) {
+              return null;
+            }
             if (item.icon === 'admin' && !isAdmin) return null;
 
             const isStudy = item.icon === 'study';

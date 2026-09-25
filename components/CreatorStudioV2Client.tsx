@@ -54,6 +54,7 @@ import type {
 import {
   composeUnifiedCreatorTopicTree,
   flattenUnifiedCreatorTopics,
+  shouldShowPersonalCreatorTopics,
   type UnifiedCreatorTopicNode,
 } from '@/lib/creator-unified-topic-tree';
 import {
@@ -1745,6 +1746,28 @@ export function CreatorStudioV2Client({
       topics,
     ]
   );
+  const officialOnlyTopicComposition = useMemo(
+    () =>
+      composeUnifiedCreatorTopicTree({
+        officialTopics: topics,
+        ownerId: initialPersonalContent.ownerId,
+        personalTopics: [],
+        topicPlacements: [],
+      }),
+    [initialPersonalContent.ownerId, topics]
+  );
+  const showPersonalCreatorTopics = shouldShowPersonalCreatorTopics({
+    creationSource:
+      activeCreatorTab === 'questions'
+        ? questionCreationSource
+        : conceptCreationSource,
+    editorSource:
+      activeCreatorTab === 'questions' ? questionSource : conceptSource,
+    role: creatorAuthority.role,
+  });
+  const visibleTopicComposition = showPersonalCreatorTopics
+    ? unifiedTopicComposition
+    : officialOnlyTopicComposition;
   const unifiedOfficialTopicRows = useMemo(
     () => flattenUnifiedCreatorTopics(unifiedTopicComposition.officialRoots),
     [unifiedTopicComposition.officialRoots]
@@ -6313,23 +6336,23 @@ export function CreatorStudioV2Client({
                       </button>
                     </div>
                     <div className={styles.conceptBrowseTree}>
-                      {unifiedTopicComposition.officialRoots.map((topic) =>
+                      {visibleTopicComposition.officialRoots.map((topic) =>
                         renderUnifiedConceptBrowseTopic(topic)
                       )}
-                      {unifiedTopicComposition.unplacedPersonalRoots.length > 0 && (
+                      {visibleTopicComposition.unplacedPersonalRoots.length > 0 && (
                         <div className={styles.unplacedTopicsLabel}>
                           Unplaced <span className={styles.sourceBadge} data-source="personal">Mine</span>
                         </div>
                       )}
-                      {unifiedTopicComposition.unplacedPersonalRoots.map((topic) =>
+                      {visibleTopicComposition.unplacedPersonalRoots.map((topic) =>
                         renderPersonalConceptBrowseTopic(topic)
                       )}
-                      {unifiedTopicComposition.otherLibraryPersonalRoots.length > 0 && (
+                      {visibleTopicComposition.otherLibraryPersonalRoots.length > 0 && (
                         <div className={styles.unplacedTopicsLabel}>
                           Other Library <span className={styles.sourceBadge} data-source="personal">Mine</span>
                         </div>
                       )}
-                      {unifiedTopicComposition.otherLibraryPersonalRoots.map((topic) =>
+                      {visibleTopicComposition.otherLibraryPersonalRoots.map((topic) =>
                         renderPersonalConceptBrowseTopic(topic)
                       )}
                     </div>
@@ -6549,29 +6572,29 @@ export function CreatorStudioV2Client({
               )}
 
               <div className={styles.treeViewport} aria-label="Topic Tree">
-                {unifiedTopicComposition.officialRoots.map((topic) =>
+                {visibleTopicComposition.officialRoots.map((topic) =>
                   renderUnifiedTopic(topic)
                 )}
-                {unifiedTopicComposition.unplacedPersonalRoots.length > 0 && (
+                {visibleTopicComposition.unplacedPersonalRoots.length > 0 && (
                   <div className={styles.unplacedTopicsLabel}>
                     Unplaced <span className={styles.sourceBadge} data-source="personal">Mine</span>
                   </div>
                 )}
-                {unifiedTopicComposition.unplacedPersonalRoots.map((topic) =>
+                {visibleTopicComposition.unplacedPersonalRoots.map((topic) =>
                   renderPersonalTopic(topic)
                 )}
-                {unifiedTopicComposition.otherLibraryPersonalRoots.length > 0 && (
+                {visibleTopicComposition.otherLibraryPersonalRoots.length > 0 && (
                   <div className={styles.unplacedTopicsLabel}>
                     Other Library <span className={styles.sourceBadge} data-source="personal">Mine</span>
                   </div>
                 )}
-                {unifiedTopicComposition.otherLibraryPersonalRoots.map((topic) =>
+                {visibleTopicComposition.otherLibraryPersonalRoots.map((topic) =>
                   renderPersonalTopic(topic)
                 )}
                 {normalizedSearch && ![
-                  ...unifiedTopicComposition.officialRoots,
-                  ...unifiedTopicComposition.unplacedPersonalRoots,
-                  ...unifiedTopicComposition.otherLibraryPersonalRoots,
+                  ...visibleTopicComposition.officialRoots,
+                  ...visibleTopicComposition.unplacedPersonalRoots,
+                  ...visibleTopicComposition.otherLibraryPersonalRoots,
                 ].some(unifiedTopicMatchesSearch) && (
                   <div className={styles.emptyTree}>No topics match “{searchQuery.trim()}”.</div>
                 )}
@@ -8218,29 +8241,29 @@ export function CreatorStudioV2Client({
                     id="question-concept-browser"
                     aria-label="Question Topic Tree"
                   >
-                    {unifiedTopicComposition.officialRoots.map((topic) =>
+                    {visibleTopicComposition.officialRoots.map((topic) =>
                       renderUnifiedQuestionTopic(topic)
                     )}
-                    {unifiedTopicComposition.unplacedPersonalRoots.length > 0 && (
+                    {visibleTopicComposition.unplacedPersonalRoots.length > 0 && (
                       <div className={styles.unplacedTopicsLabel}>
                         Unplaced <span className={styles.sourceBadge} data-source="personal">Mine</span>
                       </div>
                     )}
-                    {unifiedTopicComposition.unplacedPersonalRoots.map((topic) =>
+                    {visibleTopicComposition.unplacedPersonalRoots.map((topic) =>
                       renderPersonalQuestionTopic(topic)
                     )}
-                    {unifiedTopicComposition.otherLibraryPersonalRoots.length > 0 && (
+                    {visibleTopicComposition.otherLibraryPersonalRoots.length > 0 && (
                       <div className={styles.unplacedTopicsLabel}>
                         Other Library <span className={styles.sourceBadge} data-source="personal">Mine</span>
                       </div>
                     )}
-                    {unifiedTopicComposition.otherLibraryPersonalRoots.map((topic) =>
+                    {visibleTopicComposition.otherLibraryPersonalRoots.map((topic) =>
                       renderPersonalQuestionTopic(topic)
                     )}
                     {normalizedSearch && ![
-                      ...unifiedTopicComposition.officialRoots,
-                      ...unifiedTopicComposition.unplacedPersonalRoots,
-                      ...unifiedTopicComposition.otherLibraryPersonalRoots,
+                      ...visibleTopicComposition.officialRoots,
+                      ...visibleTopicComposition.unplacedPersonalRoots,
+                      ...visibleTopicComposition.otherLibraryPersonalRoots,
                     ].some(unifiedTopicMatchesSearch) && (
                       <div className={styles.emptyTree}>
                         No topics match “{searchQuery.trim()}”.
