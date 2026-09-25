@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { loadConceptNote, saveConceptNote } from '@/lib/concept-notes';
 import { supabase } from '@/lib/supabase';
 
 export function ConceptNotes({ conceptId }: { conceptId: string }) {
@@ -16,12 +17,11 @@ export function ConceptNotes({ conceptId }: { conceptId: string }) {
         return;
       }
 
-      const { data } = await supabase
-        .from('user_notes')
-        .select('note')
-        .eq('concept_id', conceptId)
-        .eq('user_id', userData.user.id)
-        .maybeSingle();
+      const { data } = await loadConceptNote(
+        supabase,
+        userData.user.id,
+        conceptId
+      );
 
       setNote(data?.note ?? '');
       setStatus('');
@@ -40,11 +40,10 @@ export function ConceptNotes({ conceptId }: { conceptId: string }) {
       return;
     }
 
-    const { error } = await supabase.from('user_notes').upsert({
-      user_id: userData.user.id,
-      concept_id: conceptId,
+    const { error } = await saveConceptNote(supabase, {
+      userId: userData.user.id,
+      conceptId,
       note,
-      updated_at: new Date().toISOString(),
     });
 
     if (error) {
