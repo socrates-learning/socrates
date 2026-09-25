@@ -368,13 +368,9 @@ function StudyFeedbackIcon({ type }: { type: 'up' | 'more' | 'down' }) {
   }
 
   return (
-    <svg aria-hidden="true" className="study-v2-feedback-svg" viewBox="0 0 64 64">
-      {type === 'up' ? (
-        <path d="M23 54h-8c-4 0-7-3-7-7V30c0-4 3-7 7-7h8l8-15c2-4 8-2 8 3v12h10c5 0 8 4 7 9l-3 14c-1 5-5 8-10 8z" />
-      ) : (
-        <path d="M23 10h-8c-4 0-7 3-7 7v17c0 4 3 7 7 7h8l8 15c2 4 8 2 8-3V41h10c5 0 8-4 7-9l-3-14c-1-5-5-8-10-8z" />
-      )}
-    </svg>
+    <span aria-hidden="true" className="study-v2-feedback-emoji">
+      {type === 'up' ? '👍' : '👎'}
+    </span>
   );
 }
 
@@ -5102,13 +5098,14 @@ if (mode === 'study') {
           background: #eff6ff !important;
         }
 
-        .study-v2-feedback-svg {
-          fill: none;
+        .study-v2-feedback-emoji {
+          align-items: center;
+          display: inline-flex;
+          font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
+          font-size: 24px;
           height: 30px;
-          stroke: #0f5ee8;
-          stroke-linecap: round;
-          stroke-linejoin: round;
-          stroke-width: 3;
+          justify-content: center;
+          line-height: 1;
           width: 30px;
         }
 

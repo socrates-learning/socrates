@@ -104,14 +104,18 @@ test('answer controls expose Back without changing the candidate identity', () =
   assert.doesNotMatch(backHandler, /setStudyCandidate|setIsStudySequenceComplete/);
 });
 
-test('feedback controls show compact icon, Other, icon pattern with accessible names', () => {
+test('feedback controls show compact emoji, Other, emoji pattern with accessible names', () => {
   assert.match(feedbackControls, /\['up', 'Thumbs up'\]/);
   assert.match(feedbackControls, /\['more', 'Other'\]/);
   assert.match(feedbackControls, /\['down', 'Thumbs down'\]/);
   assert.match(feedbackControls, /aria-label=\{label\}/);
   assert.match(feedbackControls, /title=\{label\}/);
   assert.doesNotMatch(feedbackControls, /<span>\{label\}<\/span>/);
-  assert.match(planner, /\.study-v2-feedback-svg \{[\s\S]*?height: 30px;[\s\S]*?width: 30px;/);
+  assert.match(planner, /type === 'up' \? '👍' : '👎'/);
+  assert.match(
+    planner,
+    /\.study-v2-feedback-emoji \{[\s\S]*?font-size: 24px;[\s\S]*?height: 30px;[\s\S]*?width: 30px;/
+  );
   assert.match(planner, /\.study-v2-feedback-row button \{[\s\S]*?min-height: 80px;/);
 });
 
