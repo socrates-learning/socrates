@@ -35,6 +35,7 @@ import {
 } from '@/lib/tag-catalog-invalidation';
 import {
   CreatorStudioLocalHeader,
+  CreatorStudioFlaggedTab,
   CreatorStudioSaveToolbar,
   CreatorStudioTabs,
   type CreatorStudioTab,
@@ -6066,6 +6067,18 @@ export function CreatorStudioV2Client({
                 </div>
               )}
             </section>
+          )}
+
+          {activeCreatorTab === 'flagged' && (
+            <CreatorStudioFlaggedTab
+              material={{
+                topics: personalTopics,
+                concepts: personalConcepts,
+                cards: personalCards,
+                overlays: personalOverlays,
+              }}
+              ownerId={initialPersonalContent.ownerId}
+            />
           )}
 
           {activeCreatorTab === 'content' ? (

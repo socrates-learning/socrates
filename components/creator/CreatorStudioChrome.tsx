@@ -1,8 +1,20 @@
 'use client';
 
+import { StudyCreatorFlaggedBrowser } from '@/components/StudyCreatorFlaggedBrowser';
+import type { CreatorPersonalContent } from '@/lib/creator-personal-content';
 import styles from '../CreatorStudioV2Client.module.css';
 
-export type CreatorStudioTab = 'content' | 'questions' | 'tags';
+export type CreatorStudioTab = 'content' | 'questions' | 'tags' | 'flagged';
+
+export function CreatorStudioFlaggedTab({
+  material,
+  ownerId,
+}: {
+  material: Pick<CreatorPersonalContent, 'topics' | 'concepts' | 'cards' | 'overlays'>;
+  ownerId: string;
+}) {
+  return <StudyCreatorFlaggedBrowser material={material} ownerId={ownerId} />;
+}
 
 export function CreatorStudioLocalHeader({
   onBack,
@@ -90,6 +102,7 @@ const creatorStudioTabs: ReadonlyArray<{
   { id: 'content', label: 'Content' },
   { id: 'questions', label: 'Questions' },
   { id: 'tags', label: 'Tags' },
+  { id: 'flagged', label: 'Flagged' },
 ];
 
 export function CreatorStudioTabs({

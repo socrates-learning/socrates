@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import type { PersonalMaterial } from './StudyCreatorClient';
+import type { CreatorPersonalContent } from '@/lib/creator-personal-content';
 import { StudyCreatorIcon as Icon } from './StudyCreatorIcon';
 import styles from './StudyCreatorClient.module.css';
 
@@ -28,7 +28,7 @@ type OfficialConcept = {
 };
 
 type StudyCreatorFlaggedBrowserProps = {
-  material: PersonalMaterial;
+  material: Pick<CreatorPersonalContent, 'topics' | 'concepts' | 'cards' | 'overlays'>;
   ownerId: string;
 };
 

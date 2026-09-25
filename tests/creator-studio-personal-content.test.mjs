@@ -192,7 +192,8 @@ test('personal Concept and Card reuse the existing Content and Questions workspa
   for (const tab of ['content', 'questions', 'tags']) {
     assert.match(creatorSource, new RegExp(`'${tab}'`));
   }
-  assert.doesNotMatch(creatorSource, /Browse\s*\|\s*Mine|Personal Decks|Flagged/);
+  assert.doesNotMatch(creatorSource, /Browse\s*\|\s*Mine|Personal Decks/);
+  assert.match(creatorSource, /activeCreatorTab === 'flagged'/);
   assert.doesNotMatch(
     creatorSource,
     /UnifiedCreatorPrototypeClient|from '@\/lib\/unified-creator-prototype'/

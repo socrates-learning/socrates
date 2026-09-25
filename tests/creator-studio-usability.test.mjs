@@ -85,6 +85,9 @@ function compileCreatorChrome() {
       if (name === '../CreatorStudioV2Client.module.css') {
         return { default: {} };
       }
+      if (name === '@/components/StudyCreatorFlaggedBrowser') {
+        return { StudyCreatorFlaggedBrowser: () => null };
+      }
       throw new Error(`Unexpected import: ${name}`);
     },
   };
@@ -100,13 +103,13 @@ test('extracted tabs and save toolbar remain controlled and dispatch once', () =
     onSelect: (tab) => selected.push(tab),
   });
   const tabButtons = tabs.props.children;
-  assert.equal(tabButtons.length, 3);
+  assert.equal(tabButtons.length, 4);
   assert.equal(
     Array.from(tabButtons, (button) => button.props['aria-selected']).join(','),
-    'false,true,false'
+    'false,true,false,false'
   );
-  tabButtons[2].props.onClick();
-  assert.deepEqual(selected, ['tags']);
+  tabButtons[3].props.onClick();
+  assert.deepEqual(selected, ['flagged']);
 
   let saves = 0;
   const toolbar = chrome.CreatorStudioSaveToolbar({
