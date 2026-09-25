@@ -49,3 +49,11 @@ export function calculateHistoricalAccuracyPercent(scores: number[]) {
     scores.reduce((total, score) => total + score * 25, 0) / scores.length
   );
 }
+
+export function calculateSessionReviewScorePercent(scores: number[]) {
+  if (scores.length === 0) return null;
+
+  return Math.round(
+    scores.reduce((total, score) => total + score * 25, 0) / scores.length
+  );
+}

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { calculateSessionReviewScorePercent } from '@/lib/concept-page-mastery';
 import { supabase } from '@/lib/supabase';
 
 type ReviewSection = {
@@ -35,12 +36,7 @@ export function ConceptReview({
   const [sessionScores, setSessionScores] = useState<number[]>([]);
 
   const currentSection = sections[currentIndex];
-  const sessionMastery = sessionScores.length
-    ? Math.round(
-        sessionScores.reduce((total, score) => total + score * 25, 0) /
-          sessionScores.length
-      )
-    : null;
+  const sessionReviewScore = calculateSessionReviewScorePercent(sessionScores);
 
   async function saveScore(score: number) {
     if (!currentSection || saving) return;
@@ -109,7 +105,7 @@ export function ConceptReview({
       <div>
         <h3>Review Complete</h3>
         <p className="muted">Completed {sections.length} of {sections.length} cards</p>
-        <p>Session Mastery: {sessionMastery ?? 0}%</p>
+        <p>Session Review Score: {sessionReviewScore ?? 0}%</p>
         <button
           className="btn primary"
           type="button"
@@ -130,7 +126,11 @@ export function ConceptReview({
   return (
     <div>
       <p className="muted">
-        Session Mastery: {sessionMastery === null ? '—' : `${sessionMastery}%`}
+        Session Review Score:{' '}
+        {sessionReviewScore === null ? '—' : `${sessionReviewScore}%`}
+      </p>
+      <p className="muted">
+        Average of your 1–4 self-ratings in this review.
       </p>
 
       <p className="muted">
