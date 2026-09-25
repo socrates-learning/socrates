@@ -323,6 +323,6 @@ test('Phase 1 UX keeps direct Study, nearby Cram, and Exit-to-Home behavior', ()
   );
   assert.match(
     studyPlannerSource,
-    /leaveStudyMode\('dashboard'\)[\s\S]*?<span aria-hidden="true">←<\/span>[\s\S]*?Exit/
+    /className="study-v2-context-action"[\s\S]*?leaveStudyMode\('dashboard'\)[\s\S]*?>\s*Exit\s*<\/button>/
   );
 });

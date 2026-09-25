@@ -364,7 +364,7 @@ function HomeProgressBar({ value }: { value: number }) {
 
 function StudyFeedbackIcon({ type }: { type: 'up' | 'more' | 'down' }) {
   if (type === 'more') {
-    return <span className="study-v2-more-dots">•••</span>;
+    return <span className="study-v2-other-label">Other</span>;
   }
 
   return (
@@ -1362,6 +1362,21 @@ export function StudyPlanner({
     setStudyResponse(null);
   }
 
+  function returnToStudyQuestion() {
+    if (
+      studySubmissionStatus !== 'idle' ||
+      studyResponseSaveLock.current ||
+      studyResponseRecordedForCard.current
+    ) {
+      return;
+    }
+
+    resetStudyCardFeedback();
+    setStudyFeedback(null);
+    setStudyResponse(null);
+    setIsAnswerVisible(false);
+  }
+
   async function loadStudyConceptReview({ retry = false } = {}) {
     const candidate = studyCandidate;
 
@@ -1513,6 +1528,9 @@ export function StudyPlanner({
     return concept?.name || 'Official Concept';
   }
 
+  // The Study entry point is intentionally retired. Keep this implementation
+  // isolated until the remaining personal-content callers are reviewed.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async function openAddToThis() {
     const candidate = studyCandidate;
     if (!candidate) return;
@@ -3453,48 +3471,49 @@ if (mode === 'study') {
 
   const studyCardActions = (
     <div className="study-v2-card-actions" aria-label="Study card controls">
-      {hasStudyCandidate && (
-        <>
-          <button
-            className="study-v2-context-action"
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              void openAddToThis();
-            }}
-            onKeyDown={(event) => event.stopPropagation()}
-          >
-            <span aria-hidden="true">＋</span>
-            Add to this
-          </button>
-          <button
-            aria-pressed={Boolean(candidateFlag)}
-            className={`study-v2-context-action study-v2-flag-action${
-              candidateFlag ? ' study-v2-flag-action-active' : ''
-            }`}
-            disabled={isCandidateFlagLoading}
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              openFlagModal();
-            }}
-            onKeyDown={(event) => event.stopPropagation()}
-          >
-            <span aria-hidden="true">⚑</span>
-            {isCandidateFlagLoading ? 'Loading…' : 'Flag'}
-          </button>
-        </>
+      {hasStudyCandidate && isAnswerVisible && (
+        <button
+          aria-label="Back to question"
+          className="study-v2-context-action"
+          disabled={studySubmissionStatus !== 'idle'}
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            returnToStudyQuestion();
+          }}
+          onKeyDown={(event) => event.stopPropagation()}
+        >
+          Back
+        </button>
       )}
-      <button type="button" onClick={() => void leaveStudyMode('dashboard')}>
-        <span aria-hidden="true">←</span>
-        Exit
-      </button>
+      {hasStudyCandidate && (
+        <button
+          aria-pressed={Boolean(candidateFlag)}
+          className={`study-v2-context-action study-v2-flag-action${
+            candidateFlag ? ' study-v2-flag-action-active' : ''
+          }`}
+          disabled={isCandidateFlagLoading}
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            openFlagModal();
+          }}
+          onKeyDown={(event) => event.stopPropagation()}
+        >
+          <span aria-hidden="true">⚑</span>
+          {isCandidateFlagLoading ? 'Loading…' : 'Flag'}
+        </button>
+      )}
       <button
-        aria-label="Close study mode"
+        className="study-v2-context-action"
         type="button"
-        onClick={() => void leaveStudyMode('dashboard')}
+        onClick={(event) => {
+          event.stopPropagation();
+          void leaveStudyMode('dashboard');
+        }}
+        onKeyDown={(event) => event.stopPropagation()}
       >
-        ×
+        Exit
       </button>
     </div>
   );
@@ -3513,6 +3532,11 @@ if (mode === 'study') {
                 : isStudySequenceComplete
                   ? 'Study sequence complete'
                   : emptyStudyTitle
+            }
+            aria-describedby={
+              hasStudyCandidate && !isAnswerVisible
+                ? 'study-card-reveal-instruction'
+                : undefined
             }
             className={`study-v2-card ${
               !hasStudyCandidate
@@ -3564,7 +3588,12 @@ if (mode === 'study') {
             ) : !isAnswerVisible ? (
               <div className="study-v2-question-content">
                 <h1>{studyCandidate?.prompt}</h1>
-                <p>Tap to reveal answer</p>
+                <p
+                  className="study-v2-sr-only"
+                  id="study-card-reveal-instruction"
+                >
+                  Press Enter or Space, or activate the card, to reveal the answer.
+                </p>
               </div>
             ) : (
               <>
@@ -3635,17 +3664,19 @@ if (mode === 'study') {
                     {(
                       studyCandidate?.kind === 'official'
                         ? [
-                            ['up', 'Thumbs Up'],
-                            ['more', 'More'],
-                            ['down', 'Thumbs Down'],
+                            ['up', 'Thumbs up'],
+                            ['more', 'Other'],
+                            ['down', 'Thumbs down'],
                           ]
                         : [
-                            ['up', 'Thumbs Up'],
-                            ['down', 'Thumbs Down'],
+                            ['up', 'Thumbs up'],
+                            ['down', 'Thumbs down'],
                           ]
                     ).map(([value, label]) => (
                       <button
+                        aria-label={label}
                         key={value}
+                        title={label}
                         type="button"
                         onClick={() => {
                           if (value === 'more') {
@@ -3660,7 +3691,6 @@ if (mode === 'study') {
                         <StudyFeedbackIcon
                           type={value as Exclude<StudyFeedback, null>}
                         />
-                        <span>{label}</span>
                       </button>
                     ))}
                   </div>
@@ -4432,12 +4462,6 @@ if (mode === 'study') {
           padding: 4px 8px;
         }
 
-        .study-v2-card-actions button:last-child {
-          font-size: 40px;
-          font-weight: 300;
-          line-height: 0.8;
-        }
-
         .study-v2-card-actions .study-v2-context-action {
           border: 1px solid #9fb0c9;
           border-radius: 999px;
@@ -4446,6 +4470,13 @@ if (mode === 'study') {
           font-size: 14px;
           font-weight: 800;
           padding: 6px 12px;
+        }
+
+        .study-v2-card-actions .study-v2-context-action:hover,
+        .study-v2-card-actions .study-v2-context-action:focus-visible {
+          background: #eff6ff;
+          border-color: #0f5ee8;
+          outline: 0;
         }
 
         .study-v2-card-actions .study-v2-context-action:disabled {
@@ -4470,7 +4501,11 @@ if (mode === 'study') {
           flex: 1;
           flex-direction: column;
           justify-content: center;
+          min-height: 0;
+          overflow-y: auto;
+          overscroll-behavior: contain;
           padding: 24px 22px 64px;
+          scrollbar-gutter: stable;
         }
 
         .study-v2-question-content h1 {
@@ -4480,17 +4515,23 @@ if (mode === 'study') {
           font-weight: 650;
           letter-spacing: -0.035em;
           line-height: 1.45;
-          margin: auto auto 0;
+          margin: auto;
           max-width: 620px;
+          overflow-wrap: anywhere;
           text-align: center;
         }
 
-        .study-v2-question-content > p {
-          color: #77797e;
-          font-size: 25px;
-          font-weight: 650;
-          margin: auto 0 0;
-          text-align: center;
+        .study-v2-sr-only {
+          border: 0;
+          clip: rect(0 0 0 0);
+          clip-path: inset(50%);
+          height: 1px;
+          margin: -1px;
+          overflow: hidden;
+          padding: 0;
+          position: absolute;
+          white-space: nowrap;
+          width: 1px;
         }
 
         .study-v2-card-empty {
@@ -5023,12 +5064,12 @@ if (mode === 'study') {
           border-top: 1px solid #dbe2ee;
           display: grid;
           flex: 0 0 auto;
-          grid-template-columns: repeat(3, 1fr);
-          min-height: 148px;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          min-height: 80px;
         }
 
         .study-v2-feedback-row-personal {
-          grid-template-columns: repeat(2, 1fr);
+          grid-template-columns: repeat(2, minmax(0, 1fr));
         }
 
         .study-v2-feedback-row button {
@@ -5039,16 +5080,22 @@ if (mode === 'study') {
           color: #08143b;
           cursor: pointer;
           display: flex;
-          flex-direction: column;
           font: inherit;
-          font-family: Georgia, "Times New Roman", Times, serif;
-          font-size: 24px;
-          gap: 18px;
+          font-size: 16px;
+          font-weight: 800;
           justify-content: center;
+          min-height: 80px;
+          padding: 12px 16px;
         }
 
         .study-v2-feedback-row button:last-child {
           border-right: 0;
+        }
+
+        .study-v2-feedback-row button:hover,
+        .study-v2-feedback-row button:focus-visible {
+          background: #eff6ff;
+          outline: 0;
         }
 
         .study-v2-feedback-active {
@@ -5057,21 +5104,20 @@ if (mode === 'study') {
 
         .study-v2-feedback-svg {
           fill: none;
-          height: 58px;
+          height: 30px;
           stroke: #0f5ee8;
           stroke-linecap: round;
           stroke-linejoin: round;
           stroke-width: 3;
-          width: 58px;
+          width: 30px;
         }
 
-        .study-v2-more-dots {
+        .study-v2-other-label {
           color: #0f5ee8;
           font-family: system-ui, sans-serif;
-          font-size: 45px;
-          font-weight: 900;
-          letter-spacing: 0.12em;
-          line-height: 0.8;
+          font-size: 16px;
+          font-weight: 800;
+          line-height: 1.2;
         }
 
         .study-v2-more-panel {
@@ -5374,16 +5420,6 @@ if (mode === 'study') {
             flex-basis: 100%;
           }
 
-          .study-v2-feedback-row {
-            grid-template-columns: 1fr;
-          }
-
-          .study-v2-feedback-row button {
-            border-bottom: 1px solid #dbe2ee;
-            border-right: 0;
-            min-height: 140px;
-          }
-
           .study-v2-more-choice-row {
             grid-template-columns: 1fr;
           }
@@ -5449,10 +5485,6 @@ if (mode === 'study') {
           .study-v2-card-actions .study-v2-context-action {
             font-size: 12px;
             padding: 5px 8px;
-          }
-
-          .study-v2-card-actions button:last-child {
-            font-size: 32px;
           }
 
           .study-v2-question-content {

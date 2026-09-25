@@ -34,5 +34,5 @@ test('retry remains available for a start failure but not a genuine empty pool',
 
 test('Study Exit uses the same dashboard transition that clears stale Stats hashes', () => {
   assert.match(planner, /else if \([\s\S]*getStatsTabFromHash\(window\.location\.hash\)[\s\S]*window\.history\.replaceState/);
-  assert.match(planner, /onClick=\{\(\) => void leaveStudyMode\('dashboard'\)\}/);
+  assert.match(planner, /void leaveStudyMode\('dashboard'\)/);
 });

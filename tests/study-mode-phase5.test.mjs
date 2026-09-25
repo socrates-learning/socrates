@@ -94,13 +94,16 @@ test('Flag UX reloads per candidate and persists with RLS upsert and delete', ()
   assert.match(planner, /study-v2-flag-action-active/);
 });
 
-test('persistent controls do not reveal cards or change scheduling contracts', () => {
+test('Study controls remove Add to this while preserving Flag and scheduling contracts', () => {
   const controls = planner.slice(
     planner.indexOf('const studyCardActions'),
     planner.indexOf('return (', planner.indexOf('const studyCardActions'))
   );
-  assert.match(controls, /Add to this/);
+  assert.doesNotMatch(controls, /Add to this|openAddToThis/);
   assert.match(controls, /Flag/);
+  assert.match(controls, /Back to question/);
+  assert.match(controls, />\s*Exit\s*<\/button>/);
+  assert.doesNotMatch(controls, /Close study mode|>\s*×\s*<\/button>/);
   assert.match(controls, /event\.stopPropagation\(\)/);
   assert.match(controls, /onKeyDown=\{\(event\) => event\.stopPropagation\(\)\}/);
   assert.match(planner, /Report an error/);
