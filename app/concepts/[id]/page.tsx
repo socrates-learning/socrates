@@ -1,7 +1,12 @@
 import { ConceptTabs } from '@/components/ConceptTabs';
-import { Header } from '@/components/Header';
+import { Header, HeaderSessionProvider } from '@/components/Header';
 import { Sidebar } from '@/components/Sidebar';
+import {
+  calculateHistoricalAccuracyPercent,
+  presentCanonicalConceptMastery,
+} from '@/lib/concept-page-mastery';
 import { resolveActiveLibraryContext } from '@/lib/library-context';
+import { getVerifiedRequestAuthContext } from '@/lib/server-auth-context';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
 import Link from 'next/link';
 
@@ -47,6 +52,7 @@ export default async function ConceptPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  const authContext = await getVerifiedRequestAuthContext();
   const supabase = await createSupabaseServerClient();
   const activeLibraryContext = await resolveActiveLibraryContext();
   const activeLibrary = activeLibraryContext.library;
@@ -54,6 +60,14 @@ export default async function ConceptPage({
   const backLabel = activeLibrary
     ? `Back to ${activeLibrary.name} Library`
     : 'Back to library';
+  const header = (
+    <HeaderSessionProvider
+      email={authContext ? authContext.email ?? 'Account' : null}
+      role={authContext?.role ?? null}
+    >
+      <Header />
+    </HeaderSessionProvider>
+  );
 
   let concept = null;
 
@@ -106,7 +120,7 @@ export default async function ConceptPage({
   if (!concept) {
     return (
       <>
-        <Header />
+        {header}
         <main className="layout">
           <Sidebar activeLibrary={activeLibrary} />
           <section className="panel">
@@ -277,22 +291,30 @@ export default async function ConceptPage({
     console.error('Failed to load review attempts:', reviewAttemptsError);
   }
 
-  const scores = (reviewAttempts || []).flatMap((attempt) =>
-    attempt.score === null ? [] : [attempt.score]
+  const canonicalMasteryResult = authContext
+    ? await supabase
+        .from('user_concept_mastery')
+        .select('mastery_estimate, evidence_count, last_exposure_at')
+        .eq('user_id', authContext.userId)
+        .eq('concept_id', concept.id)
+        .maybeSingle()
+    : { data: null, error: null };
+
+  if (canonicalMasteryResult.error) {
+    if (process.env.NODE_ENV !== 'production') {
+      console.error(
+        'Failed to load canonical Concept mastery:',
+        canonicalMasteryResult.error
+      );
+    }
+
+    throw new Error('Unable to load Concept mastery.');
+  }
+
+  const mastery = presentCanonicalConceptMastery(
+    canonicalMasteryResult.data
   );
-  const mastery = scores.length
-    ? Math.round(
-        scores.reduce((total, score) => total + score * 25, 0) / scores.length
-      )
-    : 0;
-  const newestReviewDate = (reviewAttempts || []).reduce<string | null>(
-    (latest, attempt) =>
-      !latest || new Date(attempt.created_at) > new Date(latest)
-        ? attempt.created_at
-        : latest,
-    null
-  );
-  const lastReviewed = formatLastReviewed(newestReviewDate);
+  const lastReviewed = formatLastReviewed(mastery.lastExposureAt);
 
   const sectionScores = new Map<string, number[]>();
 
@@ -304,25 +326,19 @@ export default async function ConceptPage({
     sectionScores.set(attempt.learn_section_id, scoresForSection);
   }
 
-  const sectionsWithMastery = (sections || []).map((section) => {
+  const sectionsWithHistoricalAccuracy = (sections || []).map((section) => {
     const scoresForSection = sectionScores.get(section.id) || [];
-    const sectionMastery = scoresForSection.length
-      ? Math.round(
-          scoresForSection.reduce((total, score) => total + score * 25, 0) /
-            scoresForSection.length
-        )
-      : 0;
 
     return {
       ...section,
-      mastery: sectionMastery,
+      historicalAccuracy: calculateHistoricalAccuracyPercent(scoresForSection),
       attemptCount: scoresForSection.length,
     };
   });
 
   return (
     <>
-      <Header />
+      {header}
       <main className="layout">
         <Sidebar activeId={concept.id} activeLibrary={activeLibrary} />
 
@@ -364,10 +380,23 @@ export default async function ConceptPage({
 
             <div className="mastery">
               <strong>Overall Mastery</strong>
-              <h2 style={{ margin: '4px 0' }}>{mastery}%</h2>
-              <div className="bar">
-                <span style={{ width: `${mastery}%` }} />
-              </div>
+              <h2 style={{ margin: '4px 0' }}>{mastery.label}</h2>
+              {mastery.percent === null ? (
+                <p className="muted" style={{ margin: '8px 0 0' }}>
+                  No mastery evidence yet.
+                </p>
+              ) : (
+                <div
+                  className="bar"
+                  role="meter"
+                  aria-label="Overall mastery"
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={mastery.percent}
+                >
+                  <span style={{ width: `${mastery.percent}%` }} />
+                </div>
+              )}
               <p className="muted" style={{ marginBottom: 0 }}>
                 Last reviewed: {lastReviewed}
               </p>
@@ -381,10 +410,13 @@ export default async function ConceptPage({
             whyItMatters={concept.why_it_matters}
             bodyMarkdown={concept.body_markdown}
             status={concept.status}
-            sections={sectionsWithMastery}
+            sections={sectionsWithHistoricalAccuracy}
             sources={sources}
             relationships={relationships}
             networkRelationships={networkRelationships}
+            canCreate={
+              authContext?.role === 'editor' || authContext?.role === 'admin'
+            }
           />
         </section>
       </main>

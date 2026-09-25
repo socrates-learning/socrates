@@ -1,13 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { ConceptNotes } from '@/components/ConceptNotes';
 import { ConceptReview } from '@/components/ConceptReview';
 import { ConceptDistinctions } from '@/components/ConceptDistinctions';
 import { ConceptNetwork } from '@/components/ConceptNetwork';
 import { MarkdownContent } from '@/components/MarkdownContent';
-import { supabase } from '@/lib/supabase';
 
 export function ConceptTabs({
   conceptId,
@@ -20,6 +19,7 @@ export function ConceptTabs({
   sources,
   relationships,
   networkRelationships,
+  canCreate,
 }: {
   conceptId: string;
   conceptName: string;
@@ -32,7 +32,7 @@ export function ConceptTabs({
     title: string;
     body: string;
     sort_order: number | null;
-    mastery: number;
+    historicalAccuracy: number | null;
     attemptCount: number;
   }>;
   sources: Array<{
@@ -63,9 +63,9 @@ export function ConceptTabs({
       name: string;
     };
   }>;
+  canCreate: boolean;
 }) {
   const [activeTab, setActiveTab] = useState('learn');
-  const [canCreate, setCanCreate] = useState(false);
   const hasMarkdownBody = Boolean(bodyMarkdown?.trim());
   const lifecycleStatus = status || 'draft';
   const lifecycleLabel =
@@ -75,52 +75,23 @@ export function ConceptTabs({
         ? 'Published'
         : 'Draft';
 
-	  function getMasteryLabel(mastery: number) {
-    if (mastery < 50) return 'Needs review';
-    if (mastery < 75) return 'Developing';
-    if (mastery < 90) return 'Strong';
-    return 'Mastered';
-  }
-
-	  const needsReviewSections = sections
-    .filter((section) => section.attemptCount === 0 || section.mastery < 75)
+  const historicalPracticeSections = sections
+    .filter(
+      (section) =>
+        section.attemptCount === 0 ||
+        (section.historicalAccuracy !== null &&
+          section.historicalAccuracy < 75)
+    )
     .sort((a, b) => {
       const aIsUnreviewed = a.attemptCount === 0;
       const bIsUnreviewed = b.attemptCount === 0;
 
       if (aIsUnreviewed !== bIsUnreviewed) return aIsUnreviewed ? -1 : 1;
-      return a.mastery - b.mastery;
+      return (
+        (a.historicalAccuracy ?? 0) - (b.historicalAccuracy ?? 0)
+      );
     })
-	    .slice(0, 3);
-
-  useEffect(() => {
-    let isMounted = true;
-
-    async function loadRole() {
-      const { data: userData } = await supabase.auth.getUser();
-
-      if (!userData.user) {
-        if (isMounted) setCanCreate(false);
-        return;
-      }
-
-      const { data: roleData } = await supabase
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', userData.user.id)
-        .maybeSingle();
-
-      if (isMounted) {
-        setCanCreate(roleData?.role === 'editor' || roleData?.role === 'admin');
-      }
-    }
-
-    loadRole();
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+    .slice(0, 3);
 
   return (
     <>
@@ -162,13 +133,13 @@ export function ConceptTabs({
               </div>
 
               <div className="card">
-                <h3>Needs Review</h3>
-                {needsReviewSections.length === 0 ? (
+                <h3>Historical Practice</h3>
+                {historicalPracticeSections.length === 0 ? (
                   <p className="muted">
-                    All reviewed sections are currently strong.
+                    All reviewed sections have strong historical accuracy.
                   </p>
                 ) : (
-                  needsReviewSections.map((section) => (
+                  historicalPracticeSections.map((section) => (
                     <div
                       key={section.id}
                       style={{
@@ -182,7 +153,7 @@ export function ConceptTabs({
                       <span className="muted">
                         {section.attemptCount === 0
                           ? 'Not reviewed yet'
-                          : `${section.mastery}% · ${getMasteryLabel(section.mastery)}`}
+                          : `${section.historicalAccuracy}% historical accuracy`}
                       </span>
                     </div>
                   ))
@@ -235,7 +206,7 @@ export function ConceptTabs({
           </div>
 
           <div className="card">
-            <h3>Sub-Mastery</h3>
+            <h3>Historical Section Accuracy</h3>
             {sections.map((section) => (
               <div key={section.id} style={{ marginBottom: '16px' }}>
                 <div
@@ -250,11 +221,13 @@ export function ConceptTabs({
                   <span className="muted">
                     {section.attemptCount === 0
                       ? 'Not reviewed yet'
-                      : `${section.mastery}% · ${getMasteryLabel(section.mastery)}`}
+                      : `${section.historicalAccuracy}% historical accuracy`}
                   </span>
                 </div>
                 <div className="bar">
-                  <span style={{ width: `${section.mastery}%` }} />
+                  <span
+                    style={{ width: `${section.historicalAccuracy ?? 0}%` }}
+                  />
                 </div>
               </div>
             ))}
