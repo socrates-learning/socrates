@@ -115,8 +115,8 @@ begin
   end if;
 
   select * into role_record from pg_catalog.pg_roles where rolname = 'postgres';
-  if not found or not role_record.rolcreaterole then
-    raise exception 'Migration 103 requires the postgres migration identity with CREATEROLE';
+  if not found or role_record.rolsuper or not role_record.rolcreaterole then
+    raise exception 'Migration 103 requires the Production-equivalent non-superuser postgres migration identity with CREATEROLE';
   end if;
 
   if to_regnamespace('public') is null
@@ -270,7 +270,25 @@ begin
     end if;
 
     if (select count(*) from pg_catalog.pg_auth_members membership
-        where membership.roleid = 'socrates_migrator'::regrole) <> 1
+        where membership.roleid = 'socrates_migrator'::regrole) <> 2
+       or (select count(*)
+           from pg_catalog.pg_auth_members membership
+           join pg_catalog.pg_roles grantor_role on grantor_role.oid = membership.grantor
+           where membership.roleid = 'socrates_migrator'::regrole
+             and membership.member = 'postgres'::regrole
+             and membership.grantor <> 'postgres'::regrole
+             and grantor_role.rolsuper
+             and membership.admin_option
+             and not membership.inherit_option
+             and not membership.set_option) <> 1
+       or (select count(*)
+           from pg_catalog.pg_auth_members membership
+           where membership.roleid = 'socrates_migrator'::regrole
+             and membership.member = 'postgres'::regrole
+             and membership.grantor = 'postgres'::regrole
+             and not membership.admin_option
+             and not membership.inherit_option
+             and membership.set_option) <> 1
        or not exists (
          select 1 from pg_catalog.pg_auth_members membership
          where membership.roleid = 'socrates_migrator'::regrole
@@ -283,7 +301,7 @@ begin
          select 1 from pg_catalog.pg_auth_members membership
          where membership.member = 'socrates_migrator'::regrole
        ) then
-      raise exception 'Existing socrates_migrator membership differs from SET-only postgres contract';
+      raise exception 'Existing socrates_migrator membership differs from the PostgreSQL 17 native administrative plus explicit SET-only contract';
     end if;
 
     if not has_schema_privilege('socrates_migrator', 'public', 'USAGE')
@@ -406,23 +424,120 @@ end;
 $create_role_if_absent$;
 
 grant socrates_migrator to postgres with inherit false, set true;
+
+-- PostgreSQL 17 gives a non-superuser CREATEROLE creator one automatic
+-- ADMIN-only membership (SET=false, INHERIT=false). Socrates adds a distinct
+-- SET-only membership (ADMIN=false, INHERIT=false). No other membership row is
+-- allowed, and neither grant silently inherits migrator privileges.
+do $membership_contract$
+begin
+  if (select count(*) from pg_catalog.pg_auth_members membership
+      where membership.roleid = 'socrates_migrator'::regrole) <> 2
+     or (select count(*)
+         from pg_catalog.pg_auth_members membership
+         join pg_catalog.pg_roles grantor_role on grantor_role.oid = membership.grantor
+         where membership.roleid = 'socrates_migrator'::regrole
+           and membership.member = 'postgres'::regrole
+           and membership.grantor <> 'postgres'::regrole
+           and grantor_role.rolsuper
+           and membership.admin_option
+           and not membership.inherit_option
+           and not membership.set_option) <> 1
+     or (select count(*)
+         from pg_catalog.pg_auth_members membership
+         where membership.roleid = 'socrates_migrator'::regrole
+           and membership.member = 'postgres'::regrole
+           and membership.grantor = 'postgres'::regrole
+           and not membership.admin_option
+           and not membership.inherit_option
+           and membership.set_option) <> 1
+     or exists (
+       select 1 from pg_catalog.pg_auth_members membership
+       where membership.member = 'socrates_migrator'::regrole
+     ) then
+    raise exception 'Migration 103 membership does not match the PostgreSQL 17 native administrative plus explicit SET-only contract';
+  end if;
+
+  if current_user <> 'postgres'
+     or session_user <> 'postgres'
+     or pg_has_role('postgres', 'socrates_migrator', 'USAGE')
+     or not pg_has_role('postgres', 'socrates_migrator', 'SET') then
+    raise exception 'Migration 103 requires non-inherited migrator privileges and deliberate SET ROLE capability';
+  end if;
+end;
+$membership_contract$;
+
 grant usage, create on schema public to socrates_migrator;
 
--- Dedicated-role global defaults are safe: this role can create permanent
--- objects only in public, so no Supabase-managed creator default is changed.
-alter default privileges for role socrates_migrator
+set local role socrates_migrator;
+
+do $assert_migrator_role$
+begin
+  if session_user <> 'postgres' or current_user <> 'socrates_migrator' then
+    raise exception 'Migration 103 failed to assume socrates_migrator (session_user=%, current_user=%)', session_user, current_user;
+  end if;
+end;
+$assert_migrator_role$;
+
+-- Configure only the current role's defaults. Using FOR ROLE here would fail
+-- under Production's non-superuser postgres identity even though SET ROLE is
+-- deliberately allowed.
+alter default privileges
   revoke all privileges on tables from public, anon, authenticated, service_role;
 
-alter default privileges for role socrates_migrator
+alter default privileges
   revoke all privileges on sequences from public, anon, authenticated, service_role;
 
-alter default privileges for role socrates_migrator
+alter default privileges
   revoke execute on functions from anon, authenticated, service_role;
 
 -- Must be last: if PostgreSQL collapses an empty explicit function-default
 -- row, this recreates the owner-only override of built-in PUBLIC EXECUTE.
-alter default privileges for role socrates_migrator
+alter default privileges
   revoke execute on functions from public;
+
+do $owner_scoped_default_assertions$
+begin
+  if current_user <> 'socrates_migrator' then
+    raise exception 'Migration 103 owner-scoped assertions must execute as socrates_migrator';
+  end if;
+
+  if exists (
+    select 1
+    from pg_catalog.pg_default_acl default_acl
+    cross join lateral aclexplode(default_acl.defaclacl) acl
+    where default_acl.defaclrole = current_user::regrole
+      and acl.grantee <> current_user::regrole
+  ) then
+    raise exception 'Migration 103 owner-scoped default ACL contains a non-owner grant';
+  end if;
+
+  if exists (
+    select 1
+    from aclexplode(coalesce(
+      (select default_acl.defaclacl
+       from pg_catalog.pg_default_acl default_acl
+       where default_acl.defaclrole = current_user::regrole
+         and default_acl.defaclnamespace = 0
+         and default_acl.defaclobjtype = 'f'),
+      acldefault('f', current_user::regrole)
+    )) acl
+    where acl.grantee = 0
+  ) then
+    raise exception 'Migration 103 owner-scoped function defaults still grant PUBLIC EXECUTE';
+  end if;
+end;
+$owner_scoped_default_assertions$;
+
+reset role;
+
+do $assert_postgres_role_restored$
+begin
+  if session_user <> 'postgres' or current_user <> 'postgres' then
+    raise exception 'Migration 103 failed to restore postgres (session_user=%, current_user=%)', session_user, current_user;
+  end if;
+end;
+$assert_postgres_role_restored$;
 
 do $postconditions$
 declare
@@ -444,7 +559,25 @@ begin
   end if;
 
   if (select count(*) from pg_catalog.pg_auth_members membership
-      where membership.roleid = 'socrates_migrator'::regrole) <> 1
+      where membership.roleid = 'socrates_migrator'::regrole) <> 2
+     or (select count(*)
+         from pg_catalog.pg_auth_members membership
+         join pg_catalog.pg_roles grantor_role on grantor_role.oid = membership.grantor
+         where membership.roleid = 'socrates_migrator'::regrole
+           and membership.member = 'postgres'::regrole
+           and membership.grantor <> 'postgres'::regrole
+           and grantor_role.rolsuper
+           and membership.admin_option
+           and not membership.inherit_option
+           and not membership.set_option) <> 1
+     or (select count(*)
+         from pg_catalog.pg_auth_members membership
+         where membership.roleid = 'socrates_migrator'::regrole
+           and membership.member = 'postgres'::regrole
+           and membership.grantor = 'postgres'::regrole
+           and not membership.admin_option
+           and not membership.inherit_option
+           and membership.set_option) <> 1
      or not exists (
        select 1 from pg_catalog.pg_auth_members membership
        where membership.roleid = 'socrates_migrator'::regrole
@@ -457,7 +590,12 @@ begin
        select 1 from pg_catalog.pg_auth_members membership
        where membership.member = 'socrates_migrator'::regrole
      ) then
-    raise exception 'Migration 103 membership does not match SET-only postgres contract';
+    raise exception 'Migration 103 membership does not match the PostgreSQL 17 native administrative plus explicit SET-only contract';
+  end if;
+
+  if pg_has_role('postgres', 'socrates_migrator', 'USAGE')
+     or not pg_has_role('postgres', 'socrates_migrator', 'SET') then
+    raise exception 'Migration 103 membership unexpectedly inherits migrator privileges or cannot SET ROLE';
   end if;
 
   if not has_schema_privilege('socrates_migrator', 'public', 'USAGE')
