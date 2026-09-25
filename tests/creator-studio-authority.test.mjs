@@ -121,7 +121,7 @@ test('same raw UUID cannot collide across source-qualified future identities', (
 
 test('server pages derive capabilities from the already-resolved trusted Library context', () => {
   for (const source of [newPageSource, editPageSource]) {
-    assert.match(source, /resolveActiveLibraryContext\(\)/);
+    assert.match(source, /resolveActiveLibraryContext\(\{ failOnQueryError: true \}\)/);
     assert.match(source, /getServerCreatorCapabilityManifest\(\{\s*activeLibraryContext: context/);
     assert.match(source, /creatorCapabilities=\{capabilities\}/);
   }

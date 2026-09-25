@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import ts from 'typescript';
 import { buildConceptTopicTree } from '../lib/concept-topic-tree.ts';
+import { readCreatorQueryData } from '../lib/creator-data-access.ts';
 
 for (const route of ['new','[id]']) {
  for (const library of ['nursing','medicine']) {
@@ -20,6 +21,7 @@ for (const route of ['new','[id]']) {
     'next/navigation':{notFound(){throw Error('404');},redirect(){throw Error('redirect');}},
     '@/components/CreatorStudioV2Client':{CreatorStudioV2Client:'editor'},
     '@/lib/concept-topic-tree':{buildConceptTopicTree},
+    '@/lib/creator-data-access':{readCreatorQueryData},
     '@/lib/library-context':{resolveActiveLibraryContext:async()=>({library:{id:library}})},
     '@/lib/server-creator-capabilities':{
       getServerCreatorCapabilityManifest:async({activeLibraryContext})=>({

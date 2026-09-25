@@ -39,7 +39,8 @@ export async function getServerCreatorCapabilityManifest({
   // Callers that already resolved Library context should pass it so capability
   // derivation adds no duplicate auth, membership, or Library reads.
   const libraryContext =
-    activeLibraryContext ?? (await resolveActiveLibraryContext());
+    activeLibraryContext ??
+    (await resolveActiveLibraryContext({ failOnQueryError: true }));
 
   return deriveCreatorCapabilities({
     userId: auth.userId,

@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from '@/lib/supabase-server';
 import { getVerifiedRequestAuthContext } from '@/lib/server-auth-context';
 import { getSoleAccessibleLibrary } from '@/lib/home-bootstrap';
 import type { ServerTimingRecorder } from '@/lib/request-performance';
+import { assertCreatorQuerySucceeded } from '@/lib/creator-data-access';
 
 export const ACTIVE_LIBRARY_COOKIE = 'socrates_active_library';
 
@@ -54,9 +55,11 @@ function normalizeLibrary(library: ActiveLibrary | null): ActiveLibrary | null {
 export async function resolveActiveLibraryContext({
   requestedSlug,
   timing,
+  failOnQueryError = false,
 }: {
   requestedSlug?: string | null;
   timing?: ServerTimingRecorder;
+  failOnQueryError?: boolean;
 } = {}): Promise<ActiveLibraryContext> {
   const supabase = await createSupabaseServerClient();
   const cookieStore = await cookies();
@@ -67,35 +70,45 @@ export async function resolveActiveLibraryContext({
   const cookieSlug = cookieStore.get(ACTIVE_LIBRARY_COOKIE)?.value || null;
   const cookieSlugIsValid = isValidLibrarySlug(cookieSlug);
   const requestAuth = await getVerifiedRequestAuthContext();
+  const authResult = requestAuth
+    ? { data: { user: null }, error: null }
+    : await supabase.auth.getUser();
+  if (failOnQueryError) {
+    assertCreatorQuerySucceeded(authResult.error, 'the authenticated user');
+  }
   const {
     data: { user },
-  } = requestAuth
-    ? { data: { user: null } }
-    : await supabase.auth.getUser();
+  } = authResult;
 
   async function findActiveLibraryBySlug(slug: string | null | undefined) {
     if (!isValidLibrarySlug(slug)) return null;
 
-    const { data } = await supabase
+    const result = await supabase
       .from('libraries')
       .select('id, name, slug, description, status')
       .eq('slug', slug)
       .eq('status', 'active')
       .maybeSingle();
+    if (failOnQueryError) {
+      assertCreatorQuerySucceeded(result.error, 'the requested active Library');
+    }
 
-    return normalizeLibrary(data as ActiveLibrary | null);
+    return normalizeLibrary(result.data as ActiveLibrary | null);
   }
 
   async function findDefaultActiveLibrary() {
-    const { data } = await supabase
+    const result = await supabase
       .from('libraries')
       .select('id, name, slug, description, status')
       .eq('status', 'active')
       .order('name')
       .limit(1)
       .maybeSingle();
+    if (failOnQueryError) {
+      assertCreatorQuerySucceeded(result.error, 'the default active Library');
+    }
 
-    return normalizeLibrary(data as ActiveLibrary | null);
+    return normalizeLibrary(result.data as ActiveLibrary | null);
   }
 
   if (!requestAuth && !user) {
@@ -130,7 +143,7 @@ export async function resolveActiveLibraryContext({
   );
   const loadAccessContext = () => Promise.all([
       requestAuth
-        ? Promise.resolve({ data: { role: requestAuth.role } })
+        ? Promise.resolve({ data: { role: requestAuth.role }, error: null })
         : supabase
             .from('user_roles')
             .select('role')
@@ -146,11 +159,22 @@ export async function resolveActiveLibraryContext({
             .select('id, name, slug, description, status')
             .eq('status', 'active')
             .in('slug', candidateSlugs)
-        : Promise.resolve({ data: [] }),
+        : Promise.resolve({ data: [], error: null }),
     ]);
   const [roleResult, membershipResult, candidateLibraryResult] = timing
     ? await timing.measure('library_access', loadAccessContext)
     : await loadAccessContext();
+  if (failOnQueryError) {
+    assertCreatorQuerySucceeded(roleResult.error, 'the Creator role');
+    assertCreatorQuerySucceeded(
+      membershipResult.error,
+      'the Creator Library memberships'
+    );
+    assertCreatorQuerySucceeded(
+      candidateLibraryResult.error,
+      'the selected Creator Library'
+    );
+  }
   const roleData = roleResult.data;
   const roleValue = roleData?.role;
   const role: ActiveLibraryRole =
@@ -254,9 +278,16 @@ export async function resolveActiveLibraryContext({
         .eq('status', 'active')
         .order('name')
         .limit(2);
-    const { data: activeLibraryRows } = timing
+    const activeLibraryResult = timing
       ? await timing.measure('library_staff_fallback', loadStaffFallback)
       : await loadStaffFallback();
+    if (failOnQueryError) {
+      assertCreatorQuerySucceeded(
+        activeLibraryResult.error,
+        'the staff Library choices'
+      );
+    }
+    const activeLibraryRows = activeLibraryResult.data;
     const soleActiveLibrary = getSoleAccessibleLibrary(
       (activeLibraryRows || []).flatMap((library) => {
         const normalized = normalizeLibrary(library as ActiveLibrary | null);

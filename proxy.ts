@@ -18,6 +18,7 @@ import {
   canAccessCreatorRoute,
   CREATOR_LEARNER_ALLOWLIST_ENV,
 } from '@/lib/creator-route-access';
+import { assertCreatorQuerySucceeded } from '@/lib/creator-data-access';
 
 const PUBLIC_PATHS = [
   '/login',
@@ -138,7 +139,7 @@ export async function proxy(request: NextRequest) {
   }
 
   const roleStartedAt = performance.now();
-  const { data: roleData } = await supabase
+  const roleResult = await supabase
     .from('user_roles')
     .select('role')
     .eq('user_id', userId)
@@ -149,6 +150,15 @@ export async function proxy(request: NextRequest) {
     PROXY_ROLE_TIMING_HEADER,
     String(Math.round(roleDurationMs * 10) / 10)
   );
+  const isCreatorRequest =
+    pathname === '/creator' || pathname.startsWith('/creator/');
+  if (isCreatorRequest) {
+    assertCreatorQuerySucceeded(
+      roleResult.error,
+      'the Creator route authorization role'
+    );
+  }
+  const roleData = roleResult.data;
   const role = roleData?.role;
   const hasValidRole = role === 'learner' || role === 'editor' || role === 'admin';
 
@@ -179,7 +189,7 @@ export async function proxy(request: NextRequest) {
   }
 
   if (
-    (pathname === '/creator' || pathname.startsWith('/creator/')) &&
+    isCreatorRequest &&
     !canAccessCreatorRoute({
       pathname,
       role,

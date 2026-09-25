@@ -4,6 +4,7 @@ import { buildConceptTopicTree } from '@/lib/concept-topic-tree';
 import { resolveActiveLibraryContext } from '@/lib/library-context';
 import { getServerCreatorCapabilityManifest } from '@/lib/server-creator-capabilities';
 import { loadCreatorPersonalContent } from '@/lib/creator-personal-content';
+import { readCreatorQueryData } from '@/lib/creator-data-access';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
 
 export default async function EditConceptPage({
@@ -12,14 +13,14 @@ export default async function EditConceptPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const context = await resolveActiveLibraryContext();
+  const context = await resolveActiveLibraryContext({ failOnQueryError: true });
   if (!context.library) redirect('/');
   const capabilities = await getServerCreatorCapabilityManifest({
     activeLibraryContext: context,
   });
   if (!capabilities) redirect(`/login?next=/creator/concepts/${id}`);
   const supabase = await createSupabaseServerClient();
-  const [{ data: activeLibrary }, { data: concept }, personalContent] = await Promise.all([
+  const [activeLibraryResult, conceptResult, personalContent] = await Promise.all([
     supabase
       .from('libraries')
       .select('id, library_nodes(id, name, parent_id, sort_order)')
@@ -33,6 +34,11 @@ export default async function EditConceptPage({
       .maybeSingle(),
     loadCreatorPersonalContent(supabase, capabilities.subject.userId),
   ]);
+  const activeLibrary = readCreatorQueryData(
+    activeLibraryResult,
+    'the active Library and Topic Tree'
+  );
+  const concept = readCreatorQueryData(conceptResult, 'the requested Concept');
 
   if (!activeLibrary || !concept) notFound();
   const nodes = [...(activeLibrary.library_nodes || [])].sort(
@@ -58,11 +64,14 @@ export default async function EditConceptPage({
       .is('learn_section_id', null)
       .order('created_at'),
   ]);
-  const { data: placements, error: placementError } = placementResult;
-  if (placementError) throw placementError;
-  const { data: referenceRows, error: referenceError } = referenceResult;
-
-  if (referenceError) throw referenceError;
+  const placements = readCreatorQueryData(
+    placementResult,
+    'the selected Concept placements'
+  );
+  const referenceRows = readCreatorQueryData(
+    referenceResult,
+    'the selected Concept references'
+  );
 
   type SourceRow = {
     id: string;

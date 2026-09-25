@@ -9,6 +9,7 @@ import {
 import type { RequestAuthRole } from '@/lib/request-auth-context';
 import { getVerifiedRequestAuthContext } from '@/lib/server-auth-context';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
+import { assertCreatorQuerySucceeded } from '@/lib/creator-data-access';
 
 export type ServerCreatorRouteActor = {
   userId: string;
@@ -29,16 +30,20 @@ export const getServerCreatorRouteActor = cache(
     if (requestAuth) return requestAuth;
 
     const supabase = await createSupabaseServerClient();
+    const authResult = await supabase.auth.getUser();
+    assertCreatorQuerySucceeded(authResult.error, 'the signed-in Creator user');
     const {
       data: { user },
-    } = await supabase.auth.getUser();
+    } = authResult;
     if (!user) return null;
 
-    const { data: roleData } = await supabase
+    const roleResult = await supabase
       .from('user_roles')
       .select('role')
       .eq('user_id', user.id)
       .maybeSingle();
+    assertCreatorQuerySucceeded(roleResult.error, 'the Creator authorization role');
+    const roleData = roleResult.data;
 
     return {
       userId: user.id,
