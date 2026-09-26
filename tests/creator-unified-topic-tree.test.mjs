@@ -63,7 +63,7 @@ test('Creator tree presentation keeps learner composition and defaults staff to 
     }), false);
     assert.equal(shouldShowPersonalCreatorTopics({
       role, creationSource: 'personal', editorSource: 'official',
-    }), true);
+    }), false); // Stale selector input cannot change staff defaults.
     assert.equal(shouldShowPersonalCreatorTopics({
       role, creationSource: 'official', editorSource: 'personal',
     }), true);

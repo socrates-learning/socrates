@@ -261,7 +261,7 @@ type CreatorStudioV2ClientProps = {
   initialPersonalContent: CreatorPersonalContent;
 };
 
-type CreationSource = 'official' | 'personal';
+type ContentSource = 'official' | 'personal';
 
 const ROOT_TOPIC_ID = 'nursing';
 const emptyReferenceDraft: ReferenceDraft = {
@@ -699,9 +699,14 @@ export function CreatorStudioV2Client({
     [activeLibraryId, creatorCapabilities]
   );
   const isLearnerReadOnly = creatorAuthority.role === 'learner';
+  // New content follows verified role; existing records retain their own identity.
+  const creationDestination: ContentSource =
+    creatorCapabilities.subject.role === 'learner' ? 'personal' : 'official';
   const [conceptEditorState, setConceptEditorStateValue] =
     useState<CreatorConceptEditorState>(() =>
-      createOfficialConceptEditorState(resolvedConcept.id, activeLibraryId)
+      resolvedConcept.id || creationDestination === 'official'
+        ? createOfficialConceptEditorState(resolvedConcept.id, activeLibraryId)
+        : createPersonalConceptEditorState(null, initialPersonalContent.ownerId)
     );
   const conceptEditorStateRef = useRef(conceptEditorState);
   function setConceptEditorState(nextState: CreatorConceptEditorState) {
@@ -717,7 +722,7 @@ export function CreatorStudioV2Client({
   );
   const conceptId = officialConceptId(conceptEditorState);
   const personalConceptEditorId = personalConceptId(conceptEditorState);
-  const conceptSource: CreationSource =
+  const conceptSource: ContentSource =
     conceptEditorState.mode === 'personal-concept' ||
     conceptEditorState.mode === 'new-personal-concept'
       ? 'personal'
@@ -740,9 +745,6 @@ export function CreatorStudioV2Client({
   );
   const [personalTopicPlacements, setPersonalTopicPlacements] = useState(
     initialPersonalContent.topicPlacements
-  );
-  const [conceptCreationSource, setConceptCreationSource] = useState<CreationSource>(
-    creatorCapabilities.official.saveConcept ? 'official' : 'personal'
   );
   const [personalConceptTopicId, setPersonalConceptTopicId] = useState(
     initialPersonalContent.topics[0]?.id || ''
@@ -809,7 +811,9 @@ export function CreatorStudioV2Client({
   const [isMutatingTagCatalog, setIsMutatingTagCatalog] = useState(false);
   const [questionEditorState, setQuestionEditorStateValue] =
     useState<CreatorQuestionEditorState>(() =>
-      createOfficialQuestionEditorState(null, activeLibraryId)
+      creationDestination === 'official'
+        ? createOfficialQuestionEditorState(null, activeLibraryId)
+        : createPersonalCardEditorState(null, initialPersonalContent.ownerId)
     );
   const questionEditorStateRef = useRef(questionEditorState);
   function setQuestionEditorState(nextState: CreatorQuestionEditorState) {
@@ -821,14 +825,12 @@ export function CreatorStudioV2Client({
   }, [questionEditorState]);
   const questionId = officialQuestionId(questionEditorState);
   const personalCardEditorId = personalCardId(questionEditorState);
-  const questionSource: CreationSource =
+  const questionSource: ContentSource =
     questionEditorState.mode === 'personal-card' ||
-    questionEditorState.mode === 'new-personal-card'
+    questionEditorState.mode === 'new-personal-card' ||
+    (questionEditorState.mode === 'none' && activePersonalTopicId !== null)
       ? 'personal'
       : 'official';
-  const [questionCreationSource, setQuestionCreationSource] = useState<CreationSource>(
-    creatorCapabilities.official.saveQuestion ? 'official' : 'personal'
-  );
   const [personalQuestionConceptId, setPersonalQuestionConceptId] = useState<string | null>(
     initialPersonalContent.concepts[0]?.id || null
   );
@@ -1144,6 +1146,7 @@ export function CreatorStudioV2Client({
         sourceReference: '',
         topicId: initialPersonalContent.topics[0]?.id || '',
         overlayTopicId: null,
+        overlayOfficialConceptId: null,
       })
     );
   const editingReference = editingReferenceId
@@ -1282,7 +1285,8 @@ export function CreatorStudioV2Client({
   const isCurrentContentReadOnly =
     conceptSource === 'official' && !creatorAuthority.canSaveConcept;
   const isCurrentQuestionReadOnly =
-    questionSource === 'official' && !creatorAuthority.canSaveQuestion;
+    questionEditorState.mode === 'none' ||
+    (questionSource === 'official' && !creatorAuthority.canSaveQuestion);
   const isDirty =
     (activeCreatorTab === 'content' ? !isCurrentContentReadOnly && isContentDirty :
       activeCreatorTab === 'questions' ? !isCurrentQuestionReadOnly && isQuestionDirty : false);
@@ -1757,14 +1761,10 @@ export function CreatorStudioV2Client({
     [initialPersonalContent.ownerId, topics]
   );
   const showPersonalCreatorTopics = shouldShowPersonalCreatorTopics({
-    creationSource:
-      activeCreatorTab === 'questions'
-        ? questionCreationSource
-        : conceptCreationSource,
     editorSource:
       activeCreatorTab === 'questions' ? questionSource : conceptSource,
     role: creatorAuthority.role,
-  });
+  }) || Boolean(searchQuery.trim()) || activePersonalTopicId !== null;
   const visibleTopicComposition = showPersonalCreatorTopics
     ? unifiedTopicComposition
     : officialOnlyTopicComposition;
@@ -1854,7 +1854,7 @@ export function CreatorStudioV2Client({
 
     const conceptsByKey = new Map<
       string,
-      { source: CreationSource; id: string; key: string; name: string; paths: string[] }
+      { source: ContentSource; id: string; key: string; name: string; paths: string[] }
     >();
 
     Object.entries(questionConceptsByTopicId).forEach(
@@ -2409,9 +2409,6 @@ export function CreatorStudioV2Client({
     }
 
     if (conceptId !== questionConceptId || questionSource === 'personal') {
-      setQuestionCreationSource(
-        creatorCapabilities.official.saveQuestion ? 'official' : 'personal'
-      );
       setQuestionConceptId(conceptId);
       setExistingQuestions([]);
       resetQuestionEditor(conceptId);
@@ -2425,7 +2422,6 @@ export function CreatorStudioV2Client({
     if (isSavingQuestion || !confirmDiscardQuestionChanges()) return;
     const personalConcept = personalConceptById.get(conceptId);
     if (!personalConcept || personalConcept.topic_id !== topicId) return;
-    setQuestionCreationSource('personal');
     setActivePersonalTopicId(topicId);
     setPersonalQuestionConceptId(conceptId);
     setQuestionEditorState(
@@ -2443,6 +2439,18 @@ export function CreatorStudioV2Client({
     setQuestionRelatedConceptIds([]);
     setQuestionAdditionalTestingAngles([]);
     setQuestionTags([]);
+    setSavedPersonalCardFingerprint(JSON.stringify({
+      id: null,
+      conceptId,
+      question: '',
+      answer: '',
+      sourceReference: '',
+    }));
+    if (creationDestination === 'official') {
+      const firstCard = personalCardsByConceptId.get(conceptId)?.[0];
+      if (firstCard) selectExistingQuestion(mapPersonalCard(firstCard, personalConcept), true);
+      else setQuestionEditorState({ mode: 'none' });
+    }
     setQuestionStatus({ tone: 'info', message: 'Mine · Personal Concept selected' });
   }
 
@@ -2470,7 +2478,7 @@ export function CreatorStudioV2Client({
       setQuestionEditorState(
         createPersonalCardEditorState(card.id, initialPersonalContent.ownerId)
       );
-      setQuestionCreationSource('personal');
+      setActivePersonalTopicId(personalConcept.topic_id);
       setPersonalQuestionConceptId(personalConcept.id);
       setQuestionPrompt(card.question);
       setQuestionAnswer(card.answer);
@@ -2497,6 +2505,7 @@ export function CreatorStudioV2Client({
       return;
     }
 
+    setActivePersonalTopicId(null);
     setQuestionEditorState(
       createOfficialQuestionEditorState(question.id, activeLibraryId)
     );
@@ -2601,7 +2610,7 @@ export function CreatorStudioV2Client({
 
   function startNewQuestion() {
     if (isSavingQuestion || !confirmDiscardQuestionChanges()) return;
-    if (questionCreationSource === 'personal') {
+    if (creationDestination === 'personal') {
       if (!personalQuestionConceptId) {
         setQuestionStatus({ tone: 'error', message: 'Choose one of your personal Concepts.' });
         return;
@@ -2631,7 +2640,9 @@ export function CreatorStudioV2Client({
       setQuestionStatus({ tone: 'error', message: 'Choose an official Concept first.' });
       return;
     }
+    setActivePersonalTopicId(null);
     resetQuestionEditor(questionConceptId);
+    void refreshExistingQuestionList(questionConceptId);
     setQuestionStatus(null);
   }
 
@@ -2963,6 +2974,15 @@ export function CreatorStudioV2Client({
   }
 
   function openAddDialog() {
+    if (creationDestination === 'personal') {
+      openPersonalTopicDialog();
+      return;
+    }
+    if (!creatorAuthority.canManageTopicTree) return;
+    if (activePersonalTopic) {
+      showStatus('error', 'Select an official Topic before creating official content.');
+      return;
+    }
     if (!activeTopic && !activePersonalTopic) {
       showStatus('error', 'Select a topic before adding a subtopic.');
       return;
@@ -2974,6 +2994,10 @@ export function CreatorStudioV2Client({
   }
 
   function openPersonalTopicDialog() {
+    if (creationDestination !== 'personal') {
+      openAddDialog();
+      return;
+    }
     topicDialogReturnFocusRef.current =
       document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setPersonalTopicCreationContext({
@@ -2988,6 +3012,7 @@ export function CreatorStudioV2Client({
     name: string,
     context: PersonalTopicCreationContext
   ): Promise<boolean> {
+    if (creationDestination !== 'personal') return false;
     const ownerId = initialPersonalContent.ownerId;
     resolveCreatorCommandRoute(
       {
@@ -3117,6 +3142,18 @@ export function CreatorStudioV2Client({
   }
 
   async function saveNameDialog() {
+    if (dialogMode === 'add' && creationDestination === 'personal') {
+      setDialogMode('add-personal');
+      setPersonalTopicCreationContext({
+        parentPersonalTopicId: activePersonalTopic?.id || null,
+        officialLibraryNodeId: activePersonalTopic ? null : activeTopic?.id || null,
+      });
+      return;
+    }
+    if (dialogMode === 'add' && activePersonalTopic && creationDestination === 'official') {
+      showStatus('error', 'Select an official Topic before creating official content.');
+      return;
+    }
     const name = nameDraft.trim();
     if (!name) {
       showStatus('error', 'Enter a subtopic name.');
@@ -3889,6 +3926,7 @@ export function CreatorStudioV2Client({
       }));
       const placementIds = placements.map((placement) => placement.library_node_id);
 
+      setActivePersonalTopicId(null);
       setConceptEditorState(
         createOfficialConceptEditorState(loadedConcept.id, activeLibraryId)
       );
@@ -3984,7 +4022,7 @@ export function CreatorStudioV2Client({
   }
 
   function openCreatorConceptSearchResult(result: {
-    source: CreationSource;
+    source: ContentSource;
     id: string;
   }) {
     if (result.source === 'personal') {
@@ -4097,7 +4135,7 @@ export function CreatorStudioV2Client({
     }
     conceptSelectionGenerationRef.current += 1;
 
-    if (conceptCreationSource === 'personal') {
+    if (creationDestination === 'personal') {
       const topicId = activePersonalTopicId || personalConceptTopicId || personalTopics[0]?.id;
       if (!topicId) {
         setStatus({ tone: 'error', message: 'Create or select a personal Topic first.' });
@@ -4135,6 +4173,7 @@ export function CreatorStudioV2Client({
       return;
     }
 
+    setActivePersonalTopicId(null);
     resetConceptEditor();
     router.push('/creator/concepts/new');
   }
@@ -4278,20 +4317,26 @@ export function CreatorStudioV2Client({
     setPersonalOverlays((current) =>
       current.filter((item) => item.personal_concept_id !== record.id)
     );
-    setConceptCreationSource('personal');
     setConceptEditorState(
-      createPersonalConceptEditorState(null, initialPersonalContent.ownerId)
+      creationDestination === 'personal'
+        ? createPersonalConceptEditorState(null, initialPersonalContent.ownerId)
+        : createOfficialConceptEditorState(null, activeLibraryId)
     );
     setConceptName('');
     setConcept('');
     setPersonalConceptSourceReference('');
     setPersonalOverlayTopicId(null);
     setPersonalOverlayOfficialConceptId(null);
+    if (creationDestination === 'official') setActivePersonalTopicId(null);
     setIsSaving(false);
     setStatus({ tone: 'success', message: 'Personal Concept deleted.' });
   }
 
   async function savePersonalConcept(saveState: CreatorConceptEditorState) {
+    if (saveState.mode === 'new-personal-concept' && creationDestination !== 'personal') {
+      setStatus({ tone: 'error', message: 'New content for your role belongs to Socrates. Use New to begin.' });
+      return;
+    }
     if (isSaving || isSavingQuestion) return;
     const saveTargetKey = conceptEditorIdentityKey(saveState);
     const isSaveTargetCurrent = () =>
@@ -4317,6 +4362,10 @@ export function CreatorStudioV2Client({
     const existing = savedPersonalConceptId
       ? personalConceptById.get(savedPersonalConceptId) || null
       : null;
+    if (savedPersonalConceptId && !existing) {
+      setStatus({ tone: 'error', message: 'That personal Concept is unavailable.' });
+      return;
+    }
     resolveCreatorCommandRoute(
       existing
         ? {
@@ -4918,6 +4967,10 @@ export function CreatorStudioV2Client({
   }
 
   async function savePersonalCard(saveState: CreatorQuestionEditorState) {
+    if (saveState.mode === 'new-personal-card' && creationDestination !== 'personal') {
+      setQuestionStatus({ tone: 'error', message: 'New content for your role belongs to Socrates. Use New to begin.' });
+      return;
+    }
     if (isSaving || isSavingQuestion) return;
     const saveTargetKey = questionEditorIdentityKey(saveState);
     const isSaveTargetCurrent = () =>
@@ -4944,6 +4997,10 @@ export function CreatorStudioV2Client({
     const existing = savedPersonalCardId
       ? personalCards.find((card) => card.id === savedPersonalCardId) || null
       : null;
+    if (savedPersonalCardId && !existing) {
+      setQuestionStatus({ tone: 'error', message: 'That personal Card is unavailable.' });
+      return;
+    }
     resolveCreatorCommandRoute(
       existing
         ? {
@@ -5164,8 +5221,11 @@ export function CreatorStudioV2Client({
       deleteTargetKey;
     if (targetStillCurrent) {
       setQuestionEditorState(
-        createPersonalCardEditorState(null, initialPersonalContent.ownerId)
+        creationDestination === 'personal'
+          ? createPersonalCardEditorState(null, initialPersonalContent.ownerId)
+          : createOfficialQuestionEditorState(null, activeLibraryId)
       );
+      if (creationDestination === 'official') setActivePersonalTopicId(null);
       setQuestionPrompt('');
       setQuestionAnswer('');
       setPersonalCardSourceReference('');
@@ -6141,24 +6201,6 @@ export function CreatorStudioV2Client({
                   >
                     <Folder size={17} /> Browse Concepts
                   </button>
-                  <label className={styles.sourceChoice}>
-                    <span>Create in</span>
-                    <select
-                      aria-label="New Concept source"
-                      value={conceptCreationSource}
-                      onChange={(event) =>
-                        setConceptCreationSource(event.target.value as CreationSource)
-                      }
-                    >
-                      <option
-                        value="official"
-                        disabled={!creatorCapabilities.official.saveConcept}
-                      >
-                        Socrates (Official)
-                      </option>
-                      <option value="personal">Mine (Personal)</option>
-                    </select>
-                  </label>
                   <button
                     className={styles.secondaryButton}
                     type="button"
@@ -6336,23 +6378,23 @@ export function CreatorStudioV2Client({
                       </button>
                     </div>
                     <div className={styles.conceptBrowseTree}>
-                      {visibleTopicComposition.officialRoots.map((topic) =>
+                      {unifiedTopicComposition.officialRoots.map((topic) =>
                         renderUnifiedConceptBrowseTopic(topic)
                       )}
-                      {visibleTopicComposition.unplacedPersonalRoots.length > 0 && (
+                      {unifiedTopicComposition.unplacedPersonalRoots.length > 0 && (
                         <div className={styles.unplacedTopicsLabel}>
                           Unplaced <span className={styles.sourceBadge} data-source="personal">Mine</span>
                         </div>
                       )}
-                      {visibleTopicComposition.unplacedPersonalRoots.map((topic) =>
+                      {unifiedTopicComposition.unplacedPersonalRoots.map((topic) =>
                         renderPersonalConceptBrowseTopic(topic)
                       )}
-                      {visibleTopicComposition.otherLibraryPersonalRoots.length > 0 && (
+                      {unifiedTopicComposition.otherLibraryPersonalRoots.length > 0 && (
                         <div className={styles.unplacedTopicsLabel}>
                           Other Library <span className={styles.sourceBadge} data-source="personal">Mine</span>
                         </div>
                       )}
-                      {visibleTopicComposition.otherLibraryPersonalRoots.map((topic) =>
+                      {unifiedTopicComposition.otherLibraryPersonalRoots.map((topic) =>
                         renderPersonalConceptBrowseTopic(topic)
                       )}
                     </div>
@@ -6473,7 +6515,7 @@ export function CreatorStudioV2Client({
                   />
                   <Search size={20} />
                 </label>
-                <button className={styles.toolButton} type="button" onClick={openAddDialog} disabled={(!activePersonalTopic && !creatorAuthority.canManageTopicTree) || isMutatingTopic}>
+                <button className={styles.toolButton} type="button" onClick={openAddDialog} disabled={(creationDestination === 'official' && !creatorAuthority.canManageTopicTree) || isMutatingTopic}>
                   <Plus size={18} /> Add Subtopic
                 </button>
                 <button className={styles.toolButton} type="button" onClick={openPersonalTopicDialog} disabled={isMutatingTopic}>
@@ -7739,36 +7781,18 @@ export function CreatorStudioV2Client({
                         Existing {questionSource === 'personal' ? 'Cards' : 'Questions'} · Newest first
                       </h3>
                       <span style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                        <label className={styles.sourceChoice}>
-                          <span>Create in</span>
-                          <select
-                            aria-label="New Question or Card source"
-                            value={questionCreationSource}
-                            onChange={(event) =>
-                              setQuestionCreationSource(event.target.value as CreationSource)
-                            }
-                          >
-                            <option
-                              value="official"
-                              disabled={!creatorCapabilities.official.saveQuestion}
-                            >
-                              Socrates (Official)
-                            </option>
-                            <option value="personal">Mine (Personal)</option>
-                          </select>
-                        </label>
                         <button
                           className={styles.secondaryButton}
                           type="button"
                           disabled={
                             isSavingQuestion ||
-                            (questionCreationSource === 'official'
+                            (creationDestination === 'official'
                               ? !creatorCapabilities.official.saveQuestion || !questionConceptId
                               : !personalQuestionConceptId)
                           }
                           onClick={startNewQuestion}
                         >
-                          <Plus size={16} /> New {questionCreationSource === 'personal' ? 'Card' : 'Question'}
+                          <Plus size={16} /> New {creationDestination === 'personal' ? 'Card' : 'Question'}
                         </button>
                         {questionId && (
                           <button
@@ -8079,7 +8103,7 @@ export function CreatorStudioV2Client({
                       className={styles.toolButton}
                       type="button"
                       onClick={openAddDialog}
-                      disabled={(!activePersonalTopic && !creatorAuthority.canManageTopicTree) || isMutatingTopic}
+                      disabled={(creationDestination === 'official' && !creatorAuthority.canManageTopicTree) || isMutatingTopic}
                     >
                       <Plus size={18} /> Add Subtopic
                     </button>

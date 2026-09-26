@@ -424,7 +424,6 @@
   color: #929baa;
 }
 
-.sourceChoice,
 .personalField {
   display: grid;
   gap: 6px;
@@ -433,12 +432,6 @@
   font-weight: 700;
 }
 
-.sourceChoice {
-  grid-template-columns: auto minmax(150px, 1fr);
-  align-items: center;
-}
-
-.sourceChoice select,
 .personalField select,
 .personalField input,
 .personalField textarea {

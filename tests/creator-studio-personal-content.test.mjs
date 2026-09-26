@@ -212,10 +212,9 @@ test('personal Concept and Card reuse the existing Content and Questions workspa
   );
 });
 
-test('creation source is explicit and personal unsupported metadata is never fabricated', () => {
-  assert.match(creatorSource, /Create in/);
-  assert.match(creatorSource, /Mine \(Personal\)/);
-  assert.match(creatorSource, /Socrates \(Official\)/);
+test('creation destination is role-derived and personal unsupported metadata is never fabricated', () => {
+  assert.doesNotMatch(creatorSource, /Create in|Mine \(Personal\)|Socrates \(Official\)/);
+  assert.match(creatorSource, /creatorCapabilities.subject.role === 'learner' \? 'personal' : 'official'/);
   assert.match(creatorSource, /Difficulty, Testing Angles, relationships, lifecycle, Tags, and version controls · Not applicable/);
   assert.match(creatorSource, /Difficulty · N\/A · Testing Angle · N\/A/);
   assert.match(creatorSource, /filters\.difficulty[\s\S]*filters\.tagId[\s\S]*return \[\]/);
