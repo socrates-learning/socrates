@@ -1,3 +1,4 @@
+import * as personalStructure from '../lib/creator-personal-structure.ts';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
@@ -85,6 +86,7 @@ function editor({ editing = false, response, references = [] } = {}) {
     },
     '@/lib/concept-topic-tree': { buildConceptTopicTree },
     '@/lib/supabase': { supabase: database },
+    '@/lib/creator-personal-structure': personalStructure,
     '@/lib/safe-navigation': {},
     '@/lib/tag-catalog-invalidation': { broadcastTagCatalogUsageInvalidation() {} },
     '@/lib/creator-capabilities': {},

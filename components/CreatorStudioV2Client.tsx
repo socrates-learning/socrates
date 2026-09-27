@@ -28,6 +28,7 @@ import {
 } from '@/lib/concept-topic-tree';
 import { MarkdownContent } from '@/components/MarkdownContent';
 import { supabase } from '@/lib/supabase';
+import { movePersonalStructure, refreshPersonalStructure } from '@/lib/creator-personal-structure';
 import { navigateBackOrFallback } from '@/lib/safe-navigation';
 import {
   broadcastTagCatalogUsageInvalidation,
@@ -49,7 +50,6 @@ import type {
   CreatorPersonalContent,
   CreatorPersonalOverlay,
   CreatorPersonalTopic,
-  CreatorPersonalTopicPlacement,
 } from '@/lib/creator-personal-content';
 import {
   composeUnifiedCreatorTopicTree,
@@ -3057,23 +3057,17 @@ export function CreatorStudioV2Client({
       return false;
     }
     const saved = data as CreatedPersonalTopicRow;
-    setPersonalTopics((current) => [...current, saved]);
-    if (saved.placement_id && saved.library_node_id) {
-      const placement: CreatorPersonalTopicPlacement = {
-        id: saved.placement_id,
-        owner_id: saved.owner_id,
-        personal_topic_id: saved.id,
-        library_node_id: saved.library_node_id,
-        created_at: saved.placement_created_at || saved.created_at,
-        updated_at: saved.placement_updated_at || saved.updated_at,
-      };
-      setPersonalTopicPlacements((current) => [
-        ...current.filter((item) => item.personal_topic_id !== saved.id),
-        placement,
-      ]);
-      setExpandedTopicIds((current) =>
-        new Set(current).add(saved.library_node_id as string)
-      );
+    try {
+      const refreshed = await refreshPersonalStructure(supabase, ownerId);
+      setPersonalTopics(refreshed.topics);
+      setPersonalTopicPlacements(refreshed.placements);
+    } catch (error) {
+      setIsMutatingTopic(false);
+      showStatus('error', `Topic created, but the tree could not be refreshed: ${topicMutationErrorMessage(error)}`);
+      return false;
+    }
+    if (saved.library_node_id) {
+      setExpandedTopicIds((current) => new Set(current).add(saved.library_node_id as string));
     }
     setActivePersonalTopicId(saved.id);
     setPersonalConceptTopicId(saved.id);
@@ -3407,102 +3401,38 @@ export function CreatorStudioV2Client({
         creatorCapabilities
       );
       setIsMutatingTopic(true);
-      if (activePersonalTopic.parent_id === null) {
-        const officialNodeId = moveDestinationId === 'unplaced'
-          ? null
-          : moveDestinationId.startsWith('official:topic:')
-            ? moveDestinationId.slice('official:topic:'.length)
-            : null;
-        if (moveDestinationId !== 'unplaced' && !officialNodeId) {
-          setIsMutatingTopic(false);
-          showStatus('error', 'The selected official destination is unavailable.');
-          return;
-        }
-        const { data, error } = await supabase
-          .rpc('set_personal_topic_official_placement', {
-            p_personal_topic_id: activePersonalTopic.id,
-            p_library_node_id: officialNodeId,
-          })
-          .single();
-        if (error) {
-          setIsMutatingTopic(false);
-          showStatus('error', error.message);
-          return;
-        }
-        const placementResult = data as {
-          owner_id: string;
-          placement_id: string | null;
-          personal_topic_id: string;
-          library_node_id: string | null;
-          created_at: string | null;
-          updated_at: string | null;
-        };
-        setPersonalTopicPlacements((current) => {
-          const withoutActive = current.filter(
-            (placement) =>
-              placement.personal_topic_id !== activePersonalTopic.id
-          );
-          if (!placementResult.placement_id || !placementResult.library_node_id) {
-            return withoutActive;
-          }
-          return [
-            ...withoutActive,
-            {
-              id: placementResult.placement_id,
-              owner_id: placementResult.owner_id,
-              personal_topic_id: placementResult.personal_topic_id,
-              library_node_id: placementResult.library_node_id,
-              created_at: placementResult.created_at || new Date().toISOString(),
-              updated_at: placementResult.updated_at || new Date().toISOString(),
-            },
-          ];
-        });
-        if (officialNodeId) {
-          setExpandedTopicIds((current) => new Set(current).add(officialNodeId));
-        }
-        closeTopicDialog();
-        setIsMutatingTopic(false);
-        showStatus(
-          'success',
-          officialNodeId
-            ? `Moved “${activePersonalTopic.name}” beneath the selected official Topic.`
-            : `Removed “${activePersonalTopic.name}” from the official tree. Its content was preserved.`
-        );
-        return;
-      }
-
-      const destinationId = moveDestinationId.startsWith('personal:topic:')
-        ? moveDestinationId.slice('personal:topic:'.length)
-        : '';
-      const destination = personalTopicById.get(destinationId);
-      if (!destination) {
+      const isRoot = activePersonalTopic.parent_id === null;
+      const officialNodeId = isRoot && moveDestinationId.startsWith('official:topic:')
+        ? moveDestinationId.slice('official:topic:'.length) : null;
+      const destinationId = !isRoot && moveDestinationId.startsWith('personal:topic:')
+        ? moveDestinationId.slice('personal:topic:'.length) : null;
+      const destination = destinationId ? personalTopicById.get(destinationId) : null;
+      if ((isRoot && moveDestinationId !== 'unplaced' && !officialNodeId) || (!isRoot && !destination)) {
         setIsMutatingTopic(false);
         showStatus('error', 'The selected destination is unavailable.');
         return;
       }
-      const { data, error } = await supabase
-        .from('personal_topics')
-        .update({ parent_id: destinationId })
-        .eq('id', activePersonalTopic.id)
-        .eq('owner_id', initialPersonalContent.ownerId)
-        .select('*')
-        .single();
-      if (error) {
+      try {
+        const refreshed = await movePersonalStructure(
+          supabase, { topics: personalTopics, placements: personalTopicPlacements },
+          initialPersonalContent.ownerId, activePersonalTopic.id, destinationId, officialNodeId
+        );
+        setPersonalTopics(refreshed.topics);
+        setPersonalTopicPlacements(refreshed.placements);
+        setActivePersonalTopicId(activePersonalTopic.id);
+        if (officialNodeId) setExpandedTopicIds((current) => new Set(current).add(officialNodeId));
+        if (destinationId) setExpandedPersonalTopicIds((current) => new Set(current).add(destinationId));
+        closeTopicDialog();
+        showStatus('success', isRoot
+          ? officialNodeId
+            ? `Moved “${activePersonalTopic.name}” beneath the selected official Topic.`
+            : `Removed “${activePersonalTopic.name}” from the official tree. Its content was preserved.`
+          : `Moved “${activePersonalTopic.name}” beneath ${destination!.name}.`);
+      } catch (error) {
+        showStatus('error', topicMutationErrorMessage(error));
+      } finally {
         setIsMutatingTopic(false);
-        showStatus('error', error.message);
-        return;
       }
-      setPersonalTopics((current) =>
-        current.map((topic) =>
-          topic.id === activePersonalTopic.id
-            ? (data as CreatorPersonalTopic)
-            : topic
-        )
-      );
-      setExpandedPersonalTopicIds((current) => new Set(current).add(destination.id));
-      closeTopicDialog();
-      setIsMutatingTopic(false);
-      showStatus('success', `Moved “${activePersonalTopic.name}” beneath ${destination.name}.`);
       return;
     }
 

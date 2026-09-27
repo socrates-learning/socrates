@@ -33,7 +33,7 @@ test('Creator uses one RPC for create plus optional placement, never two browser
   );
   assert.match(creatorSource, /p_parent_personal_topic_id:/);
   assert.match(creatorSource, /p_official_library_node_id:/);
-  assert.match(creatorSource, /\.rpc\('set_personal_topic_official_placement'/);
+  assert.match(creatorSource, /await movePersonalStructure\(/);
 });
 
 test('Migration 100 does not touch Study, learner state, official content, or Migration 099 storage', () => {
