@@ -1,3 +1,4 @@
+import { compareCreatorTopics } from './creator-topic-order.js';
 export type ConceptTopic = {
   id: string;
   name: string;
@@ -11,7 +12,7 @@ export type ConceptTopicRow = {
   sort_order: number | null;
 };
 
-export function buildConceptTopicTree(rows: ConceptTopicRow[]): ConceptTopic[] {
+export function buildConceptTopicTree(rows: ConceptTopicRow[], canonical = false): ConceptTopic[] {
   const topicsById = new Map<string, ConceptTopic>();
   const rowById = new Map(rows.map((row) => [row.id, row]));
 
@@ -33,6 +34,7 @@ export function buildConceptTopicTree(rows: ConceptTopicRow[]): ConceptTopic[] {
     topics.sort((left, right) => {
       const leftRow = rowById.get(left.id);
       const rightRow = rowById.get(right.id);
+      if (canonical && leftRow && rightRow) return compareCreatorTopics(leftRow, rightRow);
       const orderDifference =
         (leftRow?.sort_order ?? 0) - (rightRow?.sort_order ?? 0);
 

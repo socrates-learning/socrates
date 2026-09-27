@@ -1,0 +1,21 @@
+.interaction { min-width: 0; display: flex; flex-direction: column; flex: 1; }
+.instructions { color: #526175; font-size: 12px; margin: 4px 0 8px; line-height: 1.5; }
+.handle { touch-action: none; cursor: grab; color: #66768b; background: transparent; border: 0; min-width: 28px; height: 34px; display: inline-flex; align-items: center; justify-content: center; border-radius: 4px; flex-shrink: 0; }
+.handle:hover, .handle:focus-visible { background: #e8f0fa; color: #234d7a; outline: 2px solid #4c7ca8; }
+.handle:active { cursor: grabbing; }
+.handle:disabled { opacity: .4; cursor: wait; }
+.dropRow { position: relative; }
+.dropRow[data-moving=true] { opacity: .6; }
+.dropRow[data-drop-intent=inside] { background: #e9f3ff; box-shadow: inset 0 0 0 2px #396ba4; }
+.dropRow[data-drop-intent=before]::before, .dropRow[data-drop-intent=after]::after { content: ''; position: absolute; left: var(--topic-drop-indent, 12px); right: 8px; height: 3px; background: #2863a5; z-index: 2; pointer-events: none; }
+.dropRow[data-drop-intent=before]::before { top: 0; }
+.dropRow[data-drop-intent=after]::after { bottom: 0; }
+.keyboard { display: flex; gap: 12px; flex-wrap: wrap; padding: 12px; border: 1px solid #c3d1e0; border-radius: 5px; background: #f5f8fc; }
+.keyboard label { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1 1 180px; }
+.keyboard strong { flex-basis: 100%; }
+.keyboard select { width: 100%; min-height: 36px; max-width: 100%; }
+.keyboard button { margin-right: 8px; padding: 8px 12px; }
+.feedback { min-height: 20px; color: #345477; font-size: 12px; }
+@media(max-width:640px) { .handle { min-width: 36px; height: 40px; } .instructions { font-size: 11px; } }
+
+.interaction > [aria-label="Topic Tree"] { flex: none; height: clamp(300px, 60vh, 650px); min-height: 300px; }

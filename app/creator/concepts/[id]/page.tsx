@@ -113,7 +113,7 @@ export default async function EditConceptPage({
       activeLibraryId={activeLibrary.id}
       creatorCapabilities={capabilities}
       initialPersonalContent={personalContent}
-      initialTopics={buildConceptTopicTree(nodes || [])}
+      initialTopics={buildConceptTopicTree(nodes || [], true)}
       initialConcept={{
         id: concept.id,
         name: concept.name,

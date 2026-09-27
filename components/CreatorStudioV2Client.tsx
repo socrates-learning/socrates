@@ -29,6 +29,8 @@ import {
 import { MarkdownContent } from '@/components/MarkdownContent';
 import { supabase } from '@/lib/supabase';
 import { movePersonalStructure, refreshPersonalStructure } from '@/lib/creator-personal-structure';
+import { CreatorTopicTreeInteraction, TopicDropRow, TopicDragHandle } from './CreatorTopicTreeInteraction';
+import { executeTopicPosition, type PositionContext, type PositionPlan, type StructuralTopic } from '@/lib/creator-topic-positioning';
 import { navigateBackOrFallback } from '@/lib/safe-navigation';
 import {
   broadcastTagCatalogUsageInvalidation,
@@ -1742,8 +1744,10 @@ export function CreatorStudioV2Client({
         ownerId: initialPersonalContent.ownerId,
         personalTopics,
         topicPlacements: personalTopicPlacements,
+        canonicalOrder: activeCreatorTab === 'content',
       }),
     [
+      activeCreatorTab,
       initialPersonalContent.ownerId,
       personalTopicPlacements,
       personalTopics,
@@ -2698,7 +2702,7 @@ export function CreatorStudioV2Client({
 
     if (error) throw error;
 
-    const nextTopics = buildConceptTopicTree(data || []);
+    const nextTopics = buildConceptTopicTree(data || [], true);
     const nextActiveId = preferredActiveTopicId || activeTopicId;
     const nextActivePath = nextActiveId
       ? findTopicPath(nextTopics, nextActiveId)
@@ -2714,6 +2718,71 @@ export function CreatorStudioV2Client({
       });
     } else {
       setActiveTopicId(nextTopics[0]?.id || '');
+    }
+  }
+
+  const structuralDropLock = useRef(false);
+  const positioningContext = useMemo<PositionContext>(() => {
+    const nodes: StructuralTopic[] = [];
+    const addOfficial = (items: Topic[], parentKey: string | null) => {
+      items.forEach((topic, index) => {
+        const key = `official:topic:${topic.id}`;
+        // The official builder already applied the database comparator. Its
+        // sibling index preserves that complete canonical sequence here.
+        nodes.push({
+          key, id: topic.id, name: topic.name, source: 'official',
+          parentKey, placementKey: null, sort_order: index,
+        });
+        addOfficial(topic.children, key);
+      });
+    };
+    addOfficial(topics, null);
+    personalTopics.forEach(topic => {
+      const placement = personalTopicPlacements.find(p => p.personal_topic_id === topic.id);
+      nodes.push({
+        key: `personal:topic:${topic.id}`, id: topic.id, name: topic.name,
+        source: 'personal',
+        parentKey: topic.parent_id ? `personal:topic:${topic.parent_id}` : null,
+        placementKey: placement ? `official:topic:${placement.library_node_id}` : null,
+        sort_order: topic.sort_order, ownerId: topic.owner_id,
+      });
+    });
+    return {
+      libraryId: activeLibraryId, ownerId: initialPersonalContent.ownerId,
+      canManageOfficial: creatorAuthority.canManageTopicTree, nodes,
+    };
+  }, [topics, personalTopics, personalTopicPlacements, activeLibraryId,
+    initialPersonalContent.ownerId, creatorAuthority.canManageTopicTree]);
+
+  async function positionTopicFromTree(plan: PositionPlan) {
+    if (isMutatingTopic || structuralDropLock.current) return;
+    setIsMutatingTopic(true);
+    try {
+      const outcome = await executeTopicPosition(
+        plan, structuralDropLock, (name, args) => supabase.rpc(name, args),
+        async () => {
+          await reloadRealTopicTree(activeTopicId);
+          const state = await refreshPersonalStructure(supabase, initialPersonalContent.ownerId);
+          setPersonalTopics(state.topics);
+          setPersonalTopicPlacements(state.placements);
+          if (activePersonalTopicId && !state.topics.some(t => t.id === activePersonalTopicId)) {
+            setActivePersonalTopicId(null);
+          }
+          if (plan.destinationKey?.startsWith('personal:topic:')) {
+            setExpandedPersonalTopicIds(current => new Set(current).add(plan.destinationKey!.slice(15)));
+          }
+          if (plan.destinationKey?.startsWith('official:topic:')) {
+            setExpandedTopicIds(current => new Set(current).add(plan.destinationKey!.slice(15)));
+          }
+        }
+      );
+      showStatus(
+        outcome.kind === 'success' || outcome.kind === 'noop' ? 'success' :
+          outcome.kind === 'stale' ? 'info' : 'error',
+        outcome.message
+      );
+    } finally {
+      setIsMutatingTopic(false);
     }
   }
 
@@ -5638,10 +5707,11 @@ export function CreatorStudioV2Client({
 
     return (
       <div className={styles.topicBranch} key={`personal-topic-${topic.id}`}>
-        <div
+        <TopicDropRow topicKey={topic.key}
           className={`${styles.topicRow} ${isActive ? styles.activeTopicRow : ''}`}
           style={{ paddingLeft: `${12 + depth * 38}px` }}
         >
+          <TopicDragHandle topicKey={topic.key} />
           <button
             className={styles.expandButton}
             type="button"
@@ -5683,7 +5753,7 @@ export function CreatorStudioV2Client({
             <span className={styles.sourceBadge} data-source="personal">Mine</span>
             <small>{conceptCount}</small>
           </button>
-        </div>
+        </TopicDropRow>
         {hasChildren && isExpanded && (
           <div className={depth > 0 ? styles.nestedTopics : undefined}>
             {topic.children.map((child) => renderPersonalTopic(child, depth + 1))}
@@ -5824,10 +5894,11 @@ export function CreatorStudioV2Client({
 
     return (
       <div className={styles.topicBranch} key={topic.key}>
-        <div
+        <TopicDropRow topicKey={topic.key}
           className={`${styles.topicRow} ${isActive ? styles.activeTopicRow : ''}`}
           style={{ paddingLeft: `${12 + depth * 38}px` }}
         >
+          <TopicDragHandle topicKey={topic.key} />
           <button
             className={styles.expandButton}
             type="button"
@@ -5873,7 +5944,7 @@ export function CreatorStudioV2Client({
               {topic.name}
             </span>
           </button>
-        </div>
+        </TopicDropRow>
         {hasChildren && isExpanded && (
           <div className={depth > 0 ? styles.nestedTopics : undefined}>
             {topic.children.map((child) => renderUnifiedTopic(child, depth + 1))}
@@ -6543,14 +6614,15 @@ export function CreatorStudioV2Client({
                 </div>
               )}
 
+              <CreatorTopicTreeInteraction context={positioningContext} disabled={isMutatingTopic || !!dialogMode} onMove={positionTopicFromTree}>
               <div className={styles.treeViewport} aria-label="Topic Tree">
                 {visibleTopicComposition.officialRoots.map((topic) =>
                   renderUnifiedTopic(topic)
                 )}
-                {visibleTopicComposition.unplacedPersonalRoots.length > 0 && (
-                  <div className={styles.unplacedTopicsLabel}>
+                {showPersonalCreatorTopics && (
+                  <TopicDropRow className={styles.unplacedTopicsLabel} topicKey="unplaced">
                     Unplaced <span className={styles.sourceBadge} data-source="personal">Mine</span>
-                  </div>
+                  </TopicDropRow>
                 )}
                 {visibleTopicComposition.unplacedPersonalRoots.map((topic) =>
                   renderPersonalTopic(topic)
@@ -6571,6 +6643,7 @@ export function CreatorStudioV2Client({
                   <div className={styles.emptyTree}>No topics match “{searchQuery.trim()}”.</div>
                 )}
               </div>
+              </CreatorTopicTreeInteraction>
               <p className={styles.treeFooter}>
                 Keep nesting subtopics to any level. There’s no limit how deep you can go.
               </p>

@@ -1,3 +1,4 @@
+import * as topicPositioning from '../lib/creator-topic-positioning.ts';
 import * as personalStructure from '../lib/creator-personal-structure.ts';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -130,6 +131,8 @@ function editor({ role = 'learner', editing = false, response, references = [], 
     },
     '@/lib/creator-studio-runtime': runtimeContext.exports,
     './CreatorAlgorithmDiagnostics': {},
+    './CreatorTopicTreeInteraction': {},
+    '@/lib/creator-topic-positioning': topicPositioning,
     './CreatorStudioV2Client.module.css': { default: {} },
   };
   const context = {

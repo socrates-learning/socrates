@@ -1,3 +1,4 @@
+import { compareCreatorTopics } from './creator-topic-order.js';
 import type {
   CreatorPersonalTopic,
   CreatorPersonalTopicPlacement,
@@ -73,7 +74,9 @@ export function composeUnifiedCreatorTopicTree({
   ownerId,
   personalTopics,
   topicPlacements,
+  canonicalOrder = false,
 }: {
+  canonicalOrder?: boolean;
   officialTopics: readonly CreatorOfficialTopicInput[];
   ownerId: string;
   personalTopics: readonly CreatorPersonalTopic[];
@@ -114,7 +117,7 @@ export function composeUnifiedCreatorTopicTree({
     siblings.push(topic);
     childrenByParentId.set(topic.parent_id, siblings);
   });
-  childrenByParentId.forEach((siblings) => siblings.sort(comparePersonalTopics));
+  childrenByParentId.forEach((siblings) => siblings.sort(canonicalOrder ? compareCreatorTopics : comparePersonalTopics));
 
   function buildPersonalNode(
     topic: CreatorPersonalTopic,
@@ -172,7 +175,7 @@ export function composeUnifiedCreatorTopicTree({
   const otherLibraryPersonalRoots: UnifiedCreatorTopicNode[] = [];
   personalTopics
     .filter((topic) => topic.parent_id === null)
-    .sort(comparePersonalTopics)
+    .sort(canonicalOrder ? compareCreatorTopics : comparePersonalTopics)
     .forEach((topic) => {
       const placement = placementByTopicId.get(topic.id);
       if (!placement) {

@@ -1,3 +1,4 @@
+import * as topicPositioning from '../lib/creator-topic-positioning.ts';
 import * as personalStructure from '../lib/creator-personal-structure.ts';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -120,6 +121,8 @@ function editor({ editing = false, response, references = [] } = {}) {
       resolveOfficialCreatorCommand: command => ({ rpc: command.type === 'save-concept' ? 'save_concept_with_prerequisites' : command.type === 'save-question' ? 'save_question_with_relationships_v2' : command.type === 'inspect-delete' ? 'get_development_delete_summary' : command.type === 'delete-content' ? 'delete_development_content' : '' }),
     },
     './CreatorAlgorithmDiagnostics': {},
+    './CreatorTopicTreeInteraction': {},
+    '@/lib/creator-topic-positioning': topicPositioning,
     './CreatorStudioV2Client.module.css': { default: {} },
   };
   const context = {
