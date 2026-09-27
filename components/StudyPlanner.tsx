@@ -448,9 +448,12 @@ export function StudyPlanner({
   const [placements, setPlacements] = useState<Placement[]>(
     initialDeckData?.placements || []
   );
-  const [questionCounts, setQuestionCounts] = useState<Record<string, number>>(
-    initialDeckData?.questionCounts || {}
-  );
+  const [libraryAvailabilityQuestionCounts, setLibraryAvailabilityQuestionCounts] =
+    useState<Record<string, number>>(
+      initialDeckData?.libraryAvailabilityQuestionCounts || {}
+    );
+  const [selectedDeckQuestionCounts, setSelectedDeckQuestionCounts] =
+    useState<Record<string, number>>(initialDeckData?.selectedDeckQuestionCounts || {});
   const [selectedNodeIds, setSelectedNodeIds] = useState<Set<string>>(
     new Set(initialDeckData?.selectedNodeIds || [])
   );
@@ -760,7 +763,8 @@ export function StudyPlanner({
       setDeck(null);
       setNodes([]);
       setPlacements([]);
-      setQuestionCounts({});
+      setSelectedDeckQuestionCounts({});
+      setLibraryAvailabilityQuestionCounts({});
       setSelectedNodeIds(new Set());
       setExcludedNodeIds(new Set());
       setNodePreferences({});
@@ -909,6 +913,7 @@ export function StudyPlanner({
         preferenceResult,
         resolvedResult,
         learnerProgressResult,
+        libraryAvailabilityResult,
         personalTopicsResult,
         personalConceptsResult,
         personalCardsResult,
@@ -941,6 +946,9 @@ export function StudyPlanner({
           p_deck_id: activeDeck.id,
         }),
         supabase.rpc('get_library_learner_progress', {
+          p_library_id: activeLibrary.id,
+        }),
+        supabase.rpc('get_library_official_availability_counts', {
           p_library_id: activeLibrary.id,
         }),
         supabase
@@ -1004,7 +1012,8 @@ export function StudyPlanner({
         excludedNodesError ||
         overridesError ||
         preferenceError ||
-        resolvedError;
+        resolvedError ||
+        libraryAvailabilityResult.error;
 
       if (deckStateError) {
         setMessage(`Unable to load your deck: ${deckStateError.message}`);
@@ -1071,7 +1080,8 @@ export function StudyPlanner({
       setAvailableLibraries(loadedAvailableLibraries);
       setNodes(loadedNodes);
       setPlacements(loadedPlacements);
-      setQuestionCounts(nextQuestionCounts);
+      setSelectedDeckQuestionCounts(nextQuestionCounts);
+      setLibraryAvailabilityQuestionCounts(libraryAvailabilityResult.data || {});
       setSelectedNodeIds(
         new Set((selectedNodesData || []).map((selection) => selection.node_id))
       );
@@ -2186,9 +2196,9 @@ export function StudyPlanner({
     ];
   }
 
-  function branchQuestionCount(nodeId: string) {
+  function branchAvailabilityQuestionCount(nodeId: string) {
     return branchConceptIds(nodeId).reduce(
-      (total, conceptId) => total + (questionCounts[conceptId] || 0),
+      (total, conceptId) => total + (libraryAvailabilityQuestionCounts[conceptId] || 0),
       0
     );
   }
@@ -2293,7 +2303,7 @@ export function StudyPlanner({
     }
 
     setResolvedConcepts((resolvedResult.data || []) as StudyDeckConcept[]);
-    setQuestionCounts(
+    setSelectedDeckQuestionCounts(
       getOfficialStudyReadyQuestionCounts(
         (candidateResult.data || []) as StudyCandidateRow[]
       )
@@ -2916,7 +2926,7 @@ export function StudyPlanner({
     const children = nodes.filter((child) => child.parent_id === node.id);
     const isExpanded = expandedNodeIds.has(node.id);
     const branchConceptCount = branchConceptIds(node.id).filter(
-      (conceptId) => (questionCounts[conceptId] || 0) > 0
+      (conceptId) => (libraryAvailabilityQuestionCounts[conceptId] || 0) > 0
     ).length;
     const selection = getTopicSelectionPresentation(
       node.id,
@@ -3065,7 +3075,7 @@ export function StudyPlanner({
                 textAlign: 'center',
               }}
             >
-              {branchQuestionCount(node.id)}
+              {branchAvailabilityQuestionCount(node.id)}
             </span>
           </div>
 
@@ -3149,11 +3159,11 @@ export function StudyPlanner({
     const conceptIds = branchConceptIds(nodeId).filter(
       (conceptId) =>
         conceptOverrides[conceptId] !== 'excluded' &&
-        (questionCounts[conceptId] || 0) > 0
+        (selectedDeckQuestionCounts[conceptId] || 0) > 0
     );
 
     const questionTotal = conceptIds.reduce(
-      (total, conceptId) => total + (questionCounts[conceptId] || 0),
+      (total, conceptId) => total + (selectedDeckQuestionCounts[conceptId] || 0),
       0
     );
 
@@ -3166,7 +3176,7 @@ export function StudyPlanner({
       },
     ];
   });
-  const totalQuestions = Object.values(questionCounts).reduce(
+  const totalQuestions = Object.values(selectedDeckQuestionCounts).reduce(
     (total, count) => total + count,
     0
   );

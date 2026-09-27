@@ -78,6 +78,8 @@ type HomeStudyBootstrapResponse = {
   available_libraries: ActiveLibrary[];
   nodes: LibraryNode[];
   placements: Placement[];
+  library_availability_question_counts: Record<string, number>;
+  // Legacy wire name: these counts remain scoped to selected deck candidates.
   official_question_counts: Record<string, number>;
   selected_node_ids: string[];
   excluded_node_ids: string[];
@@ -137,7 +139,8 @@ export type StudyPlannerInitialData = {
   deck: StudyDeck | null;
   nodes: LibraryNode[];
   placements: Placement[];
-  questionCounts: Record<string, number>;
+  selectedDeckQuestionCounts: Record<string, number>;
+  libraryAvailabilityQuestionCounts: Record<string, number>;
   selectedNodeIds: string[];
   excludedNodeIds: string[];
   nodePreferences: Record<string, number>;
@@ -182,7 +185,8 @@ function emptyInitialData(
     deck: null,
     nodes: [],
     placements: [],
-    questionCounts: {},
+    selectedDeckQuestionCounts: {},
+    libraryAvailabilityQuestionCounts: {},
     selectedNodeIds: [],
     excludedNodeIds: [],
     nodePreferences: {},
@@ -287,7 +291,9 @@ export async function loadStudyPlannerInitialData({
     deck: activeDeck,
     nodes: bootstrap.nodes || [],
     placements: bootstrap.placements || [],
-    questionCounts: bootstrap.official_question_counts || {},
+    selectedDeckQuestionCounts: bootstrap.official_question_counts || {},
+    libraryAvailabilityQuestionCounts:
+      bootstrap.library_availability_question_counts || {},
     selectedNodeIds: bootstrap.selected_node_ids || [],
     excludedNodeIds: bootstrap.excluded_node_ids || [],
     nodePreferences: bootstrap.node_preferences || {},
