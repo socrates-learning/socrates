@@ -446,26 +446,6 @@
   font: inherit;
 }
 
-.sourceBadge {
-  display: inline-flex;
-  align-items: center;
-  border: 1px solid #b9cae4;
-  border-radius: 999px;
-  padding: 2px 7px;
-  background: #eef5ff;
-  color: #1d5cab;
-  font-size: 0.72rem;
-  font-weight: 800;
-  line-height: 1.25;
-  white-space: nowrap;
-}
-
-.sourceBadge[data-source='personal'] {
-  border-color: #a9d8ba;
-  background: #edf9f1;
-  color: #247044;
-}
-
 .notApplicableMetadata {
   margin: 0;
   color: #64748b;
@@ -485,7 +465,6 @@
   font-weight: 800;
 }
 
-.personalConceptChoice,
 .overlayChoice {
   display: flex;
   min-height: 38px;

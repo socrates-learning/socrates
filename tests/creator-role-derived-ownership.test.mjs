@@ -24,6 +24,9 @@ vm.runInNewContext(ts.transpileModule(readFileSync(new URL('../lib/creator-studi
   compilerOptions: { module: ts.ModuleKind.CommonJS },
 }).outputText, runtimeContext);
 const exposed = [
+  'setContentConceptSearch', 'contentConceptSearchResults', 'setQuestionSearchResults',
+  'renderUnifiedTopic', 'renderUnifiedConceptBrowseTopic', 'renderUnifiedQuestionTopic',
+  'setQuestionCountsByConceptId', 'setExpandedPersonalTopicIds', 'setExpandedBrowseTopicIds', 'setQuestionConceptsByTopicId',
   'creationDestination', 'conceptEditorState', 'questionEditorState', 'conceptSource', 'questionSource',
   'openAddDialog', 'openPersonalTopicDialog', 'saveNameDialog', 'setNameDraft', 'dialogMode',
   'startNewQuestion', 'openPersonalConcept', 'selectPersonalQuestionConcept', 'selectQuestionConcept',
@@ -47,7 +50,7 @@ const compiled = ts.transpileModule(source.replace(
   `  capture({ ${exposed} });\n  return (\n    <>\n      <Header />`,
 ), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText;
 
-function editor({ role = 'admin', editing = false, response, references = [], cards = true, placed = false } = {}) {
+function editor({ role = 'admin', editing = false, response, references = [], cards = true, placed = false, neutralFixture = false } = {}) {
   const slots = [];
   let cursor = 0;
   let api;
@@ -106,7 +109,7 @@ function editor({ role = 'admin', editing = false, response, references = [], ca
     react: hooks,
     'react/jsx-runtime': { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }) },
     'next/navigation': { useRouter: () => ({ push: path => routes.push(path), replace: path => routes.push(path), refresh: () => routes.push('refresh') }) },
-    'lucide-react': {},
+    'lucide-react': new Proxy({}, { get: (_target, key) => `icon:${String(key)}` }),
     '@/components/Header': {},
     '@/components/MarkdownContent': {},
     '@/components/creator/CreatorStudioChrome': {
@@ -131,7 +134,7 @@ function editor({ role = 'admin', editing = false, response, references = [], ca
     './CreatorAlgorithmDiagnostics': {},
     './CreatorTopicTreeInteraction': {},
     '@/lib/creator-topic-positioning': topicPositioning,
-    './CreatorStudioV2Client.module.css': { default: {} },
+    './CreatorStudioV2Client.module.css': { __esModule: true, default: new Proxy({}, { get: (_target, key) => String(key) }) },
   };
   const context = {
     exports: {}, capture: value => { api = value; },
@@ -155,6 +158,11 @@ function editor({ role = 'admin', editing = false, response, references = [], ca
       overlays: [], topicPlacements: placed ? [{id:'placement',owner_id:'owner',personal_topic_id:'mine-topic',library_node_id:'topic'}] : [],
     },
   };
+  if (neutralFixture) {
+    props.initialPersonalContent.topics[0].name = 'Topic';
+    props.initialPersonalContent.concepts[0].name = 'Concept';
+    props.initialPersonalContent.cards.forEach(card => { card.question = 'Question'; });
+  }
   function render() { cursor = 0; const tree = context.exports.CreatorStudioV2Client(props); return { ...api, tree }; }
   return { render, calls, orders, routes };
 }
@@ -293,11 +301,11 @@ for (const role of ['admin', 'editor']) {
     e.setConceptEditorState(runtimeContext.exports.createPersonalConceptEditorState(null, 'owner'));
     e.setConceptName('Must not create'); e.setConcept('Text');
     await h.render().saveCurrentConcept();
-    e = h.render(); assert.match(e.status.message, /belongs to Socrates/);
+    e = h.render(); assert.match(e.status.message, /current authoring permissions/);
     e.setQuestionEditorState(runtimeContext.exports.createPersonalCardEditorState(null, 'owner'));
     e.setQuestionPrompt('Must not create'); e.setQuestionAnswer('Text');
     await h.render().saveCurrentQuestion();
-    assert.match(h.render().questionStatus.message, /belongs to Socrates/);
+    assert.match(h.render().questionStatus.message, /current authoring permissions/);
     assert.equal(h.calls.length, 0);
   });
 }
@@ -334,7 +342,7 @@ for (const role of ['admin', 'editor']) {
     e.setActivePersonalTopicId('mine-topic'); e = h.render();
     e.openPersonalTopicDialog(); e = h.render();
     assert.equal(e.dialogMode, null);
-    assert.match(e.status.message, /Select an official Topic/);
+    assert.match(e.status.message, /Select an eligible Topic/);
     assert.equal(h.calls.length, 0);
   });
 }
@@ -346,4 +354,92 @@ for (const role of ['learner','editor','admin']) test(`${role}: owned placed con
  assert.ok(owned);assert.equal(owned.presentationParentKey,'official:topic:topic');
  assert.equal(e.creationDestination,role==='learner'?'personal':'official');
  assert.equal(e.visibleTopicComposition.unplacedPersonalRoots.length,0);
+});
+
+// Presentation-only fixtures use the real canonical component and its renderers.
+function visibleText(tree) {
+  if (typeof tree === 'string' || typeof tree === 'number') return String(tree);
+  if (!tree || typeof tree !== 'object') return '';
+  if (Array.isArray(tree)) return tree.map(visibleText).join(' ');
+  if (tree.type === 'code') return ''; // Raw entity IDs are identity, not ownership labels.
+  return [tree.props?.['aria-label'], tree.props?.title, visibleText(tree.props?.children)].filter(Boolean).join(' ');
+}
+function paint(tree) {
+  if (!tree || typeof tree !== 'object') return tree;
+  if (Array.isArray(tree)) return tree.map(paint);
+  const { children, className, style, title } = tree.props || {};
+  return { type: tree.type, className, style, title, children: paint(children) };
+}
+for (const role of ['admin', 'editor', 'learner']) {
+  test(`${role}: placed synthetic content stays source-neutral in browsing, search and editors`, () => {
+    const h = editor({ role, placed: true, neutralFixture: true }); let e = h.render();
+    assert.equal(e.visibleTopicComposition.officialRoots[0].children.filter(t => t.source === 'personal').length, 1);
+    for (const tab of ['content', 'questions', 'tags', 'flagged']) {
+      e.setActiveCreatorTab(tab); e = h.render();
+      assert.doesNotMatch(visibleText(e.tree), /\b(Mine|Personal|Official|Socrates material|My Topic|owner-only)\b/i);
+      assert.equal(nodes(e.tree).filter(n => n.props?.className === 'sourceBadge').length, 0);
+    }
+    e.setActiveCreatorTab('content'); e.setSearchQuery('Concept'); e = h.render();
+    assert.doesNotMatch(visibleText(e.tree), /\b(Mine|Personal|Official)\b/i);
+    e.openPersonalConcept('mine-concept'); e = h.render();
+    assert.equal(e.conceptEditorState.identity.key, 'personal:concept:mine-concept');
+    assert.doesNotMatch(visibleText(e.tree), /\b(Mine|Personal|Official|owner-only)\b/i);
+    e.selectExistingQuestion({ source: 'personal', id: 'mine-card', conceptId: 'mine-concept' }); e = h.render();
+    assert.equal(e.questionEditorState.identity.key, 'personal:card:mine-card');
+    assert.doesNotMatch(visibleText(e.tree), /\b(Mine|Personal|Official|owner-only)\b/i);
+  });
+}
+test('equivalent Topic activation rows have identical text, icons and paint, with distinct internal keys', () => {
+  const h = editor({ placed: true, neutralFixture: true }); const e = h.render();
+  const official = { id: 'topic', key: 'official:topic:topic', name: 'Topic', source: 'official', children: [] };
+  const personal = { id: 'mine-topic', key: 'personal:topic:mine-topic', name: 'Topic', source: 'personal', children: [] };
+  const activation = topic => nodes(e.renderUnifiedTopic(topic, 2)).find(n => n.props?.className === 'topicActivationButton');
+  // Ignore functional selection/authority controls: compare only source-independent paint.
+  assert.ok(activation(official)); assert.ok(activation(personal));
+  assert.deepEqual(paint(activation(official)), paint(activation(personal)));
+  assert.notEqual(official.key, personal.key);
+  const browse = topic => e.renderUnifiedConceptBrowseTopic(topic, 2);
+  assert.doesNotMatch(visibleText(browse(personal)), /Mine|Personal|Official/);
+});
+
+test('official and owner-qualified Concept choices share selection paint and question-count labels', () => {
+  const h = editor({ placed: true, neutralFixture: true }); let e = h.render();
+  e.setQuestionConceptsByTopicId({ topic: [{ id: 'concept', name: 'Concept' }] });
+  e.setQuestionCountsByConceptId({ concept: 1 });
+  e.setExpandedPersonalTopicIds(new Set(['mine-topic'])); e = h.render();
+  const official = { id: 'topic', key: 'official:topic:topic', name: 'Topic', source: 'official', children: [] };
+  const personal = { id: 'mine-topic', key: 'personal:topic:mine-topic', name: 'Topic', source: 'personal', children: [] };
+  const choice = topic => nodes(e.renderUnifiedQuestionTopic(topic, 1)).find(n => n.type === 'label' && visibleText(n).includes('Concept'));
+  assert.equal(visibleText(choice(official)).replace(/\s+/g, ' ').trim(), visibleText(choice(personal)).replace(/\s+/g, ' ').trim());
+  assert.deepEqual(choice(official).props.style, choice(personal).props.style);
+  assert.ok(!choice(personal).props.className);
+});
+
+test('normal browsing and search use neutral Concept presentation while search keys remain source-qualified', () => {
+  const h = editor({ placed: true, neutralFixture: true }); let e = h.render();
+  e.setQuestionConceptsByTopicId({ topic: [{ id: 'mine-concept', name: 'Concept' }] });
+  e.setContentConceptSearch('Concept'); e = h.render();
+  assert.deepEqual(Array.from(e.contentConceptSearchResults, x => x.key).sort(), ['official:concept:mine-concept', 'personal:concept:mine-concept']);
+  const results = nodes(e.tree).filter(n => n.type === 'button' && textWithoutIdentity(n).includes('Concept ID:'));
+  assert.equal(results.length, 2);
+  assert.equal(results[0].props.className, results[1].props.className);
+  assert.deepEqual(results[0].props.style, results[1].props.style);
+  for (const row of results) assert.doesNotMatch(textWithoutIdentity(row), /\b(Mine|Personal|Official)\b/i);
+  // Opening a found owner-qualified record still targets its original entity.
+  const personalResult = results.find(n => visibleText(n).includes('Topic > Topic')) || results[1];
+  personalResult.props.onClick();
+  assert.equal(h.render().conceptEditorState.identity.key, 'personal:concept:mine-concept');
+});
+function textWithoutIdentity(tree) {
+  return visibleText(tree).replaceAll('mine-concept', 'entity-id');
+}
+test('Question search prompt styling is source-neutral and does not erase backend source identity', () => {
+  const h = editor({ placed: true, neutralFixture: true }); let e = h.render();
+  const common = {id:'question-id',conceptId:'concept',primaryConceptName:'Concept',relatedConcepts:[],prompt:'Equivalent Question',status:null,difficulty:null,testingAngle:null,additionalTestingAngles:[],tags:[]};
+  e.setQuestionSearchResults([{...common,source:'official',kind:'question'},{...common,source:'personal',kind:'card'}]);
+  e.setActiveCreatorTab('questions'); e = h.render();
+  const prompts=nodes(e.tree).filter(n => n.props?.className==='questionSearchPrompt');
+  assert.equal(prompts.length,2);
+  assert.deepEqual(paint(prompts[0]),paint(prompts[1]));
+  assert.equal(visibleText(prompts[0]).trim(),'Equivalent Question');
 });

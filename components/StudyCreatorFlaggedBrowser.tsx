@@ -30,6 +30,7 @@ type OfficialConcept = {
 type StudyCreatorFlaggedBrowserProps = {
   material: Pick<CreatorPersonalContent, 'topics' | 'concepts' | 'cards' | 'overlays'>;
   ownerId: string;
+  neutralPresentation?: boolean;
 };
 
 function messageFor(error: unknown) {
@@ -43,6 +44,7 @@ function messageFor(error: unknown) {
 export function StudyCreatorFlaggedBrowser({
   material,
   ownerId,
+  neutralPresentation = false,
 }: StudyCreatorFlaggedBrowserProps) {
   const [flags, setFlags] = useState<FlagRow[]>([]);
   const [officialQuestions, setOfficialQuestions] = useState<OfficialQuestion[]>([]);
@@ -133,8 +135,8 @@ export function StudyCreatorFlaggedBrowser({
           return {
             flag,
             owner: 'official' as const,
-            title: question?.prompt ?? 'Official Question no longer available',
-            context: concept?.name ?? 'Socrates material',
+            title: question?.prompt ?? (neutralPresentation ? 'Question no longer available' : 'Official Question no longer available'),
+            context: concept?.name ?? (neutralPresentation ? 'Material' : 'Socrates material'),
             question,
             concept,
             card: null,
@@ -153,15 +155,15 @@ export function StudyCreatorFlaggedBrowser({
         return {
           flag,
           owner: 'personal' as const,
-          title: card?.question ?? 'Personal Card no longer available',
-          context: personalConcept?.name ?? 'My personal material',
+          title: card?.question ?? (neutralPresentation ? 'Question no longer available' : 'Personal Card no longer available'),
+          context: personalConcept?.name ?? (neutralPresentation ? 'Material' : 'My personal material'),
           question: null,
           concept: null,
           card,
           personalConcept,
         };
       }),
-    [flags, material.cards, material.concepts, officialConcepts, officialQuestions]
+    [flags, material.cards, material.concepts, officialConcepts, officialQuestions, neutralPresentation]
   );
 
   const normalizedSearch = search.trim().toLocaleLowerCase();
@@ -218,11 +220,12 @@ export function StudyCreatorFlaggedBrowser({
           {!isLoading && visibleFlags.map((item) => (
             <button
               className={`${styles.flaggedRow} ${selectedFlagId === item.flag.id ? styles.selectedFlag : ''}`}
+              style={neutralPresentation ? { gridTemplateColumns: 'minmax(0, 1fr) 18px' } : undefined}
               key={item.flag.id}
               onClick={() => setSelectedFlagId(item.flag.id)}
               type="button"
             >
-              <i className={item.owner === 'official' ? styles.officialOwnerMark : styles.personalOwnerMark}>{item.owner === 'official' ? 'S' : 'M'}</i>
+              {!neutralPresentation && <i className={item.owner === 'official' ? styles.officialOwnerMark : styles.personalOwnerMark}>{item.owner === 'official' ? 'S' : 'M'}</i>}
               <span><strong>{item.title}</strong><small>{item.context} · {new Date(item.flag.created_at).toLocaleDateString()}</small></span>
               <Icon name="chevron-right" />
             </button>
@@ -236,17 +239,17 @@ export function StudyCreatorFlaggedBrowser({
         <div className={styles.workspaceSectionIntro}>
           <div>
             <h2>2. Details</h2>
-            <p>Review the selected Question or Card.</p>
+            <p>{neutralPresentation ? 'Review the selected Question.' : 'Review the selected Question or Card.'}</p>
           </div>
         </div>
         <div className={`${styles.selectionHeading} ${styles.sectionSelection}`}>
-          <span className={`${styles.headingIcon} ${selected?.owner === 'personal' ? styles.personalHeadingIcon : styles.purpleIcon}`}><Icon name="flag" /></span>
-          <div><p>{selected ? `${selected.owner === 'official' ? 'Socrates' : 'Mine'} · Flagged` : 'Selected Material'}</p><h2>{selected?.context ?? 'Choose flagged material'}</h2></div>
+          <span className={`${styles.headingIcon} ${!neutralPresentation && selected?.owner === 'personal' ? styles.personalHeadingIcon : styles.purpleIcon}`}><Icon name="flag" /></span>
+          <div><p>{selected ? (neutralPresentation ? 'Flagged' : `${selected.owner === 'official' ? 'Socrates' : 'Mine'} · Flagged`) : 'Selected Material'}</p><h2>{selected?.context ?? 'Choose flagged material'}</h2></div>
         </div>
         <div className={styles.inspectorBody}>
           {selected ? (
             <div className={styles.flagReviewCard}>
-              <div><span>{selected.owner === 'official' ? 'Question' : 'Card'}</span><p>{selected.title}</p></div>
+              <div><span>{neutralPresentation || selected.owner === 'official' ? 'Question' : 'Card'}</span><p>{selected.title}</p></div>
               {selected.card && <div><span>Answer</span><p>{selected.card.answer}</p></div>}
               {selected.question && <div className={styles.flagMetadata}><span>{selected.question.difficulty ?? 'Unspecified difficulty'}</span><span>{selected.question.testing_angle ?? 'General angle'}</span></div>}
               {selected.flag.note && <div><span>Your note</span><p>{selected.flag.note}</p></div>}
@@ -254,7 +257,7 @@ export function StudyCreatorFlaggedBrowser({
               <button className={styles.dangerButton} disabled={removingId === selected.flag.id} onClick={() => void unflag(selected.flag.id)} type="button">{removingId === selected.flag.id ? 'Removing…' : 'Unflag'}</button>
             </div>
           ) : (
-            <div className={styles.inlineEmpty}>Select a flagged Question or personal Card to review it.</div>
+            <div className={styles.inlineEmpty}>{neutralPresentation ? 'Select a flagged Question to review it.' : 'Select a flagged Question or personal Card to review it.'}</div>
           )}
         </div>
       </section>

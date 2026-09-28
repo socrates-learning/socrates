@@ -215,7 +215,7 @@ test('learner mode exposes read-only and disabled semantics without changing the
   assert.match(creatorSource, /readOnly=\{isLearnerReadOnly\}/);
   assert.match(creatorSource, /disabled=\{isLearnerReadOnly \|\| isSaving/);
   assert.match(creatorSource, /disabled=\{isLearnerReadOnly \|\| isSavingQuestion/);
-  assert.match(creatorSource, /Published official content · read-only/);
+  assert.match(creatorSource, /Published content · read-only/);
   for (const label of ['Content', 'Questions', 'Tags', 'Flagged']) {
     assert.match(creatorSource, new RegExp(`'${label.toLowerCase()}'`));
   }

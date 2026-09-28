@@ -229,8 +229,8 @@ test('personal Source Reference and overlay persistence use only existing owner 
   assert.match(creatorSource, /sourceReference \|\| null/);
   assert.match(creatorSource, /create_personal_concept_overlay/);
   assert.match(creatorSource, /personal_concept_official_placements/);
-  assert.match(creatorSource, /Personal Concepts have one canonical personal Topic/);
-  assert.match(creatorSource, /Sources catalog is not applicable to personal material/);
+  assert.match(creatorSource, /This Concept has one Topic/);
+  assert.match(creatorSource, /References for this Concept are saved in the field above/);
 });
 
 test('mixed browse and search identities are qualified against raw UUID collisions', () => {

@@ -13,7 +13,7 @@ export function CreatorStudioFlaggedTab({
   material: Pick<CreatorPersonalContent, 'topics' | 'concepts' | 'cards' | 'overlays'>;
   ownerId: string;
 }) {
-  return <StudyCreatorFlaggedBrowser material={material} ownerId={ownerId} />;
+  return <StudyCreatorFlaggedBrowser material={material} ownerId={ownerId} neutralPresentation />;
 }
 
 export function CreatorStudioLocalHeader({
@@ -57,7 +57,7 @@ export function CreatorStudioLocalHeader({
             type="button"
             onClick={onClearConcept}
             disabled={!canClearConcept}
-            title={!canClearConcept ? 'Published official content is read-only.' : undefined}
+            title={!canClearConcept ? 'Published content is read-only.' : undefined}
           >
             Clear Concept
           </button>

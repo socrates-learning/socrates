@@ -173,19 +173,19 @@ export function CreatorTopicTreeInteraction({ context, disabled, onMove, childre
                 path.unshift(ancestor.name);
                 parent = ancestor.parentKey;
             }
-            return {key: node.key, label: `${node.source === 'personal' ? 'Mine · ' : ''}${path.join(' › ')}`};
+            return {key: node.key, label: path.join(' › ')};
         }),
     ].filter(node => planTopicPosition(session.context, session.key, node.key, intent)) : [];
     const chosen = options.some(o => o.key === target) ? target : options[0]?.key ?? '';
     return <InteractionContext.Provider value={{ context, disabled, moving: session?.key ?? null, pick, start, keyboard: openKeyboard }}>
     <div ref={root} className={styles.interaction} aria-busy={disabled}>
-      <p className={styles.instructions}>Drag the handle: a line places a sibling; a highlighted row makes it the parent. Select a handle for keyboard move options.{context.nodes.some(node => node.source === 'personal' && node.parentKey === null) && ' Personal roots keep their own branch when grouped under an official Topic.'}</p>
+      <p className={styles.instructions}>Drag the handle: a line places a sibling; a highlighted row makes it the parent. Select a handle for keyboard move options.{context.nodes.some(node => node.source === 'personal' && node.parentKey === null) && ' Grouping keeps the branch intact.'}</p>
       {keyboard && session && <div role="dialog" aria-label="Move or reorder Topic" className={styles.keyboard} onKeyDown={e => { if (e.key === 'Escape') {
             e.stopPropagation();
             cancel();
         } }}>
         <strong>Move “{session.context.nodes.find(n => n.key === session.key)?.name}”</strong>
-        <label>Position<select autoFocus value={intent} onChange={e => { setIntent(e.target.value as DropIntent); setTarget(''); }}><option value="inside">{isPersonalRoot ? 'Group under official Topic (last root)' : 'Inside parent (last child)'}</option><option value="before">Before sibling</option><option value="after">After sibling</option></select></label>
+        <label>Position<select autoFocus value={intent} onChange={e => { setIntent(e.target.value as DropIntent); setTarget(''); }}><option value="inside">{isPersonalRoot ? 'Group under Topic (last root)' : 'Inside parent (last child)'}</option><option value="before">Before sibling</option><option value="after">After sibling</option></select></label>
         <label>Destination<select value={chosen} onChange={e => setTarget(e.target.value)}>{options.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}</select></label>
         <div><button type="button" onClick={cancel}>Cancel</button><button type="button" disabled={!chosen || disabled} onClick={() => void commit(planTopicPosition(session.context, session.key, chosen, intent))}>Move Topic</button></div>
       </div>}
@@ -210,5 +210,5 @@ export function TopicDragHandle({ topicKey }: {
     const interaction = useContext(InteractionContext), node = interaction?.context.nodes.find(n => n.key === topicKey);
     if (!interaction || !node || !canPosition(interaction.context, node))
         return null;
-    return <button type="button" data-topic-drag-handle className={styles.handle} disabled={interaction.disabled} aria-label={`Move or reorder ${node.name}${node.source === 'personal' ? ' (Mine)' : ''}`} title="Drag to move, or select for keyboard options" onPointerDown={e => interaction.start(e, topicKey)} onClick={e => { e.stopPropagation(); interaction.keyboard(topicKey, e.currentTarget, e.detail > 0); }}><GripVertical size={16}/></button>;
+    return <button type="button" data-topic-drag-handle className={styles.handle} disabled={interaction.disabled} aria-label={`Move or reorder ${node.name}`} title="Drag to move, or select for keyboard options" onPointerDown={e => interaction.start(e, topicKey)} onClick={e => { e.stopPropagation(); interaction.keyboard(topicKey, e.currentTarget, e.detail > 0); }}><GripVertical size={16}/></button>;
 }

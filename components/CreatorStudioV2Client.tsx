@@ -670,6 +670,23 @@ function mapLearnerPublishedQuestionRow(
   });
 }
 
+function questionConceptChoiceStyle(selected: boolean, saving: boolean, depth: number) {
+  return {
+    alignItems: 'center',
+    background: selected ? '#e8f0ff' : '#f7f9fc',
+    border: selected ? '1px solid #8eb2f3' : '1px solid transparent',
+    borderRadius: 8,
+    color: selected ? '#0f4eb8' : '#475569',
+    cursor: saving ? 'not-allowed' : 'pointer',
+    display: 'flex',
+    fontSize: 14,
+    gap: 8,
+    margin: `2px 10px 2px ${50 + depth * 38}px`,
+    padding: '7px 10px',
+    textAlign: 'left' as const,
+  };
+}
+
 export function CreatorStudioV2Client({
   activeLibraryId,
   creatorCapabilities,
@@ -2455,7 +2472,7 @@ export function CreatorStudioV2Client({
       if (firstCard) selectExistingQuestion(mapPersonalCard(firstCard, personalConcept), true);
       else setQuestionEditorState({ mode: 'none' });
     }
-    setQuestionStatus({ tone: 'info', message: 'Mine · Personal Concept selected' });
+    setQuestionStatus({ tone: 'info', message: 'Concept selected' });
   }
 
   function selectExistingQuestion(
@@ -2476,7 +2493,7 @@ export function CreatorStudioV2Client({
       const card = personalCards.find((item) => item.id === question.id);
       const personalConcept = personalConceptById.get(question.conceptId);
       if (!card || !personalConcept) {
-        setQuestionStatus({ tone: 'error', message: 'That personal Card is unavailable.' });
+        setQuestionStatus({ tone: 'error', message: 'That Question is unavailable.' });
         return;
       }
       setQuestionEditorState(
@@ -2505,7 +2522,7 @@ export function CreatorStudioV2Client({
           mapPersonalCard(item, personalConcept)
         )
       );
-      setQuestionStatus({ tone: 'info', message: 'Mine · Personal Card' });
+      setQuestionStatus({ tone: 'info', message: 'Question selected' });
       return;
     }
 
@@ -2616,7 +2633,7 @@ export function CreatorStudioV2Client({
     if (isSavingQuestion || !confirmDiscardQuestionChanges()) return;
     if (creationDestination === 'personal') {
       if (!personalQuestionConceptId) {
-        setQuestionStatus({ tone: 'error', message: 'Choose one of your personal Concepts.' });
+        setQuestionStatus({ tone: 'error', message: 'Choose an editable Concept.' });
         return;
       }
       setQuestionEditorState(
@@ -2637,11 +2654,11 @@ export function CreatorStudioV2Client({
         sourceReference: '',
       });
       setSavedPersonalCardFingerprint(fingerprint);
-      setQuestionStatus({ tone: 'info', message: 'New Mine · Personal Card' });
+      setQuestionStatus({ tone: 'info', message: 'New Question' });
       return;
     }
     if (!questionConceptId) {
-      setQuestionStatus({ tone: 'error', message: 'Choose an official Concept first.' });
+      setQuestionStatus({ tone: 'error', message: 'Choose an eligible Concept first.' });
       return;
     }
     setActivePersonalTopicId(null);
@@ -3049,7 +3066,7 @@ export function CreatorStudioV2Client({
     }
     if (!creatorAuthority.canManageTopicTree) return;
     if (activePersonalTopic) {
-      showStatus('error', 'Select an official Topic before creating official content.');
+      showStatus('error', 'Select an eligible Topic before creating content.');
       return;
     }
     if (!activeTopic && !activePersonalTopic) {
@@ -3218,7 +3235,7 @@ export function CreatorStudioV2Client({
       return;
     }
     if (dialogMode === 'add' && activePersonalTopic && creationDestination === 'official') {
-      showStatus('error', 'Select an official Topic before creating official content.');
+      showStatus('error', 'Select an eligible Topic before creating content.');
       return;
     }
     const name = nameDraft.trim();
@@ -3308,7 +3325,7 @@ export function CreatorStudioV2Client({
       closeTopicDialog();
       setNameDraft('');
       setIsMutatingTopic(false);
-      showStatus('success', 'Personal Topic renamed.');
+      showStatus('success', 'Topic renamed.');
       return;
     }
 
@@ -3498,8 +3515,8 @@ export function CreatorStudioV2Client({
         closeTopicDialog();
         showStatus('success', isRoot
           ? officialNodeId
-            ? `Moved “${activePersonalTopic.name}” beneath the selected official Topic.`
-            : `Removed “${activePersonalTopic.name}” from the official tree. Its content was preserved.`
+            ? `Moved “${activePersonalTopic.name}” beneath the selected Topic.`
+            : `Removed “${activePersonalTopic.name}” from the Topic tree. Its content was preserved.`
           : `Moved “${activePersonalTopic.name}” beneath ${destination!.name}.`);
       } catch (error) {
         showStatus('error', topicMutationErrorMessage(error));
@@ -3582,7 +3599,7 @@ export function CreatorStudioV2Client({
       const directConceptCount = personalConceptsByTopicId.get(activePersonalTopic.id)?.length || 0;
       if (
         !window.confirm(
-          `Delete personal Topic “${activePersonalTopic.name}”? It must have no child Topics or Concepts. Current: ${personalTopics.filter((topic) => topic.parent_id === activePersonalTopic.id).length} child Topics, ${directConceptCount} Concepts.`
+          `Delete Topic “${activePersonalTopic.name}”? It must have no child Topics or Concepts. Current: ${personalTopics.filter((topic) => topic.parent_id === activePersonalTopic.id).length} child Topics, ${directConceptCount} Concepts.`
         )
       ) return;
       resolveCreatorCommandRoute(
@@ -3617,7 +3634,7 @@ export function CreatorStudioV2Client({
       setActivePersonalTopicId(null);
       setDialogMode(null);
       setIsMutatingTopic(false);
-      showStatus('success', 'Personal Topic deleted.');
+      showStatus('success', 'Topic deleted.');
       return;
     }
     if (!activeTopic) return;
@@ -3964,8 +3981,8 @@ export function CreatorStudioV2Client({
       setStatus({
         tone: 'info',
         message: isLearnerReadOnly
-          ? 'Published official Concept · read-only'
-          : 'Socrates · Official Concept',
+          ? 'Published Concept · read-only'
+          : 'Concept selected',
       });
       return;
     }
@@ -3982,7 +3999,7 @@ export function CreatorStudioV2Client({
     ) return;
     const selectedConcept = personalConceptById.get(selectedConceptId);
     if (!selectedConcept || selectedConcept.owner_id !== initialPersonalContent.ownerId) {
-      setStatus({ tone: 'error', message: 'That personal Concept is not available.' });
+      setStatus({ tone: 'error', message: 'That Concept is not available.' });
       return;
     }
     if (isContentDirty && !window.confirm('Discard the unsaved changes to this concept?')) {
@@ -4021,7 +4038,7 @@ export function CreatorStudioV2Client({
     setReferences([]);
     setSavedPersonalConceptFingerprint(nextFingerprint);
     setEditorMode('write');
-    setStatus({ tone: 'info', message: 'Mine · Personal Concept' });
+    setStatus({ tone: 'info', message: 'Concept selected' });
   }
 
   function openCreatorConceptSearchResult(result: {
@@ -4141,7 +4158,7 @@ export function CreatorStudioV2Client({
     if (creationDestination === 'personal') {
       const topicId = activePersonalTopicId || personalConceptTopicId || personalTopics[0]?.id;
       if (!topicId) {
-        setStatus({ tone: 'error', message: 'Create or select a personal Topic first.' });
+        setStatus({ tone: 'error', message: 'Create or select an editable Topic first.' });
         return;
       }
       conceptSelectionTargetKeyRef.current = `personal:concept:new:${initialPersonalContent.ownerId}`;
@@ -4161,7 +4178,7 @@ export function CreatorStudioV2Client({
       setReferences([]);
       setEditorMode('write');
       setActiveCreatorTab('content');
-      setStatus({ tone: 'info', message: 'New Mine · Personal Concept' });
+      setStatus({ tone: 'info', message: 'New Concept' });
       setSavedPersonalConceptFingerprint(
         JSON.stringify({
           id: null,
@@ -4285,7 +4302,7 @@ export function CreatorStudioV2Client({
     const cardCount = personalCardsByConceptId.get(record.id)?.length || 0;
     if (
       !window.confirm(
-        `Delete “${record.name}” and ${cardCount} ${cardCount === 1 ? 'Card' : 'Cards'}?`
+        `Delete “${record.name}” and ${cardCount} ${cardCount === 1 ? 'Question' : 'Questions'}?`
       )
     ) return;
 
@@ -4332,12 +4349,12 @@ export function CreatorStudioV2Client({
     setPersonalOverlayOfficialConceptId(null);
     if (creationDestination === 'official') setActivePersonalTopicId(null);
     setIsSaving(false);
-    setStatus({ tone: 'success', message: 'Personal Concept deleted.' });
+    setStatus({ tone: 'success', message: 'Concept deleted.' });
   }
 
   async function savePersonalConcept(saveState: CreatorConceptEditorState) {
     if (saveState.mode === 'new-personal-concept' && creationDestination !== 'personal') {
-      setStatus({ tone: 'error', message: 'New content for your role belongs to Socrates. Use New to begin.' });
+      setStatus({ tone: 'error', message: 'Use New to begin a draft with your current authoring permissions.' });
       return;
     }
     if (isSaving || isSavingQuestion) return;
@@ -4352,11 +4369,11 @@ export function CreatorStudioV2Client({
       return;
     }
     if (!personalConceptTopicId) {
-      setStatus({ tone: 'error', message: 'Choose one of your personal Topics.' });
+      setStatus({ tone: 'error', message: 'Choose an editable Topic.' });
       return;
     }
     if (!personalTopicById.has(personalConceptTopicId)) {
-      setStatus({ tone: 'error', message: 'The selected personal Topic is unavailable.' });
+      setStatus({ tone: 'error', message: 'The selected Topic is unavailable.' });
       return;
     }
 
@@ -4366,7 +4383,7 @@ export function CreatorStudioV2Client({
       ? personalConceptById.get(savedPersonalConceptId) || null
       : null;
     if (savedPersonalConceptId && !existing) {
-      setStatus({ tone: 'error', message: 'That personal Concept is unavailable.' });
+      setStatus({ tone: 'error', message: 'That Concept is unavailable.' });
       return;
     }
     resolveCreatorCommandRoute(
@@ -4438,7 +4455,7 @@ export function CreatorStudioV2Client({
         setIsSaving(false);
         setSaveFeedback(null);
         if (isSaveTargetCurrent()) {
-          setStatus({ tone: 'error', message: 'Personal Concept save returned no identity.' });
+          setStatus({ tone: 'error', message: 'Concept save returned no identity.' });
         }
         return;
       }
@@ -4462,7 +4479,7 @@ export function CreatorStudioV2Client({
         if (isSaveTargetCurrent()) {
           setStatus({
             tone: 'error',
-            message: conceptResult.error?.message || overlayResult.error?.message || 'Personal Concept could not be reloaded.',
+            message: conceptResult.error?.message || overlayResult.error?.message || 'Concept could not be reloaded.',
           });
         }
         return;
@@ -4493,7 +4510,7 @@ export function CreatorStudioV2Client({
       if (!saved?.personal_concept_id) {
         setSaveFeedback(null);
         if (isSaveTargetCurrent()) {
-          setStatus({ tone: 'error', message: 'Personal Concept save returned no identity.' });
+          setStatus({ tone: 'error', message: 'Concept save returned no identity.' });
         }
         return;
       }
@@ -4577,7 +4594,7 @@ export function CreatorStudioV2Client({
     });
     setSavedPersonalConceptFingerprint(fingerprint);
     setSaveFeedback('saved');
-    setStatus({ tone: 'success', message: 'Personal Concept saved.' });
+    setStatus({ tone: 'success', message: 'Concept saved.' });
   }
 
   async function saveCurrentConcept() {
@@ -4971,7 +4988,7 @@ export function CreatorStudioV2Client({
 
   async function savePersonalCard(saveState: CreatorQuestionEditorState) {
     if (saveState.mode === 'new-personal-card' && creationDestination !== 'personal') {
-      setQuestionStatus({ tone: 'error', message: 'New content for your role belongs to Socrates. Use New to begin.' });
+      setQuestionStatus({ tone: 'error', message: 'Use New to begin a draft with your current authoring permissions.' });
       return;
     }
     if (isSaving || isSavingQuestion) return;
@@ -4983,7 +5000,7 @@ export function CreatorStudioV2Client({
     const sourceReference = personalCardSourceReference.trim();
     const conceptForCard = personalQuestionConceptId;
     if (!conceptForCard || !personalConceptById.has(conceptForCard)) {
-      setQuestionStatus({ tone: 'error', message: 'Choose one of your personal Concepts.' });
+      setQuestionStatus({ tone: 'error', message: 'Choose an editable Concept.' });
       return;
     }
     if (!prompt) {
@@ -5001,7 +5018,7 @@ export function CreatorStudioV2Client({
       ? personalCards.find((card) => card.id === savedPersonalCardId) || null
       : null;
     if (savedPersonalCardId && !existing) {
-      setQuestionStatus({ tone: 'error', message: 'That personal Card is unavailable.' });
+      setQuestionStatus({ tone: 'error', message: 'That Question is unavailable.' });
       return;
     }
     resolveCreatorCommandRoute(
@@ -5084,7 +5101,7 @@ export function CreatorStudioV2Client({
         })
       );
       setSaveFeedback('saved');
-      setQuestionStatus({ tone: 'success', message: 'Personal Card saved.' });
+      setQuestionStatus({ tone: 'success', message: 'Question saved.' });
     }
     setIsSavingQuestion(false);
   }
@@ -5178,7 +5195,7 @@ export function CreatorStudioV2Client({
     if (!personalCardEditorId || isSavingQuestion) return;
     const card = personalCards.find((item) => item.id === personalCardEditorId);
     if (!card || card.owner_id !== initialPersonalContent.ownerId) return;
-    if (!window.confirm(`Delete personal Card “${card.question}”?`)) return;
+    if (!window.confirm(`Delete Question “${card.question}”?`)) return;
     resolveCreatorCommandRoute(
       {
         type: 'delete-card',
@@ -5241,7 +5258,7 @@ export function CreatorStudioV2Client({
           sourceReference: '',
         })
       );
-      setQuestionStatus({ tone: 'success', message: 'Personal Card deleted.' });
+      setQuestionStatus({ tone: 'success', message: 'Question deleted.' });
     }
     setIsSavingQuestion(false);
   }
@@ -5380,22 +5397,7 @@ export function CreatorStudioV2Client({
               return (
                 <label
                   key={`${topic.id}-${conceptOption.id}`}
-                  style={{
-                    alignItems: 'center',
-                    background: isSelected ? '#e8f0ff' : '#f7f9fc',
-                    border: isSelected
-                      ? '1px solid #8eb2f3'
-                      : '1px solid transparent',
-                    borderRadius: 8,
-                    color: isSelected ? '#0f4eb8' : '#475569',
-                    cursor: isSavingQuestion ? 'not-allowed' : 'pointer',
-                    display: 'flex',
-                    fontSize: 14,
-                    gap: 8,
-                    margin: `2px 10px 2px ${50 + depth * 38}px`,
-                    padding: '7px 10px',
-                    textAlign: 'left',
-                  }}
+                  style={questionConceptChoiceStyle(isSelected, isSavingQuestion, depth)}
                 >
                   <input
                     className={styles.topicCheckbox}
@@ -5429,8 +5431,7 @@ export function CreatorStudioV2Client({
               return (
                 <label
                   key={createCreatorEntityKey('personal', 'concept', item.id)}
-                  className={styles.personalConceptChoice}
-                  style={{ marginLeft: `${50 + depth * 38}px` }}
+                  style={questionConceptChoiceStyle(selected, isSavingQuestion, depth)}
                 >
                   <input
                     className={styles.topicCheckbox}
@@ -5438,8 +5439,8 @@ export function CreatorStudioV2Client({
                     checked={selected}
                     onChange={() => selectPersonalQuestionConcept(item.id, item.topic_id)}
                   />
-                  <span>{item.name} · {count} {count === 1 ? 'Card' : 'Cards'}</span>
-                  <span className={styles.sourceBadge} data-source="personal">Mine</span>
+                  <span>{item.name} · {count} {count === 1 ? 'question' : 'questions'}</span>
+
                 </label>
               );
             })}
@@ -5677,7 +5678,7 @@ export function CreatorStudioV2Client({
                 onClick={() => openPersonalConcept(item.id)}
               >
                 <span>{item.name}</span>
-                <small>Mine · Personal overlay</small>
+                {item.id === personalConceptEditorId && <small>Currently editing</small>}
               </button>
             ))}
             {topic.children.map((child) =>
@@ -5707,7 +5708,6 @@ export function CreatorStudioV2Client({
       ? topic.children.some(personalTopicMatches)
       : expandedPersonalTopicIds.has(topic.id);
     const isActive = activePersonalTopicId === topic.id;
-    const conceptCount = (personalConceptsByTopicId.get(topic.id) || []).length;
 
     return (
       <div className={styles.topicBranch} key={`personal-topic-${topic.id}`}>
@@ -5741,7 +5741,7 @@ export function CreatorStudioV2Client({
             className={styles.topicActivationButton}
             type="button"
             aria-pressed={isActive}
-                          aria-label={`Make ${topic.name} (Mine) active`}
+            aria-label={`Make ${topic.name} the active topic`}
             onClick={() => {
               setActivePersonalTopicId(topic.id);
               setPersonalConceptTopicId(topic.id);
@@ -5754,8 +5754,7 @@ export function CreatorStudioV2Client({
               <span className={styles.leafSpacer} />
             )}
             <span className={styles.topicName} title={topic.name}>{topic.name}</span>
-            <span className={styles.sourceBadge} data-source="personal">Mine</span>
-            <small>{conceptCount}</small>
+
           </button>
         </TopicDropRow>
         {hasChildren && isExpanded && (
@@ -5794,7 +5793,7 @@ export function CreatorStudioV2Client({
           </span>
           <Folder size={18} strokeWidth={1.7} />
           <span className={styles.conceptBrowseTopicName}>{topic.name}</span>
-          <span className={styles.sourceBadge} data-source="personal">Mine</span>
+
           <small>{directConcepts.length} {directConcepts.length === 1 ? 'Concept' : 'Concepts'}</small>
         </button>
         {isExpanded && (
@@ -5809,7 +5808,7 @@ export function CreatorStudioV2Client({
                 onClick={() => openPersonalConcept(item.id)}
               >
                 <span>{item.name}</span>
-                <small>{item.id === personalConceptEditorId ? 'Currently editing' : 'Mine'}</small>
+                {item.id === personalConceptEditorId && <small>Currently editing</small>}
               </button>
             ))}
             {topic.children.map((child) =>
@@ -5825,13 +5824,21 @@ export function CreatorStudioV2Client({
     if (normalizedSearch && !personalTopicMatches(topic)) return null;
     const directConcepts = personalConceptsByTopicId.get(topic.id) || [];
     const hasChildren = topic.children.length > 0;
+    const conceptCountInBranch = flattenUnifiedCreatorTopics([topic]).reduce(
+      (count, node) => count + (personalConceptsByTopicId.get(node.id)?.length || 0), 0
+    );
+    const hasConceptsInBranch = conceptCountInBranch > 0;
     const isExpanded = expandedPersonalTopicIds.has(topic.id);
     const isActive = activePersonalTopicId === topic.id;
     return (
       <div className={styles.topicBranch} key={`personal-question-${topic.id}`}>
         <div
           className={`${styles.topicRow} ${isActive ? styles.activeTopicRow : ''}`}
-          style={{ paddingLeft: `${12 + depth * 38}px` }}
+          style={{
+            background: hasConceptsInBranch ? undefined : '#f8fafc',
+            color: hasConceptsInBranch ? undefined : '#94a3b8',
+            paddingLeft: `${12 + depth * 38}px`,
+          }}
         >
           <button
             className={styles.expandButton}
@@ -5849,9 +5856,20 @@ export function CreatorStudioV2Client({
           >
             {hasChildren || directConcepts.length ? (isExpanded ? <ChevronDown size={17} /> : <ChevronRight size={17} />) : <span className={styles.arrowSpacer} />}
           </button>
-          <Folder className={styles.folderIcon} size={21} strokeWidth={1.7} />
-          <span className={styles.topicName}>{topic.name}</span>
-          <span className={styles.sourceBadge} data-source="personal">Mine</span>
+          {hasChildren ? <Folder className={styles.folderIcon} size={21} strokeWidth={1.7} /> : <span className={styles.leafSpacer} />}
+          <span className={styles.topicName} title={topic.name}>{topic.name}</span>
+          <span style={{
+            color: hasConceptsInBranch ? '#52647a' : '#94a3b8',
+            fontSize: 12,
+            marginLeft: 'auto',
+            paddingRight: 10,
+            whiteSpace: 'nowrap',
+          }}>
+            {hasConceptsInBranch
+              ? `${conceptCountInBranch} ${conceptCountInBranch === 1 ? 'concept' : 'concepts'}`
+              : 'No concepts'}
+          </span>
+
         </div>
         {isExpanded && (
           <div>
@@ -5861,8 +5879,7 @@ export function CreatorStudioV2Client({
               return (
                 <label
                   key={createCreatorEntityKey('personal', 'concept', item.id)}
-                  className={styles.personalConceptChoice}
-                  style={{ marginLeft: `${50 + depth * 38}px` }}
+                  style={questionConceptChoiceStyle(selected, isSavingQuestion, depth)}
                 >
                   <input
                     className={styles.topicCheckbox}
@@ -5870,7 +5887,7 @@ export function CreatorStudioV2Client({
                     checked={selected}
                     onChange={() => selectPersonalQuestionConcept(item.id, topic.id)}
                   />
-                  <span>{item.name} · {count} {count === 1 ? 'Card' : 'Cards'}</span>
+                  <span>{item.name} · {count} {count === 1 ? 'question' : 'questions'}</span>
                 </label>
               );
             })}
@@ -5979,9 +5996,7 @@ export function CreatorStudioV2Client({
                   ? 'Saving…'
                   : activeCreatorTab === 'content'
                     ? 'Save Concept'
-                    : questionSource === 'personal'
-                      ? 'Save Card'
-                      : 'Save Question'
+                    : 'Save Question'
               }
               disabled={
                 isSaving ||
@@ -5994,7 +6009,7 @@ export function CreatorStudioV2Client({
                 (activeCreatorTab === 'content'
                   ? isCurrentContentReadOnly
                   : isCurrentQuestionReadOnly)
-                  ? 'Published official content · read-only'
+                  ? 'Published content · read-only'
                   : visibleSaveFeedback === 'saving'
                   ? 'Saving…'
                   : (activeCreatorTab === 'content'
@@ -6256,11 +6271,7 @@ export function CreatorStudioV2Client({
                     </strong>
                     {(conceptId || personalConceptEditorId) && (
                       <span style={{ display: 'block', marginTop: 4 }}>
-                        <span className={styles.sourceBadge} data-source={conceptSource}>
-                          {conceptSource === 'official'
-                            ? 'Socrates · Official'
-                            : 'Mine · Personal'}
-                        </span>{' '}
+
                         Concept ID: <code>{conceptId || personalConceptEditorId}</code>
                       </span>
                     )}
@@ -6336,9 +6347,7 @@ export function CreatorStudioV2Client({
                           >
                             <span>
                               {conceptOption.name}{' '}
-                              <span className={styles.sourceBadge} data-source={conceptOption.source}>
-                                {conceptOption.source === 'official' ? 'Socrates' : 'Mine'}
-                              </span>
+
                             </span>
                             <small style={{ color: '#687386' }}>
                               Concept ID: {conceptOption.id}
@@ -6388,7 +6397,7 @@ export function CreatorStudioV2Client({
                       )}
                       {unifiedTopicComposition.unplacedPersonalRoots.length > 0 && (
                         <div className={styles.unplacedTopicsLabel}>
-                          Unplaced <span className={styles.sourceBadge} data-source="personal">Mine</span>
+                          Unplaced
                         </div>
                       )}
                       {unifiedTopicComposition.unplacedPersonalRoots.map((topic) =>
@@ -6396,7 +6405,7 @@ export function CreatorStudioV2Client({
                       )}
                       {unifiedTopicComposition.otherLibraryPersonalRoots.length > 0 && (
                         <div className={styles.unplacedTopicsLabel}>
-                          Other Library <span className={styles.sourceBadge} data-source="personal">Mine</span>
+                          Other Library
                         </div>
                       )}
                       {unifiedTopicComposition.otherLibraryPersonalRoots.map((topic) =>
@@ -6423,7 +6432,7 @@ export function CreatorStudioV2Client({
                       setStatus(null);
                     }}
                     maxLength={160}
-                    aria-label="Personal Concept name"
+                    aria-label="Concept name"
                   />
                 </label>
               )}
@@ -6631,7 +6640,7 @@ export function CreatorStudioV2Client({
                 )}
                 {visibleTopicComposition.otherLibraryPersonalRoots.length > 0 && (
                   <div className={styles.unplacedTopicsLabel}>
-                    Other Library <span className={styles.sourceBadge} data-source="personal">Mine</span>
+                    Other Library
                   </div>
                 )}
                 {visibleTopicComposition.otherLibraryPersonalRoots.map((topic) =>
@@ -7260,7 +7269,7 @@ export function CreatorStudioV2Client({
                       <div>
                         <h2>
                           3. Selected Topic
-                          <span>Personal Concepts have one canonical personal Topic.</span>
+                          <span>This Concept has one Topic.</span>
                         </h2>
                       </div>
                       <span className={styles.notApplicableMetadata}>
@@ -7268,7 +7277,7 @@ export function CreatorStudioV2Client({
                       </span>
                     </div>
                     <label className={styles.personalField}>
-                      My Topic
+                      Topic
                       <select
                         value={personalConceptTopicId}
                         onChange={(event) => {
@@ -7277,7 +7286,7 @@ export function CreatorStudioV2Client({
                           setStatus(null);
                         }}
                       >
-                        <option value="">Choose a personal Topic</option>
+                        <option value="">Choose a Topic</option>
                         {personalTopics.map((topic) => (
                           <option key={topic.id} value={topic.id}>
                             {personalTopicPath(personalTopics, topic.id)
@@ -7301,11 +7310,11 @@ export function CreatorStudioV2Client({
                           setStatus(null);
                         }}
                       />
-                      Also show this personal Concept in the official Topic Tree
+                      Also show this Concept under another Topic
                     </label>
                     {personalOverlayTopicId && (
                       <label className={styles.personalField}>
-                        Socrates Topic context
+                        Additional Topic context
                         <select
                           value={personalOverlayTopicId}
                           onChange={(event) => {
@@ -7328,7 +7337,7 @@ export function CreatorStudioV2Client({
                   <section className={`${styles.panel} ${styles.sourcesPanel}`}>
                     <div>
                       <h2>4. Sources / References</h2>
-                      <p>Keep a simple source note for your personal Concept.</p>
+                      <p>Keep a source note for this Concept.</p>
                     </div>
                     <label className={styles.personalField}>
                       Source / reference (optional)
@@ -7339,11 +7348,11 @@ export function CreatorStudioV2Client({
                           setStatus(null);
                         }}
                         rows={5}
-                        aria-label="Personal Concept source reference"
+                        aria-label="Concept source reference"
                       />
                     </label>
                     <p className={styles.notApplicableMetadata}>
-                      The shared Sources catalog is not applicable to personal material.
+                      References for this Concept are saved in the field above.
                     </p>
                   </section>
                 </>
@@ -7355,7 +7364,7 @@ export function CreatorStudioV2Client({
               <span>
                 {conceptSource === 'official'
                   ? 'Select multiple topics to assign this concept to more than one location.'
-                  : 'Your personal Concept stays owner-only and uses one personal Topic.'}
+                  : 'This Concept uses one Topic.'}
               </span>
             </div>
               </footer>
@@ -7644,10 +7653,7 @@ export function CreatorStudioV2Client({
                           onClick={() => selectQuestionSearchResult(question)}
                         >
                           <span className={styles.questionSearchPrompt}>
-                            {question.prompt || 'Untitled Question'}{' '}
-                            <span className={styles.sourceBadge} data-source={question.source}>
-                              {question.source === 'official' ? 'Socrates' : 'Mine'}
-                            </span>
+                            {question.prompt || 'Untitled Question'}
                           </span>
                           <span className={styles.questionSearchMetadata}>
                             <span>{question.status || 'Lifecycle · N/A'}</span>
@@ -7756,12 +7762,12 @@ export function CreatorStudioV2Client({
                     </div>
                   )}
                   {questionSource === 'personal' && personalQuestionConceptId && (
-                    <div className={styles.linkedConceptContext} aria-label="Personal Concept">
+                    <div className={styles.linkedConceptContext} aria-label="Primary Concept">
                       <strong>
-                        Personal Concept:{' '}
+                        Primary Concept:{' '}
                         {personalConceptById.get(personalQuestionConceptId)?.name || 'Selected Concept'}
                       </strong>
-                      <span className={styles.sourceBadge} data-source="personal">Mine · Personal</span>
+
                     </div>
                   )}
 
@@ -7783,7 +7789,7 @@ export function CreatorStudioV2Client({
                       }}
                     >
                       <h3 style={{ margin: 0 }}>
-                        Existing {questionSource === 'personal' ? 'Cards' : 'Questions'} · Newest first
+                        Existing Questions · Newest first
                       </h3>
                       <span style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                         <button
@@ -7797,7 +7803,7 @@ export function CreatorStudioV2Client({
                           }
                           onClick={startNewQuestion}
                         >
-                          <Plus size={16} /> New {creationDestination === 'personal' ? 'Card' : 'Question'}
+                          <Plus size={16} /> New Question
                         </button>
                         {questionId && (
                           <button
@@ -7816,7 +7822,7 @@ export function CreatorStudioV2Client({
                             disabled={isSavingQuestion}
                             onClick={() => void deleteCurrentPersonalCard()}
                           >
-                            <Trash2 size={16} /> Delete Card
+                            <Trash2 size={16} /> Delete Question
                           </button>
                         )}
                       </span>
@@ -7824,7 +7830,7 @@ export function CreatorStudioV2Client({
 
                     {questionSource === 'personal' && !personalQuestionConceptId ? (
                       <p className={styles.emptySelection}>
-                        Select one of your personal Concepts to view its Cards.
+                        Select an editable Concept to view its questions.
                       </p>
                     ) : questionSource === 'official' && !questionConceptId ? (
                       <p className={styles.emptySelection}>
@@ -7963,7 +7969,7 @@ export function CreatorStudioV2Client({
                           setQuestionStatus(null);
                         }}
                         rows={4}
-                        aria-label="Personal Card source reference"
+                        aria-label="Question source reference"
                       />
                     </label>
                   )}
@@ -8275,7 +8281,7 @@ export function CreatorStudioV2Client({
                     )}
                     {visibleTopicComposition.unplacedPersonalRoots.length > 0 && (
                       <div className={styles.unplacedTopicsLabel}>
-                        Unplaced <span className={styles.sourceBadge} data-source="personal">Mine</span>
+                        Unplaced
                       </div>
                     )}
                     {visibleTopicComposition.unplacedPersonalRoots.map((topic) =>
@@ -8283,7 +8289,7 @@ export function CreatorStudioV2Client({
                     )}
                     {visibleTopicComposition.otherLibraryPersonalRoots.length > 0 && (
                       <div className={styles.unplacedTopicsLabel}>
-                        Other Library <span className={styles.sourceBadge} data-source="personal">Mine</span>
+                        Other Library
                       </div>
                     )}
                     {visibleTopicComposition.otherLibraryPersonalRoots.map((topic) =>
@@ -8499,7 +8505,7 @@ export function CreatorStudioV2Client({
                 <section className={`${styles.panel} ${styles.selectedPanel}`}>
                   <div>
                     <h2>3. Additional Options</h2>
-                    <p>Personal Cards use the simple Question, Answer, and optional Source fields.</p>
+                    <p>Use the Question, Answer, and optional Source fields.</p>
                   </div>
                   <p className={styles.notApplicableMetadata}>
                     Difficulty, Testing Angles, relationships, lifecycle, Tags, and version controls · Not applicable
@@ -8513,7 +8519,7 @@ export function CreatorStudioV2Client({
                   <span>
                     {questionSource === 'official'
                       ? 'New questions default to Published. Choose Draft to save unfinished work for the selected Concept.'
-                      : 'Personal Cards remain owner-only and do not use official authoring metadata.'}
+                      : 'Use the Question, Answer, and optional Source fields.'}
                   </span>
                 </div>
               </footer>
