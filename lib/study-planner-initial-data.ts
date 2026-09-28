@@ -1,4 +1,5 @@
 import 'server-only';
+import type { HomeSettings, TopicPlacement } from '@/lib/home-deck-settings';
 
 import type { ActiveLibrary, ActiveLibraryRole } from '@/lib/library-context';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
@@ -74,7 +75,7 @@ type PersonalCollectionRow = {
   card_count: number;
 };
 
-type HomeStudyBootstrapResponse = {
+type HomeStudyBootstrapResponse = Partial<HomeSettings> & {
   available_libraries: ActiveLibrary[];
   nodes: LibraryNode[];
   placements: Placement[];
@@ -134,6 +135,9 @@ type LearnerProgressResponse = {
 };
 
 export type StudyPlannerInitialData = {
+  homeSettings?: HomeSettings;
+  homeTopicPlacements?: TopicPlacement[];
+  settingsLoadError?: string;
   libraryId: string;
   availableLibraries: ActiveLibrary[];
   deck: StudyDeck | null;
@@ -281,6 +285,23 @@ export async function loadStudyPlannerInitialData({
       loadError: 'Unable to load Home study data: No bootstrap data returned.',
     };
   }
+  // Include settings and presentation placement in the first Home render. This
+  // avoids replacing the approved tree with a second client loading treatment.
+  let homeSettings: HomeSettings | undefined;
+  let homeTopicPlacements: TopicPlacement[] = [];
+  let settingsLoadError = '';
+  if (bootstrap.unified_deck_settings?.version === 109) {
+    const placementResult = await supabase
+      .from('personal_topic_official_placements')
+      .select('personal_topic_id,library_node_id')
+      .eq('owner_id', activeDeck.user_id);
+    if (placementResult.error) {
+      settingsLoadError = `Unable to load Deck settings: ${placementResult.error.message}`;
+    } else {
+      homeTopicPlacements = placementResult.data || [];
+      homeSettings = bootstrap as HomeSettings;
+    }
+  }
   const availableLibraries = bootstrap.available_libraries?.length
     ? bootstrap.available_libraries
     : [activeLibrary];
@@ -288,6 +309,9 @@ export async function loadStudyPlannerInitialData({
   return {
     libraryId: activeLibrary.id,
     availableLibraries,
+    homeSettings,
+    homeTopicPlacements,
+    settingsLoadError,
     deck: activeDeck,
     nodes: bootstrap.nodes || [],
     placements: bootstrap.placements || [],

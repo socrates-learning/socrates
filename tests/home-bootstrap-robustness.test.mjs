@@ -179,8 +179,7 @@ test('successful deck preference saves refresh the Home route cache', () => {
   for (const successMessage of [
     'Cram Mode preference saved.',
     'Deck updated.',
-    'Personal study selection saved.',
-    'Personal Deck study selection saved.',
+    'Deck settings saved.',
   ]) {
     const successIndex = studyPlannerSource.indexOf(successMessage);
     assert.notEqual(successIndex, -1);
@@ -191,7 +190,7 @@ test('successful deck preference saves refresh the Home route cache', () => {
   }
 });
 
-test('Set Up Deck loads and persists compact Personal Deck selections', () => {
+test('Deck Settings preserves saved collection loading and atomic selections', () => {
   const studyPlannerSource = readFileSync(
     new URL('../components/StudyPlanner.tsx', import.meta.url),
     'utf8'
@@ -209,13 +208,10 @@ test('Set Up Deck loads and persists compact Personal Deck selections', () => {
   for (const source of [studyPlannerSource, initialDataSource]) {
     assert.match(source, /selectedPersonalCollectionIds/);
   }
-  assert.match(studyPlannerSource, /Personal Decks/);
-  assert.match(studyPlannerSource, /Personal Deck study selections/);
-  assert.match(studyPlannerSource, /No Personal Decks yet/);
-  assert.match(
-    studyPlannerSource,
-    /Personal Deck study selection saved\.[\s\S]{0,220}router\.refresh\(\)/
-  );
+  assert.doesNotMatch(studyPlannerSource, /My Study Material|Personal Decks|Personal Deck study selections/);
+  assert.match(studyPlannerSource, /composeHomeGroups\(nodes, personalTopics, homeTopicPlacements, personalCollections\)/);
+  assert.match(studyPlannerSource, /mutateHomeSettings/);
+  assert.match(studyPlannerSource, /setSelectedPersonalCollectionIds\(new Set\(next.unified_deck_settings.selected_collection_ids\)\)/);
 });
 
 test('large Library placement loading stays bounded by Library identity', () => {

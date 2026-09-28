@@ -44,6 +44,7 @@ import {
   type StudySessionStartOutcome,
 } from '@/lib/study-session-start';
 import type { ReactNode } from 'react';
+import { composeHomeGroups, groupSelection, mutateHomeSettings, requireHomeSettings, type HomeGroup, type HomeSettings, type TopicPlacement } from '@/lib/home-deck-settings';
 
 type LibraryNode = {
   id: string;
@@ -425,7 +426,7 @@ export function StudyPlanner({
   const initialPersonalRootTopicIds =
     initialDeckData?.personalTopics
       .filter((topic) => topic.parent_id === null)
-      .map((topic) => topic.id) || [];
+      .map((topic) => `personal:topic:${topic.id}`) || [];
   const [mode, setMode] = useState<PlannerMode>('dashboard');
   const [statsTab, setStatsTab] = useState<StatsTab>('progress');
   const [userId, setUserId] = useState<string | null>(
@@ -491,6 +492,44 @@ export function StudyPlanner({
   const [expandedPersonalTopicIds, setExpandedPersonalTopicIds] = useState<
     Set<string>
   >(new Set(initialPersonalRootTopicIds));
+  const [homeSettings, setHomeSettings] = useState<HomeSettings | null>(initialDeckData?.homeSettings || null);
+  const [homeTopicPlacements, setHomeTopicPlacements] = useState<TopicPlacement[]>(initialDeckData?.homeTopicPlacements || []);
+  const [settingsError, setSettingsError] = useState(initialDeckData?.settingsLoadError || '');
+  const [groupDrafts, setGroupDrafts] = useState<Record<string, number>>({});
+  const settingsRequest = useRef(false);
+  const settingsContext = useRef('');
+  const settingsDeckId = deck?.id;
+  const settingsLibraryId = activeLibrary?.id;
+
+  useEffect(() => {
+    settingsContext.current = `${settingsDeckId || ''}:${settingsLibraryId || ''}:${userId || ''}`;
+    if (!settingsDeckId || !settingsLibraryId || !userId) return;
+    if (initialDeckData?.deck?.id === settingsDeckId && initialDeckData.libraryId === settingsLibraryId
+      && (initialDeckData.homeSettings || initialDeckData.settingsLoadError)) return;
+    let cancelled = false;
+    setHomeSettings(null);
+    setSettingsError('');
+    setGroupDrafts({});
+    async function loadSettings() {
+      try {
+        const [snapshot, placementResult] = await Promise.all([
+          supabase.rpc('get_home_study_bootstrap', { p_library_id: settingsLibraryId, p_deck_id: settingsDeckId }),
+          supabase.from('personal_topic_official_placements').select('personal_topic_id,library_node_id').eq('owner_id', userId!),
+        ]);
+        if (snapshot.error) throw new Error(snapshot.error.message);
+        if (placementResult.error) throw new Error(placementResult.error.message);
+        const loaded = requireHomeSettings(snapshot.data);
+        if (cancelled) return;
+        setHomeTopicPlacements(placementResult.data || []);
+        setHomeSettings(loaded);
+      } catch (error) {
+        if (!cancelled) setSettingsError(error instanceof Error ? error.message : 'Unable to load Deck settings.');
+      }
+    }
+    void loadSettings();
+    return () => { cancelled = true; };
+  }, [settingsDeckId, settingsLibraryId, userId, initialDeckData]);
+
   const [learnerProgress, setLearnerProgress] =
     useState<LearnerProgressResponse>(
       initialDeckData?.learnerProgress || emptyLearnerProgress
@@ -1156,7 +1195,7 @@ export function StudyPlanner({
         new Set(
           loadedPersonalTopics
             .filter((topic) => topic.parent_id === null)
-            .map((topic) => topic.id)
+            .map((topic) => `personal:topic:${topic.id}`)
         )
       );
       setLearnerProgress(
@@ -2234,16 +2273,6 @@ export function StudyPlanner({
     return ids;
   }
 
-  function personalConceptsForTopic(topicId: string) {
-    return personalConcepts
-      .filter((concept) => concept.topic_id === topicId)
-      .sort((left, right) => left.name.localeCompare(right.name));
-  }
-
-  function personalCardCountForConcept(conceptId: string) {
-    return personalCards.filter((card) => card.concept_id === conceptId).length;
-  }
-
   function personalBranchCounts(topicId: string) {
     const topicIds = descendantPersonalTopicIds(topicId);
     const conceptIds = new Set(
@@ -2426,112 +2455,36 @@ export function StudyPlanner({
     setIsSaving(false);
   }
 
-  async function togglePersonalTopicSelection(topicId: string) {
-    if (!activeLibrary?.id || !deck || !userId || isSaving) return;
-
-    const isSelected = selectedPersonalTopicIds.has(topicId);
+  async function saveGroupSetting(group: HomeGroup, value: boolean | number) {
+    if (!deck || !activeLibrary || !homeSettings || settingsRequest.current || isSaving) return;
+    const preference = typeof value === 'number';
+    const saved = (group.source === 'collection' ? homeSettings.personal_collection_preferences : homeSettings.personal_topic_preferences)[group.id] ?? 50;
+    if (preference && value === saved) return;
+    settingsRequest.current = true;
+    const context = settingsContext.current;
     setIsSaving(true);
-    setMessage(
-      isSelected
-        ? 'Removing personal Topic from deck...'
-        : 'Adding personal Topic to deck...'
-    );
-
-    if (isSelected) {
-      const { error } = await supabase
-        .from('study_deck_personal_topic_selections')
-        .delete()
-        .eq('deck_id', deck.id)
-        .eq('personal_topic_id', topicId);
-
-      if (error) {
-        setMessage(`Unable to update personal study material: ${error.message}`);
-        setIsSaving(false);
-        return;
-      }
-
-      setSelectedPersonalTopicIds((current) => {
-        const next = new Set(current);
-        next.delete(topicId);
-        return next;
-      });
-    } else {
-      const { error } = await supabase
-        .from('study_deck_personal_topic_selections')
-        .insert({
-          deck_id: deck.id,
-          user_id: userId,
-          library_id: activeLibrary.id,
-          personal_topic_id: topicId,
-        });
-
-      if (error) {
-        setMessage(`Unable to update personal study material: ${error.message}`);
-        setIsSaving(false);
-        return;
-      }
-
-      setSelectedPersonalTopicIds((current) => new Set(current).add(topicId));
+    setMessage('Saving deck settings...');
+    try {
+      const next = await mutateHomeSettings((name, args) => supabase.rpc(name, args), deck.id, activeLibrary.id,
+        group.source === 'collection' ? (preference ? 'collection-preference' : 'collection-selection')
+          : (preference ? 'topic-preference' : 'topic-selection'), group.id, value);
+      if (settingsContext.current !== context) return;
+      setHomeSettings(next);
+      setSelectedPersonalTopicIds(new Set(next.unified_deck_settings.included_topic_ids));
+      setSelectedPersonalCollectionIds(new Set(next.unified_deck_settings.selected_collection_ids));
+      setGroupDrafts({});
+      setMessage('Deck settings saved.');
+      router.refresh();
+    } catch (error) {
+      if (settingsContext.current !== context) return;
+      setGroupDrafts({});
+      // Preserve the last confirmed state; an uncertain write needs a reload, not a retry.
+      setSettingsError(error instanceof Error ? error.message : 'Unable to confirm deck settings. Reload Home.');
+      setMessage('Unable to confirm deck settings. Reload Home before changing settings.');
+    } finally {
+      settingsRequest.current = false;
+      if (settingsContext.current === context) setIsSaving(false);
     }
-
-    setMessage('Personal study selection saved.');
-    router.refresh();
-    setIsSaving(false);
-  }
-
-  async function togglePersonalCollectionSelection(collectionId: string) {
-    if (!activeLibrary?.id || !deck || !userId || isSaving) return;
-
-    const isSelected = selectedPersonalCollectionIds.has(collectionId);
-    setIsSaving(true);
-    setMessage(
-      isSelected
-        ? 'Removing Personal Deck from study...'
-        : 'Adding Personal Deck to study...'
-    );
-
-    if (isSelected) {
-      const { error } = await supabase
-        .from('study_deck_personal_collection_selections')
-        .delete()
-        .eq('deck_id', deck.id)
-        .eq('personal_collection_id', collectionId);
-
-      if (error) {
-        setMessage(`Unable to update Personal Deck selection: ${error.message}`);
-        setIsSaving(false);
-        return;
-      }
-
-      setSelectedPersonalCollectionIds((current) => {
-        const next = new Set(current);
-        next.delete(collectionId);
-        return next;
-      });
-    } else {
-      const { error } = await supabase
-        .from('study_deck_personal_collection_selections')
-        .insert({
-          deck_id: deck.id,
-          user_id: userId,
-          library_id: activeLibrary.id,
-          personal_collection_id: collectionId,
-        });
-
-      if (error) {
-        setMessage(`Unable to update Personal Deck selection: ${error.message}`);
-        setIsSaving(false);
-        return;
-      }
-
-      setSelectedPersonalCollectionIds((current) =>
-        new Set(current).add(collectionId)
-      );
-    }
-
-    setMessage('Personal Deck study selection saved.');
-    router.refresh();
-    setIsSaving(false);
   }
 
   async function setConceptSelection(conceptId: string, shouldSelect: boolean) {
@@ -2670,278 +2623,32 @@ export function StudyPlanner({
     });
   }
 
-  function renderPersonalTopic(topic: PersonalTopic, depth = 0): ReactNode {
-    const children = personalTopics
-      .filter((child) => child.parent_id === topic.id)
-      .sort(
-        (left, right) =>
-          left.sort_order - right.sort_order || left.name.localeCompare(right.name)
-      );
-    const directConcepts = personalConceptsForTopic(topic.id);
-    const hasDetails = children.length > 0 || directConcepts.length > 0;
-    const isExpanded = expandedPersonalTopicIds.has(topic.id);
-    const isSelected = selectedPersonalTopicIds.has(topic.id);
-    const counts = personalBranchCounts(topic.id);
-
-    return (
-      <div
-        key={topic.id}
-        style={{
-          marginLeft: depth ? Math.min(depth * 20, 40) : 0,
-          position: 'relative',
-        }}
-      >
-        {depth > 0 && (
-          <span
-            aria-hidden="true"
-            style={{
-              borderLeft: '2px solid #dbeafe',
-              bottom: 0,
-              left: -11,
-              position: 'absolute',
-              top: -9,
-            }}
-          />
-        )}
-
-        <div
-          style={{
-            background: isSelected ? '#eff6ff' : '#ffffff',
-            border: isSelected ? '1px solid #93c5fd' : '1px solid #e2e8f0',
-            borderRadius: 14,
-            marginBottom: 8,
-            padding: '10px 12px',
-          }}
-        >
-          <div style={{ alignItems: 'center', display: 'flex', gap: 10 }}>
-            <button
-              type="button"
-              aria-label={isExpanded ? `Collapse ${topic.name}` : `Expand ${topic.name}`}
-              disabled={!hasDetails}
-              onClick={() => toggleExpandedPersonalTopic(topic.id)}
-              style={{
-                alignItems: 'center',
-                background: hasDetails ? '#e0f2fe' : '#f8fafc',
-                border: 0,
-                borderRadius: 10,
-                color: '#0369a1',
-                cursor: hasDetails ? 'pointer' : 'default',
-                display: 'flex',
-                flexShrink: 0,
-                fontSize: 13,
-                height: 34,
-                justifyContent: 'center',
-                width: 34,
-              }}
-            >
-              {!hasDetails ? '•' : isExpanded ? '▼' : '▶'}
-            </button>
-
-            <label
-              style={{
-                alignItems: 'center',
-                cursor: isSaving ? 'wait' : 'pointer',
-                display: 'flex',
-                flex: 1,
-                gap: 10,
-                minWidth: 0,
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={isSelected}
-                disabled={isSaving}
-                onChange={() => void togglePersonalTopicSelection(topic.id)}
-                style={{
-                  accentColor: '#2563eb',
-                  cursor: isSaving ? 'wait' : 'pointer',
-                  height: 18,
-                  width: 18,
-                }}
-              />
-              <span style={{ minWidth: 0 }}>
-                <strong style={{ display: 'block', fontSize: 15, lineHeight: 1.2 }}>
-                  {topic.name}
-                </strong>
-                <span className="muted" style={{ fontSize: 12 }}>
-                  {counts.concepts} {counts.concepts === 1 ? 'Concept' : 'Concepts'} ·{' '}
-                  {counts.cards} {counts.cards === 1 ? 'Card' : 'Cards'}
-                </span>
-              </span>
-            </label>
-          </div>
-
-          {isExpanded && directConcepts.length > 0 && (
-            <div
-              style={{
-                borderTop: '1px solid #dbeafe',
-                display: 'grid',
-                gap: 6,
-                marginTop: 10,
-                padding: '9px 0 1px 44px',
-              }}
-            >
-              {directConcepts.map((concept) => {
-                const cardCount = personalCardCountForConcept(concept.id);
-
-                return (
-                  <div
-                    key={concept.id}
-                    style={{
-                      alignItems: 'center',
-                      background: '#f8fafc',
-                      border: '1px solid #e2e8f0',
-                      borderRadius: 10,
-                      display: 'flex',
-                      gap: 8,
-                      justifyContent: 'space-between',
-                      padding: '8px 10px',
-                    }}
-                  >
-                    <span style={{ color: '#0f172a', fontSize: 13, fontWeight: 700 }}>
-                      {concept.name}
-                    </span>
-                    <span className="muted" style={{ flexShrink: 0, fontSize: 12 }}>
-                      {cardCount} {cardCount === 1 ? 'Card' : 'Cards'}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {isExpanded && children.length > 0 && (
-          <div style={{ marginTop: 4 }}>
-            {children.map((child) => renderPersonalTopic(child, depth + 1))}
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  function renderPersonalMaterialSection() {
-    const rootTopics = personalTopics
-      .filter((topic) => topic.parent_id === null)
-      .sort(
-        (left, right) =>
-          left.sort_order - right.sort_order || left.name.localeCompare(right.name)
-      );
-
-    return (
-      <section
-        aria-labelledby="personal-study-material-title"
-        style={{
-          borderTop: '1px solid #dbe3ee',
-          marginTop: 18,
-          paddingTop: 16,
-        }}
-      >
-        <div style={{ marginBottom: 12 }}>
-          <h2
-            id="personal-study-material-title"
-            style={{ fontSize: 18, margin: 0 }}
-          >
-            My Study Material
-          </h2>
-        </div>
-
-        {rootTopics.length > 0 ? (
-          <div aria-label="Personal study material Topic tree">
-            {rootTopics.map((topic) => renderPersonalTopic(topic))}
-          </div>
-        ) : (
-          <div
-            style={{
-              background: '#ffffff',
-              border: '1px dashed #cbd5e1',
-              borderRadius: 12,
-              color: '#64748b',
-              padding: '14px',
-            }}
-          >
-            Create personal Topics, Concepts, and Cards in Study Creator to select them here.
-          </div>
-        )}
-
-        <section
-          aria-labelledby="personal-decks-study-title"
-          style={{ borderTop: '1px solid #e2e8f0', marginTop: 16, paddingTop: 14 }}
-        >
-          <h3 id="personal-decks-study-title" style={{ fontSize: 16, margin: '0 0 10px' }}>
-            Personal Decks
-          </h3>
-          {personalCollections.length > 0 ? (
-            <div aria-label="Personal Deck study selections" style={{ display: 'grid', gap: 8 }}>
-              {personalCollections.map((collection) => (
-                <label
-                  key={collection.id}
-                  style={{
-                    alignItems: 'center',
-                    background: selectedPersonalCollectionIds.has(collection.id)
-                      ? '#eff6ff'
-                      : '#ffffff',
-                    border: selectedPersonalCollectionIds.has(collection.id)
-                      ? '1px solid #93c5fd'
-                      : '1px solid #e2e8f0',
-                    borderRadius: 12,
-                    cursor: isSaving ? 'wait' : 'pointer',
-                    display: 'flex',
-                    gap: 10,
-                    padding: '10px 12px',
-                  }}
-                >
-                  <input
-                    checked={selectedPersonalCollectionIds.has(collection.id)}
-                    disabled={isSaving}
-                    onChange={() =>
-                      void togglePersonalCollectionSelection(collection.id)
-                    }
-                    style={{ accentColor: '#2563eb', height: 18, width: 18 }}
-                    type="checkbox"
-                  />
-                  <span style={{ minWidth: 0 }}>
-                    <strong style={{ display: 'block', fontSize: 15 }}>
-                      {collection.name}
-                    </strong>
-                    <span className="muted" style={{ fontSize: 12 }}>
-                      {collection.cardCount}{' '}
-                      {collection.cardCount === 1 ? 'Card' : 'Cards'}
-                    </span>
-                  </span>
-                </label>
-              ))}
-            </div>
-          ) : (
-            <p className="muted" style={{ fontSize: 13, margin: 0 }}>
-              No Personal Decks yet. Create one in Study Creator when you need it.
-            </p>
-          )}
-        </section>
-      </section>
-    );
-  }
-
-  function renderNode(node: LibraryNode, depth = 0): ReactNode {
-    const children = nodes.filter((child) => child.parent_id === node.id);
-    const isExpanded = expandedNodeIds.has(node.id);
+  function renderNode(node: HomeGroup, depth = 0): ReactNode {
+    const children = node.children;
+    const isLibraryTopic = node.source === 'official';
+    const isCollection = node.source === 'collection';
+    const isExpanded = isLibraryTopic ? expandedNodeIds.has(node.id) : expandedPersonalTopicIds.has(node.key);
     const branchConceptCount = branchConceptIds(node.id).filter(
       (conceptId) => (libraryAvailabilityQuestionCounts[conceptId] || 0) > 0
     ).length;
-    const selection = getTopicSelectionPresentation(
+    const selection = isLibraryTopic ? getTopicSelectionPresentation(
       node.id,
       nodes,
       placements,
       selectedNodeIds,
       excludedNodeIds,
       conceptOverrides
-    );
+    ) : groupSelection(node, homeSettings!);
     const selected = selection.checked || selection.partial;
-    const preference = nodePreferences[node.id] ?? 50;
+    const preference = isLibraryTopic ? (nodePreferences[node.id] ?? 50)
+      : (groupDrafts[node.key] ?? (isCollection ? homeSettings!.personal_collection_preferences : homeSettings!.personal_topic_preferences)[node.id] ?? 50);
+    const conceptCount = isLibraryTopic ? branchConceptCount : isCollection ? null : personalBranchCounts(node.id).concepts;
+    const questionCount = isLibraryTopic ? branchAvailabilityQuestionCount(node.id)
+      : isCollection ? personalCollections.find(c => c.id === node.id)?.cardCount || 0 : personalBranchCounts(node.id).cards;
 
     return (
       <div
-        key={node.id}
+        key={node.key}
         style={{
           marginLeft: depth ? 22 : 0,
           position: 'relative',
@@ -2980,7 +2687,7 @@ export function StudyPlanner({
           >
             <button
               type="button"
-              onClick={() => toggleExpandedNode(node.id)}
+              onClick={() => isLibraryTopic ? toggleExpandedNode(node.id) : toggleExpandedPersonalTopic(node.key)}
               disabled={children.length === 0}
               aria-label={
                 isExpanded ? `Collapse ${node.name}` : `Expand ${node.name}`
@@ -3018,11 +2725,11 @@ export function StudyPlanner({
                 checked={selection.checked}
                 ref={(input) => { if (input) input.indeterminate = selection.partial; }}
                 aria-checked={selection.partial ? 'mixed' : selection.checked}
-                disabled={isSaving}
-                aria-describedby={`topic-selection-${node.id}`}
+                disabled={isSaving || Boolean(settingsError)}
+                aria-describedby={`topic-selection-${node.key}`}
                 title={selection.inherited ? 'Included through a selected parent Topic. Uncheck to exclude this branch.' : undefined}
                 onChange={(event) =>
-                  void toggleNodeSelection(node.id, event.currentTarget.checked)
+                  void (isLibraryTopic ? toggleNodeSelection(node.id, event.currentTarget.checked) : saveGroupSetting(node, event.currentTarget.checked))
                 }
                 style={{
                   accentColor: '#2563eb',
@@ -3044,10 +2751,10 @@ export function StudyPlanner({
                 </strong>
 
                 <span className="muted" style={{ fontSize: 12 }}>
-                  {branchConceptCount}{' '}
-                  {branchConceptCount === 1 ? 'concept' : 'concepts'}
+                  {conceptCount === null ? questionCount : conceptCount}{' '}
+                  {conceptCount === null ? (questionCount === 1 ? 'Card' : 'Cards') : (conceptCount === 1 ? 'concept' : 'concepts')}
                 </span>
-                <span id={`topic-selection-${node.id}`} className="muted" style={{ display: 'block', fontSize: 12 }}>
+                <span id={`topic-selection-${node.key}`} className="muted" style={{ display: 'block', fontSize: 12 }}>
                   {selection.partial ? 'Partially included. ' : ''}
                   {selection.excluded
                     ? 'Excluded'
@@ -3075,7 +2782,7 @@ export function StudyPlanner({
                 textAlign: 'center',
               }}
             >
-              {branchAvailabilityQuestionCount(node.id)}
+              {questionCount}
             </span>
           </div>
 
@@ -3099,26 +2806,24 @@ export function StudyPlanner({
                 </span>
                 <input
                   aria-label={`${node.name} New to Mastery balance`}
-                  disabled={isSetupCramMode}
+                  disabled={isSetupCramMode || isSaving || Boolean(settingsError)}
                   max="100"
                   min="0"
                   type="range"
                   value={preference}
                   onChange={(event) => {
                     const nextBalance = Number(event.target.value);
-                    setNodePreferences((current) => ({
-                      ...current,
-                      [node.id]: nextBalance,
-                    }));
+                    if (isLibraryTopic) setNodePreferences((current) => ({ ...current, [node.id]: nextBalance }));
+                    else setGroupDrafts((current) => ({ ...current, [node.key]: nextBalance }));
                   }}
                   onBlur={(event) =>
-                    void persistNodePreference(node.id, Number(event.currentTarget.value))
+                    void (isLibraryTopic ? persistNodePreference(node.id, Number(event.currentTarget.value)) : saveGroupSetting(node, Number(event.currentTarget.value)))
                   }
                   onKeyUp={(event) =>
-                    void persistNodePreference(node.id, Number(event.currentTarget.value))
+                    void (isLibraryTopic ? persistNodePreference(node.id, Number(event.currentTarget.value)) : saveGroupSetting(node, Number(event.currentTarget.value)))
                   }
                   onPointerUp={(event) =>
-                    void persistNodePreference(node.id, Number(event.currentTarget.value))
+                    void (isLibraryTopic ? persistNodePreference(node.id, Number(event.currentTarget.value)) : saveGroupSetting(node, Number(event.currentTarget.value)))
                   }
                   style={{
                     accentColor: '#2563eb',
@@ -3145,6 +2850,19 @@ export function StudyPlanner({
         )}
       </div>
     );
+  }
+
+  let homeGroups: HomeGroup[] = [];
+  let homeTreeError = settingsError;
+  if (homeSettings && !homeTreeError) {
+    try {
+      homeGroups = composeHomeGroups(nodes, personalTopics, homeTopicPlacements, personalCollections);
+      // Validate every authoritative state before rendering a partially assembled tree.
+      const inspect = (group: HomeGroup) => { if (group.source !== 'official') groupSelection(group, homeSettings); group.children.forEach(inspect); };
+      homeGroups.forEach(inspect);
+    } catch (error) {
+      homeTreeError = error instanceof Error ? error.message : 'Unable to display Deck settings.';
+    }
   }
 
   const rootNodes = nodes
@@ -3183,9 +2901,9 @@ export function StudyPlanner({
   const homeBootstrapView = getHomeBootstrapView({
     activeLibraryId: activeLibrary?.id,
     availableLibraryCount: availableLibraries.length,
-    bootstrapError,
+    bootstrapError: bootstrapError || homeTreeError,
     hasDeck: Boolean(deck),
-    isLoading,
+    isLoading: isLoading || Boolean(deck && !homeSettings && !homeTreeError),
     role,
   });
 
@@ -3381,7 +3099,7 @@ export function StudyPlanner({
         <main style={{ padding: 24 }}>
           <div className="panel" role="alert">
             <h2>Home could not be loaded</h2>
-            <p className="muted">{bootstrapError}</p>
+            <p className="muted">{bootstrapError || homeTreeError}</p>
             <button type="button" onClick={() => window.location.reload()}>
               Try again
             </button>
@@ -5737,8 +5455,7 @@ if (mode === 'study') {
                   className="home-v2-setup-tree"
                   aria-label="Home deck settings Topic Tree"
                 >
-                  {rootNodes.map((node) => renderNode(node))}
-                  {renderPersonalMaterialSection()}
+                  {homeGroups.map((node) => renderNode(node))}
                 </div>
 
               </section>
