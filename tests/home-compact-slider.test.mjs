@@ -48,3 +48,28 @@ test('eligibility remains separate and inherited rows do not gain unsupported pr
  const f=fixture();find(f,'Include Branch A in Study').props.onChange({currentTarget:{checked:false}});assert.deepEqual(f.writes,[['selection','Branch A',false]]);
  f.context.getTopicSelectionPresentation=()=>({checked:true,explicit:false,inherited:true,partial:false});assert.equal(sliders(f).length,0);
 });
+
+test('Topic rows retain names and right-side counts without concept-count or selection prose',()=>{
+ const f=fixture();
+ f.context.branchAvailabilityQuestionCount=id=>({Nursing:142,'Branch A':63,'Branch B':82}[id]??60);
+ f.context.getTopicSelectionPresentation=id=>({checked:id!=='Branch B',explicit:id==='Nursing',inherited:id==='Branch A',partial:id==='Nursing'});
+ const markup=require('react-dom/server').renderToStaticMarkup(f.render());
+ for(const name of ['Nursing','Branch A','Branch B']) assert.ok(markup.includes(`>${name}</button>`));
+ const badges=elements(f.render()).filter(n=>n.props.title==='Study-ready questions in this branch');
+ assert.deepEqual(badges.map(n=>n.props.children),[142,63,82]);
+ assert.doesNotMatch(markup,/>[^<]*(?:concepts?|Selected directly|Included by parent|Partially included|Excluded by parent|Excluded)[^<]*</i);
+ for(const id of ['Nursing','Branch A','Branch B']) assert.equal(find(f,`Include ${id} in Study`).props['aria-describedby'],undefined);
+ assert.deepEqual(f.writes,[]);
+});
+test('Topic checkboxes retain checked, unchecked and indeterminate states without status text',()=>{
+ const f=fixture();
+ for(const state of [{checked:true,partial:false},{checked:false,partial:false},{checked:false,partial:true}]) {
+  f.context.getTopicSelectionPresentation=()=>state;
+  const checkbox=find(f,'Include Nursing in Study'),input={indeterminate:false};
+  checkbox.props.ref(input);
+  assert.equal(checkbox.props.checked,state.checked);
+  assert.equal(input.indeterminate,state.partial);
+  assert.equal(checkbox.props['aria-checked'],state.partial?'mixed':state.checked);
+ }
+ assert.deepEqual(f.writes,[]);
+});

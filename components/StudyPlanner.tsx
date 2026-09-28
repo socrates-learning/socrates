@@ -2731,7 +2731,7 @@ export function StudyPlanner({
                 ref={(input) => { if (input) input.indeterminate = selection.partial; }}
                 aria-checked={selection.partial ? 'mixed' : selection.checked}
                 disabled={isSaving || Boolean(settingsError)}
-                aria-describedby={`topic-selection-${node.key}`}
+                aria-describedby={isCollection ? `topic-selection-${node.key}` : undefined}
                 title={selection.inherited ? 'Included through a selected parent Topic. Uncheck to exclude this branch.' : undefined}
                 onChange={(event) =>
                   void (isLibraryTopic ? toggleNodeSelection(node.id, event.currentTarget.checked) : saveGroupSetting(node, event.currentTarget.checked))
@@ -2767,20 +2767,24 @@ export function StudyPlanner({
                   {node.name}
                 </button>
 
-                <span className="muted" style={{ fontSize: 12 }}>
-                  {conceptCount === null ? questionCount : conceptCount}{' '}
-                  {conceptCount === null ? (questionCount === 1 ? 'Card' : 'Cards') : (conceptCount === 1 ? 'concept' : 'concepts')}
-                </span>
-                <span id={`topic-selection-${node.key}`} className="muted" style={{ display: 'block', fontSize: 12 }}>
-                  {selection.partial ? 'Partially included. ' : ''}
-                  {selection.excluded
-                    ? 'Excluded'
-                    : selection.excludedByAncestor
-                      ? 'Excluded by parent'
-                    : selection.inherited
-                      ? 'Included by parent'
-                      : selection.explicit ? 'Selected directly' : ''}
-                </span>
+                {isCollection && (
+                  <>
+                    <span className="muted" style={{ fontSize: 12 }}>
+                      {conceptCount === null ? questionCount : conceptCount}{' '}
+                      {conceptCount === null ? (questionCount === 1 ? 'Card' : 'Cards') : (conceptCount === 1 ? 'concept' : 'concepts')}
+                    </span>
+                    <span id={`topic-selection-${node.key}`} className="muted" style={{ display: 'block', fontSize: 12 }}>
+                      {selection.partial ? 'Partially included. ' : ''}
+                      {selection.excluded
+                        ? 'Excluded'
+                        : selection.excludedByAncestor
+                          ? 'Excluded by parent'
+                        : selection.inherited
+                          ? 'Included by parent'
+                          : selection.explicit ? 'Selected directly' : ''}
+                    </span>
+                  </>
+                )}
               </span>
             </div>
 
