@@ -121,6 +121,7 @@ test('Topic row markup and styles are identical across sources',async()=>{
  const output=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX},fileName:'row.tsx'}).outputText;
  const exports={};const s=snapshot([state('same')]);
  vm.runInNewContext(output,{exports,require,expandedNodeIds:new Set(),expandedPersonalTopicIds:new Set(),
+  configuredGroupKey:null,
   branchConceptIds:()=>['c1','c2'],libraryAvailabilityQuestionCounts:{c1:1,c2:2},
   getTopicSelectionPresentation:()=>({checked:false,explicit:false,partial:false,inherited:false,excluded:false,excludedByAncestor:false}),
   nodes:[],placements:[],selectedNodeIds:new Set(),excludedNodeIds:new Set(),conceptOverrides:{},groupSelection,

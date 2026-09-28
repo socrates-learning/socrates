@@ -548,6 +548,9 @@ export function StudyPlanner({
   const [focusedNodeId, setFocusedNodeId] = useState<string | null>(
     initialRootNodeId
   );
+  const [configuredGroupKey, setConfiguredGroupKey] = useState<string | null>(
+    initialRootNodeId ? `official:topic:${initialRootNodeId}` : null
+  );
   const [message, setMessage] = useState(initialDeckData?.loadError || '');
   const [bootstrapError, setBootstrapError] = useState('');
   const [isLoading, setIsLoading] = useState(!initialDeckData);
@@ -1211,6 +1214,7 @@ export function StudyPlanner({
       setExpandedNodeIds(rootNode ? new Set([rootNode.id]) : new Set());
       setHomeExpandedIds(rootNode ? new Set([rootNode.id]) : new Set());
       setFocusedNodeId(rootNode?.id || null);
+      setConfiguredGroupKey(rootNode ? `official:topic:${rootNode.id}` : null);
       } catch (error) {
         if (!isMounted) return;
 
@@ -2710,7 +2714,7 @@ export function StudyPlanner({
               {children.length === 0 ? '•' : isExpanded ? '▼' : '▶'}
             </button>
 
-            <label
+            <div
               style={{
                 alignItems: 'center',
                 cursor: 'pointer',
@@ -2722,6 +2726,7 @@ export function StudyPlanner({
             >
               <input
                 type="checkbox"
+                aria-label={`Include ${node.name} in Study`}
                 checked={selection.checked}
                 ref={(input) => { if (input) input.indeterminate = selection.partial; }}
                 aria-checked={selection.partial ? 'mixed' : selection.checked}
@@ -2740,15 +2745,27 @@ export function StudyPlanner({
               />
 
               <span style={{ minWidth: 0 }}>
-                <strong
+                <button
+                  type="button"
+                  aria-label={`Configure ${node.name} New to Mastery balance`}
+                  aria-pressed={configuredGroupKey === node.key}
+                  onClick={() => setConfiguredGroupKey(node.key)}
                   style={{
+                    background: 'none',
+                    border: 0,
+                    color: 'inherit',
+                    cursor: 'pointer',
                     display: 'block',
+                    fontFamily: 'inherit',
                     fontSize: 15,
+                    fontWeight: 700,
                     lineHeight: 1.2,
+                    padding: 0,
+                    textAlign: 'left',
                   }}
                 >
                   {node.name}
-                </strong>
+                </button>
 
                 <span className="muted" style={{ fontSize: 12 }}>
                   {conceptCount === null ? questionCount : conceptCount}{' '}
@@ -2765,7 +2782,7 @@ export function StudyPlanner({
                       : selection.explicit ? 'Selected directly' : ''}
                 </span>
               </span>
-            </label>
+            </div>
 
             <span
               title="Study-ready questions in this branch"
@@ -2786,12 +2803,13 @@ export function StudyPlanner({
             </span>
           </div>
 
-          {selection.explicit && (
+        </div>
+
+          {selection.explicit && configuredGroupKey === node.key && (
             <div
               style={{
-                borderTop: '1px solid #dbeafe',
-                marginTop: 10,
-                padding: '10px 2px 2px 44px',
+                marginBottom: 8,
+                padding: '0 14px 2px 56px',
               }}
             >
               <div
@@ -2841,8 +2859,6 @@ export function StudyPlanner({
               </div>
             </div>
           )}
-        </div>
-
         {isExpanded && children.length > 0 && (
           <div style={{ marginTop: 4 }}>
             {children.map((child) => renderNode(child, depth + 1))}
