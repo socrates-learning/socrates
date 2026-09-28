@@ -1,3 +1,4 @@
+import type { CreatorStandaloneCard } from './standalone-custom-cards';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 export type CreatorPersonalTopic = {
@@ -56,6 +57,7 @@ export type CreatorPersonalContent = {
   topics: CreatorPersonalTopic[];
   concepts: CreatorPersonalConcept[];
   cards: CreatorPersonalCard[];
+  standaloneCards?: CreatorStandaloneCard[];
   overlays: CreatorPersonalOverlay[];
   topicPlacements: CreatorPersonalTopicPlacement[];
 };
@@ -66,6 +68,7 @@ export function emptyCreatorPersonalContent(ownerId: string): CreatorPersonalCon
     topics: [],
     concepts: [],
     cards: [],
+    standaloneCards: [],
     overlays: [],
     topicPlacements: [],
   };
@@ -95,7 +98,7 @@ export async function loadCreatorPersonalContent(
       .order('created_at'),
     supabase
       .from('personal_cards')
-      .select('id, owner_id, concept_id, question, answer, source_reference, created_at, updated_at')
+      .select('id, owner_id, concept_id, library_node_id, library_id, personal_topic_id, question, answer, source_reference, created_at, updated_at')
       .eq('owner_id', ownerId)
       .order('created_at'),
     supabase
@@ -131,11 +134,13 @@ export async function loadCreatorPersonalContent(
     throw new Error('Personal Creator material crossed the authenticated owner boundary.');
   }
 
+  const standaloneCards = (cardResult.data ?? []).filter((card) => card.concept_id === null) as CreatorStandaloneCard[];
   return {
     ownerId,
+    standaloneCards,
     topics: (topicResult.data ?? []) as CreatorPersonalTopic[],
     concepts: (conceptResult.data ?? []) as CreatorPersonalConcept[],
-    cards: (cardResult.data ?? []) as CreatorPersonalCard[],
+    cards: (cardResult.data ?? []).filter((card) => card.concept_id !== null) as CreatorPersonalCard[],
     overlays: (overlayResult.data ?? []) as CreatorPersonalOverlay[],
     topicPlacements: (topicPlacementResult.data ?? []) as CreatorPersonalTopicPlacement[],
   };

@@ -18,8 +18,8 @@ export type PersonalStudyCandidate = {
   kind: 'personal';
   candidateId: string;
   cardId: string;
-  personalConceptId: string;
-  personalTopicId: string;
+  personalConceptId: string | null;
+  personalTopicId: string | null;
   prompt: string;
   answer: string;
   position: number;
@@ -194,16 +194,8 @@ export function adaptStudyCandidateRow(row: StudyCandidateRow): StudyCandidate {
     kind: 'personal',
     candidateId: row.candidate_id,
     cardId,
-    personalConceptId: requireValue(
-      row.personal_concept_id,
-      'personal_concept_id',
-      row.candidate_id
-    ),
-    personalTopicId: requireValue(
-      row.personal_topic_id,
-      'personal_topic_id',
-      row.candidate_id
-    ),
+    personalConceptId: row.personal_concept_id === null ? null : requireValue(row.personal_concept_id, 'personal_concept_id', row.candidate_id),
+    personalTopicId: row.personal_concept_id === null && row.personal_topic_id === null ? null : requireValue(row.personal_topic_id, 'personal_topic_id', row.candidate_id),
     prompt: row.prompt,
     answer: row.answer,
     position: row.candidate_position,

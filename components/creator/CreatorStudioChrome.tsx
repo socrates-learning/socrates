@@ -10,7 +10,7 @@ export function CreatorStudioFlaggedTab({
   material,
   ownerId,
 }: {
-  material: Pick<CreatorPersonalContent, 'topics' | 'concepts' | 'cards' | 'overlays'>;
+  material: Pick<CreatorPersonalContent, 'topics' | 'concepts' | 'cards' | 'overlays' | 'standaloneCards'>;
   ownerId: string;
 }) {
   return <StudyCreatorFlaggedBrowser material={material} ownerId={ownerId} neutralPresentation />;

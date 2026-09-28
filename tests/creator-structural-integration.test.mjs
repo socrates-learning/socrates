@@ -1,3 +1,4 @@
+import * as standaloneCards from '../lib/standalone-custom-cards.ts';
 import * as topicPositioning from '../lib/creator-topic-positioning.ts';
 import * as personalStructure from '../lib/creator-personal-structure.ts';
 import assert from 'node:assert/strict';
@@ -111,6 +112,8 @@ function editor({ role = 'learner', editing = false, response, references = [], 
     'lucide-react': {},
     '@/components/Header': {},
     '@/components/MarkdownContent': {},
+    './creator/StandaloneCustomCardWorkspace': { StandaloneCustomCardWorkspace: () => null },
+    '@/lib/standalone-custom-cards': standaloneCards,
     '@/components/creator/CreatorStudioChrome': {
       CreatorStudioLocalHeader() {},
       CreatorStudioSaveToolbar() {},

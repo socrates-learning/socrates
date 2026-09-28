@@ -27,9 +27,9 @@ export type PersonalStudyAttemptResult = {
   studySessionId: string;
   studyDeckId: string;
   personalCardId: string;
-  personalConceptId: string;
+  personalConceptId: string | null;
   result: PersonalStudyResult;
-  state: PersonalConceptState;
+  state: PersonalConceptState | null;
 };
 
 export type RecordPersonalStudyAttemptInput = {
@@ -37,7 +37,7 @@ export type RecordPersonalStudyAttemptInput = {
   studySessionId: string;
   studyDeckId: string;
   personalCardId: string;
-  personalConceptId: string;
+  personalConceptId: string | null;
   result: PersonalStudyResult;
 };
 
@@ -151,15 +151,17 @@ export function adaptPersonalStudyAttemptResult(
     throw new Error('Personal Study sequencePosition must be positive.');
   }
 
+  if (response.personalConceptId === null && response.state !== null) throw new Error('Standalone Card response must not contain Concept state.');
+
   return {
     attemptId: requireString(response, 'attemptId'),
     sequencePosition,
     studySessionId: requireString(response, 'studySessionId'),
     studyDeckId: requireString(response, 'studyDeckId'),
     personalCardId: requireString(response, 'personalCardId'),
-    personalConceptId: requireString(response, 'personalConceptId'),
+    personalConceptId: response.personalConceptId === null ? null : requireString(response, 'personalConceptId'),
     result,
-    state: adaptPersonalConceptState(response.state),
+    state: response.personalConceptId === null && response.state === null ? null : adaptPersonalConceptState(response.state),
   };
 }
 

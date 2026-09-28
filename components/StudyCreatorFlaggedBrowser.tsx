@@ -28,7 +28,7 @@ type OfficialConcept = {
 };
 
 type StudyCreatorFlaggedBrowserProps = {
-  material: Pick<CreatorPersonalContent, 'topics' | 'concepts' | 'cards' | 'overlays'>;
+  material: Pick<CreatorPersonalContent, 'topics' | 'concepts' | 'cards' | 'overlays' | 'standaloneCards'>;
   ownerId: string;
   neutralPresentation?: boolean;
 };
@@ -146,7 +146,7 @@ export function StudyCreatorFlaggedBrowser({
 
         const card = material.cards.find(
           (candidate) => candidate.id === flag.personal_card_id
-        );
+        ) || material.standaloneCards?.find((candidate) => candidate.id === flag.personal_card_id);
         const personalConcept = card
           ? material.concepts.find(
               (candidate) => candidate.id === card.concept_id
@@ -163,7 +163,7 @@ export function StudyCreatorFlaggedBrowser({
           personalConcept,
         };
       }),
-    [flags, material.cards, material.concepts, officialConcepts, officialQuestions, neutralPresentation]
+    [flags, material.cards, material.standaloneCards, material.concepts, officialConcepts, officialQuestions, neutralPresentation]
   );
 
   const normalizedSearch = search.trim().toLocaleLowerCase();

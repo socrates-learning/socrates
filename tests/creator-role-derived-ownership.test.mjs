@@ -1,3 +1,4 @@
+import * as standaloneCards from '../lib/standalone-custom-cards.ts';
 import * as topicPositioning from '../lib/creator-topic-positioning.ts';
 import * as personalStructure from '../lib/creator-personal-structure.ts';
 import assert from 'node:assert/strict';
@@ -24,6 +25,7 @@ vm.runInNewContext(ts.transpileModule(readFileSync(new URL('../lib/creator-studi
   compilerOptions: { module: ts.ModuleKind.CommonJS },
 }).outputText, runtimeContext);
 const exposed = [
+  'loadQuestionSearchPage', 'questionSearchResults', 'deleteSelectedStandaloneCard', 'activeCreatorTab', 'standaloneEditorRef', 'closeStandaloneEditor', 'standaloneRequest', 'filterPersonalCardsForSearch', 'setStandaloneCards',
   'setContentConceptSearch', 'contentConceptSearchResults', 'setQuestionSearchResults',
   'renderUnifiedTopic', 'renderUnifiedConceptBrowseTopic', 'renderUnifiedQuestionTopic',
   'setQuestionCountsByConceptId', 'setExpandedPersonalTopicIds', 'setExpandedBrowseTopicIds', 'setQuestionConceptsByTopicId',
@@ -80,7 +82,7 @@ function editor({ role = 'admin', editing = false, response, references = [], ca
     from(table) {
       let mutation; const filters = [];
       const query = {
-        select() { return query; }, eq(key, value) { filters.push([key, value]); return query; },
+        select() { return query; }, is(key,value) { filters.push([key,value]); return query; }, eq(key, value) { filters.push([key, value]); return query; },
         order() { return query; }, in() { return query; },
         insert(values) { mutation = { table, operation: 'insert', values, filters }; calls.push(mutation); return query; },
         update(values) { mutation = { table, operation: 'update', values, filters }; calls.push(mutation); return query; },
@@ -112,6 +114,8 @@ function editor({ role = 'admin', editing = false, response, references = [], ca
     'lucide-react': new Proxy({}, { get: (_target, key) => `icon:${String(key)}` }),
     '@/components/Header': {},
     '@/components/MarkdownContent': {},
+    './creator/StandaloneCustomCardWorkspace': { StandaloneCustomCardWorkspace: () => null },
+    '@/lib/standalone-custom-cards': standaloneCards,
     '@/components/creator/CreatorStudioChrome': {
       CreatorStudioLocalHeader() {},
       CreatorStudioSaveToolbar() {},
@@ -442,4 +446,97 @@ test('Question search prompt styling is source-neutral and does not erase backen
   assert.equal(prompts.length,2);
   assert.deepEqual(paint(prompts[0]),paint(prompts[1]));
   assert.equal(visibleText(prompts[0]).trim(),'Equivalent Question');
+});
+
+
+test('standalone Cards use existing search, open without a Concept, and remain in their Library', () => {
+  const h = editor({role:'learner',placed:true}); let e=h.render();
+  const common={owner_id:'owner',concept_id:null,question:'Independent front',answer:'Independent back',source_reference:null,created_at:'2026',updated_at:'2026'};
+  e.setStandaloneCards([
+    {...common,id:'direct',library_node_id:'topic',library_id:'library',personal_topic_id:null},
+    {...common,id:'custom',library_node_id:null,library_id:null,personal_topic_id:'mine-topic'},
+    {...common,id:'foreign-library',library_node_id:'topic',library_id:'other-library',personal_topic_id:null},
+  ]);e=h.render();
+  const filters={text:'independent',difficulty:'',primaryTestingAngle:'',additionalTestingAngle:'',primaryConceptId:'',relatedConceptId:'',status:'',tagId:''};
+  const found=e.filterPersonalCardsForSearch(filters);
+  assert.deepEqual(Array.from(found,item=>item.id).sort(),['custom','direct']);
+  assert.ok(found.every(item=>item.conceptId===null));
+  e.selectExistingQuestion(found.find(item=>item.id==='direct'));e=h.render();
+  assert.equal(e.standaloneRequest.card.id,'direct');
+  assert.equal(e.standaloneRequest.attachment.source,'official');
+  assert.equal(e.standaloneRequest.attachment.topicId,'topic');
+  assert.equal(e.filterPersonalCardsForSearch({...filters,primaryConceptId:'mine-concept'}).length,0);
+});
+
+
+test('Add Custom Card reuses the Content left pane and retains the Topic Tree without navigation', () => {
+  const h=editor({role:'learner',placed:true});let e=h.render();
+  e.setActiveCreatorTab('content');e.setConcept('Existing draft');e=h.render();
+  const control=nodes(e.tree).find(n=>n.props?.className==='treeControls');
+  nodes(control).find(n=>n.type==='button' && visibleText(n)==='Add Custom Card').props.onClick();e=h.render();
+  assert.equal(e.activeCreatorTab,'content');
+  assert.equal(e.standaloneRequest.attachment.topicId,'topic');
+  assert.ok(nodes(e.tree).some(n=>n.props?.['aria-label']==='Topic Tree'));
+  assert.ok(nodes(e.tree).some(n=>n.props?.className==='panel topicPanel'));
+  assert.equal(nodes(e.tree).filter(n=>n.props?.['aria-label']==='Concept or explanation').length,0);
+  assert.equal(nodes(e.tree).filter(n=>n.props?.['aria-label']==='Search concepts').length,0);
+  const left=nodes(e.tree).find(n=>n.props?.className==='panel conceptPanel');
+  const cardEditor=nodes(left).find(n=>n.type?.name==='StandaloneCustomCardWorkspace');
+  assert.ok(cardEditor);assert.equal(cardEditor.props.request,e.standaloneRequest);
+  assert.equal(nodes(e.tree).filter(n=>n.type?.name==='StandaloneCustomCardWorkspace').length,1);
+  cardEditor.props.onRequest(null);e=h.render();
+  assert.equal(nodes(e.tree).find(n=>n.props?.['aria-label']==='Concept or explanation').props.value,'Existing draft');
+  assert.ok(nodes(e.tree).some(n=>n.props?.['aria-label']==='Topic Tree'));
+  assert.deepEqual(h.routes,[]);assert.equal(h.calls.length,0);
+});
+
+for (const role of ['learner','admin','editor']) test(`${role}: explicit Add Custom uses identical owned Card action while normal destination stays role-derived`,()=>{
+  const h=editor({role,placed:true});let e=h.render();
+  const action=nodes(e.tree).find(n=>n.type==='button'&&visibleText(n)==='Add Custom Card');assert.ok(action);
+  action.props.onClick();e=h.render();
+  assert.equal(e.creationDestination,role==='learner'?'personal':'official');
+  const cardEditor=nodes(e.tree).find(n=>n.type?.name==='StandaloneCustomCardWorkspace');
+  assert.equal(cardEditor.props.ownerId,'owner');assert.equal(cardEditor.props.canCreate,true);
+  assert.equal(cardEditor.props.request.card,null);assert.equal(cardEditor.props.request.attachment.topicId,'topic');
+  assert.doesNotMatch(visibleText(nodes(e.tree).find(n=>n.props?.className==='treeControls')),/Personal|Official|Mine|Create in/);
+  assert.deepEqual(h.routes,[]);
+});
+
+test('Card search opens the Content editor at its existing Topic and Topic changes respect busy state',()=>{
+  const h=editor({role:'learner',placed:true});let e=h.render();
+  e.setActiveCreatorTab('questions');
+  e.setStandaloneCards([{id:'standalone',owner_id:'owner',concept_id:null,question:'Front',answer:'Back',library_node_id:null,library_id:null,personal_topic_id:'mine-topic'}]);e=h.render();
+  e.selectExistingQuestion({source:'personal',id:'standalone',conceptId:null});e=h.render();
+  assert.equal(e.activeCreatorTab,'content');
+  assert.equal(e.standaloneRequest.attachment.topicId,'mine-topic');
+  const activation=nodes(e.tree).find(n=>n.props?.['aria-label']==='Make Topic the active topic');
+  e.standaloneEditorRef.current.busy=true;activation.props.onClick();e=h.render();assert.ok(e.standaloneRequest);
+  e.standaloneEditorRef.current.busy=false;activation.props.onClick();e=h.render();assert.equal(e.standaloneRequest,null);
+  assert.deepEqual(h.routes,[]);
+});
+
+
+test('contextual Delete Card removes only its owner-qualified identity and restores the Concept pane',async()=>{
+ const h=editor({role:'learner',placed:true});let e=h.render();
+ e.setConcept('Preserved Concept draft');
+ e.setStandaloneCards([{id:'standalone',owner_id:'owner',concept_id:null,question:'Front',answer:'Back',library_node_id:'topic',library_id:'library',personal_topic_id:null,created_at:'2026',updated_at:'2026'}]);e=h.render();
+ e.selectExistingQuestion({source:'personal',id:'standalone',conceptId:null});e=h.render();
+ const treeControls=nodes(e.tree).find(n=>n.props?.className==='treeControls');
+ assert.ok(nodes(treeControls).find(n=>n.type==='button'&&visibleText(n)==='Delete Card'));
+ await e.deleteSelectedStandaloneCard();e=h.render();
+ assert.equal(e.standaloneRequest,null);
+ assert.equal(nodes(e.tree).find(n=>n.props?.['aria-label']==='Concept or explanation').props.value,'Preserved Concept draft');
+ assert.equal(nodes(e.tree).filter(n=>n.props?.className==='questionSearchResult'&&visibleText(n)==='Front').length,0);
+ const deletion=h.calls.find(c=>c.operation==='delete');assert.equal(deletion.table,'personal_cards');
+ assert.deepEqual(JSON.parse(JSON.stringify(deletion.filters)),[['id','standalone'],['owner_id','owner'],['concept_id',null]]);
+ assert.deepEqual(h.routes,[]);
+});
+
+
+test('learner search includes standalone Cards when the Library has no official Concepts',async()=>{
+ const h=editor({role:'learner',placed:true});let e=h.render();
+ e.setStandaloneCards([{id:'standalone',owner_id:'owner',concept_id:null,question:'Find without Concept',answer:'Back',library_node_id:'topic',library_id:'library',personal_topic_id:null,created_at:'2026',updated_at:'2026'}]);e=h.render();
+ await e.loadQuestionSearchPage({text:'without',difficulty:'',primaryTestingAngle:'',additionalTestingAngle:'',primaryConceptId:'',relatedConceptId:'',status:'',tagId:''},null,false);e=h.render();
+ assert.equal(e.questionSearchResults.length,1);assert.equal(e.questionSearchResults[0].id,'standalone');
+ assert.equal(e.questionSearchResults[0].conceptId,null);assert.equal(h.calls.length,0);
 });

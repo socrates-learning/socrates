@@ -1594,7 +1594,7 @@ export function StudyPlanner({
     setAddToThisOfficialNodeId('');
     setAddToThisOverlayMatches([]);
     setAddToThisConceptId(
-      candidate.kind === 'personal' ? candidate.personalConceptId : ''
+      candidate.kind === 'personal' ? candidate.personalConceptId ?? '' : ''
     );
 
     if (candidate.kind === 'personal') return;
@@ -1685,7 +1685,7 @@ export function StudyPlanner({
     try {
       let destinationConceptId: string | undefined =
         candidate.kind === 'personal'
-          ? candidate.personalConceptId
+          ? candidate.personalConceptId ?? undefined
           : addToThisConceptId;
       let destinationConceptName =
         personalConcepts.find((concept) => concept.id === destinationConceptId)

@@ -1,5 +1,7 @@
 'use client';
 
+import { StandaloneCustomCardWorkspace, type StandaloneCardRequest } from './creator/StandaloneCustomCardWorkspace';
+import { deleteStandaloneCard, standaloneCardMatchesTopic, standaloneCardAttachment, type CreatorStandaloneCard, type StandaloneCardAttachment } from '@/lib/standalone-custom-cards';
 import {
   useCallback,
   useEffect,
@@ -144,7 +146,8 @@ type ExistingQuestion =
       testingAngle: string;
       status: LifecycleStatus;
     })
-  | (ExistingQuestionBase & {
+  | (Omit<ExistingQuestionBase, 'conceptId'> & {
+      conceptId: string | null;
       source: 'personal';
       kind: 'card';
       difficulty: null;
@@ -618,6 +621,13 @@ function mapPersonalCard(
   };
 }
 
+function mapStandaloneCard(card: CreatorStandaloneCard): Extract<ExistingQuestion, { source: 'personal' }> {
+  return { source: 'personal', kind: 'card', id: card.id, conceptId: null, primaryConceptName: '',
+    relatedConcepts: [], relatedConceptIds: [], prompt: card.question, answer: card.answer,
+    explanation: '', difficulty: null, testingAngle: null, additionalTestingAngles: [], status: null,
+    tags: [], createdAt: card.created_at, updatedAt: card.updated_at };
+}
+
 function personalCardMatchesQuestionSearch(
   card: Extract<ExistingQuestion, { source: 'personal' }>,
   filters: QuestionSearchFilters
@@ -759,6 +769,11 @@ export function CreatorStudioV2Client({
     initialPersonalContent.concepts
   );
   const [personalCards, setPersonalCards] = useState(initialPersonalContent.cards);
+  const [standaloneCards, setStandaloneCards] = useState(initialPersonalContent.standaloneCards ?? []);
+  const [standaloneEditorVersion, setStandaloneEditorVersion] = useState(0);
+  const [standaloneError, setStandaloneError] = useState('');
+  const standaloneEditorRef = useRef({ dirty: false, busy: false });
+  const [standaloneRequest, setStandaloneRequest] = useState<StandaloneCardRequest | null>(null);
   const [personalOverlays, setPersonalOverlays] = useState(
     initialPersonalContent.overlays
   );
@@ -932,7 +947,7 @@ export function CreatorStudioV2Client({
   );
   const filterPersonalCardsForSearch = useMemo(
     () => (filters: QuestionSearchFilters) => {
-      return personalCards
+      return [...personalCards
         .flatMap((card) => {
           const personalConcept = personalConcepts.find(
             (candidate) => candidate.id === card.concept_id
@@ -942,14 +957,19 @@ export function CreatorStudioV2Client({
           return personalCardMatchesQuestionSearch(mappedCard, filters)
             ? [mappedCard]
             : [];
-        })
+        }), ...standaloneCards.filter((card) => {
+          if (card.library_node_id) return card.library_id === activeLibraryId;
+          const root = personalTopicPath(personalTopics, card.personal_topic_id || '')[0];
+          const placement = root && personalTopicPlacements.find((p) => p.personal_topic_id === root.id);
+          return !!placement && !!findTopic(topics, placement.library_node_id);
+        }).map(mapStandaloneCard).filter((card) => personalCardMatchesQuestionSearch(card, filters))]
         .sort(
           (left, right) =>
             right.createdAt.localeCompare(left.createdAt) ||
             right.id.localeCompare(left.id)
         );
     },
-    [personalCards, personalConcepts]
+    [personalCards, personalConcepts, standaloneCards, activeLibraryId, personalTopics, personalTopicPlacements, topics]
   );
   const loadQuestionSearchPage = useMemo(
     () => async (
@@ -973,7 +993,7 @@ export function CreatorStudioV2Client({
       if (isLearnerReadOnly) {
         if (!learnerPublishedConceptIds.length) {
           setIsSearchingQuestions(false);
-          setQuestionSearchResults([]);
+          setQuestionSearchResults(filterPersonalCardsForSearch(filters));
           setQuestionSearchCursor(null);
           setQuestionSearchHasMore(false);
           return;
@@ -1830,6 +1850,9 @@ export function CreatorStudioV2Client({
     () => new Map(personalOverlays.map((overlay) => [overlay.personal_concept_id, overlay])),
     [personalOverlays]
   );
+  const standaloneTarget: StandaloneCardAttachment | null = activePersonalTopicId
+    ? { source: 'personal', topicId: activePersonalTopicId }
+    : activeTopicId && activeLibraryId ? { source: 'official', topicId: activeTopicId, libraryId: activeLibraryId } : null;
   const activeTopic = activeTopicId
     ? findTopic(topics, activeTopicId)
     : null;
@@ -2407,11 +2430,32 @@ export function CreatorStudioV2Client({
     );
   }
 
+  function closeStandaloneEditor() {
+    if (standaloneEditorRef.current.busy) return false;
+    if (standaloneEditorRef.current.dirty && !window.confirm('Discard unsaved Card changes?')) return false;
+    setStandaloneRequest(null);
+    return true;
+  }
+
+  async function deleteSelectedStandaloneCard() {
+    const card = standaloneRequest?.card;
+    if (!card || standaloneEditorRef.current.busy || !window.confirm('Permanently delete this Card and its study history?')) return;
+    standaloneEditorRef.current.busy = true;
+    setIsSaving(true); setStandaloneError('');
+    try {
+      await deleteStandaloneCard(supabase, initialPersonalContent.ownerId, card);
+      setStandaloneCards((current) => current.filter((item) => item.id !== card.id));
+      setQuestionSearchResults((current) => current.filter((item) => !(item.source === 'personal' && item.id === card.id)));
+      setStandaloneRequest(null);
+    } catch (error) {
+      setStandaloneError(error instanceof Error ? error.message : 'Card could not be deleted.');
+    } finally { standaloneEditorRef.current.busy = false; setIsSaving(false); }
+  }
+
   function confirmDiscardQuestionChanges() {
-    return (
-      !isQuestionDirty ||
-      window.confirm('Discard the unsaved changes to this question?')
-    );
+    if (standaloneEditorRef.current.busy) return false;
+    if (isQuestionDirty && !window.confirm('Discard the unsaved changes to this question?')) return false;
+    return !standaloneRequest || closeStandaloneEditor();
   }
 
   function selectQuestionConcept(
@@ -2489,9 +2533,22 @@ export function CreatorStudioV2Client({
     ) return;
     if (!skipDiscardConfirmation && !confirmDiscardQuestionChanges()) return;
 
+    if (question.source === 'personal' && question.conceptId === null) {
+      const card = standaloneCards.find((item) => item.id === question.id && item.owner_id === initialPersonalContent.ownerId);
+      if (!card) return;
+      const attachment = standaloneCardAttachment(card);
+      setActiveCreatorTab('content');
+      setActivePersonalTopicId(attachment.source === 'personal' ? attachment.topicId : null);
+      if (attachment.source === 'official') setActiveTopicId(attachment.topicId);
+      setStandaloneError('');
+      setStandaloneRequest({ card, attachment, topicName: attachment.source === 'official'
+        ? findTopic(topics, attachment.topicId)?.name || 'Selected Topic'
+        : personalTopics.find((topic) => topic.id === attachment.topicId)?.name || 'Selected Topic' });
+      return;
+    }
     if (question.source === 'personal') {
       const card = personalCards.find((item) => item.id === question.id);
-      const personalConcept = personalConceptById.get(question.conceptId);
+      const personalConcept = personalConceptById.get(question.conceptId || '');
       if (!card || !personalConcept) {
         setQuestionStatus({ tone: 'error', message: 'That Question is unavailable.' });
         return;
@@ -3801,6 +3858,7 @@ export function CreatorStudioV2Client({
       return;
     }
 
+    if (standaloneRequest && !closeStandaloneEditor()) return;
     router.push(destination);
   }
 
@@ -3812,6 +3870,7 @@ export function CreatorStudioV2Client({
       return;
     }
 
+    if (standaloneRequest && !closeStandaloneEditor()) return;
     navigateBackOrFallback(router);
   }
 
@@ -4147,6 +4206,7 @@ export function CreatorStudioV2Client({
   }
 
   function startNewConcept() {
+    if (standaloneRequest && !closeStandaloneEditor()) return;
     if (
       isContentDirty &&
       !window.confirm('Discard the unsaved changes to this concept?')
@@ -5358,6 +5418,7 @@ export function CreatorStudioV2Client({
             aria-pressed={isActive}
             aria-label={`Use ${topic.name} for question sourcing`}
             onClick={() => {
+              if (standaloneRequest && !closeStandaloneEditor()) return;
               setActivePersonalTopicId(null);
               setActiveTopicId(topic.id);
               if (!questionId && !isQuestionDirty && !isSavingQuestion) {
@@ -5743,6 +5804,7 @@ export function CreatorStudioV2Client({
             aria-pressed={isActive}
             aria-label={`Make ${topic.name} the active topic`}
             onClick={() => {
+              if (standaloneRequest && !closeStandaloneEditor()) return;
               setActivePersonalTopicId(topic.id);
               setPersonalConceptTopicId(topic.id);
               setStatus(null);
@@ -5940,7 +6002,7 @@ export function CreatorStudioV2Client({
             className={styles.topicCheckbox}
             type="checkbox"
             checked={isChecked}
-            disabled={isCurrentContentReadOnly || conceptSource === 'personal'}
+            disabled={!!standaloneRequest || isCurrentContentReadOnly || conceptSource === 'personal'}
             aria-label={`Assign concept to ${topic.name}`}
             onClick={(event) => event.stopPropagation()}
             onChange={() => toggleSelected(topic.id)}
@@ -5951,6 +6013,7 @@ export function CreatorStudioV2Client({
             aria-pressed={isActive}
             aria-label={`Make ${topic.name} the active topic`}
             onClick={() => {
+              if (standaloneRequest && !closeStandaloneEditor()) return;
               setActivePersonalTopicId(null);
               setActiveTopicId(topic.id);
               setStatus(null);
@@ -5984,12 +6047,12 @@ export function CreatorStudioV2Client({
             onBack={goBackFromCreator}
             onClearConcept={clearDraft}
             onOpenLibraryOrganizer={() => navigateFromCreator('/creator/libraries')}
-            showClearConcept={activeCreatorTab === 'content'}
+            showClearConcept={activeCreatorTab === 'content' && !standaloneRequest}
             canManageLibrary={creatorAuthority.canManageTopicTree}
             canClearConcept={!isCurrentContentReadOnly}
           />
 
-          {(activeCreatorTab === 'content' || activeCreatorTab === 'questions') && (
+          {!standaloneRequest && (activeCreatorTab === 'content' || activeCreatorTab === 'questions') && (
             <CreatorStudioSaveToolbar
               buttonLabel={
                 isSaving || isSavingQuestion
@@ -6032,6 +6095,7 @@ export function CreatorStudioV2Client({
           <CreatorStudioTabs
             activeTab={activeCreatorTab}
             onSelect={(tab) => {
+              if (tab !== activeCreatorTab && standaloneRequest && !confirmDiscardQuestionChanges()) return;
               setActiveCreatorTab(tab);
               if (tab === 'questions') {
                 setActiveTopicId(questionTopicId);
@@ -6178,6 +6242,7 @@ export function CreatorStudioV2Client({
                 topics: personalTopics,
                 concepts: personalConcepts,
                 cards: personalCards,
+                standaloneCards,
                 overlays: personalOverlays,
               }}
               ownerId={initialPersonalContent.ownerId}
@@ -6186,6 +6251,7 @@ export function CreatorStudioV2Client({
 
           {activeCreatorTab === 'content' ? (
             <>
+              {!standaloneRequest && (
               <section
                 className={styles.panel}
                 style={{ marginBottom: 18 }}
@@ -6416,8 +6482,26 @@ export function CreatorStudioV2Client({
                 )}
               </section>
 
+              )}
               <div className={styles.mainGrid}>
                 <section className={`${styles.panel} ${styles.conceptPanel}`}>
+                  {standaloneRequest ? (
+            <StandaloneCustomCardWorkspace
+              key={`${standaloneEditorVersion}:${standaloneRequest.attachment.source}:${standaloneRequest.attachment.topicId}:${standaloneRequest.card?.id || 'new-card'}`}
+              ownerId={initialPersonalContent.ownerId} canCreate={creatorCapabilities.personal.createCard && creatorCapabilities.library.canAccessActiveLibrary}
+              request={standaloneRequest} onRequest={setStandaloneRequest}
+              onEditorState={(dirty, busy) => { standaloneEditorRef.current = { dirty, busy }; }}
+              onSaved={(card) => {
+                setStandaloneCards((current) => [card, ...current.filter((item) => item.id !== card.id)]);
+                setQuestionSearchResults((current) => {
+                  const remaining = current.filter((item) => !(item.source === 'personal' && item.id === card.id));
+                  const mapped = mapStandaloneCard(card);
+                  return personalCardMatchesQuestionSearch(mapped, appliedQuestionSearchFilters) && (!card.library_id || card.library_id === activeLibraryId)
+                    ? [mapped, ...remaining] : remaining;
+                });
+              }}
+            />
+                  ) : (<>
               <div>
                 <h2>1. Concept / Explanation</h2>
                 <p>Main concept creation space.</p>
@@ -6511,6 +6595,7 @@ export function CreatorStudioV2Client({
                 </div>
               )}
               <div className={styles.wordCount}>Word count: {wordCount(concept)}</div>
+                  </>)}
                 </section>
 
                 <section className={`${styles.panel} ${styles.topicPanel}`}>
@@ -6529,6 +6614,16 @@ export function CreatorStudioV2Client({
                   />
                   <Search size={20} />
                 </label>
+                {creatorCapabilities.personal.createCard && creatorCapabilities.library.canAccessActiveLibrary && <button className={styles.toolButton} type="button"
+                  disabled={!standaloneTarget || isMutatingTopic} onClick={() => {
+                    if (!standaloneTarget || !closeStandaloneEditor()) return;
+                    setStandaloneError('');
+                    setStandaloneEditorVersion((current) => current + 1);
+                    setStandaloneRequest({ card: null, attachment: standaloneTarget,
+                      topicName: activePersonalTopic?.name || activeTopic?.name || 'Selected Topic' });
+                  }}>Add Custom Card</button>}
+                {standaloneRequest?.card && <button className={styles.toolButton} type="button"
+                  onClick={() => void deleteSelectedStandaloneCard()}>Delete Card</button>}
                 <button className={styles.toolButton} type="button" onClick={openAddDialog} disabled={(creationDestination === 'official' && !creatorAuthority.canManageTopicTree) || isMutatingTopic}>
                   <Plus size={18} /> Add Subtopic
                 </button>
@@ -6655,12 +6750,20 @@ export function CreatorStudioV2Client({
                 )}
               </div>
               </CreatorTopicTreeInteraction>
+              {standaloneError && <div className={`${styles.status} ${styles.error}`} role="alert">{standaloneError}</div>}
+              {standaloneTarget && <div className={styles.existingQuestionList} aria-label="Cards attached to selected Topic">
+                {standaloneCards.filter((card) => standaloneCardMatchesTopic(card, standaloneTarget)).map((card) => (
+                  <button key={`personal:card:${card.id}`} className={styles.questionSearchResult} type="button"
+                    onClick={() => selectExistingQuestion(mapStandaloneCard(card))}>{card.question}</button>
+                ))}
+              </div>}
               <p className={styles.treeFooter}>
                 Keep nesting subtopics to any level. There’s no limit how deep you can go.
               </p>
                 </section>
               </div>
 
+              {!standaloneRequest && (<>
               <section
                 className={`${styles.panel} ${styles.selectedPanel}`}
                 hidden={conceptSource === 'personal'}
@@ -7374,6 +7477,7 @@ export function CreatorStudioV2Client({
                   {status.message}
                 </div>
               )}
+              </>)}
             </>
           ) : activeCreatorTab === 'questions' ? (
             <>
@@ -7658,9 +7762,9 @@ export function CreatorStudioV2Client({
                           <span className={styles.questionSearchMetadata}>
                             <span>{question.status || 'Lifecycle · N/A'}</span>
                             <span>{question.difficulty || 'Difficulty · N/A'}</span>
-                            <span>
+                            {question.conceptId && <span>
                               Primary Concept: {question.primaryConceptName}
-                            </span>
+                            </span>}
                             <span>
                               Primary Angle: {question.testingAngle || 'N/A'}
                             </span>
