@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { movePersonalStructure, personalSiblingIds, refreshPersonalStructure } from '../lib/creator-personal-structure.ts';
 const topic = (id, parent_id, sort_order, name = id) => ({ id, owner_id: 'owner', parent_id, sort_order, name });
-const original = () => ({ topics: [topic('p', null, 0), topic('q', null, 1), topic('a', 'p', 0), topic('b', 'p', 1)], placements: [] });
+const original = () => ({ topics: [topic('p', null, 0), topic('q', null, 1), topic('a', 'p', 0), topic('b', 'p', 1)], placements: ['p','q'].map(id=>({id:'place-'+id,owner_id:'owner',personal_topic_id:id,library_node_id:'topic'})) });
 function clientFor(finalState, failure = null, refreshFailure = false) {
   const calls = [];
   return { calls,
@@ -16,7 +16,7 @@ function clientFor(finalState, failure = null, refreshFailure = false) {
 }
 test('child Move sends exact current parent and complete source/destination assertions, then consumes final group state', async () => {
   const before = original(); const copy = structuredClone(before);
-  const final = { topics: before.topics.map(t => t.id === 'b' ? { ...t, parent_id: 'q', sort_order: 0 } : t), placements: [] };
+  const final = { topics: before.topics.map(t => t.id === 'b' ? { ...t, parent_id: 'q', sort_order: 0 } : t), placements: before.placements };
   const c = clientFor(final); const result = await movePersonalStructure(c, before, 'owner', 'b', 'q', null);
   assert.equal(c.calls[0].name, 'position_personal_topic');
   assert.deepEqual(c.calls[0].args, { p_topic_id: 'b', p_expected_parent_id: 'p', p_destination_parent_id: 'q', p_expected_official_node_id: null, p_destination_official_node_id: null, p_before_sibling_id: null, p_expected_source_ids: ['a', 'b'], p_expected_destination_ids: [] });
@@ -33,7 +33,7 @@ test('same-parent reorder passes the before anchor and identical assertions', as
   const c = clientFor(original()); await movePersonalStructure(c, original(), 'owner', 'b', 'p', null, 'a');
   assert.equal(c.calls[0].args.p_before_sibling_id, 'a'); assert.deepEqual(c.calls[0].args.p_expected_source_ids, c.calls[0].args.p_expected_destination_ids);
 });
-for (const destination of ['official-next', null]) test(`root relocation to ${destination ?? 'Unplaced'} refreshes Topic ranks and placements`, async () => {
+for (const destination of ['official-next']) test(`root relocation to ${destination ?? 'Unplaced'} refreshes Topic ranks and placements`, async () => {
   const state = original(); state.placements = [{ id: 'placement', owner_id: 'owner', personal_topic_id: 'p', library_node_id: 'official-old' }];
   const final = { topics: state.topics.map(t => t.id === 'p' ? { ...t, sort_order: 1 } : t), placements: [] };
   const c = clientFor(final); assert.deepEqual(await movePersonalStructure(c, state, 'owner', 'p', null, destination), final);
@@ -65,4 +65,12 @@ test('canonical UI keeps selection and Add Subtopic context; structural reparent
   assert.match(source,/await movePersonalStructure\([\s\S]*?setPersonalTopics\(refreshed.topics\);[\s\S]*?setActivePersonalTopicId\(activePersonalTopic.id\)/);
   assert.match(source,/parentPersonalTopicId: activePersonalTopic.id/);
   assert.match(source,/\.from\('personal_topics'\)\s*\.update\(\{ name \}\)/);
+});
+
+test('unplacement and destinations in unplaced branches are rejected before RPC',async()=>{
+ const state=original(), c=clientFor(state);
+ await assert.rejects(movePersonalStructure(c,state,'owner','p',null,null),/canonical/);
+ state.placements=[];
+ await assert.rejects(movePersonalStructure(c,state,'owner','b','q',null),/canonical/);
+ assert.equal(c.calls.length,0);
 });

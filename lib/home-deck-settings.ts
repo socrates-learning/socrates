@@ -36,7 +36,12 @@ export function composeHomeGroups(
       const parent = byKey.get(parentKey);
       if (!parent) throw new Error('A Topic placement is outside the loaded Library. Its organization cannot be displayed safely.');
       parent.children.push(node);
-    } else roots.push(node);
+    } else {
+      if (node.source === 'personal') {
+        throw new Error('A custom Topic has no canonical placement. Its organization must be repaired before Home can display it.');
+      }
+      roots.push(node);
+    }
   }
   const seen = new Set<string>();
   function visit(n: HomeGroup) {

@@ -42,6 +42,23 @@ export async function movePersonalStructure(
 ): Promise<PersonalStructure> {
   const moving = state.topics.find((t) => t.id === topicId && t.owner_id === ownerId);
   if (!moving) throw new Error('Personal Topic was not found for the signed-in owner.');
+  if (!destinationParentId && !destinationPlacementId) {
+    throw new Error('Choose a canonical Topic destination.');
+  }
+  if (destinationParentId) {
+    const seen = new Set<string>();
+    let current: string | null = destinationParentId;
+    let placed = false;
+    while (current) {
+      if (seen.has(current) || current === topicId) throw new Error('Invalid Topic destination.');
+      seen.add(current);
+      const topic = state.topics.find(t => t.id === current && t.owner_id === ownerId);
+      if (!topic) throw new Error('Destination Topic was not found.');
+      if (!topic.parent_id) placed = state.placements.some(p => p.personal_topic_id === topic.id && p.owner_id === ownerId);
+      current = topic.parent_id;
+    }
+    if (!placed) throw new Error('Destination Topic needs a canonical placement.');
+  }
   const sourcePlacementId = moving.parent_id === null
     ? state.placements.find((p) => p.personal_topic_id === topicId)?.library_node_id ?? null : null;
   const { error } = await client.rpc('position_personal_topic', {

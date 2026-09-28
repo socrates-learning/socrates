@@ -49,13 +49,10 @@ export function shouldShowPersonalCreatorTopics({
   editorSource: 'official' | 'personal';
   role: 'learner' | 'editor' | 'admin';
 }): boolean {
-  // Learners keep the existing unified official + personal tree. Staff default
-  // to the official tree, but their existing personal authoring mode remains
-  // available whenever they open existing personal material.
-  return (
-    role === 'learner' ||
-    editorSource === 'personal'
-  );
+  // Existing-record discoverability is independent of new-content authority.
+  // Composition already validates ownership; editor mode must never hide it.
+  void editorSource;
+  return role === 'learner' || role === 'editor' || role === 'admin';
 }
 
 function comparePersonalTopics(

@@ -6,8 +6,8 @@ import {compareCreatorTopics} from '../lib/creator-topic-order.js';
 import {buildConceptTopicTree} from '../lib/concept-topic-tree.ts';
 const key=(id,source='official')=>`${source}:topic:${id}`;
 function fixture(source='official') {
-  const node=(id,parent,rank)=>({id,key:key(id,source),source,name:id,parentKey:parent?key(parent,source):null,placementKey:null,sort_order:rank,ownerId:'owner'});
-  return {libraryId:'library',ownerId:'owner',canManageOfficial:true,nodes:[node('root',null,0),node('p','root',0),node('q','root',1),node('a','p',0),node('b','p',1),node('c','p',2),node('d','p',3)]};
+  const node=(id,parent,rank)=>({id,key:key(id,source),source,name:id,parentKey:parent?key(parent,source):null,placementKey:source==='personal'&&!parent?key('canonical'):null,sort_order:rank,ownerId:'owner'});
+  return {libraryId:'library',ownerId:'owner',canManageOfficial:true,nodes:[node('root',null,0),node('p','root',0),node('q','root',1),node('a','p',0),node('b','p',1),node('c','p',2),node('d','p',3),...(source==='personal'?[{id:'canonical',key:key('canonical'),source:'official',name:'Canonical',parentKey:null,placementKey:null,sort_order:0}]:[])]};
 }
 for(const source of ['official','personal']) {
  for(const [label,moving,target,intent,anchor] of [['earlier','c','a','before','a'],['later','a','c','after','d'],['first','d','a','before','a'],['last','a','d','after',null],['adjacent','b','a','before','a']]) {
@@ -35,13 +35,13 @@ for(const source of ['official','personal']) {
   assert.equal(planTopicPosition(c,key('root',source),key('p',source),'inside'),null);
  });
 }
-test('personal roots: placement and Unplaced retain canonical null parent',()=>{
+test('personal roots: canonical placement is supported and unplacement is rejected',()=>{
  const c=fixture('personal');c.nodes=c.nodes.filter(n=>n.id!=='p'&&n.id!=='q'&&n.parentKey===null);
  c.nodes.push(...fixture().nodes);
  const p=planTopicPosition(c,key('root','personal'),key('p'),'inside');
  assert.equal(p.args.p_destination_parent_id,null);assert.equal(p.args.p_destination_official_node_id,'p');
  c.nodes[0].placementKey=key('p');
- const unplaced=planTopicPosition(c,key('root','personal'),'unplaced','inside');assert.equal(unplaced.args.p_expected_official_node_id,'p');assert.equal(unplaced.args.p_destination_official_node_id,null);
+ const unplaced=planTopicPosition(c,key('root','personal'),'unplaced','inside');assert.equal(unplaced,null);
 });
 test('personal root reorder asserts complete owner-only placement group',()=>{
  const c=fixture('personal');c.nodes=c.nodes.filter(n=>n.parentKey===null);

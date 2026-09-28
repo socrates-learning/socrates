@@ -24,7 +24,7 @@ vm.runInNewContext(ts.transpileModule(readFileSync(new URL('../lib/creator-studi
   compilerOptions: { module: ts.ModuleKind.CommonJS },
 }).outputText, runtimeContext);
 const exposed = [
-  'moveActiveTopic', 'setMoveDestinationId', 'personalTopics', 'personalTopicPlacements', 'activePersonalTopicId', 'personalTopicCreationContext',
+  'createPersonalTopic', 'moveActiveTopic', 'setMoveDestinationId', 'personalTopics', 'personalTopicPlacements', 'activePersonalTopicId', 'personalTopicCreationContext',
   'creationDestination', 'conceptEditorState', 'questionEditorState', 'conceptSource', 'questionSource',
   'openAddDialog', 'openPersonalTopicDialog', 'saveNameDialog', 'setNameDraft', 'dialogMode',
   'startNewQuestion', 'openPersonalConcept', 'selectPersonalQuestionConcept', 'selectQuestionConcept',
@@ -163,10 +163,10 @@ function editor({ role = 'learner', editing = false, response, references = [], 
 
 
 const topic = (id, parent_id, sort_order) => ({ id, owner_id: 'owner', parent_id, sort_order, name: id });
-const initial = () => ({ topics: [topic('p', null, 0), topic('q', null, 1), topic('a', 'p', 0), topic('b', 'p', 1)], placements: [] });
+const initial = () => ({ topics: [topic('p', null, 0), topic('q', null, 1), topic('a', 'p', 0), topic('b', 'p', 1)], placements: ['p','q'].map(id=>({id:'place-'+id,owner_id:'owner',personal_topic_id:id,library_node_id:'topic'})) });
 const plain = value => JSON.parse(JSON.stringify(value));
 test('actual Creator Move installs all final sibling rows, preserves selection and Add Subtopic target', async () => {
- const structure=initial();const refreshed={topics:structure.topics.map(t=>t.id==='b'?{...t,parent_id:'q',sort_order:0}:t),placements:[]};
+ const structure=initial();const refreshed={topics:structure.topics.map(t=>t.id==='b'?{...t,parent_id:'q',sort_order:0}:t),placements:structure.placements};
  const h=editor({structure,refreshed});let e=h.render();e.setActivePersonalTopicId('b');e.setMoveDestinationId('personal:topic:q');e=h.render();await e.moveActiveTopic();e=h.render();
  assert.deepEqual(plain(e.personalTopics),refreshed.topics);assert.equal(e.activePersonalTopicId,'b');assert.equal(new Set(e.personalTopics.map(t=>t.id)).size,4);
  e.openPersonalTopicDialog();e=h.render();assert.equal(e.personalTopicCreationContext.parentPersonalTopicId,'b');
@@ -174,13 +174,26 @@ test('actual Creator Move installs all final sibling rows, preserves selection a
 });
 for (const failure of ['stale sibling sequence','stale parent','normalization failure','placement failure']) test(`actual Creator ${failure} leaves tree and selection unchanged`,async()=>{
  const structure=initial();const h=editor({structure,refreshed:structure,response:()=>({data:null,error:{message:failure}})});let e=h.render();e.setActivePersonalTopicId('b');e.setMoveDestinationId('personal:topic:q');e=h.render();await e.moveActiveTopic();e=h.render();
- assert.deepEqual(plain(e.personalTopics),structure.topics);assert.deepEqual(plain(e.personalTopicPlacements),[]);assert.equal(e.activePersonalTopicId,'b');assert.equal(e.status.message,failure);
+ assert.deepEqual(plain(e.personalTopics),structure.topics);assert.deepEqual(plain(e.personalTopicPlacements),structure.placements);assert.equal(e.activePersonalTopicId,'b');assert.equal(e.status.message,failure);
 });
-test('actual Creator root relocation and Unplaced use positioning and replace normalized Topic state',async()=>{
+test('actual Creator root relocation refreshes and Unplaced is rejected without a write',async()=>{
  const structure=initial();const refreshed={topics:structure.topics.map(t=>t.id==='p'?{...t,sort_order:0}:t),placements:[{id:'place',owner_id:'owner',personal_topic_id:'p',library_node_id:'topic'}]};
  const h=editor({structure,refreshed});let e=h.render();e.setActivePersonalTopicId('p');e.setMoveDestinationId('official:topic:topic');e=h.render();await e.moveActiveTopic();e=h.render();assert.deepEqual(plain(e.personalTopicPlacements),refreshed.placements);assert.equal(e.activePersonalTopicId,'p');
- refreshed.placements=[];e.setMoveDestinationId('unplaced');e=h.render();await e.moveActiveTopic();e=h.render();assert.deepEqual(plain(e.personalTopicPlacements),[]);assert.equal(h.calls.at(-1).payload.p_destination_official_node_id,null);
+ const callsBefore=h.calls.length;e.setMoveDestinationId('unplaced');e=h.render();await e.moveActiveTopic();e=h.render();assert.deepEqual(plain(e.personalTopicPlacements),refreshed.placements);assert.equal(h.calls.length,callsBefore);assert.equal(e.status.tone,'error');
 });
 test('actual Creator committed Move with refresh failure reports it without optimistic corruption',async()=>{
  const structure=initial();const h=editor({structure,refreshed:structure,refreshError:true});let e=h.render();e.setActivePersonalTopicId('b');e.setMoveDestinationId('personal:topic:q');e=h.render();await e.moveActiveTopic();e=h.render();assert.deepEqual(plain(e.personalTopics),structure.topics);assert.match(e.status.message,/Topic moved, but the tree could not be refreshed/);
+});
+
+
+test('canonical Creator rejects missing placement before sending a creation RPC',async()=>{
+ const h=editor({structure:initial(),refreshed:initial()});const e=h.render();
+ assert.equal(await e.createPersonalTopic('Invalid root',{parentPersonalTopicId:null,officialLibraryNodeId:null}),false);
+ assert.equal(h.calls.length,0);assert.match(h.render().status.message,/canonical tree/);
+});
+test('canonical Add Subtopic preserves the source-qualified parent in the atomic RPC',async()=>{
+ const structure=initial();const h=editor({structure,refreshed:structure});const e=h.render();
+ assert.equal(await e.createPersonalTopic('Nested',{parentPersonalTopicId:'a',officialLibraryNodeId:null}),true);
+ assert.equal(h.calls[0].name,'create_personal_topic');assert.equal(h.calls[0].payload.p_parent_personal_topic_id,'a');
+ assert.equal(h.calls[0].payload.p_official_library_node_id,null);
 });

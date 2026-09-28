@@ -24,9 +24,8 @@ test('same UUID across sources and collection remains three independent identiti
  assert.equal(new Set(keys).size,keys.length);
  assert.ok(keys.includes('official:topic:same')); assert.ok(keys.includes('personal:topic:same')); assert.ok(keys.includes('personal:collection:same'));
 });
-test('unplaced roots retain their actual organization without a My group or source label',()=>{
- const result=composeHomeGroups(nodes,topics,[],[]);
- assert.equal(result[1].name,'Placed'); assert.equal(result[1].parent_id,null);
+test('unplaced roots fail visibly instead of becoming independent Home roots',()=>{
+ assert.throws(()=>composeHomeGroups(nodes,topics,[],[]),/no canonical placement/);
 });
 test('missing Library placement fails instead of moving a placed Topic to root',()=>{
  assert.throws(()=>composeHomeGroups(nodes,topics,[{personal_topic_id:'same',library_node_id:'missing'}],[]),/outside the loaded Library/);

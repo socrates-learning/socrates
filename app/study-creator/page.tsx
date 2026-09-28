@@ -39,6 +39,8 @@ export default async function StudyCreatorPage() {
   }
 
   if (!userId) redirect('/login?next=/study-creator');
+  // Staff new-content authority belongs to the canonical Creator interface.
+  if (role === 'admin' || role === 'editor') redirect('/creator');
 
   const activeLibraryContext = await resolveActiveLibraryContext();
   const activeLibrary = activeLibraryContext.library;

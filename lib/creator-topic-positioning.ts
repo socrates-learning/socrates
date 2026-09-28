@@ -30,14 +30,10 @@ export function canPosition(context: PositionContext, node: StructuralTopic) {
 /** Build assertions from the complete gesture-start snapshot, never filtered visible rows. */
 export function planTopicPosition(context: PositionContext, key: string, targetKey: string, intent: DropIntent): PositionPlan | null {
     const moving = context.nodes.find(n => n.key === key), target = context.nodes.find(n => n.key === targetKey);
-    if (!moving || !canPosition(context, moving) || (!target && targetKey !== 'unplaced'))
+    if (!moving || !canPosition(context, moving) || !target)
         return null;
     let parent: string | null = null, placement: string | null = null;
-    if (targetKey === 'unplaced') {
-        if (moving.source !== 'personal' || moving.parentKey !== null)
-            return null;
-    }
-    else if (moving.source === 'official') {
+    if (moving.source === 'official') {
         if (target!.source !== 'official')
             return null;
         parent = intent === 'inside' ? target!.key : target!.parentKey;
@@ -58,6 +54,20 @@ export function planTopicPosition(context: PositionContext, key: string, targetK
         parent = intent === 'inside' ? target!.key : target!.parentKey;
         if (!parent)
             return null;
+    }
+    // A root needs an official destination; a child must reach a placed root.
+    if (moving.source === 'personal') {
+        let canonical = placement;
+        const visited = new Set<string>();
+        for (let cursor = parent; cursor;) {
+            if (visited.has(cursor)) return null;
+            visited.add(cursor);
+            const ancestor = context.nodes.find(n => n.key === cursor && n.source === 'personal' && n.ownerId === context.ownerId);
+            if (!ancestor) return null;
+            canonical = ancestor.placementKey;
+            cursor = ancestor.parentKey;
+        }
+        if (!canonical || !context.nodes.some(n => n.key === canonical && n.source === 'official')) return null;
     }
     // Reject malformed cycles as well as moving beneath our own descendants.
     const ancestry = new Set<string>();

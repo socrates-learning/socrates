@@ -52,7 +52,7 @@ const officialTopics = [
   { id: otherOfficialId, name: 'Second official root', children: [] },
 ];
 
-test('Creator tree presentation keeps learner composition and defaults staff to official', () => {
+test('Creator tree shows owned records independently of staff creation authority', () => {
   assert.equal(shouldShowPersonalCreatorTopics({
     role: 'learner', creationSource: 'personal', editorSource: 'official',
   }), true);
@@ -60,10 +60,10 @@ test('Creator tree presentation keeps learner composition and defaults staff to 
   for (const role of ['editor', 'admin']) {
     assert.equal(shouldShowPersonalCreatorTopics({
       role, creationSource: 'official', editorSource: 'official',
-    }), false);
+    }), true);
     assert.equal(shouldShowPersonalCreatorTopics({
       role, creationSource: 'personal', editorSource: 'official',
-    }), false); // Stale selector input cannot change staff defaults.
+    }), true); // Stale editor inputs cannot hide manageable records.
     assert.equal(shouldShowPersonalCreatorTopics({
       role, creationSource: 'official', editorSource: 'personal',
     }), true);

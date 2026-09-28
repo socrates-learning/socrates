@@ -47,7 +47,7 @@ const compiled = ts.transpileModule(source.replace(
   `  capture({ ${exposed} });\n  return (\n    <>\n      <Header />`,
 ), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText;
 
-function editor({ role = 'admin', editing = false, response, references = [], cards = true } = {}) {
+function editor({ role = 'admin', editing = false, response, references = [], cards = true, placed = false } = {}) {
   const slots = [];
   let cursor = 0;
   let api;
@@ -152,7 +152,7 @@ function editor({ role = 'admin', editing = false, response, references = [], ca
       topics: [{ id: 'mine-topic', owner_id: 'owner', parent_id: null, name: 'Personal Topic', sort_order: 0 }],
       concepts: [{ id: 'mine-concept', owner_id: 'owner', topic_id: 'mine-topic', name: 'Personal Concept', description: 'Original body' }],
       cards: cards ? [{ id: 'mine-card', owner_id: 'owner', concept_id: 'mine-concept', question: 'Personal Question', answer: 'Original answer' }] : [],
-      overlays: [], topicPlacements: [],
+      overlays: [], topicPlacements: placed ? [{id:'placement',owner_id:'owner',personal_topic_id:'mine-topic',library_node_id:'topic'}] : [],
     },
   };
   function render() { cursor = 0; const tree = context.exports.CreatorStudioV2Client(props); return { ...api, tree }; }
@@ -248,23 +248,24 @@ for (const role of ['learner', 'admin', 'editor']) {
     assert.equal(e.questionEditorState.identity.key, 'official:question:official-q');
     assert.equal(e.isCurrentQuestionReadOnly, role === 'learner');
     e.setActiveCreatorTab('questions'); e = h.render();
-    assert.equal(e.showPersonalCreatorTopics, role === 'learner');
+    assert.equal(e.showPersonalCreatorTopics, true);
     e.startNewQuestion();
     assert.equal(h.render().questionSource, destination);
     h.render().startNewConcept();
     assert.equal(h.render().conceptSource, destination);
   });
-  test(`${role}: tree defaults and explicit personal record discovery survive`, () => {
+  test(`${role}: owned records are discoverable before search and after starting a new draft`, () => {
     const h = editor({ role }); let e = h.render();
-    assert.equal(e.showPersonalCreatorTopics, role === 'learner');
+    assert.equal(e.showPersonalCreatorTopics, true);
     e.setIsConceptBrowseOpen(true); e = h.render();
     assert.ok(nodes(e.tree).some(node => node.props?.children === 'Personal Topic'));
+    assert.equal(e.visibleTopicComposition.unplacedPersonalRoots[0].id, 'mine-topic');
     e.setSearchQuery('Personal Topic'); e = h.render();
     assert.equal(e.visibleTopicComposition.unplacedPersonalRoots[0].id, 'mine-topic');
     e.setSearchQuery(''); e.openPersonalConcept('mine-concept'); e = h.render();
     assert.equal(e.showPersonalCreatorTopics, true);
     e.startNewConcept(); e = h.render();
-    assert.equal(e.showPersonalCreatorTopics, role === 'learner');
+    assert.equal(e.showPersonalCreatorTopics, true);
   });
 }
 test('learner cannot force official creation by supplying official editor state', async () => {
@@ -337,3 +338,12 @@ for (const role of ['admin', 'editor']) {
     assert.equal(h.calls.length, 0);
   });
 }
+
+for (const role of ['learner','editor','admin']) test(`${role}: owned placed content appears in normal canonical browsing without search`,()=>{
+ const h=editor({role,placed:true});const e=h.render();
+ const rows=flattenUnifiedCreatorTopics(e.visibleTopicComposition.officialRoots);
+ const owned=rows.find(t=>t.key==='personal:topic:mine-topic');
+ assert.ok(owned);assert.equal(owned.presentationParentKey,'official:topic:topic');
+ assert.equal(e.creationDestination,role==='learner'?'personal':'official');
+ assert.equal(e.visibleTopicComposition.unplacedPersonalRoots.length,0);
+});

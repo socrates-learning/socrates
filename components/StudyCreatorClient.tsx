@@ -127,6 +127,7 @@ export function StudyCreatorClient({
   const [detachTarget, setDetachTarget] = useState<PersonalOverlay | null>(null);
   const [topicName, setTopicName] = useState('');
   const [topicParentId, setTopicParentId] = useState('');
+  const [topicCanonicalId, setTopicCanonicalId] = useState('');
   const [conceptName, setConceptName] = useState('');
   const [conceptDescription, setConceptDescription] = useState('');
   const [conceptSourceReference, setConceptSourceReference] = useState('');
@@ -626,6 +627,14 @@ export function StudyCreatorClient({
   async function saveTopic(event: React.FormEvent) {
     event.preventDefault();
     if (!editorModal || editorModal.kind !== 'topic' || !topicName.trim()) return;
+    if (!editorModal.record && !topicParentId && !topicCanonicalId) {
+      setError('Choose a canonical Topic for this branch.');
+      return;
+    }
+    if (editorModal.record?.parent_id && !topicParentId) {
+      setError('Move this Topic beneath another placed Topic.');
+      return;
+    }
     setIsSaving(true);
     clearFeedback();
     const values = {
@@ -641,15 +650,21 @@ export function StudyCreatorClient({
           .eq('owner_id', ownerId)
           .select('id')
           .single()
-      : await supabase.from('personal_topics').insert(values).select('id').single();
+      : await supabase.rpc('create_personal_topic', {
+          p_name: topicName.trim(),
+          p_parent_personal_topic_id: topicParentId || null,
+          p_official_library_node_id: topicParentId ? null : topicCanonicalId,
+          p_sort_order: 0,
+        }).single();
 
     if (result.error) {
       setError(getErrorMessage(result.error));
     } else {
+      const saved = result.data as { id: string };
       await loadMaterial();
-      setSelectedTopicId(result.data.id);
+      setSelectedTopicId(saved.id);
       setExpandedTopicIds((current) => {
-        const next = new Set(current).add(result.data.id);
+        const next = new Set(current).add(saved.id);
         if (topicParentId) next.add(topicParentId);
         return next;
       });
@@ -743,6 +758,10 @@ export function StudyCreatorClient({
 
   async function moveSelectedTopic(parentId: string) {
     if (!selectedTopic) return;
+    if (!parentId) {
+      setError('Choose a placed parent Topic. A branch cannot be moved to an unplaced root.');
+      return;
+    }
     clearFeedback();
     const { error: moveError } = await supabase
       .from('personal_topics')
@@ -1119,7 +1138,7 @@ export function StudyCreatorClient({
                   <label>
                     Move under
                     <select value={selectedTopic.parent_id ?? ''} onChange={(event) => moveSelectedTopic(event.target.value)}>
-                      <option value="">Top level</option>
+                      <option value="" disabled>Use Creator Studio to change root placement</option>
                       {orderedTopics.filter((topic) => !unavailableTopicParents.has(topic.id)).map((topic) => (
                         <option key={topic.id} value={topic.id}>{topicLabel(topic.id)}</option>
                       ))}
@@ -1266,11 +1285,17 @@ export function StudyCreatorClient({
               <form className={styles.modalForm} onSubmit={saveTopic}>
                 <label>Topic name<input autoFocus maxLength={120} onChange={(event) => setTopicName(event.target.value)} required value={topicName} /></label>
                 <label>Parent Topic<select onChange={(event) => setTopicParentId(event.target.value)} value={topicParentId}>
-                  <option value="">Top level</option>
+                  <option value="" disabled={Boolean(editorModal.record?.parent_id)}>Canonical placement</option>
                   {orderedTopics.filter((topic) => !editorModal.record || !descendantTopicIds(editorModal.record.id, true).has(topic.id)).map((topic) => (
                     <option key={topic.id} value={topic.id}>{topicLabel(topic.id)}</option>
                   ))}
                 </select></label>
+                {!editorModal.record && !topicParentId && (
+                  <label>Place beneath Topic<select required value={topicCanonicalId} onChange={(event) => setTopicCanonicalId(event.target.value)}>
+                    <option value="" disabled>Select a Topic</option>
+                    {(officialBrowser?.nodes ?? []).map(node => <option key={node.id} value={node.id}>{node.name}</option>)}
+                  </select></label>
+                )}
                 <div className={styles.modalActions}><button className={styles.secondary} disabled={isSaving} onClick={closeEditor} type="button">Cancel</button><button className={styles.primary} disabled={isSaving} type="submit">{isSaving ? 'Saving…' : 'Save Topic'}</button></div>
               </form>
             )}

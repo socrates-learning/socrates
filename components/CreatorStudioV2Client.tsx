@@ -3082,6 +3082,10 @@ export function CreatorStudioV2Client({
     context: PersonalTopicCreationContext
   ): Promise<boolean> {
     if (creationDestination !== 'personal') return false;
+    if (!context.parentPersonalTopicId && !context.officialLibraryNodeId) {
+      showStatus('error', 'Select a Topic in the canonical tree before creating a Topic.');
+      return false;
+    }
     const ownerId = initialPersonalContent.ownerId;
     resolveCreatorCommandRoute(
       {
@@ -3183,7 +3187,7 @@ export function CreatorStudioV2Client({
                 'topic',
                 activePersonalTopicPlacement.library_node_id
               )
-            : 'unplaced'
+            : ''
           : personalMoveDestinations[0]
             ? createCreatorEntityKey(
                 'personal',
@@ -3476,7 +3480,7 @@ export function CreatorStudioV2Client({
       const destinationId = !isRoot && moveDestinationId.startsWith('personal:topic:')
         ? moveDestinationId.slice('personal:topic:'.length) : null;
       const destination = destinationId ? personalTopicById.get(destinationId) : null;
-      if ((isRoot && moveDestinationId !== 'unplaced' && !officialNodeId) || (!isRoot && !destination)) {
+      if ((isRoot && !officialNodeId) || (!isRoot && !destination)) {
         setIsMutatingTopic(false);
         showStatus('error', 'The selected destination is unavailable.');
         return;
@@ -6545,7 +6549,7 @@ export function CreatorStudioV2Client({
                         >
                           {activePersonalTopic?.parent_id === null ? (
                             <>
-                              <option value="unplaced">Unplaced — keep this branch</option>
+                              <option value="" disabled>Select a Topic</option>
                               {personalRootPlacementDestinations.map((destination) => (
                                 <option key={destination.key} value={destination.key}>
                                   {destination.label}
@@ -6587,7 +6591,7 @@ export function CreatorStudioV2Client({
                             ? `New Topic beneath ${activePersonalTopic.name}`
                             : activeTopic
                               ? `New Topic beneath ${activeTopic.name}`
-                              : 'New unplaced Topic'
+                              : 'Select a Topic before creating content'
                           : dialogMode === 'add'
                             ? `Add Subtopic beneath ${activePersonalTopic?.name || activeTopic?.name}`
                             : `Rename “${activePersonalTopic?.name || activeTopic?.name}”`}
@@ -6619,10 +6623,8 @@ export function CreatorStudioV2Client({
                 {visibleTopicComposition.officialRoots.map((topic) =>
                   renderUnifiedTopic(topic)
                 )}
-                {showPersonalCreatorTopics && (
-                  <TopicDropRow className={styles.unplacedTopicsLabel} topicKey="unplaced">
-                    Unplaced <span className={styles.sourceBadge} data-source="personal">Mine</span>
-                  </TopicDropRow>
+                {visibleTopicComposition.unplacedPersonalRoots.length > 0 && (
+                  <div className={styles.unplacedTopicsLabel}>Placement required</div>
                 )}
                 {visibleTopicComposition.unplacedPersonalRoots.map((topic) =>
                   renderPersonalTopic(topic)
@@ -8162,7 +8164,7 @@ export function CreatorStudioV2Client({
                             >
                               {activePersonalTopic?.parent_id === null ? (
                                 <>
-                                  <option value="unplaced">Unplaced — keep this branch</option>
+                                  <option value="" disabled>Select a Topic</option>
                                   {personalRootPlacementDestinations.map((destination) => (
                                     <option key={destination.key} value={destination.key}>
                                       {destination.label}
@@ -8213,7 +8215,7 @@ export function CreatorStudioV2Client({
                                 ? `New Topic beneath ${activePersonalTopic.name}`
                                 : activeTopic
                                   ? `New Topic beneath ${activeTopic.name}`
-                                  : 'New unplaced Topic'
+                                  : 'Select a Topic before creating content'
                               : dialogMode === 'add'
                                 ? `Add Subtopic beneath ${activePersonalTopic?.name || activeTopic?.name}`
                                 : `Rename “${activePersonalTopic?.name || activeTopic?.name}”`}

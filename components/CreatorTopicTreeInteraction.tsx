@@ -175,7 +175,6 @@ export function CreatorTopicTreeInteraction({ context, disabled, onMove, childre
             }
             return {key: node.key, label: `${node.source === 'personal' ? 'Mine · ' : ''}${path.join(' › ')}`};
         }),
-        {key: 'unplaced', label: 'Unplaced · Mine'},
     ].filter(node => planTopicPosition(session.context, session.key, node.key, intent)) : [];
     const chosen = options.some(o => o.key === target) ? target : options[0]?.key ?? '';
     return <InteractionContext.Provider value={{ context, disabled, moving: session?.key ?? null, pick, start, keyboard: openKeyboard }}>
