@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "test:home-bootstrap": "node --test tests/home-bootstrap-robustness.test.mjs"
+    "test:home-bootstrap": "node --test tests/home-bootstrap-robustness.test.mjs",
+    "postinstall": "node -e \"const p=require('./package.json');if(p.dependencies.next!=='16.3.4'||require('next/package.json').version!=='16.3.4'){throw new Error('Temporary Next.js hash-cache patch requires exactly 16.3.4. Review upstream #96714/#96737, remove the patch and guard, and pass navigation acceptance before upgrading.')}\" && patch-package --error-on-fail"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.0",
@@ -15,7 +16,8 @@
     "lucide-react": "latest",
     "next": "16.3.4",
     "react": "latest",
-    "react-dom": "latest"
+    "react-dom": "latest",
+    "patch-package": "8.0.1"
   },
   "devDependencies": {
     "@types/node": "latest",
@@ -24,5 +26,8 @@
     "eslint": "^9.39.5",
     "eslint-config-next": "^16.2.12",
     "typescript": "latest"
+  },
+  "socratesFrameworkCompatibility": {
+    "next16_3_4": "Temporary canonical-URL route-cache compatibility patch; https://github.com/vercel/next.js/issues/96714 and https://github.com/vercel/next.js/pull/96737. On any Next.js upgrade, verify the upstream fix, remove this patch and its exact-version postinstall guard, and rerun Stats/Account/Home first-navigation, direct hash/refresh, Back/Forward, diagnostics and Creator guard acceptance. Never update the patch filename/version merely to bypass the guard."
   }
 }

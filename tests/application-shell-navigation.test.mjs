@@ -129,7 +129,7 @@ test('native Library switch retains server membership checks and safe Account re
 });
 
 // Execute the shared navigation with inert framework boundaries; no workspace is reconstructed.
-function shellFixture(allowed = true) {
+function shellFixture(allowed = true, active = 'creator') {
   const calls = [], exports = {};
   const jsx = (type, props) => ({ type, props });
   const definitions = compile(read('lib/application-shell-navigation.ts'), {});
@@ -143,7 +143,7 @@ function shellFixture(allowed = true) {
   vm.runInNewContext(ts.transpileModule(read('components/application-shell/SocratesShell.tsx'), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText, {
     exports, require: name => { assert.ok(name in modules, name); return modules[name]; },
   });
-  const tree = exports.ApplicationNavigation({ active: 'creator', onLogout: () => calls.push('logout') });
+  const tree = exports.ApplicationNavigation({ active, onLogout: () => calls.push('logout') });
   const elements = []; function walk(n) { if (Array.isArray(n)) n.forEach(walk); else if (n?.props) { elements.push(n); walk(n.props.children); } } walk(tree);
   return { calls, definitions, elements };
 }
@@ -169,4 +169,71 @@ for (const allowed of [true, false]) test(`shell navigation and Logout delegate 
 test('modified link activation neither discards nor reroutes current workspace', () => {
   const h = shellFixture(); h.elements.find(n => n.props.href === '/account').props.onClick({ button: 0, ctrlKey: true, preventDefault: () => assert.fail('native new tab must remain native') });
   assert.deepEqual(h.calls, []);
+});
+
+// Temporary Next16.3.4 compatibility boundary (upstream #96714 / #96737).
+// Execute installed framework functions, not a hand-written router simulation:
+// a hash-bearing initial route must never poison the shared route-cache URL.
+function frameworkFunction(path, name) {
+  const source = read(`node_modules/next/${path}`);
+  const file = ts.createSourceFile(path, source, ts.ScriptTarget.Latest, true);
+  const fn = file.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === name);
+  assert.ok(fn, `Installed framework boundary missing: ${name}`);
+  return `export ${fn.getText(file).replace(/^export /, '')}`;
+}
+function cachedDestination(initialURL, target, pending = false, esm = false) {
+  let cached;
+  const cache = (...args) => ({ canonicalUrl: args[5] });
+  const discoverPart = (...args) => { cached = args[12]; return { canonicalUrl: cached }; };
+  const dir = esm ? 'dist/esm' : 'dist';
+  const { discoverKnownRoute } = compile(frameworkFunction(`${dir}/client/components/segment-cache/optimistic-routes.js`, 'discoverKnownRoute'), {
+    knownRouteTreeRoot: {}, _cachekey: { splitPathnameIntoParts: p => p.split('/') },
+    splitPathnameIntoParts: p => p.split('/'), _cache: { fulfillRouteCacheEntry: cache }, fulfillRouteCacheEntry: cache,
+    discoverKnownRoutePart: discoverPart,
+  });
+  const initial = new URL(initialURL, 'https://fixture.invalid');
+  const entry = discoverKnownRoute(0, initial.pathname, initial.search, null, pending ? {} : null, {}, [], false, initialURL, true, false);
+  assert.equal(cached, entry.canonicalUrl);
+  const { navigateUsingPrefetchedRouteTree } = compile(frameworkFunction('dist/client/components/segment-cache/navigation.js', 'navigateUsingPrefetchedRouteTree'), {
+    _bfcache: { computeDynamicStaleAt: () => 0, UnknownDynamicStaleTime: 0 },
+    navigateToKnownRoute: (_now, _state, _url, canonicalURL) => canonicalURL,
+  });
+  return navigateUsingPrefetchedRouteTree(0, {}, new URL(target, 'https://fixture.invalid'), initial, '', null, {}, {}, 0, 0, 'push', {
+    canonicalUrl: cached, tree: {}, renderedSearch: initial.search, metadata: { varyPath: [] },
+  });
+}
+for (const [label, hash] of Object.entries(hashes)) test(`framework cache: Stats ${label} → Account → first Home, hashes, refresh and history`, () => {
+  for (const esm of [false, true]) for (const pending of [false, true]) {
+    assert.equal(cachedDestination('/' + hash, '/', pending, esm), '/');
+    for (const destination of ['/', ...Object.values(hashes).map(h => '/' + h)]) {
+      assert.equal(cachedDestination('/' + hash, destination, pending, esm), destination);
+    }
+  }
+  const home = historyFixture(); home.api.mount(); assert.equal(home.state.mode, 'dashboard');
+  const stats = historyFixture(hash, true); stats.api.mount(); assert.equal(stats.state.tab, label);
+});
+test('Creator → Account → Home and direct Account → Home retain canonical guarded destination', () => {
+  for (const active of ['creator', 'account']) {
+    const h = shellFixture(true, active);
+    h.elements.find(n => n.props.href === '/').props.onClick({ button: 0, preventDefault() {} });
+    assert.deepEqual(h.calls, ['guard', '/']);
+    assert.equal(cachedDestination('/', '/'), '/');
+  }
+});
+test('framework patch preserves encoded fragments and Library query strings', () => {
+  assert.equal(cachedDestination('/?library=nursing%23one#stats-history', '/?library=nursing%23one'), '/?library=nursing%23one');
+  assert.equal(cachedDestination('/?library=nursing#stats', '/?library=nursing#stats-history'), '/?library=nursing#stats-history');
+});
+test('temporary framework patch pins package and installed versions and errors on future versions', () => {
+  const pkg = JSON.parse(read('package.json'));
+  assert.equal(pkg.dependencies.next, '16.3.4'); assert.equal(pkg.dependencies['patch-package'], '8.0.1');
+  assert.match(pkg.scripts.postinstall, /patch-package --error-on-fail$/);
+  const guard = pkg.scripts.postinstall.match(/^node -e "([^"]+)" && /)?.[1]; assert.ok(guard);
+  for (const declared of ['16.3.4', '16.3.5']) for (const installed of ['16.3.4', '16.3.5']) {
+    const run = () => vm.runInNewContext(guard, { require: name => name === './package.json' ? { dependencies: { next: declared } } : { version: installed } });
+    if (declared === '16.3.4' && installed === '16.3.4') assert.doesNotThrow(run);
+    else assert.throws(run, /Temporary Next.js hash-cache patch requires exactly 16.3.4/);
+  }
+  assert.match(pkg.socratesFrameworkCompatibility.next16_3_4, /remove this patch/);
+  assert.match(pkg.socratesFrameworkCompatibility.next16_3_4, /96714.*96737/);
 });

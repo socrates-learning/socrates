@@ -1,0 +1,24 @@
+diff --git a/node_modules/next/dist/client/components/segment-cache/optimistic-routes.js b/node_modules/next/dist/client/components/segment-cache/optimistic-routes.js
+index a0ace60..b2259a1 100644
+--- a/node_modules/next/dist/client/components/segment-cache/optimistic-routes.js
++++ b/node_modules/next/dist/client/components/segment-cache/optimistic-routes.js
+@@ -105,6 +105,7 @@ function createEmptyPart() {
+ // The root of the known route tree.
+ let knownRouteTreeRoot = createEmptyPart();
+ function discoverKnownRoute(now, pathname, search, nextUrl, pendingEntry, routeTree, metadataVaryPath, couldBeIntercepted, canonicalUrl, supportsPerSegmentPrefetching, hasDynamicRewrite) {
++    canonicalUrl = canonicalUrl.split('#', 1)[0];
+     const tree = routeTree;
+     const pathnameParts = (0, _cachekey.splitPathnameIntoParts)(pathname);
+     if (pendingEntry !== null) {
+diff --git a/node_modules/next/dist/esm/client/components/segment-cache/optimistic-routes.js b/node_modules/next/dist/esm/client/components/segment-cache/optimistic-routes.js
+index 6fd5992..cca9b94 100644
+--- a/node_modules/next/dist/esm/client/components/segment-cache/optimistic-routes.js
++++ b/node_modules/next/dist/esm/client/components/segment-cache/optimistic-routes.js
+@@ -96,6 +96,7 @@ let knownRouteTreeRoot = createEmptyPart();
+  *
+  * Returns the fulfilled route cache entry.
+  */ export function discoverKnownRoute(now, pathname, search, nextUrl, pendingEntry, routeTree, metadataVaryPath, couldBeIntercepted, canonicalUrl, supportsPerSegmentPrefetching, hasDynamicRewrite) {
++    canonicalUrl = canonicalUrl.split('#', 1)[0];
+     const tree = routeTree;
+     const pathnameParts = splitPathnameIntoParts(pathname);
+     if (pendingEntry !== null) {
