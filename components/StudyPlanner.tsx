@@ -21,7 +21,6 @@ import {
 } from '@/lib/home-bootstrap';
 import { supabase } from '@/lib/supabase';
 import {
-  getEffectiveTopicNodeIds,
   getTopicSelectionPresentation,
 } from '@/lib/topic-selection-presentation';
 import type { ActiveLibrary, ActiveLibraryRole } from '@/lib/library-context';
@@ -2042,28 +2041,7 @@ export function StudyPlanner({
     };
   }
 
-  function isConceptSelectedByBranch(conceptId: string) {
-    const effectiveNodeIds = getEffectiveTopicNodeIds(
-      nodes,
-      selectedNodeIds,
-      excludedNodeIds
-    );
 
-    return placements.some(
-      (placement) =>
-        placement.concept_id === conceptId &&
-        effectiveNodeIds.has(placement.library_node_id)
-    );
-  }
-
-  function effectiveConceptSelected(conceptId: string) {
-    const override = conceptOverrides[conceptId];
-
-    if (override === 'included') return true;
-    if (override === 'excluded') return false;
-
-    return isConceptSelectedByBranch(conceptId);
-  }
 
   async function refreshResolvedDeck(deckId = deck?.id) {
     if (!deckId) return;
@@ -2241,111 +2219,8 @@ export function StudyPlanner({
     }
   }
 
-  async function setConceptSelection(conceptId: string, shouldSelect: boolean) {
-    if (!activeLibrary?.id || !deck || !userId) return;
 
-    const selectedByBranch = isConceptSelectedByBranch(conceptId);
-    const nextState: ConceptOverride | null = shouldSelect
-      ? selectedByBranch
-        ? null
-        : 'included'
-      : selectedByBranch
-        ? 'excluded'
-        : null;
 
-    setIsSaving(true);
-    setMessage('Saving concept selection...');
-
-    if (!nextState) {
-      const { error } = await supabase
-        .from('user_study_concept_overrides')
-        .delete()
-        .eq('deck_id', deck.id)
-        .eq('concept_id', conceptId);
-
-      if (error) {
-        setMessage(`Unable to update concept selection: ${error.message}`);
-        setIsSaving(false);
-        return;
-      }
-
-      setConceptOverrides((current) => {
-        const next = { ...current };
-        delete next[conceptId];
-        return next;
-      });
-    } else {
-      const { error } = await supabase.from('user_study_concept_overrides').upsert(
-        {
-          deck_id: deck.id,
-          user_id: userId,
-          library_id: activeLibrary.id,
-          concept_id: conceptId,
-          selection_state: nextState,
-        },
-        { onConflict: 'deck_id,concept_id' }
-      );
-
-      if (error) {
-        setMessage(`Unable to update concept selection: ${error.message}`);
-        setIsSaving(false);
-        return;
-      }
-
-      setConceptOverrides((current) => ({
-        ...current,
-        [conceptId]: nextState,
-      }));
-    }
-
-    setMessage('Deck updated.');
-    await refreshResolvedDeck();
-    setIsSaving(false);
-  }
-
-  async function saveAndReturnToDashboard() {
-    setIsSaving(true);
-    await refreshResolvedDeck();
-    setIsSaving(false);
-    setMode('dashboard');
-    setMessage('Deck saved.');
-  }
-
-  async function clearDeck() {
-    if (!deck) return;
-
-    setIsSaving(true);
-    setMessage('Clearing deck...');
-
-    const { error: nodeError } = await supabase
-      .from('user_study_node_selections')
-      .delete()
-      .eq('deck_id', deck.id);
-    const { error: exclusionError } = await supabase
-      .from('study_deck_node_exclusions')
-      .delete()
-      .eq('deck_id', deck.id);
-    const { error: overrideError } = await supabase
-      .from('user_study_concept_overrides')
-      .delete()
-      .eq('deck_id', deck.id);
-
-    if (nodeError || exclusionError || overrideError) {
-      setMessage(
-        `Unable to clear deck: ${nodeError?.message || exclusionError?.message || overrideError?.message
-        }`
-      );
-      setIsSaving(false);
-      return;
-    }
-
-    setSelectedNodeIds(new Set());
-    setExcludedNodeIds(new Set());
-    setConceptOverrides({});
-    await refreshResolvedDeck();
-    setMessage('Deck cleared.');
-    setIsSaving(false);
-  }
 
   function toggleExpandedNode(nodeId: string) {
     setExpandedNodeIds((current) => {
