@@ -1,3 +1,5 @@
+import * as topicSelection from '../lib/topic-selection-presentation.ts';
+import * as homeSettings from '../lib/home-deck-settings.ts';
 import * as standaloneCards from '../lib/standalone-custom-cards.ts';
 import * as topicPositioning from '../lib/creator-topic-positioning.ts';
 import * as personalStructure from '../lib/creator-personal-structure.ts';
@@ -114,8 +116,11 @@ function editor({ role = 'admin', editing = false, response, references = [], ca
     'lucide-react': new Proxy({}, { get: (_target, key) => `icon:${String(key)}` }),
     '@/components/Header': {},
     '@/components/MarkdownContent': {},
+    './creator/CreatorLearnerQuestionsWorkspace': { CreatorLearnerQuestionsWorkspace() {} },
     './creator/StandaloneCustomCardWorkspace': { StandaloneCustomCardWorkspace: () => null },
     '@/lib/standalone-custom-cards': standaloneCards,
+    '@/lib/topic-selection-presentation': topicSelection,
+    '@/lib/home-deck-settings': homeSettings,
     '@/components/creator/CreatorStudioChrome': {
       CreatorStudioLocalHeader() {},
       CreatorStudioSaveToolbar() {},
@@ -162,6 +167,8 @@ function editor({ role = 'admin', editing = false, response, references = [], ca
       overlays: [], topicPlacements: placed ? [{id:'placement',owner_id:'owner',personal_topic_id:'mine-topic',library_node_id:'topic'}] : [],
     },
   };
+  // Learner browsing now immediately sorts persisted Cards, whose timestamps are required.
+  if (role === 'learner') props.initialPersonalContent.cards.forEach(card => { card.created_at = '2026-01-01T00:00:00Z'; card.updated_at = card.created_at; });
   if (neutralFixture) {
     props.initialPersonalContent.topics[0].name = 'Topic';
     props.initialPersonalContent.concepts[0].name = 'Concept';
@@ -174,7 +181,7 @@ function editor({ role = 'admin', editing = false, response, references = [], ca
 function nodes(tree) {
   if (!tree || typeof tree !== 'object') return [];
   if (Array.isArray(tree)) return tree.flatMap(nodes);
-  return [tree, ...nodes(tree.props?.children)];
+  return [tree, ...nodes(tree.props?.children), ...(tree.type?.name === 'CreatorLearnerQuestionsWorkspace' ? [...nodes(tree.props.editor), ...nodes(tree.props.topicTree)] : [])];
 }
 for (const role of ['learner', 'admin', 'editor']) {
   const destination = role === 'learner' ? 'personal' : 'official';
@@ -470,7 +477,7 @@ test('standalone Cards use existing search, open without a Concept, and remain i
 
 
 test('Add Custom Card reuses the Content left pane and retains the Topic Tree without navigation', () => {
-  const h=editor({role:'learner',placed:true});let e=h.render();
+  const h=editor({role:'admin',placed:true});let e=h.render();
   e.setActiveCreatorTab('content');e.setConcept('Existing draft');e=h.render();
   const control=nodes(e.tree).find(n=>n.props?.className==='treeControls');
   nodes(control).find(n=>n.type==='button' && visibleText(n)==='Add Custom Card').props.onClick();e=h.render();
@@ -490,7 +497,7 @@ test('Add Custom Card reuses the Content left pane and retains the Topic Tree wi
   assert.deepEqual(h.routes,[]);assert.equal(h.calls.length,0);
 });
 
-for (const role of ['learner','admin','editor']) test(`${role}: explicit Add Custom uses identical owned Card action while normal destination stays role-derived`,()=>{
+for (const role of ['admin','editor']) test(`${role}: explicit Add Custom uses identical owned Card action while normal destination stays role-derived`,()=>{
   const h=editor({role,placed:true});let e=h.render();
   const action=nodes(e.tree).find(n=>n.type==='button'&&visibleText(n)==='Add Custom Card');assert.ok(action);
   action.props.onClick();e=h.render();
@@ -503,7 +510,7 @@ for (const role of ['learner','admin','editor']) test(`${role}: explicit Add Cus
 });
 
 test('Card search opens the Content editor at its existing Topic and Topic changes respect busy state',()=>{
-  const h=editor({role:'learner',placed:true});let e=h.render();
+  const h=editor({role:'admin',placed:true});let e=h.render();
   e.setActiveCreatorTab('questions');
   e.setStandaloneCards([{id:'standalone',owner_id:'owner',concept_id:null,question:'Front',answer:'Back',library_node_id:null,library_id:null,personal_topic_id:'mine-topic'}]);e=h.render();
   e.selectExistingQuestion({source:'personal',id:'standalone',conceptId:null});e=h.render();
@@ -517,7 +524,7 @@ test('Card search opens the Content editor at its existing Topic and Topic chang
 
 
 test('contextual Delete Card removes only its owner-qualified identity and restores the Concept pane',async()=>{
- const h=editor({role:'learner',placed:true});let e=h.render();
+ const h=editor({role:'admin',placed:true});let e=h.render();
  e.setConcept('Preserved Concept draft');
  e.setStandaloneCards([{id:'standalone',owner_id:'owner',concept_id:null,question:'Front',answer:'Back',library_node_id:'topic',library_id:'library',personal_topic_id:null,created_at:'2026',updated_at:'2026'}]);e=h.render();
  e.selectExistingQuestion({source:'personal',id:'standalone',conceptId:null});e=h.render();

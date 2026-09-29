@@ -39,7 +39,7 @@ test('route classifier opens only the explicit shared Creator contract', () => {
   assert.equal(classifyCreatorRoute('/study-creator'), 'outside');
 });
 
-test('cohort learner is allowed on every shared Creator route', () => {
+test('authenticated learner is allowed on every shared Creator route', () => {
   for (const pathname of sharedRoutes) {
     assert.equal(canAccessCreatorRoute({
       pathname, role: 'learner', userId: learnerA, learnerAllowlist: allowlist,
@@ -47,11 +47,11 @@ test('cohort learner is allowed on every shared Creator route', () => {
   }
 });
 
-test('non-cohort learner is denied on every shared Creator route', () => {
+test('another authenticated learner is allowed on every shared Creator route', () => {
   for (const pathname of sharedRoutes) {
     assert.equal(canAccessCreatorRoute({
       pathname, role: 'learner', userId: learnerB, learnerAllowlist: allowlist,
-    }), false);
+    }), true);
   }
 });
 
@@ -73,23 +73,23 @@ test('editor and admin retain access to every Creator route', () => {
   }
 });
 
-test('missing and empty allowlists deny learners without affecting staff', () => {
+test('missing and empty allowlists do not restrict authenticated learners or staff', () => {
   for (const learnerAllowlist of [undefined, '', '   ']) {
     assert.equal(canAccessSharedCreator({
       role: 'learner', userId: learnerA, learnerAllowlist,
-    }), false);
+    }), true);
     assert.equal(canAccessSharedCreator({
       role: 'editor', userId: learnerA, learnerAllowlist,
     }), true);
   }
 });
 
-test('one malformed allowlist entry fails the whole learner cohort closed', () => {
+test('obsolete malformed allowlist does not control learner admission', () => {
   const malformed = `${learnerA},not-a-uuid`;
   assert.equal(parseCreatorLearnerAllowlist(malformed).valid, false);
   assert.equal(canAccessSharedCreator({
     role: 'learner', userId: learnerA, learnerAllowlist: malformed,
-  }), false);
+  }), true);
 });
 
 test('allowlist parsing is case-insensitive, trimmed, and deduplicated', () => {
@@ -102,25 +102,21 @@ test('allowlist parsing is case-insensitive, trimmed, and deduplicated', () => {
   }), true);
 });
 
-test('browser-controlled values cannot substitute for the server allowlist', () => {
-  for (const pathname of [
-    '/creator?creator_access=true',
-    '/creator/concepts/new?role=editor',
-  ]) {
-    assert.equal(canAccessCreatorRoute({
-      pathname: new URL(pathname, 'https://socrates.local').pathname,
-      role: 'learner', userId: learnerB, learnerAllowlist: allowlist,
-    }), false);
+test('browser-controlled values cannot grant staff route access', () => {
+  for (const pathname of ['/creator/libraries?role=admin', '/creator/articles?creator_access=true']) {
+    assert.equal(canAccessCreatorRoute({ pathname: new URL(pathname, 'https://socrates.local').pathname,
+      role: 'learner', userId: learnerB, learnerAllowlist: allowlist }), false);
   }
 });
 
-test('removing a learner from configuration immediately restores denial', () => {
-  assert.equal(canAccessSharedCreator({
-    role: 'learner', userId: learnerA, learnerAllowlist: allowlist,
-  }), true);
-  assert.equal(canAccessSharedCreator({
-    role: 'learner', userId: learnerA, learnerAllowlist: learnerB,
-  }), false);
+test('authenticated learner access is independent of obsolete cohort configuration', () => {
+  for (const learnerAllowlist of [allowlist, learnerB, '', undefined]) {
+    assert.equal(canAccessSharedCreator({ role: 'learner', userId: learnerA, learnerAllowlist }), true);
+  }
+  for (const userId of ['', 'not-authenticated', 'not-a-uuid']) {
+    assert.equal(canAccessSharedCreator({ role: 'learner', userId, learnerAllowlist: allowlist }), false);
+  }
+  assert.equal(canAccessSharedCreator({ role: 'unknown', userId: learnerA, learnerAllowlist: allowlist }), false);
 });
 
 test('Home advertises canonical Creator while route authorization remains server-controlled', () => {

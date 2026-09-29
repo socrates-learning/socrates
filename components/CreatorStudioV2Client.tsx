@@ -1,5 +1,6 @@
 'use client';
 
+import { CreatorLearnerQuestionsWorkspace } from './creator/CreatorLearnerQuestionsWorkspace';
 import { StandaloneCustomCardWorkspace, type StandaloneCardRequest } from './creator/StandaloneCustomCardWorkspace';
 import { deleteStandaloneCard, standaloneCardMatchesTopic, standaloneCardAttachment, type CreatorStandaloneCard, type StandaloneCardAttachment } from '@/lib/standalone-custom-cards';
 import {
@@ -10,6 +11,8 @@ import {
   useState,
   type FormEvent,
 } from 'react';
+import { getTopicSelectionPresentation } from '@/lib/topic-selection-presentation';
+import { groupSelection, mutateHomeSettings, requireHomeSettings, type HomeSettings } from '@/lib/home-deck-settings';
 import { useRouter } from 'next/navigation';
 import {
   ArrowUpDown,
@@ -85,6 +88,23 @@ import {
   type CreatorQuestionEditorState,
 } from '@/lib/creator-studio-runtime';
 import styles from './CreatorStudioV2Client.module.css';
+
+type LearnerDeckSnapshot = {
+  nodes: { id: string; parent_id: string | null }[];
+  placements: { concept_id: string; library_node_id: string }[];
+  selected_node_ids: string[];
+  excluded_node_ids: string[];
+  concept_overrides: Record<string, 'included' | 'excluded'>;
+} & HomeSettings;
+
+function learnerDeckSnapshot(data: unknown): LearnerDeckSnapshot {
+  requireHomeSettings(data);
+  const value = data as LearnerDeckSnapshot;
+  if (!Array.isArray(value.nodes) || !Array.isArray(value.placements)
+    || !Array.isArray(value.selected_node_ids) || !Array.isArray(value.excluded_node_ids)
+    || !value.concept_overrides) throw new Error('Study selection could not be confirmed. Reload Creator.');
+  return value;
+}
 
 type Reference = {
   id: string;
@@ -825,7 +845,127 @@ export function CreatorStudioV2Client({
       () => new Set(resolvedTopics[0]?.id ? [resolvedTopics[0].id] : [])
     );
   const [prerequisiteStatus, setPrerequisiteStatus] = useState<Status>(null);
-  const [activeCreatorTab, setActiveCreatorTab] = useState<CreatorStudioTab>('content');
+  // Study selection belongs to the learner's deck, never the Concept placement draft.
+  const [learnerDeck, setLearnerDeck] = useState<{
+    libraryId: string; deckId: string; snapshot: LearnerDeckSnapshot;
+  } | null>(null);
+  const [learnerSelectionError, setLearnerSelectionError] = useState('');
+  const [learnerSelectionBusy, setLearnerSelectionBusy] = useState(false);
+  const learnerSelectionContext = useRef<object | null>(null);
+  const learnerSelectionPending = useRef(false);
+  const [learnerStructureRefresh, setLearnerStructureRefresh] = useState(0);
+
+  useEffect(() => {
+    const context = {};
+    learnerSelectionContext.current = context;
+    learnerSelectionPending.current = false;
+    if (!isLearnerReadOnly || !activeLibraryId) return;
+    setLearnerDeck(null);
+    setLearnerSelectionError('');
+    setLearnerSelectionBusy(true);
+    async function load() {
+      try {
+        const existing = await supabase.rpc('get_existing_home_study_bootstrap', { p_library_id: activeLibraryId });
+        if (existing.error) throw new Error(existing.error.message);
+        let deck = existing.data?.deck;
+        let snapshot = existing.data?.bootstrap;
+        if (learnerSelectionContext.current !== context) return;
+        if (!deck) {
+          const created = await supabase.rpc('get_or_create_active_study_deck', { p_library_id: activeLibraryId });
+          if (created.error || !created.data?.id) throw new Error(created.error?.message || 'Study deck unavailable.');
+          deck = created.data;
+          if (learnerSelectionContext.current !== context) return;
+          const loaded = await supabase.rpc('get_home_study_bootstrap', { p_library_id: activeLibraryId, p_deck_id: deck.id });
+          if (loaded.error) throw new Error(loaded.error.message);
+          snapshot = loaded.data;
+        }
+        const confirmed = learnerDeckSnapshot(snapshot);
+        if (learnerSelectionContext.current === context) setLearnerDeck({ libraryId: activeLibraryId!, deckId: deck.id, snapshot: confirmed });
+      } catch (error) {
+        if (learnerSelectionContext.current === context) setLearnerSelectionError(error instanceof Error ? error.message : 'Unable to load Study selection. Reload Creator.');
+      } finally {
+        if (learnerSelectionContext.current === context) setLearnerSelectionBusy(false);
+      }
+    }
+    void load();
+    return () => { if (learnerSelectionContext.current === context) learnerSelectionContext.current = null; };
+  }, [isLearnerReadOnly, activeLibraryId]);
+
+  const learnerSelectionDeckId = learnerDeck?.libraryId === activeLibraryId ? learnerDeck.deckId : null;
+  // Structural changes require a fresh authoritative snapshot; never invent new Topic state.
+  // A selection write owns readback until completion, then retries any deferred refresh.
+  useEffect(() => {
+    if (!isLearnerReadOnly || !activeLibraryId || !learnerSelectionDeckId || learnerSelectionPending.current) return;
+    const context = learnerSelectionContext.current;
+    let cancelled = false;
+    setLearnerSelectionBusy(true);
+    async function refresh() {
+      try {
+        const result = await supabase.rpc('get_home_study_bootstrap', { p_library_id: activeLibraryId, p_deck_id: learnerSelectionDeckId });
+        if (result.error) throw new Error(result.error.message);
+        const snapshot = learnerDeckSnapshot(result.data);
+        if (!cancelled && learnerSelectionContext.current === context) setLearnerDeck({ libraryId: activeLibraryId!, deckId: learnerSelectionDeckId!, snapshot });
+      } catch (error) {
+        if (!cancelled && learnerSelectionContext.current === context) setLearnerSelectionError(`${error instanceof Error ? error.message : 'Unable to refresh Study selection.'} Reload Creator before changing selection.`);
+      } finally {
+        if (!cancelled && learnerSelectionContext.current === context) setLearnerSelectionBusy(false);
+      }
+    }
+    void refresh();
+    return () => { cancelled = true; };
+  }, [isLearnerReadOnly, activeLibraryId, learnerSelectionDeckId, personalTopics, personalTopicPlacements, learnerStructureRefresh]);
+
+  async function saveLearnerTopicSelection(topic: UnifiedCreatorTopicNode, include: boolean) {
+    if (!isLearnerReadOnly || !learnerDeck || learnerDeck.libraryId !== activeLibraryId
+      || learnerSelectionError || learnerSelectionBusy || learnerSelectionPending.current) return;
+    const context = learnerSelectionContext.current;
+    learnerSelectionPending.current = true;
+    setLearnerSelectionBusy(true);
+    try {
+      const rpc = (name: string, args: Record<string, unknown>) => supabase.rpc(name, args);
+      let snapshot: LearnerDeckSnapshot;
+      if (topic.source === 'personal') {
+        const settings = await mutateHomeSettings(rpc, learnerDeck.deckId, learnerDeck.libraryId, 'topic-selection', topic.id, include);
+        snapshot = learnerDeckSnapshot(settings);
+      } else {
+        const saved = await rpc('set_study_deck_node_selection', { p_deck_id: learnerDeck.deckId, p_node_id: topic.id, p_should_include: include });
+        if (saved.error) throw new Error(saved.error.message);
+        if (!Array.isArray(saved.data?.selected_node_ids) || !Array.isArray(saved.data?.excluded_node_ids)) throw new Error('Selection save was not confirmed.');
+        const loaded = await rpc('get_home_study_bootstrap', { p_library_id: learnerDeck.libraryId, p_deck_id: learnerDeck.deckId });
+        if (loaded.error) throw new Error(loaded.error.message);
+        snapshot = learnerDeckSnapshot(loaded.data);
+      }
+      if (learnerSelectionContext.current === context) setLearnerDeck({ ...learnerDeck, snapshot });
+    } catch (error) {
+      // Keep the last confirmed state and block retries after an uncertain write.
+      if (learnerSelectionContext.current === context) setLearnerSelectionError(`${error instanceof Error ? error.message : 'Unable to confirm Study selection.'} Reload Creator before changing selection.`);
+    } finally {
+      if (learnerSelectionContext.current === context) {
+        learnerSelectionPending.current = false;
+        setLearnerSelectionBusy(false);
+        setLearnerStructureRefresh(current => current + 1);
+      }
+    }
+  }
+
+  function renderLearnerStudyCheckbox(topic: UnifiedCreatorTopicNode) {
+    const snapshot = learnerDeck?.libraryId === activeLibraryId ? learnerDeck.snapshot : null;
+    const personalState = snapshot?.unified_deck_settings.topic_states.some(state => state.group_key === topic.key);
+    const available = !!snapshot && (topic.source === 'official' || personalState);
+    const selection = !available ? { checked: false, partial: false }
+      : topic.source === 'official' ? getTopicSelectionPresentation(topic.id, snapshot.nodes, snapshot.placements,
+        new Set(snapshot.selected_node_ids), new Set(snapshot.excluded_node_ids), snapshot.concept_overrides)
+      : groupSelection({ ...topic, parent_id: null, children: [] }, snapshot);
+    return <input key="study-selection" className={styles.topicCheckbox} type="checkbox"
+      aria-label={`Include ${topic.name} in Study`} checked={selection.checked}
+      aria-checked={selection.partial ? 'mixed' : selection.checked}
+      ref={input => { if (input) input.indeterminate = selection.partial; }}
+      disabled={!available || learnerSelectionBusy || !!learnerSelectionError}
+      onClick={event => event.stopPropagation()}
+      onChange={event => { void saveLearnerTopicSelection(topic, event.currentTarget.checked); }} />;
+  }
+
+  const [activeCreatorTab, setActiveCreatorTab] = useState<CreatorStudioTab>(isLearnerReadOnly ? 'questions' : 'content');
   const [editorMode, setEditorMode] = useState<EditorMode>('write');
   const [dialogMode, setDialogMode] = useState<DialogMode>(null);
   const topicDialogReturnFocusRef = useRef<HTMLElement | null>(null);
@@ -1138,7 +1278,7 @@ export function CreatorStudioV2Client({
     ]
   );
   useEffect(() => {
-    if (activeCreatorTab !== 'questions') return;
+    if (isLearnerReadOnly || activeCreatorTab !== 'questions') return;
 
     if (!activeLibraryId) {
       questionSearchLibraryRef.current = null;
@@ -1432,16 +1572,17 @@ export function CreatorStudioV2Client({
   }, [isLearnerReadOnly]);
 
   useEffect(() => {
-    void loadTagCatalog();
-  }, [loadTagCatalog]);
+    if (!isLearnerReadOnly) void loadTagCatalog();
+  }, [isLearnerReadOnly, loadTagCatalog]);
 
   useEffect(() => {
-    if (activeCreatorTab === 'tags') {
+    if (!isLearnerReadOnly && activeCreatorTab === 'tags') {
       void loadTagCatalog(true);
     }
-  }, [activeCreatorTab, loadTagCatalog]);
+  }, [activeCreatorTab, isLearnerReadOnly, loadTagCatalog]);
 
   useEffect(() => {
+    if (isLearnerReadOnly) return;
     function refreshTagCatalogUsage(event: StorageEvent) {
       if (event.key === TAG_CATALOG_USAGE_INVALIDATION_KEY) {
         void loadTagCatalog(true);
@@ -1450,10 +1591,11 @@ export function CreatorStudioV2Client({
 
     window.addEventListener('storage', refreshTagCatalogUsage);
     return () => window.removeEventListener('storage', refreshTagCatalogUsage);
-  }, [loadTagCatalog]);
+  }, [isLearnerReadOnly, loadTagCatalog]);
 
   useEffect(() => {
     if (
+      isLearnerReadOnly ||
       !resolvedConcept.id ||
       !activeLibraryId ||
       conceptId !== resolvedConcept.id
@@ -1563,6 +1705,7 @@ export function CreatorStudioV2Client({
     activeLibraryId,
     conceptId,
     initialReferences,
+    isLearnerReadOnly,
     resolvedConcept.bodyMarkdown,
     resolvedConcept.id,
     resolvedConcept.placementIds,
@@ -1596,6 +1739,7 @@ export function CreatorStudioV2Client({
   ]);
 
   useEffect(() => {
+    if (isLearnerReadOnly) return;
     if (!activeLibraryId) {
       setQuestionConceptsByTopicId({});
       return;
@@ -1690,7 +1834,7 @@ export function CreatorStudioV2Client({
   ]);
 
   useEffect(() => {
-    if (activeCreatorTab !== 'questions') return;
+    if (isLearnerReadOnly || activeCreatorTab !== 'questions') return;
 
     const conceptIds = Array.from(
       new Set(
@@ -2193,7 +2337,7 @@ export function CreatorStudioV2Client({
   }, [availableTags, tagCatalogSearch]);
 
   function showStatus(tone: StatusTone, message: string) {
-    if (activeCreatorTab === 'questions') {
+    if (activeCreatorTab === 'questions' && !isLearnerReadOnly) {
       setQuestionStatus({ tone, message });
       return;
     }
@@ -2537,7 +2681,8 @@ export function CreatorStudioV2Client({
       const card = standaloneCards.find((item) => item.id === question.id && item.owner_id === initialPersonalContent.ownerId);
       if (!card) return;
       const attachment = standaloneCardAttachment(card);
-      setActiveCreatorTab('content');
+      setActiveCreatorTab(isLearnerReadOnly ? 'questions' : 'content');
+      if (isLearnerReadOnly) { resetQuestionEditor(null); setStandaloneEditorVersion(current => current + 1); }
       setActivePersonalTopicId(attachment.source === 'personal' ? attachment.topicId : null);
       if (attachment.source === 'official') setActiveTopicId(attachment.topicId);
       setStandaloneError('');
@@ -2725,6 +2870,7 @@ export function CreatorStudioV2Client({
   }
 
   useEffect(() => {
+    if (isLearnerReadOnly) return;
     if (!activeLibraryId || !questionConceptId) {
       setExistingQuestions([]);
       setIsLoadingExistingQuestions(false);
@@ -2762,7 +2908,7 @@ export function CreatorStudioV2Client({
     return () => {
       isMounted = false;
     };
-  }, [activeLibraryId, fetchExistingQuestions, questionConceptId]);
+  }, [activeLibraryId, fetchExistingQuestions, isLearnerReadOnly, questionConceptId]);
 
   async function reloadRealTopicTree(preferredActiveTopicId?: string) {
     if (!activeLibraryId) return;
@@ -5418,6 +5564,7 @@ export function CreatorStudioV2Client({
             aria-pressed={isActive}
             aria-label={`Use ${topic.name} for question sourcing`}
             onClick={() => {
+              if (isLearnerReadOnly) { if (activeLibraryId) openLearnerDraft({ source: 'official', topicId: topic.id, libraryId: activeLibraryId }, topic.name); return; }
               if (standaloneRequest && !closeStandaloneEditor()) return;
               setActivePersonalTopicId(null);
               setActiveTopicId(topic.id);
@@ -5776,7 +5923,7 @@ export function CreatorStudioV2Client({
           className={`${styles.topicRow} ${isActive ? styles.activeTopicRow : ''}`}
           style={{ paddingLeft: `${12 + depth * 38}px` }}
         >
-          <TopicDragHandle topicKey={topic.key} />
+          {isLearnerReadOnly ? [<TopicDragHandle key="drag" topicKey={topic.key} />, renderLearnerStudyCheckbox(topic)] : <TopicDragHandle topicKey={topic.key} />}
           <button
             className={styles.expandButton}
             type="button"
@@ -5804,6 +5951,7 @@ export function CreatorStudioV2Client({
             aria-pressed={isActive}
             aria-label={`Make ${topic.name} the active topic`}
             onClick={() => {
+              if (isLearnerReadOnly) { openLearnerDraft({ source: 'personal', topicId: topic.id }, topic.name); return; }
               if (standaloneRequest && !closeStandaloneEditor()) return;
               setActivePersonalTopicId(topic.id);
               setPersonalConceptTopicId(topic.id);
@@ -5998,7 +6146,7 @@ export function CreatorStudioV2Client({
               <span className={styles.arrowSpacer} />
             )}
           </button>
-          <input
+          {isLearnerReadOnly ? renderLearnerStudyCheckbox(topic) : <input
             className={styles.topicCheckbox}
             type="checkbox"
             checked={isChecked}
@@ -6006,13 +6154,14 @@ export function CreatorStudioV2Client({
             aria-label={`Assign concept to ${topic.name}`}
             onClick={(event) => event.stopPropagation()}
             onChange={() => toggleSelected(topic.id)}
-          />
+          />}
           <button
             className={styles.topicActivationButton}
             type="button"
             aria-pressed={isActive}
             aria-label={`Make ${topic.name} the active topic`}
             onClick={() => {
+              if (isLearnerReadOnly) { if (activeLibraryId) openLearnerDraft({ source: 'official', topicId: topic.id, libraryId: activeLibraryId }, topic.name); return; }
               if (standaloneRequest && !closeStandaloneEditor()) return;
               setActivePersonalTopicId(null);
               setActiveTopicId(topic.id);
@@ -6038,10 +6187,234 @@ export function CreatorStudioV2Client({
     );
   }
 
+  function openLearnerDraft(attachment: StandaloneCardAttachment | null, topicName: string) {
+    if (isSaving || isSavingQuestion || !confirmDiscardQuestionChanges()) return;
+    resetQuestionEditor(null);
+    setStandaloneEditorVersion(current => current + 1);
+    setStandaloneError('');
+    setStandaloneRequest(attachment ? { card: null, attachment, topicName } : null);
+    if (attachment) {
+      setActivePersonalTopicId(attachment.source === 'personal' ? attachment.topicId : null);
+      if (attachment.source === 'official') setActiveTopicId(attachment.topicId);
+    }
+  }
+
+  const standaloneTopicName = activePersonalTopic?.name || activeTopic?.name || 'Selected Topic';
+  const contentTopicPanel = (
+                <section className={`${styles.panel} ${styles.topicPanel}`}>
+              <div>
+                {isLearnerReadOnly ? [
+                  <h2 key="heading">2. Topic Tree</h2>,
+                  learnerSelectionError && <p key="error" role="alert">{learnerSelectionError}</p>,
+                  learnerSelectionBusy && <p key="status" role="status">Loading Study selection…</p>,
+                ] : <h2>2. Topic Tree</h2>}
+                <p>Select a topic, then add a subtopic beneath it.</p>
+              </div>
+
+              <div className={styles.treeControls}>
+                <label className={styles.searchBox}>
+                  <span className={styles.srOnly}>Search topics</span>
+                  <input
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    placeholder="Search topics..."
+                  />
+                  <Search size={20} />
+                </label>
+                {!isLearnerReadOnly && creatorCapabilities.personal.createCard && creatorCapabilities.library.canAccessActiveLibrary && <button className={styles.toolButton} type="button"
+                  disabled={!standaloneTarget || isMutatingTopic} onClick={() => {
+                    if (!standaloneTarget || !closeStandaloneEditor()) return;
+                    setStandaloneError('');
+                    setStandaloneEditorVersion((current) => current + 1);
+                    setStandaloneRequest({ card: null, attachment: standaloneTarget,
+                      topicName: standaloneTopicName });
+                  }}>Add Custom Card</button>}
+                {standaloneRequest?.card && <button className={styles.toolButton} type="button"
+                  onClick={() => void deleteSelectedStandaloneCard()}>Delete Card</button>}
+                <button className={styles.toolButton} type="button" onClick={openAddDialog} disabled={(creationDestination === 'official' && !creatorAuthority.canManageTopicTree) || isMutatingTopic}>
+                  <Plus size={18} /> Add Subtopic
+                </button>
+                <button className={styles.toolButton} type="button" onClick={openPersonalTopicDialog} disabled={isMutatingTopic}>
+                  <Plus size={18} /> New Topic
+                </button>
+                {(!isLearnerReadOnly || !!activePersonalTopic) && <button className={styles.toolButton} type="button" onClick={openRenameDialog} disabled={(!activePersonalTopic && !creatorAuthority.canManageTopicTree) || isMutatingTopic}>
+                  <Pencil size={17} /> Rename
+                </button>}
+                {(!isLearnerReadOnly || !!activePersonalTopic) && <button className={styles.toolButton} type="button" onClick={deleteActiveTopic} disabled={(!activePersonalTopic && !creatorAuthority.canManageTopicTree) || isMutatingTopic}>
+                  <Trash2 size={17} /> Delete
+                </button>}
+                {(!isLearnerReadOnly || !!activePersonalTopic) && <button className={styles.toolButton} type="button" onClick={openMoveDialog} disabled={(!activePersonalTopic && !creatorAuthority.canManageTopicTree) || isMutatingTopic}>
+                  <ArrowUpDown size={17} /> Move
+                </button>}
+              </div>
+
+              {dialogMode && (
+                <div className={styles.inlineDialog} role="dialog" aria-modal="false">
+                  {dialogMode === 'move' ? (
+                    <>
+                      <label>
+                        Move “{activePersonalTopic?.name || activeTopic?.name}” beneath
+                        <select
+                          value={moveDestinationId}
+                          onChange={(event) => setMoveDestinationId(event.target.value)}
+                        >
+                          {activePersonalTopic?.parent_id === null ? (
+                            <>
+                              <option value="" disabled>Select a Topic</option>
+                              {personalRootPlacementDestinations.map((destination) => (
+                                <option key={destination.key} value={destination.key}>
+                                  {destination.label}
+                                </option>
+                              ))}
+                            </>
+                          ) : activePersonalTopic ? (
+                            personalMoveDestinations.map((destination) => (
+                              <option
+                                key={destination.id}
+                                value={createCreatorEntityKey('personal', 'topic', destination.id)}
+                              >
+                                {destination.name}
+                              </option>
+                            ))
+                          ) : (
+                            moveDestinations.map((destination) => (
+                              <option key={destination.id} value={destination.id}>
+                                {destination.label}
+                              </option>
+                            ))
+                          )}
+                        </select>
+                      </label>
+                      <div className={styles.dialogActions}>
+                        <button className={styles.secondaryButton} type="button" onClick={closeTopicDialog}>
+                          Cancel
+                        </button>
+                        <button className={styles.primaryButton} type="button" onClick={moveActiveTopic} disabled={isMutatingTopic}>
+                          {isMutatingTopic ? 'Moving…' : 'Move'}
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <label>
+                        {dialogMode === 'add-personal'
+                          ? activePersonalTopic
+                            ? `New Topic beneath ${activePersonalTopic.name}`
+                            : activeTopic
+                              ? `New Topic beneath ${activeTopic.name}`
+                              : 'Select a Topic before creating content'
+                          : dialogMode === 'add'
+                            ? `Add Subtopic beneath ${activePersonalTopic?.name || activeTopic?.name}`
+                            : `Rename “${activePersonalTopic?.name || activeTopic?.name}”`}
+                        <input
+                          autoFocus
+                          value={nameDraft}
+                          onChange={(event) => setNameDraft(event.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter' && !isMutatingTopic) saveNameDialog();
+                          }}
+                          placeholder={dialogMode === 'add-personal' ? 'Topic name' : dialogMode === 'add' ? 'Subtopic name' : 'Topic name'}
+                        />
+                      </label>
+                      <div className={styles.dialogActions}>
+                        <button className={styles.secondaryButton} type="button" onClick={closeTopicDialog}>
+                          Cancel
+                        </button>
+                        <button className={styles.primaryButton} type="button" onClick={saveNameDialog} disabled={isMutatingTopic}>
+                          {isMutatingTopic ? 'Saving…' : 'Save'}
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+
+              <CreatorTopicTreeInteraction context={positioningContext} disabled={isMutatingTopic || !!dialogMode} onMove={positionTopicFromTree}>
+              <div className={styles.treeViewport} aria-label="Topic Tree">
+                {visibleTopicComposition.officialRoots.map((topic) =>
+                  renderUnifiedTopic(topic)
+                )}
+                {visibleTopicComposition.unplacedPersonalRoots.length > 0 && (
+                  <div className={styles.unplacedTopicsLabel}>Placement required</div>
+                )}
+                {visibleTopicComposition.unplacedPersonalRoots.map((topic) =>
+                  renderPersonalTopic(topic)
+                )}
+                {visibleTopicComposition.otherLibraryPersonalRoots.length > 0 && (
+                  <div className={styles.unplacedTopicsLabel}>
+                    Other Library
+                  </div>
+                )}
+                {visibleTopicComposition.otherLibraryPersonalRoots.map((topic) =>
+                  renderPersonalTopic(topic)
+                )}
+                {normalizedSearch && ![
+                  ...visibleTopicComposition.officialRoots,
+                  ...visibleTopicComposition.unplacedPersonalRoots,
+                  ...visibleTopicComposition.otherLibraryPersonalRoots,
+                ].some(unifiedTopicMatchesSearch) && (
+                  <div className={styles.emptyTree}>No topics match “{searchQuery.trim()}”.</div>
+                )}
+              </div>
+              </CreatorTopicTreeInteraction>
+              {standaloneError && <div className={`${styles.status} ${styles.error}`} role="alert">{standaloneError}</div>}
+              {!isLearnerReadOnly && standaloneTarget && <div className={styles.existingQuestionList} aria-label="Cards attached to selected Topic">
+                {standaloneCards.filter((card) => standaloneCardMatchesTopic(card, standaloneTarget)).map((card) => (
+                  <button key={`personal:card:${card.id}`} className={styles.questionSearchResult} type="button"
+                    onClick={() => selectExistingQuestion(mapStandaloneCard(card))}>{card.question}</button>
+                ))}
+              </div>}
+              <p className={styles.treeFooter}>
+                Keep nesting subtopics to any level. There’s no limit how deep you can go.
+              </p>
+                </section>
+    );
+
+  // Standalone and legacy Cards share browsing, but keep distinct persistence paths.
+  const learnerCards = isLearnerReadOnly ? filterPersonalCardsForSearch(EMPTY_QUESTION_SEARCH_FILTERS) : [];
+  const learnerQuestions = <CreatorLearnerQuestionsWorkspace
+      busy={isSaving || isSavingQuestion || isMutatingTopic}
+      cards={learnerCards.map(card => ({ id: card.id, front: card.prompt,
+        back: standaloneCards.find(item => item.id === card.id)?.answer || personalCards.find(item => item.id === card.id)?.answer || '' }))}
+      onOpen={id => { const card = learnerCards.find(item => item.id === id); if (card) selectExistingQuestion(card); }}
+      onNew={() => openLearnerDraft(standaloneRequest?.attachment || null, standaloneRequest?.topicName || 'Selected Topic')}
+      topicTree={contentTopicPanel}
+      editor={standaloneRequest ? <StandaloneCustomCardWorkspace
+        key={`${standaloneEditorVersion}:${standaloneRequest.card?.id || 'new-card'}`}
+        ownerId={initialPersonalContent.ownerId}
+        canCreate={creatorCapabilities.personal.createCard && creatorCapabilities.library.canAccessActiveLibrary}
+        request={standaloneRequest} onRequest={setStandaloneRequest}
+        onEditorState={(dirty, busy) => { standaloneEditorRef.current = { dirty, busy }; }}
+        onSaved={card => setStandaloneCards(current => [card, ...current.filter(item => item.id !== card.id)])}
+      /> : personalCardEditorId ? <>
+        <p>Existing Card context: {personalConceptById.get(personalQuestionConceptId || '')?.name || 'Existing attachment'}</p>
+        <form onSubmit={event => { event.preventDefault(); void saveCurrentQuestion(); }}>
+          <label className={styles.personalField}>Front<textarea value={questionPrompt} required disabled={isSavingQuestion} onChange={event => setQuestionPrompt(event.target.value)} /></label>
+          <label className={styles.personalField}>Back<textarea value={questionAnswer} required disabled={isSavingQuestion} onChange={event => setQuestionAnswer(event.target.value)} /></label>
+          <button type="submit" className={styles.primaryButton} disabled={isSavingQuestion || !questionPrompt.trim() || !questionAnswer.trim()}>Save Card</button>
+          <button type="button" className={styles.dangerButton} disabled={isSavingQuestion} onClick={() => void deleteCurrentPersonalCard()}>Delete Card</button>
+        </form>
+        {questionStatus && <p role="status">{questionStatus.message}</p>}
+      </> : <p>Select a Topic to create a Card.</p>}
+    />;
+
   return (
     <>
       <Header />
-      <main className={styles.workspace}>
+      {isLearnerReadOnly ? <main className={styles.workspace}>
+        <fieldset className={styles.studioShell} disabled={isSaving || isSavingQuestion} aria-label="Creator Studio editor">
+          <CreatorStudioLocalHeader learnerPresentation onBack={goBackFromCreator} onClearConcept={clearDraft} onOpenLibraryOrganizer={() => {}} showClearConcept={false} />
+          <CreatorStudioTabs learnerPresentation activeTab={activeCreatorTab} onSelect={tab => {
+            if (tab !== 'questions' && tab !== 'flagged') return;
+            if (tab !== activeCreatorTab && !confirmDiscardQuestionChanges()) return;
+            setActiveCreatorTab(tab);
+          }} />
+          {activeCreatorTab === 'flagged' ? <CreatorStudioFlaggedTab learnerPresentation
+            ownerId={initialPersonalContent.ownerId} material={{ topics: personalTopics, concepts: personalConcepts, cards: personalCards, standaloneCards, overlays: personalOverlays }}
+          /> : learnerQuestions}
+          {status && <p role="status">{status.message}</p>}
+        </fieldset>
+      </main> : <main className={styles.workspace}>
         <fieldset className={styles.studioShell} disabled={isSaving || isSavingQuestion} aria-label="Creator Studio editor">
           <CreatorStudioLocalHeader
             onBack={goBackFromCreator}
@@ -6598,169 +6971,7 @@ export function CreatorStudioV2Client({
                   </>)}
                 </section>
 
-                <section className={`${styles.panel} ${styles.topicPanel}`}>
-              <div>
-                <h2>2. Topic Tree</h2>
-                <p>Select a topic, then add a subtopic beneath it.</p>
-              </div>
-
-              <div className={styles.treeControls}>
-                <label className={styles.searchBox}>
-                  <span className={styles.srOnly}>Search topics</span>
-                  <input
-                    value={searchQuery}
-                    onChange={(event) => setSearchQuery(event.target.value)}
-                    placeholder="Search topics..."
-                  />
-                  <Search size={20} />
-                </label>
-                {creatorCapabilities.personal.createCard && creatorCapabilities.library.canAccessActiveLibrary && <button className={styles.toolButton} type="button"
-                  disabled={!standaloneTarget || isMutatingTopic} onClick={() => {
-                    if (!standaloneTarget || !closeStandaloneEditor()) return;
-                    setStandaloneError('');
-                    setStandaloneEditorVersion((current) => current + 1);
-                    setStandaloneRequest({ card: null, attachment: standaloneTarget,
-                      topicName: activePersonalTopic?.name || activeTopic?.name || 'Selected Topic' });
-                  }}>Add Custom Card</button>}
-                {standaloneRequest?.card && <button className={styles.toolButton} type="button"
-                  onClick={() => void deleteSelectedStandaloneCard()}>Delete Card</button>}
-                <button className={styles.toolButton} type="button" onClick={openAddDialog} disabled={(creationDestination === 'official' && !creatorAuthority.canManageTopicTree) || isMutatingTopic}>
-                  <Plus size={18} /> Add Subtopic
-                </button>
-                <button className={styles.toolButton} type="button" onClick={openPersonalTopicDialog} disabled={isMutatingTopic}>
-                  <Plus size={18} /> New Topic
-                </button>
-                <button className={styles.toolButton} type="button" onClick={openRenameDialog} disabled={(!activePersonalTopic && !creatorAuthority.canManageTopicTree) || isMutatingTopic}>
-                  <Pencil size={17} /> Rename
-                </button>
-                <button className={styles.toolButton} type="button" onClick={deleteActiveTopic} disabled={(!activePersonalTopic && !creatorAuthority.canManageTopicTree) || isMutatingTopic}>
-                  <Trash2 size={17} /> Delete
-                </button>
-                <button className={styles.toolButton} type="button" onClick={openMoveDialog} disabled={(!activePersonalTopic && !creatorAuthority.canManageTopicTree) || isMutatingTopic}>
-                  <ArrowUpDown size={17} /> Move
-                </button>
-              </div>
-
-              {dialogMode && (
-                <div className={styles.inlineDialog} role="dialog" aria-modal="false">
-                  {dialogMode === 'move' ? (
-                    <>
-                      <label>
-                        Move “{activePersonalTopic?.name || activeTopic?.name}” beneath
-                        <select
-                          value={moveDestinationId}
-                          onChange={(event) => setMoveDestinationId(event.target.value)}
-                        >
-                          {activePersonalTopic?.parent_id === null ? (
-                            <>
-                              <option value="" disabled>Select a Topic</option>
-                              {personalRootPlacementDestinations.map((destination) => (
-                                <option key={destination.key} value={destination.key}>
-                                  {destination.label}
-                                </option>
-                              ))}
-                            </>
-                          ) : activePersonalTopic ? (
-                            personalMoveDestinations.map((destination) => (
-                              <option
-                                key={destination.id}
-                                value={createCreatorEntityKey('personal', 'topic', destination.id)}
-                              >
-                                {destination.name}
-                              </option>
-                            ))
-                          ) : (
-                            moveDestinations.map((destination) => (
-                              <option key={destination.id} value={destination.id}>
-                                {destination.label}
-                              </option>
-                            ))
-                          )}
-                        </select>
-                      </label>
-                      <div className={styles.dialogActions}>
-                        <button className={styles.secondaryButton} type="button" onClick={closeTopicDialog}>
-                          Cancel
-                        </button>
-                        <button className={styles.primaryButton} type="button" onClick={moveActiveTopic} disabled={isMutatingTopic}>
-                          {isMutatingTopic ? 'Moving…' : 'Move'}
-                        </button>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <label>
-                        {dialogMode === 'add-personal'
-                          ? activePersonalTopic
-                            ? `New Topic beneath ${activePersonalTopic.name}`
-                            : activeTopic
-                              ? `New Topic beneath ${activeTopic.name}`
-                              : 'Select a Topic before creating content'
-                          : dialogMode === 'add'
-                            ? `Add Subtopic beneath ${activePersonalTopic?.name || activeTopic?.name}`
-                            : `Rename “${activePersonalTopic?.name || activeTopic?.name}”`}
-                        <input
-                          autoFocus
-                          value={nameDraft}
-                          onChange={(event) => setNameDraft(event.target.value)}
-                          onKeyDown={(event) => {
-                            if (event.key === 'Enter' && !isMutatingTopic) saveNameDialog();
-                          }}
-                          placeholder={dialogMode === 'add-personal' ? 'Topic name' : dialogMode === 'add' ? 'Subtopic name' : 'Topic name'}
-                        />
-                      </label>
-                      <div className={styles.dialogActions}>
-                        <button className={styles.secondaryButton} type="button" onClick={closeTopicDialog}>
-                          Cancel
-                        </button>
-                        <button className={styles.primaryButton} type="button" onClick={saveNameDialog} disabled={isMutatingTopic}>
-                          {isMutatingTopic ? 'Saving…' : 'Save'}
-                        </button>
-                      </div>
-                    </>
-                  )}
-                </div>
-              )}
-
-              <CreatorTopicTreeInteraction context={positioningContext} disabled={isMutatingTopic || !!dialogMode} onMove={positionTopicFromTree}>
-              <div className={styles.treeViewport} aria-label="Topic Tree">
-                {visibleTopicComposition.officialRoots.map((topic) =>
-                  renderUnifiedTopic(topic)
-                )}
-                {visibleTopicComposition.unplacedPersonalRoots.length > 0 && (
-                  <div className={styles.unplacedTopicsLabel}>Placement required</div>
-                )}
-                {visibleTopicComposition.unplacedPersonalRoots.map((topic) =>
-                  renderPersonalTopic(topic)
-                )}
-                {visibleTopicComposition.otherLibraryPersonalRoots.length > 0 && (
-                  <div className={styles.unplacedTopicsLabel}>
-                    Other Library
-                  </div>
-                )}
-                {visibleTopicComposition.otherLibraryPersonalRoots.map((topic) =>
-                  renderPersonalTopic(topic)
-                )}
-                {normalizedSearch && ![
-                  ...visibleTopicComposition.officialRoots,
-                  ...visibleTopicComposition.unplacedPersonalRoots,
-                  ...visibleTopicComposition.otherLibraryPersonalRoots,
-                ].some(unifiedTopicMatchesSearch) && (
-                  <div className={styles.emptyTree}>No topics match “{searchQuery.trim()}”.</div>
-                )}
-              </div>
-              </CreatorTopicTreeInteraction>
-              {standaloneError && <div className={`${styles.status} ${styles.error}`} role="alert">{standaloneError}</div>}
-              {standaloneTarget && <div className={styles.existingQuestionList} aria-label="Cards attached to selected Topic">
-                {standaloneCards.filter((card) => standaloneCardMatchesTopic(card, standaloneTarget)).map((card) => (
-                  <button key={`personal:card:${card.id}`} className={styles.questionSearchResult} type="button"
-                    onClick={() => selectExistingQuestion(mapStandaloneCard(card))}>{card.question}</button>
-                ))}
-              </div>}
-              <p className={styles.treeFooter}>
-                Keep nesting subtopics to any level. There’s no limit how deep you can go.
-              </p>
-                </section>
+                {contentTopicPanel}
               </div>
 
               {!standaloneRequest && (<>
@@ -8640,7 +8851,7 @@ export function CreatorStudioV2Client({
             </>
           ) : null}
         </fieldset>
-      </main>
+      </main>}
     </>
   );
 }

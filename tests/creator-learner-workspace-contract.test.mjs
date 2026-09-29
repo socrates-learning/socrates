@@ -3,17 +3,16 @@ import test from 'node:test';
 import { deriveCreatorCapabilities } from '../lib/creator-capabilities.ts';
 import { canAccessCreatorRoute, resolveHomeCreatorEntry } from '../lib/creator-route-access.ts';
 import { canPosition } from '../lib/creator-topic-positioning.ts';
-import { editor, nodes, text, button, expandChrome, currentTabLabels } from './fixtures/creator-role-workspaces.mjs';
+import { editor, nodes, text, button, expandChrome } from './fixtures/creator-role-workspaces.mjs';
 
-// This is the released BEFORE-state. Future Questions | Flagged UI and removal
-// of the route allowlist are intentionally not asserted as existing behavior.
+// Gate 2 learner presentation contract. Staff fingerprints remain frozen separately.
 const userId = '11111111-1111-4111-8111-111111111111';
 const library = { activeLibraryId: 'library', canAccessActiveLibrary: true, canManageActiveLibrary: false };
 
-test('current learner admission needs the server allowlist; it never admits staff-only routes', () => {
+test('authenticated learners share canonical Creator admission but never staff-only routes', () => {
   for (const learnerAllowlist of ['', userId]) {
     const context = { role: 'learner', userId, learnerAllowlist };
-    assert.equal(canAccessCreatorRoute({ ...context, pathname: '/creator' }), Boolean(learnerAllowlist));
+    assert.equal(canAccessCreatorRoute({ ...context, pathname: '/creator' }), true);
     for (const pathname of ['/creator/libraries', '/creator/articles', '/creator/unknown']) assert.equal(canAccessCreatorRoute({ ...context, pathname }), false);
     assert.deepEqual(resolveHomeCreatorEntry(context), { label: 'Creator Studio', href: '/creator' });
   }
@@ -33,27 +32,23 @@ test('learner backend personal-Concept capability remains separate from official
   }
 });
 
-test('current learner starts in Content, sees four tabs and personal Concept authoring', () => {
+test('learner starts in Questions with only Questions and Flagged, without Concept or staff controls', () => {
   const h = editor({ role: 'learner', placed: true }); const e = h.render();
   const tree = expandChrome(e.tree);
-  assert.equal(e.activeCreatorTab, 'content'); assert.equal(e.creationDestination, 'personal');
-  assert.deepEqual(nodes(tree).filter(n => n.props?.role === 'tab').map(text), currentTabLabels);
-  assert.equal(nodes(tree).find(n => n.props?.['aria-label'] === 'Concept or explanation').props.readOnly, false);
-  assert.equal(button(tree, 'Save Concept').props.disabled, false);
-  assert.equal(button(tree, 'Library Organizer').props.disabled, true);
-  assert.ok(button(tree, 'Add Custom Card'));
+  assert.equal(e.activeCreatorTab, 'questions'); assert.equal(e.creationDestination, 'personal');
+  assert.deepEqual(nodes(tree).filter(n => n.props?.role === 'tab').map(text), ['Questions', 'Flagged']);
+  assert.ok(nodes(tree).some(n => n.props?.['aria-label'] === 'Topic Tree'));
+  for (const label of ['Concept or explanation', 'Tag Manager']) assert.ok(!nodes(tree).some(n => n.props?.['aria-label'] === label));
+  for (const label of ['Save Concept', 'Library Organizer', 'Add Custom Card', 'Tags', 'Content']) assert.ok(!nodes(tree).some(n => n.type === 'button' && text(n).trim() === label));
   assert.equal(h.calls.length, 0); assert.equal(h.reads.length, 0); assert.deepEqual(h.routes, []);
 });
 
-test('current learner Tags are visible but catalog mutations are disabled; Flagged is owner-scoped', () => {
+test('learner Flagged stays owner-scoped and receives only the learner metadata presentation flag', () => {
   const h = editor({ role: 'learner', placed: true });
-  button(h.render().tree, 'Tags').props.onClick();
-  const tree = expandChrome(h.render().tree);
-  assert.ok(nodes(tree).some(n => n.props?.['aria-label'] === 'Tag Manager'));
-  assert.equal(button(tree, 'Create Tag').props.disabled, true);
   button(h.render().tree, 'Flagged').props.onClick();
   const flagged = nodes(expandChrome(h.render().tree)).find(n => n.type?.name === 'StudyCreatorFlaggedBrowser');
   assert.equal(flagged.props.ownerId, 'owner'); assert.equal(flagged.props.neutralPresentation, true);
+  assert.equal(flagged.props.learnerPresentation, true);
   assert.equal(h.calls.length, 0);
 });
 
@@ -70,12 +65,12 @@ test('existing Concept-backed personal Cards remain editable under their origina
   assert.equal(h.calls.length, 0);
 });
 
-test('standalone search currently opens Content with the canonical tree and no synthetic Concept', () => {
+test('standalone browse opens learner Questions with the canonical tree and no synthetic Concept', () => {
   const h = editor({ role: 'learner', placed: true }); let e = h.render();
-  e.setStandaloneCards([{ id: 'standalone', owner_id: 'owner', concept_id: null, library_node_id: 'topic', library_id: 'library', personal_topic_id: null, question: 'Standalone front', answer: 'Back' }]);
+  e.setStandaloneCards([{ id: 'standalone', owner_id: 'owner', concept_id: null, library_node_id: 'topic', library_id: 'library', personal_topic_id: null, question: 'Standalone front', answer: 'Back', created_at: '2026-01-02T00:00:00Z', updated_at: '2026-01-02T00:00:00Z' }]);
   e.setActiveCreatorTab('questions'); e = h.render();
   e.selectExistingQuestion({ source: 'personal', id: 'standalone', conceptId: null }); e = h.render();
-  assert.equal(e.activeCreatorTab, 'content'); assert.equal(e.standaloneRequest.card.concept_id, null);
+  assert.equal(e.activeCreatorTab, 'questions'); assert.equal(e.standaloneRequest.card.concept_id, null);
   assert.equal(e.standaloneRequest.attachment.topicId, 'topic');
   assert.ok(nodes(e.tree).some(n => n.props?.['aria-label'] === 'Topic Tree'));
   assert.ok(nodes(e.tree).some(n => n.type?.name === 'StandaloneCustomCardWorkspace'));

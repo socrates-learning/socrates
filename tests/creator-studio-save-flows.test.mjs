@@ -1,3 +1,5 @@
+import * as topicSelection from '../lib/topic-selection-presentation.ts';
+import * as homeSettings from '../lib/home-deck-settings.ts';
 import * as standaloneCards from '../lib/standalone-custom-cards.ts';
 import * as topicPositioning from '../lib/creator-topic-positioning.ts';
 import * as personalStructure from '../lib/creator-personal-structure.ts';
@@ -81,8 +83,11 @@ function editor({ editing = false, response, references = [] } = {}) {
     'lucide-react': {},
     '@/components/Header': {},
     '@/components/MarkdownContent': {},
+    './creator/CreatorLearnerQuestionsWorkspace': { CreatorLearnerQuestionsWorkspace() {} },
     './creator/StandaloneCustomCardWorkspace': { StandaloneCustomCardWorkspace: () => null },
     '@/lib/standalone-custom-cards': standaloneCards,
+    '@/lib/topic-selection-presentation': topicSelection,
+    '@/lib/home-deck-settings': homeSettings,
     '@/components/creator/CreatorStudioChrome': {
       CreatorStudioLocalHeader() {},
       CreatorStudioSaveToolbar() {},

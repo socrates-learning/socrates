@@ -129,8 +129,8 @@ test('Topic rows use sibling native controls rather than nested button semantics
 test('Tag and Question loaders have stable hook dependencies without disable comments', () => {
   assert.match(creatorSource, /const loadTagCatalog = useCallback/);
   assert.match(creatorSource, /\}, \[isLearnerReadOnly\]\);/);
-  assert.match(creatorSource, /\[activeCreatorTab, loadTagCatalog\]/);
+  assert.match(creatorSource, /\[activeCreatorTab, isLearnerReadOnly, loadTagCatalog\]/);
   assert.match(creatorSource, /const fetchExistingQuestions = useCallback/);
-  assert.match(creatorSource, /\[activeLibraryId, fetchExistingQuestions, questionConceptId\]/);
+  assert.match(creatorSource, /\[activeLibraryId, fetchExistingQuestions, isLearnerReadOnly, questionConceptId\]/);
   assert.doesNotMatch(creatorSource, /eslint-disable[^\n]*react-hooks/);
 });

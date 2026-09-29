@@ -1,3 +1,5 @@
+import * as topicSelection from '../../lib/topic-selection-presentation.ts';
+import * as homeSettings from '../../lib/home-deck-settings.ts';
 // Disposable in-memory characterization only. No Auth, network, or database is used.
 // Adapted from the existing role-derived-ownership harness. Effects are deliberately
 // excluded; DOM geometry, real focus, RLS, and browser drag/drop are not proved here.
@@ -27,6 +29,7 @@ vm.runInNewContext(ts.transpileModule(readFileSync(new URL('../../lib/creator-st
   compilerOptions: { module: ts.ModuleKind.CommonJS },
 }).outputText, runtimeContext);
 const exposed = [
+  'learnerDeck', 'setLearnerDeck', 'learnerSelectionError', 'learnerSelectionBusy', 'saveLearnerTopicSelection', 'renderLearnerStudyCheckbox', 'learnerSelectionContext',
   'personalQuestionConceptId', 'closeTopicDialog', 'creatorAuthority', 'loadQuestionSearchPage', 'questionSearchResults', 'deleteSelectedStandaloneCard', 'activeCreatorTab', 'standaloneEditorRef', 'closeStandaloneEditor', 'standaloneRequest', 'filterPersonalCardsForSearch', 'setStandaloneCards',
   'setContentConceptSearch', 'contentConceptSearchResults', 'setQuestionSearchResults',
   'renderUnifiedTopic', 'renderUnifiedConceptBrowseTopic', 'renderUnifiedQuestionTopic',
@@ -58,6 +61,8 @@ const compiled = ts.transpileModule(source.replace(
 
 export function editor({ role = 'admin', editing = false, response, references = [], cards = true, placed = false, neutralFixture = false, confirm = () => true } = {}) {
   const slots = [];
+  let selectionEffect;
+  let structureEffect;
   let cursor = 0;
   let api;
   const calls = [];
@@ -77,7 +82,7 @@ export function editor({ role = 'admin', editing = false, response, references =
     },
     useMemo: fn => fn(),
     useCallback: fn => fn,
-    useEffect: () => {},
+    useEffect: fn => { if (fn.toString().includes('async function refresh()')) structureEffect = fn; else if (fn.toString().includes('learnerSelectionContext')) selectionEffect = fn; },
   };
   const database = {
     rpc(name, payload) {
@@ -121,8 +126,11 @@ export function editor({ role = 'admin', editing = false, response, references =
     'lucide-react': new Proxy({}, { get: (_target, key) => `icon:${String(key)}` }),
     '@/components/Header': {},
     '@/components/MarkdownContent': {},
+    './creator/CreatorLearnerQuestionsWorkspace': { CreatorLearnerQuestionsWorkspace() {} },
     './creator/StandaloneCustomCardWorkspace': { StandaloneCustomCardWorkspace: () => null },
     '@/lib/standalone-custom-cards': standaloneCards,
+    '@/lib/topic-selection-presentation': topicSelection,
+    '@/lib/home-deck-settings': homeSettings,
     '@/components/creator/CreatorStudioChrome': {
       ...chrome,
     },
@@ -170,19 +178,21 @@ export function editor({ role = 'admin', editing = false, response, references =
       overlays: [], topicPlacements: placed ? [{id:'placement',owner_id:'owner',personal_topic_id:'mine-topic',library_node_id:'topic'}] : [],
     },
   };
+  // Learner browsing now immediately sorts persisted Cards, whose timestamps are required.
+  if (role === 'learner') props.initialPersonalContent.cards.forEach(card => { card.created_at = '2026-01-01T00:00:00Z'; card.updated_at = card.created_at; });
   if (neutralFixture) {
     props.initialPersonalContent.topics[0].name = 'Topic';
     props.initialPersonalContent.concepts[0].name = 'Concept';
     props.initialPersonalContent.cards.forEach(card => { card.question = 'Question'; });
   }
   function render() { cursor = 0; const tree = context.exports.CreatorStudioV2Client(props); return { ...api, tree }; }
-  return { render, calls, reads, orders, routes, confirmations, focusTarget };
+  return { render, calls, reads, orders, routes, confirmations, focusTarget, props, runSelectionEffect: () => selectionEffect(), runStructureEffect: () => structureEffect() };
 }
 
 export function nodes(tree) {
   if (!tree || typeof tree !== 'object') return [];
   if (Array.isArray(tree)) return tree.flatMap(nodes);
-  return [tree, ...nodes(tree.props?.children)];
+  return [tree, ...nodes(tree.props?.children), ...(tree.type?.name === 'CreatorLearnerQuestionsWorkspace' ? [...nodes(tree.props.editor), ...nodes(tree.props.topicTree)] : [])];
 }
 
 const chromeSource = readFileSync(new URL('../../components/creator/CreatorStudioChrome.tsx', import.meta.url), 'utf8');

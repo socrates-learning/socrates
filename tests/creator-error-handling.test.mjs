@@ -132,6 +132,7 @@ test('a genuinely absent Concept remains legitimate not-found behavior', async (
   await assert.rejects(
     runCreatorPage({
       route: '[id]',
+      role: 'editor',
       results: { concepts: { data: null, error: null } },
     }),
     (error) => error instanceof NotFoundSignal
@@ -163,6 +164,7 @@ test('a generic Concept query failure propagates as an application error, not a 
   await assert.rejects(
     runCreatorPage({
       route: '[id]',
+      role: 'editor',
       results: { concepts: { data: null, error: databaseError } },
     }),
     (error) => {
@@ -266,4 +268,17 @@ test('Creator bootstrap checks errors before deciding that data is missing', () 
     assert.ok(readResult >= 0 && missing > readResult);
     assert.match(source, /failOnQueryError: true/);
   }
+});
+
+// A learner must leave this route before its Concept query can be evaluated.
+test('learner Concept-detail redirects to canonical Creator before Concept loading', async () => {
+  let conceptReads = 0;
+  const results = {};
+  Object.defineProperty(results, 'concepts', { get() { conceptReads++; throw new Error('Concept loading must not occur'); } });
+  await assert.rejects(runCreatorPage({ route: '[id]', role: 'learner', results }), error => {
+    assert.ok(error instanceof RedirectSignal);
+    assert.equal(error.destination, '/creator');
+    return true;
+  });
+  assert.equal(conceptReads, 0);
 });

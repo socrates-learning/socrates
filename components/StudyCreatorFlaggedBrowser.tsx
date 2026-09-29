@@ -31,6 +31,7 @@ type StudyCreatorFlaggedBrowserProps = {
   material: Pick<CreatorPersonalContent, 'topics' | 'concepts' | 'cards' | 'overlays' | 'standaloneCards'>;
   ownerId: string;
   neutralPresentation?: boolean;
+  learnerPresentation?: boolean;
 };
 
 function messageFor(error: unknown) {
@@ -45,6 +46,7 @@ export function StudyCreatorFlaggedBrowser({
   material,
   ownerId,
   neutralPresentation = false,
+  learnerPresentation = false,
 }: StudyCreatorFlaggedBrowserProps) {
   const [flags, setFlags] = useState<FlagRow[]>([]);
   const [officialQuestions, setOfficialQuestions] = useState<OfficialQuestion[]>([]);
@@ -251,7 +253,7 @@ export function StudyCreatorFlaggedBrowser({
             <div className={styles.flagReviewCard}>
               <div><span>{neutralPresentation || selected.owner === 'official' ? 'Question' : 'Card'}</span><p>{selected.title}</p></div>
               {selected.card && <div><span>Answer</span><p>{selected.card.answer}</p></div>}
-              {selected.question && <div className={styles.flagMetadata}><span>{selected.question.difficulty ?? 'Unspecified difficulty'}</span><span>{selected.question.testing_angle ?? 'General angle'}</span></div>}
+              {selected.question && !learnerPresentation && <div className={styles.flagMetadata}><span>{selected.question.difficulty ?? 'Unspecified difficulty'}</span><span>{selected.question.testing_angle ?? 'General angle'}</span></div>}
               {selected.flag.note && <div><span>Your note</span><p>{selected.flag.note}</p></div>}
               <div><span>Flagged</span><p>{new Date(selected.flag.created_at).toLocaleString()}</p></div>
               <button className={styles.dangerButton} disabled={removingId === selected.flag.id} onClick={() => void unflag(selected.flag.id)} type="button">{removingId === selected.flag.id ? 'Removing…' : 'Unflag'}</button>

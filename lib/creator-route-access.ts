@@ -72,8 +72,9 @@ export function canAccessSharedCreator({
   if (role === 'editor' || role === 'admin') return true;
   if (role !== 'learner' || !UUID_PATTERN.test(userId)) return false;
 
-  const parsed = parseCreatorLearnerAllowlist(learnerAllowlist);
-  return parsed.valid && parsed.userIds.has(userId.toLowerCase());
+  // Admission does not change server-derived capabilities or database authority.
+  void learnerAllowlist;
+  return true;
 }
 
 export function resolveHomeCreatorEntry(

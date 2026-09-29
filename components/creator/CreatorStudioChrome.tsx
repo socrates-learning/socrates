@@ -9,10 +9,13 @@ export type CreatorStudioTab = 'content' | 'questions' | 'tags' | 'flagged';
 export function CreatorStudioFlaggedTab({
   material,
   ownerId,
+  learnerPresentation = false,
 }: {
   material: Pick<CreatorPersonalContent, 'topics' | 'concepts' | 'cards' | 'overlays' | 'standaloneCards'>;
   ownerId: string;
+  learnerPresentation?: boolean;
 }) {
+  if (learnerPresentation) return <StudyCreatorFlaggedBrowser material={material} ownerId={ownerId} neutralPresentation learnerPresentation />;
   return <StudyCreatorFlaggedBrowser material={material} ownerId={ownerId} neutralPresentation />;
 }
 
@@ -23,6 +26,7 @@ export function CreatorStudioLocalHeader({
   showClearConcept,
   canManageLibrary = true,
   canClearConcept = true,
+  learnerPresentation = false,
 }: {
   onBack: () => void;
   onClearConcept: () => void;
@@ -30,7 +34,9 @@ export function CreatorStudioLocalHeader({
   showClearConcept: boolean;
   canManageLibrary?: boolean;
   canClearConcept?: boolean;
+  learnerPresentation?: boolean;
 }) {
+  if (learnerPresentation) return <header className={styles.localHeader}><h1>Creator Studio</h1><div className={styles.headerActions}><button className={styles.secondaryButton} type="button" onClick={onBack}>← Back</button></div></header>;
   return (
     <header className={styles.localHeader}>
       <h1>Creator Studio</h1>
@@ -108,8 +114,10 @@ const creatorStudioTabs: ReadonlyArray<{
 export function CreatorStudioTabs({
   activeTab,
   onSelect,
+  learnerPresentation = false,
 }: {
   activeTab: CreatorStudioTab;
+  learnerPresentation?: boolean;
   onSelect: (tab: CreatorStudioTab) => void;
 }) {
   return (
@@ -126,7 +134,7 @@ export function CreatorStudioTabs({
         background: 'linear-gradient(180deg, #f8fbff, #eef4fc)',
       }}
     >
-      {creatorStudioTabs.map((tab) => {
+      {creatorStudioTabs.filter(tab => !learnerPresentation || tab.id === 'questions' || tab.id === 'flagged').map((tab) => {
         const isActive = activeTab === tab.id;
 
         return (
