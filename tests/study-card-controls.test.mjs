@@ -4,6 +4,7 @@ import test from 'node:test';
 import vm from 'node:vm';
 import ts from 'typescript';
 
+const studyStyles = readFileSync(new URL('../components/study-planner/StudyModeStyles.tsx', import.meta.url), 'utf8');
 const planner = readFileSync(
   new URL('../components/StudyPlanner.tsx', import.meta.url),
   'utf8'
@@ -113,10 +114,10 @@ test('feedback controls show compact emoji, Other, emoji pattern with accessible
   assert.doesNotMatch(feedbackControls, /<span>\{label\}<\/span>/);
   assert.match(planner, /type === 'up' \? '👍' : '👎'/);
   assert.match(
-    planner,
+    studyStyles,
     /\.study-v2-feedback-emoji \{[\s\S]*?font-size: 24px;[\s\S]*?height: 30px;[\s\S]*?width: 30px;/
   );
-  assert.match(planner, /\.study-v2-feedback-row button \{[\s\S]*?min-height: 80px;/);
+  assert.match(studyStyles, /\.study-v2-feedback-row button \{[\s\S]*?min-height: 80px;/);
 });
 
 test('Other reuses the established error and suggestion reporting workflow', () => {
@@ -134,18 +135,19 @@ test('Other reuses the established error and suggestion reporting workflow', () 
 });
 
 test('narrow layouts retain horizontal feedback controls and usable targets', () => {
-  const narrowStyles = planner.slice(planner.indexOf('@media (max-width: 900px)'));
+  assert.ok(studyStyles.includes('@media (max-width: 900px)'));
+  const narrowStyles = studyStyles.slice(studyStyles.indexOf('@media (max-width: 900px)'));
   assert.doesNotMatch(
     narrowStyles,
     /\.study-v2-feedback-row \{\s*grid-template-columns: 1fr;/
   );
-  assert.match(planner, /grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/);
-  assert.match(planner, /grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
+  assert.match(studyStyles, /grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/);
+  assert.match(studyStyles, /grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
   assert.match(
-    planner,
+    studyStyles,
     /\.study-v2-question-content \{[\s\S]*?min-height: 0;[\s\S]*?overflow-y: auto;/
   );
-  assert.match(planner, /\.study-v2-answer-body \{[\s\S]*?overflow-y: auto;/);
+  assert.match(studyStyles, /\.study-v2-answer-body \{[\s\S]*?overflow-y: auto;/);
 });
 
 test('six-response persistence and Review Concept remain on their existing paths', () => {

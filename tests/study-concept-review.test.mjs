@@ -4,6 +4,7 @@ import test from 'node:test';
 import vm from 'node:vm';
 import ts from 'typescript';
 
+const studyStyles = readFileSync(new URL('../components/study-planner/StudyModeStyles.tsx', import.meta.url), 'utf8');
 const planner = readFileSync(
   new URL('../components/StudyPlanner.tsx', import.meta.url),
   'utf8'
@@ -167,7 +168,7 @@ test('revealed answer keeps one smaller Question context above Answer', () => {
     answerBody.indexOf('study-v2-revealed-question') <
       answerBody.indexOf('study-v2-answer-section')
   );
-  assert.match(planner, /\.study-v2-revealed-question h2[\s\S]*font-size: clamp\(17px, 2vw, 21px\)/);
+  assert.match(studyStyles, /\.study-v2-revealed-question h2[\s\S]*font-size: clamp\(17px, 2vw, 21px\)/);
 });
 
 test('Review Concept is official-only, lazy, and cached per current card', () => {
@@ -194,8 +195,8 @@ test('Concept review dialog is scrollable, keyboard-contained, and returns focus
   assert.match(planner, /event\.key !== 'Tab'/);
   assert.match(planner, /const trigger = conceptReviewTriggerRef\.current/);
   assert.match(planner, /trigger\.focus\(\)/);
-  assert.match(planner, /\.study-v2-concept-review-body[\s\S]*overflow-y: auto/);
-  assert.match(planner, /max-height: min\(760px, calc\(100dvh - 48px\)\)/);
+  assert.match(studyStyles, /\.study-v2-concept-review-body[\s\S]*overflow-y: auto/);
+  assert.match(studyStyles, /max-height: min\(760px, calc\(100dvh - 48px\)\)/);
 });
 
 test('modal reuses safe Markdown rendering and exposes only attributed source labels', () => {

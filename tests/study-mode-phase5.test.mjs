@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
+const studyStyles = await readFile(new URL('../components/study-planner/StudyModeStyles.tsx', import.meta.url), 'utf8');
 const planner = await readFile(
   new URL('../components/StudyPlanner.tsx', import.meta.url),
   'utf8'
@@ -26,10 +27,10 @@ test('active Flag keeps its Escape handler and shared dialog presentation', () =
   assert.match(planner, /if \(!isFlagSaving\) setIsFlagModalOpen\(false\);/);
   assert.match(planner, /\[isFlagModalOpen, isFlagSaving\]/);
   assert.match(planner, /className="study-v2-private-explainer"/);
-  assert.match(planner, /\.study-v2-private-explainer,/);
+  assert.match(studyStyles, /\.study-v2-private-explainer,/);
   for (const name of ['study-v2-modal-backdrop', 'study-v2-modal-form', 'study-v2-modal-footer']) {
     assert.ok(planner.includes(`className="${name}"`));
-    assert.ok(planner.includes(`.${name} {`));
+    assert.ok(studyStyles.includes(`.${name} {`));
   }
 });
 
