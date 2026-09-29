@@ -106,7 +106,9 @@ test('Study candidates remain backend resolved and Cram controls retained',()=>{
 
 test('no new visible loading treatment is introduced',()=>{
  assert.doesNotMatch(planner,/Loading deck settings\.\.\./);
- assert.match(planner,/Loading your deck…/);
+ const shell = readFileSync(new URL('../components/study-planner/LearnerShell.tsx', import.meta.url), 'utf8');
+ assert.doesNotMatch(shell,/Loading deck settings\.\.\./);
+ assert.match(shell,/Loading your deck…/);
  assert.match(planner,/initialDeckData\?\.homeSettings \|\| null/);
  assert.match(planner,/isLoading: isLoading \|\| Boolean\(deck && !homeSettings && !homeTreeError\)/);
 });

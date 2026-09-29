@@ -8,12 +8,11 @@ import {
   type FormEvent,
   type MouseEvent,
 } from 'react';
-import Image from 'next/image';
-import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { usePathname, useRouter } from 'next/navigation';
 import { Header, HeaderSessionProvider } from '@/components/Header';
 import { MarkdownContent } from '@/components/MarkdownContent';
+import { LearnerHeader, HomeRail, LibrarySubjectSwitcher, PlannerFallback, type LearnerHeaderPrefix, type LearnerNavIcon, type HeaderItem, type RailItem } from '@/components/study-planner/LearnerShell';
 import { StudyModeStyles } from '@/components/study-planner/StudyModeStyles';
 import {
   getBootstrapErrorMessage,
@@ -192,16 +191,6 @@ type StudyResponse =
   | 'too_hard'
   | null;
 
-type LearnerHeaderPrefix = 'home-v2' | 'study-v2';
-type LearnerNavIcon =
-  | 'home'
-  | 'learn'
-  | 'study'
-  | 'progress'
-  | 'creator'
-  | 'admin'
-  | 'account';
-
 const learnerNavItems: Array<{
   icon: LearnerNavIcon;
   label: string;
@@ -249,100 +238,6 @@ function getStatsTabFromHash(hash: string): StatsTab | null {
   if (hash === statsTabHashes.history) return 'history';
   if (hash === statsTabHashes.algorithm) return 'algorithm';
   return null;
-}
-
-function LearnerHeaderIcon({
-  icon,
-  classPrefix,
-}: {
-  icon: LearnerNavIcon;
-  classPrefix: LearnerHeaderPrefix;
-}) {
-  return (
-    <span className={`${classPrefix}-nav-icon`} aria-hidden="true">
-      {icon === 'home' && (
-        <svg viewBox="0 0 24 24">
-          <path d="M3 11l9-8 9 8" />
-          <path d="M5 10v10h5v-6h4v6h5V10" />
-        </svg>
-      )}
-      {icon === 'learn' && (
-        <svg viewBox="0 0 24 24">
-          <path d="M4 5c3 0 5 .8 8 3v12c-3-2.2-5-3-8-3zM20 5c-3 0-5 .8-8 3v12c3-2.2 5-3 8-3z" />
-        </svg>
-      )}
-      {icon === 'study' && (
-        <svg viewBox="0 0 24 24">
-          <path d="M3 8l9-4 9 4-9 4z" />
-          <path d="M7 10v5c3 2 7 2 10 0v-5" />
-        </svg>
-      )}
-      {icon === 'progress' && (
-        <svg viewBox="0 0 24 24">
-          <path d="M5 20V9M12 20V4M19 20v-8" />
-          <path d="M3 20h18" />
-        </svg>
-      )}
-      {icon === 'creator' && (
-        <svg viewBox="0 0 24 24">
-          <path d="M4 20l4-1 11-11-3-3L5 16z" />
-          <path d="M14 7l3 3" />
-        </svg>
-      )}
-      {icon === 'admin' && (
-        <svg viewBox="0 0 24 24">
-          <path d="M12 3l8 4v5c0 5-3 8-8 10-5-2-8-5-8-10V7z" />
-          <path d="M9 12l2 2 4-5" />
-        </svg>
-      )}
-      {icon === 'account' && (
-        <svg viewBox="0 0 24 24">
-          <circle cx="12" cy="8" r="4" />
-          <path d="M4 21c1.5-5 4-7 8-7s6.5 2 8 7" />
-        </svg>
-      )}
-    </span>
-  );
-}
-
-function RailIcon({ icon }: { icon: string }) {
-  return (
-    <span className="home-v2-rail-icon" aria-hidden="true">
-      {icon === 'document' && (
-        <svg viewBox="0 0 40 40">
-          <path d="M12 7h12l5 5v21H12z" />
-          <path d="M24 7v7h7M16 19h10M16 24h10M16 29h7" />
-        </svg>
-      )}
-      {icon === 'gear' && (
-        <svg viewBox="0 0 40 40">
-          <path d="M20 13a7 7 0 1 0 0 14 7 7 0 0 0 0-14z" />
-          <path d="M20 5v6M20 29v6M5 20h6M29 20h6M9 9l4 4M27 27l4 4M31 9l-4 4M13 27l-4 4" />
-        </svg>
-      )}
-      {icon === 'edit' && (
-        <svg viewBox="0 0 40 40">
-          <path d="M10 30h20M12 26l2-8 13-13 6 6-13 13zM25 7l6 6" />
-        </svg>
-      )}
-      {icon === 'bars' && (
-        <svg viewBox="0 0 40 40">
-          <path d="M9 31V19h6v12M17 31V11h6v20M25 31V5h6v26" />
-        </svg>
-      )}
-      {icon === 'people' && (
-        <svg viewBox="0 0 40 40">
-          <path d="M15 19a6 6 0 1 0 0-12 6 6 0 0 0 0 12zM5 33c1-7 5-10 10-10s9 3 10 10" />
-          <path d="M27 20a5 5 0 1 0-1-10M26 24c4 1 7 4 8 9" />
-        </svg>
-      )}
-      {icon === 'dots' && (
-        <svg viewBox="0 0 40 40">
-          <path d="M11 20h.1M20 20h.1M29 20h.1" />
-        </svg>
-      )}
-    </span>
-  );
 }
 
 function HomeProgressBar({ value }: { value: number }) {
@@ -1792,130 +1687,34 @@ export function StudyPlanner({
     return `${metric.assessed_concepts}/${metric.total_concepts} assessed · ${metric.unseen_concepts} unseen · ${assessedAverage}`;
   }
 
-  function renderLearnerHeader(classPrefix: LearnerHeaderPrefix) {
-    const isEditor = role === 'editor' || role === 'admin';
-    const isAdmin = role === 'admin';
-
-    return (
-      <header className={`${classPrefix}-header`}>
-        <Link
-          className={`${classPrefix}-brand`}
-          href="/"
-          onClick={handleHomeClick}
-          prefetch={false}
-        >
-          {classPrefix === 'home-v2' ? (
-            <Image
-              alt="Socrates — Learn anything."
-              className="home-v2-brand-logo"
-              height={152}
-              priority
-              src="/brand/socrates-logo-dark.png"
-              width={270}
-            />
-          ) : (
-            <>
-              <Image
-                alt="Socrates owl mark"
-                className={`${classPrefix}-brand-mark`}
-                height={66}
-                src="/brand/socrates-mark.png"
-                width={76}
-              />
-              <div>
-                <strong>Socrates</strong>
-                <span>Learn anything.</span>
-              </div>
-            </>
-          )}
-        </Link>
-
-        <nav className={`${classPrefix}-nav`} aria-label="Socrates learner navigation">
-          {learnerNavItems.map((item) => {
-            if (
-              item.icon === 'creator' &&
-              (!isEditor || (classPrefix === 'home-v2' && mode !== 'stats'))
-            ) {
-              return null;
-            }
-            if (item.icon === 'admin' && !isAdmin) return null;
-
-            const isStudy = item.icon === 'study';
-            const isAccount = item.icon === 'account';
-            const className = [
-              `${classPrefix}-nav-item`,
-              classPrefix !== 'home-v2' && isStudy ? `${classPrefix}-nav-active` : '',
-              classPrefix !== 'home-v2' && isAccount ? `${classPrefix}-nav-account` : '',
-              classPrefix === 'home-v2' && isAccount ? 'home-v2-nav-account' : '',
-            ]
-              .filter(Boolean)
-              .join(' ');
-            const content = (
-              <>
-                <LearnerHeaderIcon icon={item.icon} classPrefix={classPrefix} />
-                {item.label}
-                {isAccount && <span aria-hidden="true">⌄</span>}
-              </>
-            );
-
-            if (item.href) {
-              return (
-                <Link
-                  className={className}
-                  href={item.href}
-                  key={item.label}
-                  onClick={
-                    item.icon === 'home'
-                      ? handleHomeClick
-                      : item.icon === 'creator'
-                        ? handleCreatorClick
-                        : undefined
-                  }
-                  prefetch={item.icon === 'home' ? false : undefined}
-                >
-                  {content}
-                </Link>
-              );
-            }
-
-            if (isStudy) {
-              return (
-                <button
-                  className={className}
-                  key={item.label}
-                  type="button"
-                  onClick={openStudyMode}
-                  disabled={isSaving}
-                >
-                  {content}
-                </button>
-              );
-            }
-
-            if (isAccount) {
-              return (
-                <button
-                  className={className}
-                  key={item.label}
-                  type="button"
-                  onClick={handleLogout}
-                  title={email ? `Signed in as ${email}. Click to log out.` : 'Account'}
-                >
-                  {content}
-                </button>
-              );
-            }
-
-            return (
-              <button className={className} key={item.label} type="button" disabled>
-                {content}
-              </button>
-            );
-          })}
-        </nav>
-      </header>
-    );
-  }
+  const classPrefix: LearnerHeaderPrefix = mode === 'study' ? 'study-v2' : 'home-v2';
+  const isEditor = role === 'editor' || role === 'admin';
+  const isAdmin = role === 'admin';
+  const items = learnerNavItems.map((item): HeaderItem | null => {
+    if (item.icon === 'creator' && (!isEditor || (classPrefix === 'home-v2' && mode !== 'stats'))) return null;
+    if (item.icon === 'admin' && !isAdmin) return null;
+    const isStudy = item.icon === 'study';
+    const isAccount = item.icon === 'account';
+    const className = [
+      `${classPrefix}-nav-item`,
+      classPrefix !== 'home-v2' && isStudy ? `${classPrefix}-nav-active` : '',
+      classPrefix !== 'home-v2' && isAccount ? `${classPrefix}-nav-account` : '',
+      classPrefix === 'home-v2' && isAccount ? 'home-v2-nav-account' : '',
+    ].filter(Boolean).join(' ');
+    const presentation = { label: item.label, icon: item.icon, className, accountChevron: isAccount };
+    if (item.href) {
+      return { ...presentation, kind: 'link', href: item.href,
+        onClick: item.icon === 'home' ? handleHomeClick : item.icon === 'creator' ? handleCreatorClick : undefined,
+        prefetch: item.icon === 'home' ? false : undefined };
+    } else if (isStudy) {
+      return { ...presentation, kind: 'button', onClick: openStudyMode, disabled: isSaving };
+    } else if (isAccount) {
+      return { ...presentation, kind: 'button', onClick: handleLogout,
+        title: email ? `Signed in as ${email}. Click to log out.` : 'Account' };
+    } else {
+      return { ...presentation, kind: 'button', disabled: true };
+    }
+  }).filter((item): item is HeaderItem => item !== null);
 
   function renderHomeTreeRow(
     node: LibraryNode,
@@ -2560,175 +2359,23 @@ export function StudyPlanner({
       return null;
     }
 
-    return (
-      <form
-        action="/library/switch"
-        className="home-v2-library-switcher"
-        method="post"
-        style={
-          standalone
-            ? {
-              alignItems: 'end',
-              display: 'flex',
-              flexWrap: 'wrap',
-              gap: 10,
-              marginTop: 18,
-              maxWidth: 420,
-            }
-            : undefined
-        }
-      >
-        <label
-          style={
-            standalone
-              ? { display: 'grid', flex: '1 1 240px', gap: 5 }
-              : undefined
-          }
-        >
-          <span
-            style={
-              standalone
-                ? {
-                  color: '#59687f',
-                  fontSize: 12,
-                  fontWeight: 800,
-                  letterSpacing: '0.04em',
-                  textTransform: 'uppercase',
-                }
-                : undefined
-            }
-          >
-            {currentSlug ? 'Current Subject' : 'Choose a Library'}
-          </span>
-          <select
-            aria-label={currentSlug ? 'Current Subject' : 'Choose a Library'}
-            defaultValue={currentSlug || availableLibraries[0].slug}
-            name="library_slug"
-            style={
-              standalone
-                ? {
-                  background: '#ffffff',
-                  border: '1px solid #c7d1e0',
-                  borderRadius: 8,
-                  color: '#17233a',
-                  font: 'inherit',
-                  minHeight: 42,
-                  padding: '8px 10px',
-                  width: '100%',
-                }
-                : undefined
-            }
-          >
-            {availableLibraries.map((library) => (
-              <option key={library.id} value={library.slug}>
-                {library.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <input name="return_to" type="hidden" value="/" />
-        <button
-          disabled={Boolean(currentSlug) && availableLibraries.length < 2}
-          type="submit"
-          style={
-            standalone
-              ? {
-                background: '#155ee8',
-                border: '1px solid #0f4fc7',
-                borderRadius: 8,
-                color: '#ffffff',
-                cursor: 'pointer',
-                font: 'inherit',
-                fontWeight: 800,
-                minHeight: 42,
-                padding: '8px 14px',
-              }
-              : undefined
-          }
-        >
-          {currentSlug ? 'Switch' : 'Choose Library'}
-        </button>
-      </form>
-    );
+    return <LibrarySubjectSwitcher
+      options={availableLibraries}
+      label={currentSlug ? 'Current Subject' : 'Choose a Library'}
+      defaultSlug={currentSlug || availableLibraries[0].slug}
+      submitLabel={currentSlug ? 'Switch' : 'Choose Library'}
+      disabled={Boolean(currentSlug) && availableLibraries.length < 2}
+      standalone={standalone}
+      action="/library/switch"
+      returnTo="/"
+    />;
   }
 
   if (homeBootstrapView === 'loading') {
     return (
       <HeaderSessionProvider email={email} role={role}>
         <Header />
-        <main
-          aria-label="Loading your deck"
-          aria-live="polite"
-          style={{
-            alignItems: 'stretch',
-            background: '#f3f6fb',
-            display: 'flex',
-            flexWrap: 'wrap',
-            minHeight: 'calc(100vh - 126px)',
-          }}
-        >
-          <aside
-            aria-hidden="true"
-            style={{
-              background: 'linear-gradient(180deg, #0c4dc3, #0a3c9f)',
-              boxSizing: 'border-box',
-              display: 'grid',
-              flex: '1 1 190px',
-              gap: 14,
-              minHeight: 420,
-              padding: 22,
-            }}
-          >
-            {homeRailItems.map((item) => (
-              <div
-                key={item.label}
-                style={{
-                  background: 'rgba(255, 255, 255, 0.15)',
-                  border: '1px solid rgba(255, 255, 255, 0.25)',
-                  borderRadius: 12,
-                  minHeight: 62,
-                }}
-              />
-            ))}
-          </aside>
-          <section
-            style={{
-              boxSizing: 'border-box',
-              flex: '5 1 540px',
-              padding: '32px clamp(20px, 4vw, 54px)',
-            }}
-          >
-            <p
-              style={{
-                color: '#48617f',
-                fontSize: 15,
-                fontWeight: 700,
-                margin: '0 0 14px',
-              }}
-            >
-              Loading your deck…
-            </p>
-            <div
-              style={{
-                background: '#ffffff',
-                border: '1px solid #dfe6f0',
-                borderRadius: 18,
-                boxShadow: '0 12px 30px rgba(15, 23, 42, 0.07)',
-                minHeight: 130,
-              }}
-            />
-            <div
-              style={{
-                background: '#ffffff',
-                border: '1px solid #dfe6f0',
-                borderRadius: 18,
-                boxShadow: '0 12px 30px rgba(15, 23, 42, 0.07)',
-                marginTop: 22,
-                minHeight: 300,
-              }}
-            />
-          </section>
-        </main>
+        <PlannerFallback variant="loading" skeletonKeys={homeRailItems.map((item) => item.label)} />
       </HeaderSessionProvider>
     );
   }
@@ -2737,15 +2384,7 @@ export function StudyPlanner({
     return (
       <HeaderSessionProvider email={email} role={role}>
         <Header />
-        <main style={{ padding: 24 }}>
-          <div className="panel" role="alert">
-            <h2>Home could not be loaded</h2>
-            <p className="muted">{bootstrapError || homeTreeError}</p>
-            <button type="button" onClick={() => window.location.reload()}>
-              Try again
-            </button>
-          </div>
-        </main>
+        <PlannerFallback variant="error" errorText={bootstrapError || homeTreeError} onRetry={() => window.location.reload()} />
       </HeaderSessionProvider>
     );
   }
@@ -2754,29 +2393,15 @@ export function StudyPlanner({
     return (
       <HeaderSessionProvider email={email} role={role}>
         <Header />
-        <main style={{ padding: 24 }}>
-          <div className="panel">
-            <h2>Choose a Library</h2>
-            <p className="muted">
-              Choose an active Library before setting up or opening your deck.
-            </p>
-            {renderLibrarySubjectSwitcher(null, true)}
-            {(role === 'admin' || role === 'editor') &&
-              !availableLibraries.length && (
-                <p className="muted">No active Libraries are available.</p>
-              )}
-          </div>
-        </main>
+        <PlannerFallback variant="no-library" librarySwitcher={renderLibrarySubjectSwitcher(null, true)}
+          showNoActiveLibraries={(role === 'admin' || role === 'editor') && !availableLibraries.length} />
       </HeaderSessionProvider>
     );
   }
 
   if (!deck) {
     return (
-      <div className="panel">
-        <h2>Deck Dashboard</h2>
-        <p className="muted">{message || 'Unable to load your active deck.'}</p>
-      </div>
+      <PlannerFallback variant="deck-error" message={message || 'Unable to load your active deck.'} />
     );
   }
 
@@ -2865,7 +2490,7 @@ export function StudyPlanner({
 
     return (
       <>
-        {renderLearnerHeader('study-v2')}
+        <LearnerHeader classPrefix="study-v2" brandHref="/" onHomeClick={handleHomeClick} items={items} />
         <main className="study-v2-page">
           <section className="study-v2-shell" aria-label="Study Mode">
             <article
@@ -3400,57 +3025,21 @@ export function StudyPlanner({
 
   return (
     <>
-      {renderLearnerHeader('home-v2')}
+      <LearnerHeader classPrefix="home-v2" brandHref="/" onHomeClick={handleHomeClick} items={items} />
       <main className={`home-v2-shell${mode === 'stats' ? ' home-v2-shell-stats' : ''}`}>
         {mode !== 'stats' && (
-          <aside className="home-v2-rail" aria-label="Deck navigation">
-            <div className="home-v2-rail-list">
-              {homeRailItems.map((item) => {
-                const content = (
-                  <>
-                    <RailIcon icon={item.icon} />
-                    <span>{item.label}</span>
-                  </>
-                );
-
-                return item.href ? (
-                  <Link
-                    className={`home-v2-rail-card${item.label === 'Creator Studio' ? ' home-v2-rail-card-primary' : ''
-                      }`}
-                    href={item.href}
-                    key={item.label}
-                    onClick={
-                      item.href === '/creator' || item.href.startsWith('/creator/')
-                        ? handleCreatorClick
-                        : undefined
-                    }
-                  >
-                    {content}
-                  </Link>
-                ) : (
-                  <button
-                    className="home-v2-rail-card"
-                    key={item.label}
-                    title={
-                      item.label === 'Account Settings' && email
-                        ? `Signed in as ${email}`
-                        : undefined
-                    }
-                    type="button"
-                    onClick={
-                      item.label === 'Stats' ? () => openStatsTab('progress') : undefined
-                    }
-                  >
-                    {content}
-                  </button>
-                );
-              })}
-            </div>
-            <button className="home-v2-logout" type="button" onClick={handleLogout}>
-              <RailIcon icon="edit" />
-              <span>Log Out</span>
-            </button>
-          </aside>
+          <HomeRail
+            items={homeRailItems.map((item): RailItem => item.href ? {
+              kind: 'link', label: item.label, icon: item.icon, href: item.href,
+              className: `home-v2-rail-card${item.label === 'Creator Studio' ? ' home-v2-rail-card-primary' : ''}`,
+              onClick: item.href === '/creator' || item.href.startsWith('/creator/') ? handleCreatorClick : undefined,
+            } : {
+              kind: 'button', label: item.label, icon: item.icon, className: 'home-v2-rail-card',
+              title: item.label === 'Account Settings' && email ? `Signed in as ${email}` : undefined,
+              onClick: item.label === 'Stats' ? () => openStatsTab('progress') : undefined,
+            })}
+            onLogout={handleLogout}
+          />
         )}
 
         <section className="home-v2-workspace">
