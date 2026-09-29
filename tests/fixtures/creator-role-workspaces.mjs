@@ -30,6 +30,7 @@ vm.runInNewContext(ts.transpileModule(readFileSync(new URL('../../lib/creator-st
   compilerOptions: { module: ts.ModuleKind.CommonJS },
 }).outputText, runtimeContext);
 const exposed = [
+  'navigateFromCreator', 'goBackFromCreator', 'isDirty', 'confirmDiscardQuestionChanges',
   'learnerDeck', 'setLearnerDeck', 'learnerSelectionError', 'learnerSelectionBusy', 'saveLearnerTopicSelection', 'renderLearnerStudyCheckbox', 'learnerSelectionContext',
   'personalQuestionConceptId', 'closeTopicDialog', 'creatorAuthority', 'loadQuestionSearchPage', 'questionSearchResults', 'deleteSelectedStandaloneCard', 'activeCreatorTab', 'standaloneEditorRef', 'closeStandaloneEditor', 'standaloneRequest', 'filterPersonalCardsForSearch', 'setStandaloneCards',
   'setContentConceptSearch', 'contentConceptSearchResults', 'setQuestionSearchResults',
@@ -62,6 +63,8 @@ const compiled = ts.transpileModule(source.replace(
 
 export function editor({ role = 'admin', editing = false, response, references = [], cards = true, placed = false, neutralFixture = false, confirm = () => true } = {}) {
   const slots = [];
+  let unloadEffect;
+  const listeners = new Map();
   let selectionEffect;
   let structureEffect;
   let cursor = 0;
@@ -83,7 +86,7 @@ export function editor({ role = 'admin', editing = false, response, references =
     },
     useMemo: fn => fn(),
     useCallback: fn => fn,
-    useEffect: fn => { if (fn.toString().includes('async function refresh()')) structureEffect = fn; else if (fn.toString().includes('learnerSelectionContext')) selectionEffect = fn; },
+    useEffect: fn => { if (fn.toString().includes('warnBeforeUnload')) unloadEffect = fn; else if (fn.toString().includes('async function refresh()')) structureEffect = fn; else if (fn.toString().includes('learnerSelectionContext')) selectionEffect = fn; },
   };
   const database = {
     rpc(name, payload) {
@@ -162,7 +165,7 @@ export function editor({ role = 'admin', editing = false, response, references =
     exports: {}, capture: value => { api = value; },
     require(name) { assert.ok(name in modules, `Unexpected import: ${name}`); return modules[name]; },
     document: { activeElement: focusTarget }, HTMLElement: FocusTarget,
-    window: { requestAnimationFrame: fn => fn(), confirm: message => { confirmations.push(message); return confirm(message); }, location: { pathname: '/creator' }, history: { replaceState: (_a, _b, path) => routes.push(path) } },
+    window: { addEventListener: (name, fn) => listeners.set(name, fn), removeEventListener: name => listeners.delete(name), requestAnimationFrame: fn => fn(), confirm: message => { confirmations.push(message); return confirm(message); }, location: { pathname: '/creator' }, history: { replaceState: (_a, _b, path) => routes.push(path) } },
   };
   vm.runInNewContext(compiled, context);
   const props = {
@@ -188,7 +191,7 @@ export function editor({ role = 'admin', editing = false, response, references =
     props.initialPersonalContent.cards.forEach(card => { card.question = 'Question'; });
   }
   function render() { cursor = 0; const tree = context.exports.CreatorStudioV2Client(props); return { ...api, tree }; }
-  return { render, calls, reads, orders, routes, confirmations, focusTarget, props, runSelectionEffect: () => selectionEffect(), runStructureEffect: () => structureEffect() };
+  return { render, calls, reads, orders, routes, confirmations, focusTarget, props, listeners, runUnloadEffect: () => unloadEffect(), runSelectionEffect: () => selectionEffect(), runStructureEffect: () => structureEffect() };
 }
 
 export function nodes(tree) {
