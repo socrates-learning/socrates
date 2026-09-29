@@ -109,13 +109,6 @@ type PersonalCard = {
   concept_id: string;
 };
 
-type PersonalConceptOverlayMatch = {
-  personalConceptId: string;
-  libraryNodeId: string;
-  name: string;
-  topicId: string;
-};
-
 type StudyCandidateFlag = {
   id: string;
   note: string | null;
@@ -571,19 +564,6 @@ export function StudyPlanner({
   const [isStudyCardFeedbackSubmitting, setIsStudyCardFeedbackSubmitting] =
     useState(false);
   const [isStudyCardFeedbackSent, setIsStudyCardFeedbackSent] = useState(false);
-  const [isAddToThisOpen, setIsAddToThisOpen] = useState(false);
-  const [isAddToThisLoading, setIsAddToThisLoading] = useState(false);
-  const [isAddToThisSaving, setIsAddToThisSaving] = useState(false);
-  const [addToThisError, setAddToThisError] = useState('');
-  const [addToThisFront, setAddToThisFront] = useState('');
-  const [addToThisBack, setAddToThisBack] = useState('');
-  const [addToThisConceptName, setAddToThisConceptName] = useState('');
-  const [addToThisPersonalTopicId, setAddToThisPersonalTopicId] = useState('');
-  const [addToThisOfficialNodeId, setAddToThisOfficialNodeId] = useState('');
-  const [addToThisConceptId, setAddToThisConceptId] = useState('');
-  const [addToThisOverlayMatches, setAddToThisOverlayMatches] = useState<
-    PersonalConceptOverlayMatch[]
-  >([]);
   const [candidateFlag, setCandidateFlag] = useState<StudyCandidateFlag | null>(null);
   const [isCandidateFlagLoading, setIsCandidateFlagLoading] = useState(false);
   const [isFlagModalOpen, setIsFlagModalOpen] = useState(false);
@@ -636,10 +616,6 @@ export function StudyPlanner({
     () => new Map(nodes.map((node) => [node.id, node])),
     [nodes]
   );
-  const personalTopicsById = useMemo(
-    () => new Map(personalTopics.map((topic) => [topic.id, topic])),
-    [personalTopics]
-  );
   const learnerProgressByNodeId = useMemo(
     () =>
       new Map(
@@ -663,7 +639,6 @@ export function StudyPlanner({
     const candidate = studyCandidate;
     let isCurrent = true;
 
-    setIsAddToThisOpen(false);
     setIsFlagModalOpen(false);
     setIsConceptReviewOpen(false);
     setIsConceptReviewLoading(false);
@@ -774,17 +749,16 @@ export function StudyPlanner({
   }, [isConceptReviewOpen]);
 
   useEffect(() => {
-    if (!isAddToThisOpen && !isFlagModalOpen) return;
+    if (!isFlagModalOpen) return;
 
     function closeOnEscape(event: KeyboardEvent) {
       if (event.key !== 'Escape') return;
-      if (!isAddToThisSaving) setIsAddToThisOpen(false);
       if (!isFlagSaving) setIsFlagModalOpen(false);
     }
 
     window.addEventListener('keydown', closeOnEscape);
     return () => window.removeEventListener('keydown', closeOnEscape);
-  }, [isAddToThisOpen, isAddToThisSaving, isFlagModalOpen, isFlagSaving]);
+  }, [isFlagModalOpen, isFlagSaving]);
 
   useEffect(() => {
     let isMounted = true;
@@ -1544,229 +1518,6 @@ export function StudyPlanner({
       if (studyCardFeedbackConfirmationTimer.current === null) {
         studyCardFeedbackSaveLock.current = false;
       }
-    }
-  }
-
-  function getPersonalTopicPath(topicId: string) {
-    const names: string[] = [];
-    const visited = new Set<string>();
-    let currentId: string | null = topicId;
-
-    while (currentId && !visited.has(currentId)) {
-      visited.add(currentId);
-      const topic = personalTopicsById.get(currentId);
-      if (!topic) break;
-      names.unshift(topic.name);
-      currentId = topic.parent_id;
-    }
-
-    return names.join(' / ');
-  }
-
-  function getOfficialCandidatePlacements(candidate: StudyCandidate | null) {
-    if (!candidate || candidate.kind !== 'official') return [];
-    return placements.filter(
-      (placement) => placement.concept_id === candidate.conceptId
-    );
-  }
-
-  function getOfficialCandidateConceptName(candidate: StudyCandidate | null) {
-    const concept = getOfficialCandidatePlacements(candidate)
-      .map(getConceptFromPlacement)
-      .find(Boolean);
-    return concept?.name || 'Official Concept';
-  }
-
-  // The Study entry point is intentionally retired. Keep this implementation
-  // isolated until the remaining personal-content callers are reviewed.
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async function openAddToThis() {
-    const candidate = studyCandidate;
-    if (!candidate) return;
-
-    setIsAddToThisOpen(true);
-    setIsAddToThisLoading(candidate.kind === 'official');
-    setIsAddToThisSaving(false);
-    setAddToThisError('');
-    setAddToThisFront('');
-    setAddToThisBack('');
-    setAddToThisPersonalTopicId('');
-    setAddToThisOfficialNodeId('');
-    setAddToThisOverlayMatches([]);
-    setAddToThisConceptId(
-      candidate.kind === 'personal' ? candidate.personalConceptId ?? '' : ''
-    );
-
-    if (candidate.kind === 'personal') return;
-
-    const officialPlacements = getOfficialCandidatePlacements(candidate);
-    setAddToThisConceptName(
-      `${getOfficialCandidateConceptName(candidate)} — My Notes`
-    );
-
-    if (officialPlacements.length === 1) {
-      setAddToThisOfficialNodeId(officialPlacements[0].library_node_id);
-    }
-
-    const libraryNodeIds = officialPlacements.map(
-      (placement) => placement.library_node_id
-    );
-
-    if (libraryNodeIds.length === 0) {
-      setAddToThisError(
-        'This official Concept has no visible placement in the active Library.'
-      );
-      setIsAddToThisLoading(false);
-      return;
-    }
-
-    const { data, error } = await supabase
-      .from('personal_concept_official_placements')
-      .select(
-        'personal_concept_id, library_node_id, personal_concepts!inner(id, topic_id, name)'
-      )
-      .eq('official_concept_id', candidate.conceptId)
-      .in('library_node_id', libraryNodeIds);
-
-    if (studyCandidate?.candidateId !== candidate.candidateId) return;
-
-    if (error) {
-      setAddToThisError(
-        error.message || 'Private Concept destinations could not be loaded.'
-      );
-      setIsAddToThisLoading(false);
-      return;
-    }
-
-    const matchesByConceptId = new Map<string, PersonalConceptOverlayMatch>();
-    (
-      (data || []) as Array<{
-        personal_concept_id: string;
-        library_node_id: string;
-        personal_concepts: PersonalConcept | PersonalConcept[];
-      }>
-    ).forEach((row) => {
-      const concept = Array.isArray(row.personal_concepts)
-        ? row.personal_concepts[0]
-        : row.personal_concepts;
-      if (!concept) return;
-      matchesByConceptId.set(row.personal_concept_id, {
-        personalConceptId: row.personal_concept_id,
-        libraryNodeId: row.library_node_id,
-        name: concept.name,
-        topicId: concept.topic_id,
-      });
-    });
-    const matches = [...matchesByConceptId.values()];
-    setAddToThisOverlayMatches(matches);
-    setAddToThisConceptId(
-      matches.length === 1 ? matches[0].personalConceptId : ''
-    );
-    setIsAddToThisLoading(false);
-  }
-
-  async function saveAddToThisCard(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const candidate = studyCandidate;
-    const normalizedFront = addToThisFront.trim();
-    const normalizedBack = addToThisBack.trim();
-
-    if (
-      !candidate ||
-      !userId ||
-      !normalizedFront ||
-      !normalizedBack ||
-      isAddToThisSaving
-    ) return;
-
-    setIsAddToThisSaving(true);
-    setAddToThisError('');
-
-    try {
-      let destinationConceptId: string | undefined =
-        candidate.kind === 'personal'
-          ? candidate.personalConceptId ?? undefined
-          : addToThisConceptId;
-      let destinationConceptName =
-        personalConcepts.find((concept) => concept.id === destinationConceptId)
-          ?.name || 'personal Concept';
-
-      if (
-        candidate.kind === 'official' &&
-        addToThisOverlayMatches.length === 0
-      ) {
-        const normalizedConceptName = addToThisConceptName.trim();
-        if (
-          !normalizedConceptName ||
-          !addToThisPersonalTopicId ||
-          !addToThisOfficialNodeId
-        ) {
-          setAddToThisError(
-            'Choose the personal Topic, Concept name, and official location.'
-          );
-          return;
-        }
-
-        const { data, error } = await supabase.rpc(
-          'create_personal_concept_overlay',
-          {
-            p_personal_topic_id: addToThisPersonalTopicId,
-            p_name: normalizedConceptName,
-            p_description: null,
-            p_library_node_id: addToThisOfficialNodeId,
-            p_official_concept_id: candidate.conceptId,
-          }
-        );
-
-        if (error) throw error;
-        destinationConceptId = data?.[0]?.personal_concept_id as
-          | string
-          | undefined;
-        if (!destinationConceptId) {
-          throw new Error('The private Concept was not returned after creation.');
-        }
-        destinationConceptName = normalizedConceptName;
-        setPersonalConcepts((current) => [
-          ...current,
-          {
-            id: destinationConceptId as string,
-            topic_id: addToThisPersonalTopicId,
-            name: normalizedConceptName,
-          },
-        ]);
-      }
-
-      if (!destinationConceptId) {
-        setAddToThisError('Choose a private Concept destination.');
-        return;
-      }
-
-      const { data, error } = await supabase
-        .from('personal_cards')
-        .insert({
-          owner_id: userId,
-          concept_id: destinationConceptId,
-          question: normalizedFront,
-          answer: normalizedBack,
-        })
-        .select('id, concept_id')
-        .single();
-
-      if (error) throw error;
-      setPersonalCards((current) => [...current, data as PersonalCard]);
-      setIsAddToThisOpen(false);
-      setStudyActionStatus(
-        `Private Card created under ${destinationConceptName}.`
-      );
-    } catch (error) {
-      console.error('Unable to create the private Study Card.', error);
-      setAddToThisError(
-        error instanceof Error
-          ? error.message
-          : 'The private Card could not be created. Please try again.'
-      );
-    } finally {
-      setIsAddToThisSaving(false);
     }
   }
 
@@ -3168,25 +2919,6 @@ export function StudyPlanner({
         conceptReview.whyItMatters?.trim())
     );
     const hasStudyCandidate = Boolean(studyCandidate && studyAnswer);
-    const officialCandidatePlacements = getOfficialCandidatePlacements(studyCandidate);
-    const addToThisDestinationConcept = personalConcepts.find(
-      (concept) =>
-        concept.id ===
-        (studyCandidate?.kind === 'personal'
-          ? studyCandidate.personalConceptId
-          : addToThisConceptId)
-    );
-    const addToThisDestinationReady =
-      studyCandidate?.kind === 'personal'
-        ? Boolean(studyCandidate.personalConceptId)
-        : addToThisOverlayMatches.length > 0
-          ? Boolean(addToThisConceptId)
-          : Boolean(
-            personalTopics.length > 0 &&
-            addToThisPersonalTopicId &&
-            addToThisConceptName.trim() &&
-            addToThisOfficialNodeId
-          );
     const hasStudySelections =
       selectedNodeIds.size > 0 ||
       selectedPersonalTopicIds.size > 0 ||
@@ -3686,251 +3418,6 @@ export function StudyPlanner({
                       </div>
                     )}
                   </div>
-                </section>
-              </div>
-            )}
-
-            {isAddToThisOpen && studyCandidate && (
-              <div
-                className="study-v2-modal-backdrop"
-                role="presentation"
-                onMouseDown={(event) => {
-                  if (
-                    event.currentTarget === event.target &&
-                    !isAddToThisSaving
-                  ) {
-                    setIsAddToThisOpen(false);
-                  }
-                }}
-              >
-                <section
-                  aria-labelledby="study-add-to-this-title"
-                  aria-modal="true"
-                  className="study-v2-modal"
-                  role="dialog"
-                >
-                  <div className="study-v2-modal-header">
-                    <div>
-                      <p>Private personal material</p>
-                      <h2 id="study-add-to-this-title">Add to this</h2>
-                    </div>
-                    <button
-                      aria-label="Close Add to this"
-                      disabled={isAddToThisSaving}
-                      type="button"
-                      onClick={() => setIsAddToThisOpen(false)}
-                    >
-                      ×
-                    </button>
-                  </div>
-
-                  <form className="study-v2-modal-form" onSubmit={saveAddToThisCard}>
-                    <div className="study-v2-read-only-context">
-                      <span>
-                        {studyCandidate.kind === 'official'
-                          ? 'Official Question · read only'
-                          : 'Current personal Card · read only'}
-                      </span>
-                      <strong>{studyCandidate.prompt}</strong>
-                      <small>
-                        {studyCandidate.kind === 'official'
-                          ? getOfficialCandidateConceptName(studyCandidate)
-                          : addToThisDestinationConcept?.name || 'Personal Concept'}
-                      </small>
-                    </div>
-
-                    <p className="study-v2-private-explainer">
-                      Start with a blank private Card. Official content will not be
-                      copied or changed, and the Card will not be added to a Personal
-                      Deck automatically.
-                    </p>
-
-                    {studyCandidate.kind === 'official' && (
-                      <div className="study-v2-destination-fields">
-                        {isAddToThisLoading ? (
-                          <p role="status">Loading private destinations…</p>
-                        ) : addToThisOverlayMatches.length === 1 ? (
-                          <div className="study-v2-read-only-field">
-                            <span>Private Concept destination</span>
-                            <strong>{addToThisOverlayMatches[0].name}</strong>
-                            <small>
-                              {getPersonalTopicPath(
-                                addToThisOverlayMatches[0].topicId
-                              )}
-                            </small>
-                          </div>
-                        ) : addToThisOverlayMatches.length > 1 ? (
-                          <label>
-                            Private Concept destination
-                            <select
-                              required
-                              value={addToThisConceptId}
-                              onChange={(event) => {
-                                setAddToThisConceptId(event.target.value);
-                                setAddToThisError('');
-                              }}
-                            >
-                              <option value="">Choose a private Concept</option>
-                              {addToThisOverlayMatches.map((match) => (
-                                <option
-                                  key={match.personalConceptId}
-                                  value={match.personalConceptId}
-                                >
-                                  {match.name} — {getPersonalTopicPath(match.topicId)}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                        ) : (
-                          <>
-                            {personalTopics.length === 0 ? (
-                              <div className="study-v2-modal-warning">
-                                <strong>Create a personal Topic first.</strong>
-                                <p>
-                                  Add to this will not create a hidden Topic. Open Study
-                                  Creator, create a visible personal Topic, then return.
-                                </p>
-                                <Link href="/study-creator">Open Study Creator</Link>
-                              </div>
-                            ) : (
-                              <>
-                                <label>
-                                  Personal Topic <small>Canonical home</small>
-                                  <select
-                                    required
-                                    value={addToThisPersonalTopicId}
-                                    onChange={(event) => {
-                                      setAddToThisPersonalTopicId(event.target.value);
-                                      setAddToThisError('');
-                                    }}
-                                  >
-                                    <option value="">Choose one of My Topics</option>
-                                    {personalTopics.map((topic) => (
-                                      <option key={topic.id} value={topic.id}>
-                                        {getPersonalTopicPath(topic.id)}
-                                      </option>
-                                    ))}
-                                  </select>
-                                </label>
-                                <label>
-                                  Personal Concept name
-                                  <input
-                                    maxLength={160}
-                                    required
-                                    value={addToThisConceptName}
-                                    onChange={(event) => {
-                                      setAddToThisConceptName(event.target.value);
-                                      setAddToThisError('');
-                                    }}
-                                  />
-                                </label>
-                                {officialCandidatePlacements.length === 1 ? (
-                                  <div className="study-v2-read-only-field">
-                                    <span>Official location</span>
-                                    <strong>
-                                      {getNodePath(
-                                        nodesById.get(
-                                          officialCandidatePlacements[0].library_node_id
-                                        ) as LibraryNode,
-                                        nodesById
-                                      )}
-                                    </strong>
-                                  </div>
-                                ) : (
-                                  <label>
-                                    Official location
-                                    <select
-                                      required
-                                      value={addToThisOfficialNodeId}
-                                      onChange={(event) => {
-                                        setAddToThisOfficialNodeId(event.target.value);
-                                        setAddToThisError('');
-                                      }}
-                                    >
-                                      <option value="">Choose the official location</option>
-                                      {officialCandidatePlacements.map((placement) => {
-                                        const node = nodesById.get(
-                                          placement.library_node_id
-                                        );
-                                        return node ? (
-                                          <option key={node.id} value={node.id}>
-                                            {getNodePath(node, nodesById)}
-                                          </option>
-                                        ) : null;
-                                      })}
-                                    </select>
-                                  </label>
-                                )}
-                              </>
-                            )}
-                          </>
-                        )}
-                      </div>
-                    )}
-
-                    {studyCandidate.kind === 'personal' && (
-                      <div className="study-v2-read-only-field">
-                        <span>Private Concept destination · locked</span>
-                        <strong>
-                          {addToThisDestinationConcept?.name || 'Personal Concept'}
-                        </strong>
-                        <small>No Concept reassignment</small>
-                      </div>
-                    )}
-
-                    <label>
-                      Question / Front
-                      <textarea
-                        autoFocus
-                        maxLength={10000}
-                        required
-                        value={addToThisFront}
-                        onChange={(event) => {
-                          setAddToThisFront(event.target.value);
-                          setAddToThisError('');
-                        }}
-                      />
-                    </label>
-                    <label>
-                      Answer / Back
-                      <textarea
-                        maxLength={20000}
-                        required
-                        value={addToThisBack}
-                        onChange={(event) => {
-                          setAddToThisBack(event.target.value);
-                          setAddToThisError('');
-                        }}
-                      />
-                    </label>
-
-                    <div className="study-v2-modal-footer">
-                      <p aria-live="polite" role="status">
-                        {addToThisError}
-                      </p>
-                      <button
-                        className="study-v2-modal-secondary"
-                        disabled={isAddToThisSaving}
-                        type="button"
-                        onClick={() => setIsAddToThisOpen(false)}
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        className="study-v2-modal-primary"
-                        disabled={
-                          isAddToThisLoading ||
-                          isAddToThisSaving ||
-                          !addToThisDestinationReady ||
-                          !addToThisFront.trim() ||
-                          !addToThisBack.trim()
-                        }
-                        type="submit"
-                      >
-                        {isAddToThisSaving ? 'Saving…' : 'Save Card'}
-                      </button>
-                    </div>
-                  </form>
                 </section>
               </div>
             )}

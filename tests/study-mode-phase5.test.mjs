@@ -11,56 +11,41 @@ const migration = await readFile(
   'utf8'
 );
 
-test('official Add to this reuses one overlay without copying official content', () => {
-  assert.match(planner, /matches\.length === 1 \? matches\[0\]\.personalConceptId/);
-  assert.match(planner, /\.from\('personal_cards'\)[\s\S]*\.insert\(/);
-  assert.match(planner, /Start with a blank private Card/);
-  assert.doesNotMatch(
-    planner.slice(
-      planner.indexOf('async function saveAddToThisCard'),
-      planner.indexOf('function openFlagModal')
-    ),
-    /\.from\('(questions|concepts|concept_placements)'\)/
-  );
+test('retired Study authoring has no state, entry point, modal, or persistence path', () => {
+  assert.doesNotMatch(planner, /AddToThis|addToThis|PersonalConceptOverlayMatch/);
+  assert.doesNotMatch(planner, /getPersonalTopicPath|getOfficialCandidatePlacements|getOfficialCandidateConceptName/);
+  assert.doesNotMatch(planner, /create_personal_concept_overlay|Start with a blank private Card|Choose a private Concept/);
+  assert.doesNotMatch(planner, /\.insert\(/);
+  // These active count/bootstrap reads are not part of retired authoring.
+  assert.match(planner, /\.from\('personal_cards'\)/);
+  assert.match(planner, /\.from\('personal_concepts'\)/);
 });
 
-test('missing official overlay requires visible Topic and reuses Migration 078 RPC', () => {
-  const addBody = planner.slice(
-    planner.indexOf('async function saveAddToThisCard'),
-    planner.indexOf('function openFlagModal')
-  );
-  assert.match(planner, /addToThisOverlayMatches\.length === 0/);
-  assert.match(planner, /'create_personal_concept_overlay'/);
-  assert.match(planner, /p_personal_topic_id: addToThisPersonalTopicId/);
-  assert.match(planner, /p_official_concept_id: candidate\.conceptId/);
-  assert.match(planner, /Create a personal Topic first/);
-  assert.match(planner, /href="\/study-creator"/);
-  assert.doesNotMatch(addBody, /\.from\('personal_topics'\)/);
+test('active Flag keeps its Escape handler and shared dialog presentation', () => {
+  assert.match(planner, /if \(!isFlagModalOpen\) return;/);
+  assert.match(planner, /if \(!isFlagSaving\) setIsFlagModalOpen\(false\);/);
+  assert.match(planner, /\[isFlagModalOpen, isFlagSaving\]/);
+  assert.match(planner, /className="study-v2-private-explainer"/);
+  assert.match(planner, /\.study-v2-private-explainer,/);
+  for (const name of ['study-v2-modal-backdrop', 'study-v2-modal-form', 'study-v2-modal-footer']) {
+    assert.ok(planner.includes(`className="${name}"`));
+    assert.ok(planner.includes(`.${name} {`));
+  }
 });
 
-test('ambiguous overlays and official placements require explicit selection', () => {
-  assert.match(planner, /addToThisOverlayMatches\.length > 1/);
-  assert.match(planner, /Choose a private Concept/);
-  assert.match(planner, /officialCandidatePlacements\.length === 1/);
-  assert.match(planner, /Choose the official location/);
-  assert.match(
-    planner,
-    /setAddToThisConceptId\([\s\S]*matches\.length === 1[\s\S]*: ''/
-  );
+test('Study retains canonical candidate loading and official Concept Review', () => {
+  assert.match(planner, /startStudySessionWithCandidate\(/);
+  assert.match(planner, /selectNextStudyCandidate\(/);
+  assert.match(planner, /loadOfficialStudyConceptReview\(/);
+  assert.match(planner, /if \(candidate\?\.kind !== 'official' \|\| !activeLibrary\?\.id\) return;/);
 });
 
-test('personal Add to this locks the sibling destination and avoids deck writes', () => {
-  const addBody = planner.slice(
-    planner.indexOf('async function saveAddToThisCard'),
-    planner.indexOf('function openFlagModal')
-  );
-  assert.match(addBody, /candidate\.personalConceptId/);
-  assert.match(planner, /Private Concept destination · locked/);
-  assert.match(planner, /No Concept reassignment/);
-  assert.doesNotMatch(
-    addBody,
-    /study_deck_personal_(topic|collection)_selections|personal_collection_cards/
-  );
+test('official and personal responses retain their identity and evidence writers', () => {
+  assert.match(planner, /record_study_session_attempt/);
+  assert.match(planner, /recordPersonalStudyAttempt\(supabase,/);
+  assert.match(planner, /personalConceptId: studyCandidate\.personalConceptId,/);
+  assert.match(planner, /p_submission_id: submission\.id/);
+  assert.match(planner, /submissionId: submission\.id/);
 });
 
 test('flag schema enforces target, note, uniqueness, ownership, and cascades', () => {

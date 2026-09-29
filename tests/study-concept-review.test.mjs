@@ -202,11 +202,13 @@ test('modal reuses safe Markdown rendering and exposes only attributed source la
   assert.match(planner, /<MarkdownContent markdown=\{conceptReview\.bodyMarkdown\} \/>/);
   assert.match(planner, /No Concept review content is available yet\./);
   assert.match(planner, /rel="noreferrer"[\s\S]*target="_blank"/);
+  const reviewStart = planner.indexOf('study-v2-concept-review-modal');
+  const flagStart = planner.indexOf('{isFlagModalOpen');
+  assert.ok(reviewStart >= 0, 'Concept Review start marker exists');
+  assert.ok(flagStart >= 0, 'Flag modal endpoint exists');
+  assert.ok(flagStart > reviewStart, 'Flag modal follows Concept Review');
   assert.doesNotMatch(
-    planner.slice(
-      planner.indexOf('study-v2-concept-review-modal'),
-      planner.indexOf('{isAddToThisOpen')
-    ),
+    planner.slice(reviewStart, flagStart),
     /dangerouslySetInnerHTML|mastery|testingAngle|accepted_answers/
   );
 });
