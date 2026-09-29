@@ -26,7 +26,13 @@ const find=(f,label)=>elements(f.render()).find(n=>n.props['aria-label']===label
 const sliders=f=>elements(f.render()).filter(n=>n.props.type==='range');
 test('only active Topic slider renders beneath compact row and before immediate children',()=>{
  const f=fixture(),tree=f.render();assert.equal(sliders(f).length,1);assert.equal(sliders(f)[0].props.value,50);
- const children=tree.props.children;const row=children.find(n=>n?.props?.style?.minHeight===62);assert.ok(row);assert.equal(elements(row).filter(n=>n.props.type==='range').length,0);
+ const children=tree.props.children;
+ const row=children.find(n=>elements(n).some(el=>el.props['aria-label']==='Configure Nursing New to Mastery balance'));
+ assert.ok(row);assert.ok(elements(row).some(el=>el.props['aria-label']==='Include Nursing in Study'));
+ assert.equal(elements(row).filter(n=>n.props.type==='range').length,0);
+ const sliderIndex=children.findIndex(n=>elements(n).some(el=>el.props.type==='range'));
+ const childIndex=children.findIndex(n=>elements(n).some(el=>el.props['aria-label']==='Expand Branch A'));
+ assert.equal(sliderIndex,children.indexOf(row)+1);assert.ok(childIndex>sliderIndex);
  assert.ok(find(f,'Expand Branch A'));assert.equal(find(f,'Expand Leaf A'),undefined);assert.deepEqual(f.writes,[]);
 });
 test('configure is source-qualified, moves one slider, and never changes selection or writes',()=>{

@@ -131,9 +131,9 @@ type PersonalCollectionRow = {
   id: string;
   name: string;
   personal_collection_cards:
-    | { count: number }[]
-    | { count: number }
-    | null;
+  | { count: number }[]
+  | { count: number }
+  | null;
 };
 
 type LearnerProgressMetric = {
@@ -214,10 +214,10 @@ const learnerNavItems: Array<{
   label: string;
   href?: string;
 }> = [
-  { href: '/', icon: 'home', label: 'Home' },
-  { href: '/creator/concepts/new', icon: 'creator', label: 'Creator Studio' },
-  { href: '/admin/users', icon: 'admin', label: 'Admin' },
-];
+    { href: '/', icon: 'home', label: 'Home' },
+    { href: '/creator/concepts/new', icon: 'creator', label: 'Creator Studio' },
+    { href: '/admin/users', icon: 'admin', label: 'Admin' },
+  ];
 
 function createHomeRailItems(homeCreatorEntry: {
   label: 'Creator Studio';
@@ -617,19 +617,19 @@ export function StudyPlanner({
   const conceptReviewRequestVersionRef = useRef(0);
   const authoredStudyQuestion = studyCandidate?.kind === 'official'
     ? {
-        id: studyCandidate.questionId,
-        concept_id: studyCandidate.conceptId,
-        prompt: studyCandidate.prompt,
-        explanation: studyCandidate.explanation,
-        difficulty: studyCandidate.difficulty,
-        testing_angle: studyCandidate.testingAngle,
-        question_accepted_answers: [
-          {
-            answer_text: studyCandidate.answer,
-            sort_order: 0,
-          },
-        ],
-      }
+      id: studyCandidate.questionId,
+      concept_id: studyCandidate.conceptId,
+      prompt: studyCandidate.prompt,
+      explanation: studyCandidate.explanation,
+      difficulty: studyCandidate.difficulty,
+      testing_angle: studyCandidate.testingAngle,
+      question_accepted_answers: [
+        {
+          answer_text: studyCandidate.answer,
+          sort_order: 0,
+        },
+      ],
+    }
     : null;
 
   const nodesById = useMemo(
@@ -834,32 +834,32 @@ export function StudyPlanner({
           loadedRole = initialSession?.role ?? null;
           loadedDisplayName = initialSession?.displayName ?? 'there';
         } else {
-        const {
-          data: { user },
-          error: authError,
-        } = await supabase.auth.getUser();
+          const {
+            data: { user },
+            error: authError,
+          } = await supabase.auth.getUser();
 
-        if (authError) {
-          throw new Error(`Unable to verify your session: ${authError.message}`);
-        }
-
-        if (user) {
-          const { data: roleData, error: roleError } = await supabase
-            .from('user_roles')
-            .select('role')
-            .eq('user_id', user.id)
-            .maybeSingle();
-
-          if (roleError) {
-            throw new Error(`Unable to load your account role: ${roleError.message}`);
+          if (authError) {
+            throw new Error(`Unable to verify your session: ${authError.message}`);
           }
 
-          loadedUserId = user.id;
-          loadedEmail = user.email ?? 'Account';
-          loadedRole = roleData?.role ?? null;
-          loadedDisplayName =
-            (user.user_metadata?.full_name as string | undefined) ||
-            (user.email ? user.email.split('@')[0] : 'there');
+          if (user) {
+            const { data: roleData, error: roleError } = await supabase
+              .from('user_roles')
+              .select('role')
+              .eq('user_id', user.id)
+              .maybeSingle();
+
+            if (roleError) {
+              throw new Error(`Unable to load your account role: ${roleError.message}`);
+            }
+
+            loadedUserId = user.id;
+            loadedEmail = user.email ?? 'Account';
+            loadedRole = roleData?.role ?? null;
+            loadedDisplayName =
+              (user.user_metadata?.full_name as string | undefined) ||
+              (user.email ? user.email.split('@')[0] : 'there');
           }
         }
 
@@ -873,24 +873,24 @@ export function StudyPlanner({
           return;
         }
 
-      const availableLibrariesPromise =
-        loadedRole === 'editor' || loadedRole === 'admin'
-          ? supabase
+        const availableLibrariesPromise =
+          loadedRole === 'editor' || loadedRole === 'admin'
+            ? supabase
               .from('libraries')
               .select('id, name, slug, description, status')
               .eq('status', 'active')
               .order('name')
-          : Promise.resolve({
+            : Promise.resolve({
               data: activeLibrary ? [activeLibrary] : [],
               error: null,
             });
 
         if (!isMounted) return;
 
-      setUserId(loadedUserId);
-      setEmail(loadedEmail ?? 'Account');
-      setRole(loadedRole);
-      setDisplayName(loadedDisplayName);
+        setUserId(loadedUserId);
+        setEmail(loadedEmail ?? 'Account');
+        setRole(loadedRole);
+        setDisplayName(loadedDisplayName);
 
         if (!activeLibrary?.id) {
           const { data: libraryData, error: libraryError } =
@@ -922,149 +922,149 @@ export function StudyPlanner({
           return;
         }
 
-      const [availableLibrariesResult, deckResult] = await Promise.all([
-        availableLibrariesPromise,
-        supabase.rpc('get_or_create_active_study_deck', {
-          p_library_id: activeLibrary.id,
-        }),
-      ]);
+        const [availableLibrariesResult, deckResult] = await Promise.all([
+          availableLibrariesPromise,
+          supabase.rpc('get_or_create_active_study_deck', {
+            p_library_id: activeLibrary.id,
+          }),
+        ]);
 
-      if (!isMounted) return;
+        if (!isMounted) return;
 
-      if (availableLibrariesResult.error) {
-        throw new Error(
-          `Unable to load available Libraries: ${availableLibrariesResult.error.message}`
-        );
-      }
+        if (availableLibrariesResult.error) {
+          throw new Error(
+            `Unable to load available Libraries: ${availableLibrariesResult.error.message}`
+          );
+        }
 
-      const { data: deckData, error: deckError } = deckResult;
+        const { data: deckData, error: deckError } = deckResult;
 
-      if (deckError || !deckData) {
-        setMessage(
-          `Unable to load your deck: ${deckError?.message || 'No active deck found.'}`
-        );
-        return;
-      }
+        if (deckError || !deckData) {
+          setMessage(
+            `Unable to load your deck: ${deckError?.message || 'No active deck found.'}`
+          );
+          return;
+        }
 
-      const activeDeck = deckData as StudyDeck;
-      const [
-        nodeResult,
-        selectedNodesResult,
-        excludedNodesResult,
-        overridesResult,
-        preferenceResult,
-        resolvedResult,
-        learnerProgressResult,
-        libraryAvailabilityResult,
-        personalTopicsResult,
-        personalConceptsResult,
-        personalCardsResult,
-        personalSelectionsResult,
-        personalCollectionsResult,
-        personalCollectionSelectionsResult,
-      ] = await Promise.all([
-        supabase
-          .from('library_nodes')
-          .select('id, name, node_type, parent_id')
-          .eq('library_id', activeLibrary.id)
-          .order('name'),
-        supabase
-          .from('user_study_node_selections')
-          .select('node_id')
-          .eq('deck_id', activeDeck.id),
-        supabase
-          .from('study_deck_node_exclusions')
-          .select('node_id')
-          .eq('deck_id', activeDeck.id),
-        supabase
-          .from('user_study_concept_overrides')
-          .select('concept_id, selection_state')
-          .eq('deck_id', activeDeck.id),
-        supabase
-          .from('study_deck_node_preferences')
-          .select('library_node_id, new_mastery_balance')
-          .eq('deck_id', activeDeck.id),
-        supabase.rpc('resolve_study_deck', {
-          p_deck_id: activeDeck.id,
-        }),
-        supabase.rpc('get_library_learner_progress', {
-          p_library_id: activeLibrary.id,
-        }),
-        supabase.rpc('get_library_official_availability_counts', {
-          p_library_id: activeLibrary.id,
-        }),
-        supabase
-          .from('personal_topics')
-          .select('id, parent_id, name, sort_order')
-          .order('sort_order')
-          .order('name'),
-        supabase
-          .from('personal_concepts')
-          .select('id, topic_id, name')
-          .order('name'),
-        supabase
-          .from('personal_cards')
-          .select('id, concept_id')
-          .order('created_at'),
-        supabase
-          .from('study_deck_personal_topic_selections')
-          .select('personal_topic_id')
-          .eq('deck_id', activeDeck.id),
-        supabase
-          .from('personal_collections')
-          .select('id, name, personal_collection_cards(count)')
-          .order('name'),
-        supabase
-          .from('study_deck_personal_collection_selections')
-          .select('personal_collection_id')
-          .eq('deck_id', activeDeck.id),
-      ]);
-      const { data: nodeData, error: nodeError } = nodeResult;
-      const { data: selectedNodesData, error: selectedNodesError } =
-        selectedNodesResult;
-      const { data: excludedNodesData, error: excludedNodesError } =
-        excludedNodesResult;
-      const { data: overridesData, error: overridesError } = overridesResult;
-      const { data: preferenceData, error: preferenceError } = preferenceResult;
-      const { data: resolvedData, error: resolvedError } = resolvedResult;
-      const {
-        data: learnerProgressData,
-        error: learnerProgressLoadError,
-      } = learnerProgressResult;
-      const { data: personalTopicsData, error: personalTopicsError } =
-        personalTopicsResult;
-      const { data: personalConceptsData, error: personalConceptsError } =
-        personalConceptsResult;
-      const { data: personalCardsData, error: personalCardsError } =
-        personalCardsResult;
-      const { data: personalSelectionsData, error: personalSelectionsError } =
-        personalSelectionsResult;
-      const { data: personalCollectionsData, error: personalCollectionsError } =
-        personalCollectionsResult;
-      const {
-        data: personalCollectionSelectionsData,
-        error: personalCollectionSelectionsError,
-      } = personalCollectionSelectionsResult;
+        const activeDeck = deckData as StudyDeck;
+        const [
+          nodeResult,
+          selectedNodesResult,
+          excludedNodesResult,
+          overridesResult,
+          preferenceResult,
+          resolvedResult,
+          learnerProgressResult,
+          libraryAvailabilityResult,
+          personalTopicsResult,
+          personalConceptsResult,
+          personalCardsResult,
+          personalSelectionsResult,
+          personalCollectionsResult,
+          personalCollectionSelectionsResult,
+        ] = await Promise.all([
+          supabase
+            .from('library_nodes')
+            .select('id, name, node_type, parent_id')
+            .eq('library_id', activeLibrary.id)
+            .order('name'),
+          supabase
+            .from('user_study_node_selections')
+            .select('node_id')
+            .eq('deck_id', activeDeck.id),
+          supabase
+            .from('study_deck_node_exclusions')
+            .select('node_id')
+            .eq('deck_id', activeDeck.id),
+          supabase
+            .from('user_study_concept_overrides')
+            .select('concept_id, selection_state')
+            .eq('deck_id', activeDeck.id),
+          supabase
+            .from('study_deck_node_preferences')
+            .select('library_node_id, new_mastery_balance')
+            .eq('deck_id', activeDeck.id),
+          supabase.rpc('resolve_study_deck', {
+            p_deck_id: activeDeck.id,
+          }),
+          supabase.rpc('get_library_learner_progress', {
+            p_library_id: activeLibrary.id,
+          }),
+          supabase.rpc('get_library_official_availability_counts', {
+            p_library_id: activeLibrary.id,
+          }),
+          supabase
+            .from('personal_topics')
+            .select('id, parent_id, name, sort_order')
+            .order('sort_order')
+            .order('name'),
+          supabase
+            .from('personal_concepts')
+            .select('id, topic_id, name')
+            .order('name'),
+          supabase
+            .from('personal_cards')
+            .select('id, concept_id')
+            .order('created_at'),
+          supabase
+            .from('study_deck_personal_topic_selections')
+            .select('personal_topic_id')
+            .eq('deck_id', activeDeck.id),
+          supabase
+            .from('personal_collections')
+            .select('id, name, personal_collection_cards(count)')
+            .order('name'),
+          supabase
+            .from('study_deck_personal_collection_selections')
+            .select('personal_collection_id')
+            .eq('deck_id', activeDeck.id),
+        ]);
+        const { data: nodeData, error: nodeError } = nodeResult;
+        const { data: selectedNodesData, error: selectedNodesError } =
+          selectedNodesResult;
+        const { data: excludedNodesData, error: excludedNodesError } =
+          excludedNodesResult;
+        const { data: overridesData, error: overridesError } = overridesResult;
+        const { data: preferenceData, error: preferenceError } = preferenceResult;
+        const { data: resolvedData, error: resolvedError } = resolvedResult;
+        const {
+          data: learnerProgressData,
+          error: learnerProgressLoadError,
+        } = learnerProgressResult;
+        const { data: personalTopicsData, error: personalTopicsError } =
+          personalTopicsResult;
+        const { data: personalConceptsData, error: personalConceptsError } =
+          personalConceptsResult;
+        const { data: personalCardsData, error: personalCardsError } =
+          personalCardsResult;
+        const { data: personalSelectionsData, error: personalSelectionsError } =
+          personalSelectionsResult;
+        const { data: personalCollectionsData, error: personalCollectionsError } =
+          personalCollectionsResult;
+        const {
+          data: personalCollectionSelectionsData,
+          error: personalCollectionSelectionsError,
+        } = personalCollectionSelectionsResult;
 
-      if (!isMounted) return;
+        if (!isMounted) return;
 
-      const deckStateError =
-        nodeError ||
-        selectedNodesError ||
-        excludedNodesError ||
-        overridesError ||
-        preferenceError ||
-        resolvedError ||
-        libraryAvailabilityResult.error;
+        const deckStateError =
+          nodeError ||
+          selectedNodesError ||
+          excludedNodesError ||
+          overridesError ||
+          preferenceError ||
+          resolvedError ||
+          libraryAvailabilityResult.error;
 
-      if (deckStateError) {
-        setMessage(`Unable to load your deck: ${deckStateError.message}`);
-        return;
-      }
+        if (deckStateError) {
+          setMessage(`Unable to load your deck: ${deckStateError.message}`);
+          return;
+        }
 
-      const loadedNodes = (nodeData || []) as LibraryNode[];
-      const { data: placementData, error: placementError } = loadedNodes.length
-        ? await supabase
+        const loadedNodes = (nodeData || []) as LibraryNode[];
+        const { data: placementData, error: placementError } = loadedNodes.length
+          ? await supabase
             .from('concept_placements')
             .select(
               `
@@ -1082,97 +1082,97 @@ export function StudyPlanner({
             )
             .eq('library_nodes.library_id', activeLibrary.id)
             .eq('concepts.status', 'published')
-        : { data: [], error: null };
+          : { data: [], error: null };
 
-      if (!isMounted) return;
+        if (!isMounted) return;
 
-      if (placementError) {
-        setMessage(`Unable to load deck concepts: ${placementError.message}`);
-        return;
-      }
+        if (placementError) {
+          setMessage(`Unable to load deck concepts: ${placementError.message}`);
+          return;
+        }
 
-      const loadedPlacements = (placementData || []) as unknown as Placement[];
-      const conceptIds = [
-        ...new Set(loadedPlacements.map((placement) => placement.concept_id)),
-      ];
-      const { data: candidateData, error: questionError } = conceptIds.length
-        ? await supabase.rpc('resolve_study_candidates', {
+        const loadedPlacements = (placementData || []) as unknown as Placement[];
+        const conceptIds = [
+          ...new Set(loadedPlacements.map((placement) => placement.concept_id)),
+        ];
+        const { data: candidateData, error: questionError } = conceptIds.length
+          ? await supabase.rpc('resolve_study_candidates', {
             p_deck_id: activeDeck.id,
           })
-        : { data: [], error: null };
+          : { data: [], error: null };
 
-      if (!isMounted) return;
+        if (!isMounted) return;
 
-      if (questionError) {
-        setMessage(`Unable to load deck questions: ${questionError.message}`);
-        return;
-      }
-      const nextQuestionCounts = getOfficialStudyReadyQuestionCounts(
-        (candidateData || []) as StudyCandidateRow[]
-      );
+        if (questionError) {
+          setMessage(`Unable to load deck questions: ${questionError.message}`);
+          return;
+        }
+        const nextQuestionCounts = getOfficialStudyReadyQuestionCounts(
+          (candidateData || []) as StudyCandidateRow[]
+        );
 
-      if (!isMounted) return;
+        if (!isMounted) return;
 
-      const rootNode = loadedNodes.find((node) => node.parent_id === null);
-      const loadedAvailableLibraries = availableLibrariesResult.data?.length
-        ? (availableLibrariesResult.data as ActiveLibrary[])
-        : [activeLibrary];
+        const rootNode = loadedNodes.find((node) => node.parent_id === null);
+        const loadedAvailableLibraries = availableLibrariesResult.data?.length
+          ? (availableLibrariesResult.data as ActiveLibrary[])
+          : [activeLibrary];
 
-      setDeck(activeDeck);
-      setAvailableLibraries(loadedAvailableLibraries);
-      setNodes(loadedNodes);
-      setPlacements(loadedPlacements);
-      setSelectedDeckQuestionCounts(nextQuestionCounts);
-      setLibraryAvailabilityQuestionCounts(libraryAvailabilityResult.data || {});
-      setSelectedNodeIds(
-        new Set((selectedNodesData || []).map((selection) => selection.node_id))
-      );
-      setExcludedNodeIds(
-        new Set((excludedNodesData || []).map((exclusion) => exclusion.node_id))
-      );
-      setNodePreferences(
-        Object.fromEntries(
-          ((preferenceData || []) as StudyDeckNodePreference[]).map((preference) => [
-            preference.library_node_id,
-            Number(preference.new_mastery_balance),
-          ])
-        )
-      );
-      setIsSetupCramMode(Boolean(activeDeck.cram_mode));
-      setConceptOverrides(
-        Object.fromEntries(
-          (overridesData || []).map((override) => [
-            override.concept_id,
-            override.selection_state as ConceptOverride,
-          ])
-        )
-      );
-      setResolvedConcepts((resolvedData || []) as StudyDeckConcept[]);
-      const loadedPersonalTopics = personalTopicsError
-        ? []
-        : ((personalTopicsData || []) as PersonalTopic[]);
-      setPersonalTopics(loadedPersonalTopics);
-      setPersonalConcepts(
-        personalConceptsError
+        setDeck(activeDeck);
+        setAvailableLibraries(loadedAvailableLibraries);
+        setNodes(loadedNodes);
+        setPlacements(loadedPlacements);
+        setSelectedDeckQuestionCounts(nextQuestionCounts);
+        setLibraryAvailabilityQuestionCounts(libraryAvailabilityResult.data || {});
+        setSelectedNodeIds(
+          new Set((selectedNodesData || []).map((selection) => selection.node_id))
+        );
+        setExcludedNodeIds(
+          new Set((excludedNodesData || []).map((exclusion) => exclusion.node_id))
+        );
+        setNodePreferences(
+          Object.fromEntries(
+            ((preferenceData || []) as StudyDeckNodePreference[]).map((preference) => [
+              preference.library_node_id,
+              Number(preference.new_mastery_balance),
+            ])
+          )
+        );
+        setIsSetupCramMode(Boolean(activeDeck.cram_mode));
+        setConceptOverrides(
+          Object.fromEntries(
+            (overridesData || []).map((override) => [
+              override.concept_id,
+              override.selection_state as ConceptOverride,
+            ])
+          )
+        );
+        setResolvedConcepts((resolvedData || []) as StudyDeckConcept[]);
+        const loadedPersonalTopics = personalTopicsError
           ? []
-          : ((personalConceptsData || []) as PersonalConcept[])
-      );
-      setPersonalCards(
-        personalCardsError ? [] : ((personalCardsData || []) as PersonalCard[])
-      );
-      setSelectedPersonalTopicIds(
-        new Set(
-          personalSelectionsError
+          : ((personalTopicsData || []) as PersonalTopic[]);
+        setPersonalTopics(loadedPersonalTopics);
+        setPersonalConcepts(
+          personalConceptsError
             ? []
-            : (personalSelectionsData || []).map(
+            : ((personalConceptsData || []) as PersonalConcept[])
+        );
+        setPersonalCards(
+          personalCardsError ? [] : ((personalCardsData || []) as PersonalCard[])
+        );
+        setSelectedPersonalTopicIds(
+          new Set(
+            personalSelectionsError
+              ? []
+              : (personalSelectionsData || []).map(
                 (selection) => selection.personal_topic_id
               )
-        )
-      );
-      setPersonalCollections(
-        personalCollectionsError
-          ? []
-          : ((personalCollectionsData || []) as unknown as PersonalCollectionRow[]).map(
+          )
+        );
+        setPersonalCollections(
+          personalCollectionsError
+            ? []
+            : ((personalCollectionsData || []) as unknown as PersonalCollectionRow[]).map(
               (collection) => {
                 const count = Array.isArray(collection.personal_collection_cards)
                   ? collection.personal_collection_cards[0]?.count
@@ -1184,37 +1184,37 @@ export function StudyPlanner({
                 };
               }
             )
-      );
-      setSelectedPersonalCollectionIds(
-        new Set(
-          personalCollectionSelectionsError
-            ? []
-            : (personalCollectionSelectionsData || []).map(
+        );
+        setSelectedPersonalCollectionIds(
+          new Set(
+            personalCollectionSelectionsError
+              ? []
+              : (personalCollectionSelectionsData || []).map(
                 (selection) => selection.personal_collection_id
               )
-        )
-      );
-      setExpandedPersonalTopicIds(
-        new Set(
-          loadedPersonalTopics
-            .filter((topic) => topic.parent_id === null)
-            .map((topic) => `personal:topic:${topic.id}`)
-        )
-      );
-      setLearnerProgress(
-        learnerProgressLoadError || !learnerProgressData
-          ? { ...emptyLearnerProgress, library_id: activeLibrary.id }
-          : (learnerProgressData as unknown as LearnerProgressResponse)
-      );
-      setLearnerProgressError(
-        learnerProgressLoadError
-          ? `Progress could not be loaded: ${learnerProgressLoadError.message}`
-          : ''
-      );
-      setExpandedNodeIds(rootNode ? new Set([rootNode.id]) : new Set());
-      setHomeExpandedIds(rootNode ? new Set([rootNode.id]) : new Set());
-      setFocusedNodeId(rootNode?.id || null);
-      setConfiguredGroupKey(rootNode ? `official:topic:${rootNode.id}` : null);
+          )
+        );
+        setExpandedPersonalTopicIds(
+          new Set(
+            loadedPersonalTopics
+              .filter((topic) => topic.parent_id === null)
+              .map((topic) => `personal:topic:${topic.id}`)
+          )
+        );
+        setLearnerProgress(
+          learnerProgressLoadError || !learnerProgressData
+            ? { ...emptyLearnerProgress, library_id: activeLibrary.id }
+            : (learnerProgressData as unknown as LearnerProgressResponse)
+        );
+        setLearnerProgressError(
+          learnerProgressLoadError
+            ? `Progress could not be loaded: ${learnerProgressLoadError.message}`
+            : ''
+        );
+        setExpandedNodeIds(rootNode ? new Set([rootNode.id]) : new Set());
+        setHomeExpandedIds(rootNode ? new Set([rootNode.id]) : new Set());
+        setFocusedNodeId(rootNode?.id || null);
+        setConfiguredGroupKey(rootNode ? `official:topic:${rootNode.id}` : null);
       } catch (error) {
         if (!isMounted) return;
 
@@ -1276,37 +1276,37 @@ export function StudyPlanner({
   }, [canViewAlgorithmDiagnostics, pathname]);
 
   useEffect(() => {
-  const layout = document.querySelector<HTMLElement>('main.layout');
+    const layout = document.querySelector<HTMLElement>('main.layout');
 
-  if (mode === 'stats') {
-    const requestedStatsTab = getStatsTabFromHash(window.location.hash);
+    if (mode === 'stats') {
+      const requestedStatsTab = getStatsTabFromHash(window.location.hash);
 
-    if (requestedStatsTab !== statsTab) {
-      window.history.replaceState(null, '', statsTabHashes[statsTab]);
+      if (requestedStatsTab !== statsTab) {
+        window.history.replaceState(null, '', statsTabHashes[statsTab]);
+      }
+    } else if (
+      window.location.hash === '#set-up-deck' ||
+      getStatsTabFromHash(window.location.hash)
+    ) {
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
     }
-  } else if (
-    window.location.hash === '#set-up-deck' ||
-    getStatsTabFromHash(window.location.hash)
-  ) {
-    window.history.replaceState(null, '', window.location.pathname + window.location.search);
-  }
 
-  if (!layout) return;
+    if (!layout) return;
 
-  if (mode === 'study') {
-    // Study uses the focused full-width layout.
-    layout.style.gridTemplateColumns = '1fr';
+    if (mode === 'study') {
+      // Study uses the focused full-width layout.
+      layout.style.gridTemplateColumns = '1fr';
 
-    window.dispatchEvent(new Event('socrates-open-study'));
-  } else {
-    // Page 1 returns to the normal dashboard layout.
-    layout.style.gridTemplateColumns = '';
+      window.dispatchEvent(new Event('socrates-open-study'));
+    } else {
+      // Page 1 returns to the normal dashboard layout.
+      layout.style.gridTemplateColumns = '';
 
-    if (mode === 'dashboard') {
-      window.dispatchEvent(new Event('socrates-open-deck-dashboard'));
+      if (mode === 'dashboard') {
+        window.dispatchEvent(new Event('socrates-open-deck-dashboard'));
+      }
     }
-  }
-}, [mode, statsTab]);
+  }, [mode, statsTab]);
 
   function openStatsTab(tab: StatsTab) {
     if (tab === 'algorithm' && !canViewAlgorithmDiagnostics) return;
@@ -1339,9 +1339,9 @@ export function StudyPlanner({
       );
       const sessionBalance = selectedBalances.length
         ? Math.round(
-            selectedBalances.reduce((total, balance) => total + balance, 0) /
-              selectedBalances.length
-          )
+          selectedBalances.reduce((total, balance) => total + balance, 0) /
+          selectedBalances.length
+        )
         : 50;
       const requestId =
         studySessionStartRequestIdRef.current ?? window.crypto.randomUUID();
@@ -1877,8 +1877,8 @@ export function StudyPlanner({
       studySessionIdRef.current ||
       (studySessionCreatePromiseRef.current
         ? studySessionCreatePromiseRef.current.then(
-            (startup) => startup?.sessionId ?? null
-          )
+          (startup) => startup?.sessionId ?? null
+        )
         : studySessionStartRequestIdRef.current);
 
     studySessionIdRef.current = null;
@@ -2328,8 +2328,7 @@ export function StudyPlanner({
 
     if (resolvedResult.error || candidateResult.error) {
       setMessage(
-        `Deck saved, but summary could not refresh: ${
-          resolvedResult.error?.message || candidateResult.error?.message
+        `Deck saved, but summary could not refresh: ${resolvedResult.error?.message || candidateResult.error?.message
         }`
       );
       return;
@@ -2582,8 +2581,7 @@ export function StudyPlanner({
 
     if (nodeError || exclusionError || overrideError) {
       setMessage(
-        `Unable to clear deck: ${
-          nodeError?.message || exclusionError?.message || overrideError?.message
+        `Unable to clear deck: ${nodeError?.message || exclusionError?.message || overrideError?.message
         }`
       );
       setIsSaving(false);
@@ -2643,7 +2641,6 @@ export function StudyPlanner({
       excludedNodeIds,
       conceptOverrides
     ) : groupSelection(node, homeSettings!);
-    const selected = selection.checked || selection.partial;
     const preference = isLibraryTopic ? (nodePreferences[node.id] ?? 50)
       : (groupDrafts[node.key] ?? (isCollection ? homeSettings!.personal_collection_preferences : homeSettings!.personal_topic_preferences)[node.id] ?? 50);
     const conceptCount = isLibraryTopic ? branchConceptCount : isCollection ? null : personalBranchCounts(node.id).concepts;
@@ -2673,12 +2670,11 @@ export function StudyPlanner({
 
         <div
           style={{
-            background: selected ? '#eff6ff' : '#ffffff',
-            border: selected ? '1px solid #93c5fd' : '1px solid #e2e8f0',
-            borderRadius: 14,
-            marginBottom: 8,
-            minHeight: 62,
-            padding: '10px 12px',
+            background: 'transparent',
+            borderBottom: 'none',
+            marginBottom: 0,
+            minHeight: 48,
+            padding: '6px 4px',
             transition: 'all 0.15s ease',
           }}
         >
@@ -2698,17 +2694,18 @@ export function StudyPlanner({
               }
               style={{
                 alignItems: 'center',
-                background: children.length === 0 ? '#f8fafc' : '#e0f2fe',
+                background: 'transparent',
                 border: 'none',
-                borderRadius: 10,
-                color: '#0369a1',
+                borderRadius: 0,
+                color: '#08143b',
                 cursor: children.length === 0 ? 'default' : 'pointer',
                 display: 'flex',
                 flexShrink: 0,
                 fontSize: 13,
-                height: 34,
+                height: 28,
                 justifyContent: 'center',
-                width: 34,
+                padding: 0,
+                width: 28,
               }}
             >
               {children.length === 0 ? '•' : isExpanded ? '▼' : '▶'}
@@ -2737,7 +2734,7 @@ export function StudyPlanner({
                   void (isLibraryTopic ? toggleNodeSelection(node.id, event.currentTarget.checked) : saveGroupSetting(node, event.currentTarget.checked))
                 }
                 style={{
-                  accentColor: '#2563eb',
+                  accentColor: '#08143b',
                   cursor: 'pointer',
                   height: 18,
                   width: 18,
@@ -2779,9 +2776,9 @@ export function StudyPlanner({
                         ? 'Excluded'
                         : selection.excludedByAncestor
                           ? 'Excluded by parent'
-                        : selection.inherited
-                          ? 'Included by parent'
-                          : selection.explicit ? 'Selected directly' : ''}
+                          : selection.inherited
+                            ? 'Included by parent'
+                            : selection.explicit ? 'Selected directly' : ''}
                     </span>
                   </>
                 )}
@@ -2809,60 +2806,61 @@ export function StudyPlanner({
 
         </div>
 
-          {selection.explicit && configuredGroupKey === node.key && (
+        {selection.explicit && configuredGroupKey === node.key && (
+          <div
+            style={{
+              marginBottom: 8,
+              padding: '0 14px 2px 56px',
+            }}
+          >
             <div
               style={{
-                marginBottom: 8,
-                padding: '0 14px 2px 56px',
+                alignItems: 'center',
+                display: 'flex',
+                gap: 12,
               }}
             >
-              <div
-                style={{
-                  alignItems: 'center',
-                  display: 'flex',
-                  gap: 12,
+              <span style={{ color: '#08143b', fontSize: 12, fontWeight: 700 }}>
+                New
+              </span>
+              <input
+                className="home-v2-preference-slider"
+                aria-label={`${node.name} New to Mastery balance`}
+                disabled={isSetupCramMode || isSaving || Boolean(settingsError)}
+                max="100"
+                min="0"
+                type="range"
+                value={preference}
+                onChange={(event) => {
+                  const nextBalance = Number(event.target.value);
+                  if (isLibraryTopic) setNodePreferences((current) => ({ ...current, [node.id]: nextBalance }));
+                  else setGroupDrafts((current) => ({ ...current, [node.key]: nextBalance }));
                 }}
-              >
-                <span style={{ color: '#2563eb', fontSize: 12, fontWeight: 700 }}>
-                  New
-                </span>
-                <input
-                  aria-label={`${node.name} New to Mastery balance`}
-                  disabled={isSetupCramMode || isSaving || Boolean(settingsError)}
-                  max="100"
-                  min="0"
-                  type="range"
-                  value={preference}
-                  onChange={(event) => {
-                    const nextBalance = Number(event.target.value);
-                    if (isLibraryTopic) setNodePreferences((current) => ({ ...current, [node.id]: nextBalance }));
-                    else setGroupDrafts((current) => ({ ...current, [node.key]: nextBalance }));
-                  }}
-                  onBlur={(event) =>
-                    void (isLibraryTopic ? persistNodePreference(node.id, Number(event.currentTarget.value)) : saveGroupSetting(node, Number(event.currentTarget.value)))
-                  }
-                  onKeyUp={(event) =>
-                    void (isLibraryTopic ? persistNodePreference(node.id, Number(event.currentTarget.value)) : saveGroupSetting(node, Number(event.currentTarget.value)))
-                  }
-                  onPointerUp={(event) =>
-                    void (isLibraryTopic ? persistNodePreference(node.id, Number(event.currentTarget.value)) : saveGroupSetting(node, Number(event.currentTarget.value)))
-                  }
-                  style={{
-                    accentColor: '#2563eb',
-                    cursor: isSetupCramMode ? 'not-allowed' : 'pointer',
-                    flex: 1,
-                    opacity: isSetupCramMode ? 0.5 : 1,
-                  }}
-                />
-                <span style={{ color: '#1e3a8a', fontSize: 12, fontWeight: 700 }}>
-                  Mastery
-                </span>
-                <strong style={{ color: '#0f172a', minWidth: 30, textAlign: 'right' }}>
-                  {preference}
-                </strong>
-              </div>
+                onBlur={(event) =>
+                  void (isLibraryTopic ? persistNodePreference(node.id, Number(event.currentTarget.value)) : saveGroupSetting(node, Number(event.currentTarget.value)))
+                }
+                onKeyUp={(event) =>
+                  void (isLibraryTopic ? persistNodePreference(node.id, Number(event.currentTarget.value)) : saveGroupSetting(node, Number(event.currentTarget.value)))
+                }
+                onPointerUp={(event) =>
+                  void (isLibraryTopic ? persistNodePreference(node.id, Number(event.currentTarget.value)) : saveGroupSetting(node, Number(event.currentTarget.value)))
+                }
+                style={{
+                  accentColor: '#08143b',
+                  cursor: isSetupCramMode ? 'not-allowed' : 'pointer',
+                  flex: 1,
+                  opacity: isSetupCramMode ? 0.5 : 1,
+                }}
+              />
+              <span style={{ color: '#08143b', fontSize: 12, fontWeight: 700 }}>
+                Mastery
+              </span>
+              <strong style={{ color: '#0f172a', minWidth: 30, textAlign: 'right' }}>
+                {preference}
+              </strong>
             </div>
-          )}
+          </div>
+        )}
         {isExpanded && children.length > 0 && (
           <div style={{ marginTop: 4 }}>
             {children.map((child) => renderNode(child, depth + 1))}
@@ -2947,13 +2945,13 @@ export function StudyPlanner({
         style={
           standalone
             ? {
-                alignItems: 'end',
-                display: 'flex',
-                flexWrap: 'wrap',
-                gap: 10,
-                marginTop: 18,
-                maxWidth: 420,
-              }
+              alignItems: 'end',
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: 10,
+              marginTop: 18,
+              maxWidth: 420,
+            }
             : undefined
         }
       >
@@ -2968,12 +2966,12 @@ export function StudyPlanner({
             style={
               standalone
                 ? {
-                    color: '#59687f',
-                    fontSize: 12,
-                    fontWeight: 800,
-                    letterSpacing: '0.04em',
-                    textTransform: 'uppercase',
-                  }
+                  color: '#59687f',
+                  fontSize: 12,
+                  fontWeight: 800,
+                  letterSpacing: '0.04em',
+                  textTransform: 'uppercase',
+                }
                 : undefined
             }
           >
@@ -2986,15 +2984,15 @@ export function StudyPlanner({
             style={
               standalone
                 ? {
-                    background: '#ffffff',
-                    border: '1px solid #c7d1e0',
-                    borderRadius: 8,
-                    color: '#17233a',
-                    font: 'inherit',
-                    minHeight: 42,
-                    padding: '8px 10px',
-                    width: '100%',
-                  }
+                  background: '#ffffff',
+                  border: '1px solid #c7d1e0',
+                  borderRadius: 8,
+                  color: '#17233a',
+                  font: 'inherit',
+                  minHeight: 42,
+                  padding: '8px 10px',
+                  width: '100%',
+                }
                 : undefined
             }
           >
@@ -3012,16 +3010,16 @@ export function StudyPlanner({
           style={
             standalone
               ? {
-                  background: '#155ee8',
-                  border: '1px solid #0f4fc7',
-                  borderRadius: 8,
-                  color: '#ffffff',
-                  cursor: 'pointer',
-                  font: 'inherit',
-                  fontWeight: 800,
-                  minHeight: 42,
-                  padding: '8px 14px',
-                }
+                background: '#155ee8',
+                border: '1px solid #0f4fc7',
+                borderRadius: 8,
+                color: '#ffffff',
+                cursor: 'pointer',
+                font: 'inherit',
+                fontWeight: 800,
+                minHeight: 42,
+                padding: '8px 14px',
+              }
               : undefined
           }
         >
@@ -3159,397 +3157,394 @@ export function StudyPlanner({
     );
   }
 
-if (mode === 'study') {
-  const studyAnswer = studyCandidate?.answer || null;
-  const authoredStudyExplanation =
-    authoredStudyQuestion?.explanation?.trim() || null;
-  const hasConceptReviewContent = Boolean(
-    conceptReview &&
+  if (mode === 'study') {
+    const studyAnswer = studyCandidate?.answer || null;
+    const authoredStudyExplanation =
+      authoredStudyQuestion?.explanation?.trim() || null;
+    const hasConceptReviewContent = Boolean(
+      conceptReview &&
       (conceptReview.bodyMarkdown.trim() ||
         conceptReview.summary?.trim() ||
         conceptReview.whyItMatters?.trim())
-  );
-  const hasStudyCandidate = Boolean(studyCandidate && studyAnswer);
-  const officialCandidatePlacements = getOfficialCandidatePlacements(studyCandidate);
-  const addToThisDestinationConcept = personalConcepts.find(
-    (concept) =>
-      concept.id ===
-      (studyCandidate?.kind === 'personal'
-        ? studyCandidate.personalConceptId
-        : addToThisConceptId)
-  );
-  const addToThisDestinationReady =
-    studyCandidate?.kind === 'personal'
-      ? Boolean(studyCandidate.personalConceptId)
-      : addToThisOverlayMatches.length > 0
-        ? Boolean(addToThisConceptId)
-        : Boolean(
+    );
+    const hasStudyCandidate = Boolean(studyCandidate && studyAnswer);
+    const officialCandidatePlacements = getOfficialCandidatePlacements(studyCandidate);
+    const addToThisDestinationConcept = personalConcepts.find(
+      (concept) =>
+        concept.id ===
+        (studyCandidate?.kind === 'personal'
+          ? studyCandidate.personalConceptId
+          : addToThisConceptId)
+    );
+    const addToThisDestinationReady =
+      studyCandidate?.kind === 'personal'
+        ? Boolean(studyCandidate.personalConceptId)
+        : addToThisOverlayMatches.length > 0
+          ? Boolean(addToThisConceptId)
+          : Boolean(
             personalTopics.length > 0 &&
-              addToThisPersonalTopicId &&
-              addToThisConceptName.trim() &&
-              addToThisOfficialNodeId
+            addToThisPersonalTopicId &&
+            addToThisConceptName.trim() &&
+            addToThisOfficialNodeId
           );
-  const hasStudySelections =
-    selectedNodeIds.size > 0 ||
-    selectedPersonalTopicIds.size > 0 ||
-    selectedPersonalCollectionIds.size > 0 ||
-    Object.values(conceptOverrides).some((state) => state === 'included');
-  const emptyStudyTitle = isStudySequenceComplete
-    ? 'Study complete'
-    : studyStartFailure === 'empty-deck'
-      ? hasStudySelections
-        ? 'No eligible study material'
-        : 'No study material selected'
-      : studyStartFailure === 'error'
-        ? 'Study Mode could not start'
-        : 'No study material available';
-  const emptyStudyMessage = isStudySequenceComplete
-    ? 'You reviewed every selected personal Card in this session.'
-    : studyStartFailure === 'empty-deck'
-      ? hasStudySelections
-        ? 'Your selections are saved, but they contain no eligible Published official Questions or selected personal Cards. Review your deck settings on Home.'
-        : 'Choose an official Topic, personal Topic, or Personal Deck on Home, then start Study.'
-      : studyStartFailure === 'error'
-        ? 'Study Mode could not be started. Please try again.'
-        : 'This deck does not currently contain an eligible published Question or selected personal Card.';
+    const hasStudySelections =
+      selectedNodeIds.size > 0 ||
+      selectedPersonalTopicIds.size > 0 ||
+      selectedPersonalCollectionIds.size > 0 ||
+      Object.values(conceptOverrides).some((state) => state === 'included');
+    const emptyStudyTitle = isStudySequenceComplete
+      ? 'Study complete'
+      : studyStartFailure === 'empty-deck'
+        ? hasStudySelections
+          ? 'No eligible study material'
+          : 'No study material selected'
+        : studyStartFailure === 'error'
+          ? 'Study Mode could not start'
+          : 'No study material available';
+    const emptyStudyMessage = isStudySequenceComplete
+      ? 'You reviewed every selected personal Card in this session.'
+      : studyStartFailure === 'empty-deck'
+        ? hasStudySelections
+          ? 'Your selections are saved, but they contain no eligible Published official Questions or selected personal Cards. Review your deck settings on Home.'
+          : 'Choose an official Topic, personal Topic, or Personal Deck on Home, then start Study.'
+        : studyStartFailure === 'error'
+          ? 'Study Mode could not be started. Please try again.'
+          : 'This deck does not currently contain an eligible published Question or selected personal Card.';
 
-  const studyCardActions = (
-    <div className="study-v2-card-actions" aria-label="Study card controls">
-      {hasStudyCandidate && isAnswerVisible && (
+    const studyCardActions = (
+      <div className="study-v2-card-actions" aria-label="Study card controls">
+        {hasStudyCandidate && isAnswerVisible && (
+          <button
+            aria-label="Back to question"
+            className="study-v2-context-action"
+            disabled={studySubmissionStatus !== 'idle'}
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              returnToStudyQuestion();
+            }}
+            onKeyDown={(event) => event.stopPropagation()}
+          >
+            Back
+          </button>
+        )}
+        {hasStudyCandidate && (
+          <button
+            aria-pressed={Boolean(candidateFlag)}
+            className={`study-v2-context-action study-v2-flag-action${candidateFlag ? ' study-v2-flag-action-active' : ''
+              }`}
+            disabled={isCandidateFlagLoading}
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              openFlagModal();
+            }}
+            onKeyDown={(event) => event.stopPropagation()}
+          >
+            <span aria-hidden="true">⚑</span>
+            {isCandidateFlagLoading ? 'Loading…' : 'Flag'}
+          </button>
+        )}
         <button
-          aria-label="Back to question"
           className="study-v2-context-action"
-          disabled={studySubmissionStatus !== 'idle'}
           type="button"
           onClick={(event) => {
             event.stopPropagation();
-            returnToStudyQuestion();
+            void leaveStudyMode('dashboard');
           }}
           onKeyDown={(event) => event.stopPropagation()}
         >
-          Back
+          Exit
         </button>
-      )}
-      {hasStudyCandidate && (
-        <button
-          aria-pressed={Boolean(candidateFlag)}
-          className={`study-v2-context-action study-v2-flag-action${
-            candidateFlag ? ' study-v2-flag-action-active' : ''
-          }`}
-          disabled={isCandidateFlagLoading}
-          type="button"
-          onClick={(event) => {
-            event.stopPropagation();
-            openFlagModal();
-          }}
-          onKeyDown={(event) => event.stopPropagation()}
-        >
-          <span aria-hidden="true">⚑</span>
-          {isCandidateFlagLoading ? 'Loading…' : 'Flag'}
-        </button>
-      )}
-      <button
-        className="study-v2-context-action"
-        type="button"
-        onClick={(event) => {
-          event.stopPropagation();
-          void leaveStudyMode('dashboard');
-        }}
-        onKeyDown={(event) => event.stopPropagation()}
-      >
-        Exit
-      </button>
-    </div>
-  );
+      </div>
+    );
 
-  return (
-    <>
-      {renderLearnerHeader('study-v2')}
-      <main className="study-v2-page">
-        <section className="study-v2-shell" aria-label="Study Mode">
-          <article
-            aria-label={
-              hasStudyCandidate
-                ? isAnswerVisible
-                  ? 'Revealed study card'
-                  : 'Question card'
-                : isStudySequenceComplete
-                  ? 'Study sequence complete'
-                  : emptyStudyTitle
-            }
-            aria-describedby={
-              hasStudyCandidate && !isAnswerVisible
-                ? 'study-card-reveal-instruction'
-                : undefined
-            }
-            className={`study-v2-card ${
-              !hasStudyCandidate
+    return (
+      <>
+        {renderLearnerHeader('study-v2')}
+        <main className="study-v2-page">
+          <section className="study-v2-shell" aria-label="Study Mode">
+            <article
+              aria-label={
+                hasStudyCandidate
+                  ? isAnswerVisible
+                    ? 'Revealed study card'
+                    : 'Question card'
+                  : isStudySequenceComplete
+                    ? 'Study sequence complete'
+                    : emptyStudyTitle
+              }
+              aria-describedby={
+                hasStudyCandidate && !isAnswerVisible
+                  ? 'study-card-reveal-instruction'
+                  : undefined
+              }
+              className={`study-v2-card ${!hasStudyCandidate
                 ? 'study-v2-card-empty'
                 : isAnswerVisible
                   ? 'study-v2-card-revealed'
                   : 'study-v2-card-front'
-            }`}
-            onClick={
-              !hasStudyCandidate || isAnswerVisible
-                ? undefined
-                : () => setIsAnswerVisible(true)
-            }
-            onKeyDown={(event) => {
-              if (
-                hasStudyCandidate &&
-                !isAnswerVisible &&
-                (event.key === 'Enter' || event.key === ' ')
-              ) {
-                event.preventDefault();
-                setIsAnswerVisible(true);
+                }`}
+              onClick={
+                !hasStudyCandidate || isAnswerVisible
+                  ? undefined
+                  : () => setIsAnswerVisible(true)
               }
-            }}
-            role={!hasStudyCandidate || isAnswerVisible ? undefined : 'button'}
-            tabIndex={!hasStudyCandidate || isAnswerVisible ? undefined : 0}
-          >
-            <div className="study-v2-card-topline">
-              {studyCardActions}
-            </div>
+              onKeyDown={(event) => {
+                if (
+                  hasStudyCandidate &&
+                  !isAnswerVisible &&
+                  (event.key === 'Enter' || event.key === ' ')
+                ) {
+                  event.preventDefault();
+                  setIsAnswerVisible(true);
+                }
+              }}
+              role={!hasStudyCandidate || isAnswerVisible ? undefined : 'button'}
+              tabIndex={!hasStudyCandidate || isAnswerVisible ? undefined : 0}
+            >
+              <div className="study-v2-card-topline">
+                {studyCardActions}
+              </div>
 
-            {!hasStudyCandidate ? (
-              <div className="study-v2-empty-state">
-                <h1>{emptyStudyTitle}</h1>
-                <p>{emptyStudyMessage}</p>
-                <div className="study-v2-empty-actions">
-                  {studyStartFailure === 'error' && (
-                    <button type="button" onClick={() => void openStudyMode()}>
-                      Retry
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => void leaveStudyMode('dashboard')}
-                  >
-                    Go Home
-                  </button>
-                </div>
-              </div>
-            ) : !isAnswerVisible ? (
-              <div className="study-v2-question-content">
-                <h1>{studyCandidate?.prompt}</h1>
-                <p
-                  className="study-v2-sr-only"
-                  id="study-card-reveal-instruction"
-                >
-                  Press Enter or Space, or activate the card, to reveal the answer.
-                </p>
-              </div>
-            ) : (
-              <>
-                {studySubmissionStatus !== 'idle' && (
-                  <div className="study-v2-submission-status" role="status" aria-live="polite">
-                    <p>{studySubmissionStatus === 'saving' ? 'Saving answer…'
-                      : studySubmissionStatus === 'loading-next' ? 'Answer saved. Loading next card…'
-                      : studySubmissionStatus === 'next-error' ? 'Answer saved. Unable to load next card.'
-                      : 'Unable to confirm your answer was saved. Retry the same answer safely.'}</p>
-                    {studySubmissionStatus === 'save-error' && (
-                      <button className="btn primary" type="button" onClick={() => {
-                        if (studySubmission.current) void persistFinalStudyResponse(studySubmission.current.response);
-                      }}>Retry answer</button>
-                    )}
-                    {studySubmissionStatus === 'next-error' && (
-                      <button className="btn primary" type="button" onClick={() => void retryNextStudyCard()}>Retry next card</button>
-                    )}
-                    <button className="btn" type="button" onClick={() => void leaveStudyMode('dashboard')}>Exit</button>
-                  </div>
-                )}
-                <div className="study-v2-answer-body">
-                  <section
-                    className="study-v2-revealed-question"
-                    aria-labelledby="study-revealed-question-heading"
-                  >
-                    <p>Question</p>
-                    <h2 id="study-revealed-question-heading">
-                      {studyCandidate?.prompt}
-                    </h2>
-                  </section>
-                  <section
-                    className="study-v2-answer-section"
-                    aria-labelledby="study-answer-heading"
-                  >
-                    <h1 id="study-answer-heading">Answer</h1>
-                    <p>{studyAnswer}</p>
-                  </section>
-                  {authoredStudyExplanation && (
-                    <section
-                      className="study-v2-explanation-section"
-                      aria-labelledby="study-explanation-heading"
-                    >
-                      <h2 id="study-explanation-heading">Explanation</h2>
-                      <p>{authoredStudyExplanation}</p>
-                    </section>
-                  )}
-                  {studyCandidate?.kind === 'official' && activeLibrary?.id && (
-                    <div className="study-v2-review-concept-action">
-                      <button
-                        ref={conceptReviewTriggerRef}
-                        type="button"
-                        onClick={openStudyConceptReview}
-                      >
-                        Review Concept
+              {!hasStudyCandidate ? (
+                <div className="study-v2-empty-state">
+                  <h1>{emptyStudyTitle}</h1>
+                  <p>{emptyStudyMessage}</p>
+                  <div className="study-v2-empty-actions">
+                    {studyStartFailure === 'error' && (
+                      <button type="button" onClick={() => void openStudyMode()}>
+                        Retry
                       </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => void leaveStudyMode('dashboard')}
+                    >
+                      Go Home
+                    </button>
+                  </div>
+                </div>
+              ) : !isAnswerVisible ? (
+                <div className="study-v2-question-content">
+                  <h1>{studyCandidate?.prompt}</h1>
+                  <p
+                    className="study-v2-sr-only"
+                    id="study-card-reveal-instruction"
+                  >
+                    Press Enter or Space, or activate the card, to reveal the answer.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  {studySubmissionStatus !== 'idle' && (
+                    <div className="study-v2-submission-status" role="status" aria-live="polite">
+                      <p>{studySubmissionStatus === 'saving' ? 'Saving answer…'
+                        : studySubmissionStatus === 'loading-next' ? 'Answer saved. Loading next card…'
+                          : studySubmissionStatus === 'next-error' ? 'Answer saved. Unable to load next card.'
+                            : 'Unable to confirm your answer was saved. Retry the same answer safely.'}</p>
+                      {studySubmissionStatus === 'save-error' && (
+                        <button className="btn primary" type="button" onClick={() => {
+                          if (studySubmission.current) void persistFinalStudyResponse(studySubmission.current.response);
+                        }}>Retry answer</button>
+                      )}
+                      {studySubmissionStatus === 'next-error' && (
+                        <button className="btn primary" type="button" onClick={() => void retryNextStudyCard()}>Retry next card</button>
+                      )}
+                      <button className="btn" type="button" onClick={() => void leaveStudyMode('dashboard')}>Exit</button>
                     </div>
                   )}
-                </div>
+                  <div className="study-v2-answer-body">
+                    <section
+                      className="study-v2-revealed-question"
+                      aria-labelledby="study-revealed-question-heading"
+                    >
+                      <p>Question</p>
+                      <h2 id="study-revealed-question-heading">
+                        {studyCandidate?.prompt}
+                      </h2>
+                    </section>
+                    <section
+                      className="study-v2-answer-section"
+                      aria-labelledby="study-answer-heading"
+                    >
+                      <h1 id="study-answer-heading">Answer</h1>
+                      <p>{studyAnswer}</p>
+                    </section>
+                    {authoredStudyExplanation && (
+                      <section
+                        className="study-v2-explanation-section"
+                        aria-labelledby="study-explanation-heading"
+                      >
+                        <h2 id="study-explanation-heading">Explanation</h2>
+                        <p>{authoredStudyExplanation}</p>
+                      </section>
+                    )}
+                    {studyCandidate?.kind === 'official' && activeLibrary?.id && (
+                      <div className="study-v2-review-concept-action">
+                        <button
+                          ref={conceptReviewTriggerRef}
+                          type="button"
+                          onClick={openStudyConceptReview}
+                        >
+                          Review Concept
+                        </button>
+                      </div>
+                    )}
+                  </div>
 
-                {studyFeedback === null ? (
-                  <div
-                    className={`study-v2-feedback-row${
-                      studyCandidate?.kind === 'personal'
+                  {studyFeedback === null ? (
+                    <div
+                      className={`study-v2-feedback-row${studyCandidate?.kind === 'personal'
                         ? ' study-v2-feedback-row-personal'
                         : ''
-                    }`}
-                  >
-                    {(
-                      studyCandidate?.kind === 'official'
-                        ? [
+                        }`}
+                    >
+                      {(
+                        studyCandidate?.kind === 'official'
+                          ? [
                             ['up', 'Thumbs up'],
                             ['more', 'Other'],
                             ['down', 'Thumbs down'],
                           ]
-                        : [
+                          : [
                             ['up', 'Thumbs up'],
                             ['down', 'Thumbs down'],
                           ]
-                    ).map(([value, label]) => (
-                      <button
-                        aria-label={label}
-                        key={value}
-                        title={label}
-                        type="button"
-                        onClick={() => {
-                          if (value === 'more') {
-                            openStudyCardMorePanel();
-                          } else {
-                            resetStudyCardFeedback();
-                            setStudyFeedback(value as StudyFeedback);
-                            setStudyResponse(null);
-                          }
-                        }}
-                      >
-                        <StudyFeedbackIcon
-                          type={value as Exclude<StudyFeedback, null>}
-                        />
-                      </button>
-                    ))}
-                  </div>
-                ) : studyFeedback === 'more' ? (
-                  <div className="study-v2-more-panel">
-                    {isStudyCardFeedbackSent ? (
-                      <p
-                        aria-live="polite"
-                        className="study-v2-more-confirmation"
-                        role="status"
-                      >
-                        Thanks — feedback sent.
-                      </p>
-                    ) : studyCardFeedbackType === null ? (
-                      <div className="study-v2-more-choice-row">
+                      ).map(([value, label]) => (
                         <button
+                          aria-label={label}
+                          key={value}
+                          title={label}
                           type="button"
                           onClick={() => {
-                            setStudyCardFeedbackType('error');
-                            setStudyCardFeedbackError('');
+                            if (value === 'more') {
+                              openStudyCardMorePanel();
+                            } else {
+                              resetStudyCardFeedback();
+                              setStudyFeedback(value as StudyFeedback);
+                              setStudyResponse(null);
+                            }
                           }}
                         >
-                          Report an error
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setStudyCardFeedbackType('suggestion');
-                            setStudyCardFeedbackError('');
-                          }}
-                        >
-                          Suggest an improvement
-                        </button>
-                        <button type="button" onClick={closeStudyCardMorePanel}>
-                          ← Back
-                        </button>
-                      </div>
-                    ) : (
-                      <form
-                        className="study-v2-more-form"
-                        onSubmit={(event) => {
-                          event.preventDefault();
-                          void submitStudyCardFeedback();
-                        }}
-                      >
-                        <label>
-                          <span>
-                            {studyCardFeedbackType === 'error'
-                              ? 'What looks incorrect or misleading?'
-                              : 'How could this question or answer be improved?'}
-                          </span>
-                          <textarea
-                            autoFocus
-                            maxLength={4000}
-                            placeholder="Share a concise note"
-                            value={studyCardFeedbackMessage}
-                            onChange={(event) => {
-                              setStudyCardFeedbackMessage(event.target.value);
-                              if (studyCardFeedbackError) {
-                                setStudyCardFeedbackError('');
-                              }
-                            }}
+                          <StudyFeedbackIcon
+                            type={value as Exclude<StudyFeedback, null>}
                           />
-                        </label>
-                        <div className="study-v2-more-form-footer">
-                          <p aria-live="polite" role="status">
-                            {studyCardFeedbackError}
-                          </p>
+                        </button>
+                      ))}
+                    </div>
+                  ) : studyFeedback === 'more' ? (
+                    <div className="study-v2-more-panel">
+                      {isStudyCardFeedbackSent ? (
+                        <p
+                          aria-live="polite"
+                          className="study-v2-more-confirmation"
+                          role="status"
+                        >
+                          Thanks — feedback sent.
+                        </p>
+                      ) : studyCardFeedbackType === null ? (
+                        <div className="study-v2-more-choice-row">
                           <button
                             type="button"
                             onClick={() => {
-                              setStudyCardFeedbackType(null);
-                              setStudyCardFeedbackMessage('');
+                              setStudyCardFeedbackType('error');
                               setStudyCardFeedbackError('');
                             }}
-                            disabled={isStudyCardFeedbackSubmitting}
                           >
-                            Cancel
+                            Report an error
                           </button>
                           <button
-                            className="study-v2-more-submit"
-                            disabled={
-                              isStudyCardFeedbackSubmitting ||
-                              !studyCardFeedbackMessage.trim()
-                            }
-                            type="submit"
+                            type="button"
+                            onClick={() => {
+                              setStudyCardFeedbackType('suggestion');
+                              setStudyCardFeedbackError('');
+                            }}
                           >
-                            {isStudyCardFeedbackSubmitting ? 'Sending…' : 'Submit'}
+                            Suggest an improvement
+                          </button>
+                          <button type="button" onClick={closeStudyCardMorePanel}>
+                            ← Back
                           </button>
                         </div>
-                      </form>
-                    )}
-                  </div>
-                ) : studySubmissionStatus !== 'idle' ? null : (
-                  <div className="study-v2-response-stage">
-                    <div className="study-v2-response-toolbar">
-                      <button
-                        className="study-v2-response-back"
-                        type="button"
-                        onClick={() => {
-                          setStudyFeedback(null);
-                          setStudyResponse(null);
-                        }}
-                      >
-                        ← Back
-                      </button>
+                      ) : (
+                        <form
+                          className="study-v2-more-form"
+                          onSubmit={(event) => {
+                            event.preventDefault();
+                            void submitStudyCardFeedback();
+                          }}
+                        >
+                          <label>
+                            <span>
+                              {studyCardFeedbackType === 'error'
+                                ? 'What looks incorrect or misleading?'
+                                : 'How could this question or answer be improved?'}
+                            </span>
+                            <textarea
+                              autoFocus
+                              maxLength={4000}
+                              placeholder="Share a concise note"
+                              value={studyCardFeedbackMessage}
+                              onChange={(event) => {
+                                setStudyCardFeedbackMessage(event.target.value);
+                                if (studyCardFeedbackError) {
+                                  setStudyCardFeedbackError('');
+                                }
+                              }}
+                            />
+                          </label>
+                          <div className="study-v2-more-form-footer">
+                            <p aria-live="polite" role="status">
+                              {studyCardFeedbackError}
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setStudyCardFeedbackType(null);
+                                setStudyCardFeedbackMessage('');
+                                setStudyCardFeedbackError('');
+                              }}
+                              disabled={isStudyCardFeedbackSubmitting}
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              className="study-v2-more-submit"
+                              disabled={
+                                isStudyCardFeedbackSubmitting ||
+                                !studyCardFeedbackMessage.trim()
+                              }
+                              type="submit"
+                            >
+                              {isStudyCardFeedbackSubmitting ? 'Sending…' : 'Submit'}
+                            </button>
+                          </div>
+                        </form>
+                      )}
                     </div>
-                    <div className="study-v2-rating-row">
-                      {(studyFeedback === 'up'
-                        ? [
+                  ) : studySubmissionStatus !== 'idle' ? null : (
+                    <div className="study-v2-response-stage">
+                      <div className="study-v2-response-toolbar">
+                        <button
+                          className="study-v2-response-back"
+                          type="button"
+                          onClick={() => {
+                            setStudyFeedback(null);
+                            setStudyResponse(null);
+                          }}
+                        >
+                          ← Back
+                        </button>
+                      </div>
+                      <div className="study-v2-rating-row">
+                        {(studyFeedback === 'up'
+                          ? [
                             ['easy', 'Easy', 'I knew this well'],
                             ['average', 'Average', 'I knew part of this'],
                             ['hard', 'Hard', 'This was challenging'],
                           ]
-                        : [
+                          : [
                             ['didnt_know', "Didn't Know", 'I had no idea'],
                             [
                               'forgot',
@@ -3558,489 +3553,488 @@ if (mode === 'study') {
                             ],
                             ['too_hard', 'Too Hard', 'This was above my level'],
                           ]
-                      ).map(([value, label, subtitle]) => (
-                        <button
-                          aria-pressed={studyResponse === value}
-                          className={`study-v2-rating-button study-v2-rating-${value}${
-                            studyResponse === value
+                        ).map(([value, label, subtitle]) => (
+                          <button
+                            aria-pressed={studyResponse === value}
+                            className={`study-v2-rating-button study-v2-rating-${value}${studyResponse === value
                               ? ' study-v2-rating-active'
                               : ''
-                          }`}
-                          key={value}
-                          type="button"
-                          onClick={() =>
-                            void persistFinalStudyResponse(
-                              value as Exclude<StudyResponse, null>
-                            )
-                          }
-                        >
-                          <strong>{label}</strong>
-                          <span>{subtitle}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-          </article>
-
-          {isConceptReviewOpen && studyCandidate?.kind === 'official' && (
-            <div
-              className="study-v2-modal-backdrop"
-              role="presentation"
-              onMouseDown={(event) => {
-                if (event.currentTarget === event.target) {
-                  setIsConceptReviewOpen(false);
-                }
-              }}
-            >
-              <section
-                aria-labelledby="study-concept-review-title"
-                aria-modal="true"
-                className="study-v2-modal study-v2-concept-review-modal"
-                ref={conceptReviewDialogRef}
-                role="dialog"
-                tabIndex={-1}
-              >
-                <div className="study-v2-modal-header">
-                  <h2 id="study-concept-review-title">Review Concept</h2>
-                  <button
-                    aria-label="Close Concept review"
-                    type="button"
-                    onClick={() => setIsConceptReviewOpen(false)}
-                  >
-                    ×
-                  </button>
-                </div>
-
-                <div
-                  aria-busy={isConceptReviewLoading}
-                  className="study-v2-concept-review-body"
-                >
-                  {isConceptReviewLoading ? (
-                    <p className="study-v2-concept-review-status" role="status">
-                      Loading Concept review…
-                    </p>
-                  ) : conceptReview ? (
-                    <>
-                      <h3>{conceptReview.name}</h3>
-
-                      {!hasConceptReviewContent && (
-                        <p className="study-v2-concept-review-empty">
-                          No Concept review content is available yet.
-                        </p>
-                      )}
-
-                      {conceptReview.summary?.trim() && (
-                        <section>
-                          <h4>Summary</h4>
-                          <p>{conceptReview.summary}</p>
-                        </section>
-                      )}
-
-                      {conceptReview.whyItMatters?.trim() && (
-                        <section>
-                          <h4>Why it matters</h4>
-                          <p>{conceptReview.whyItMatters}</p>
-                        </section>
-                      )}
-
-                      {conceptReview.bodyMarkdown.trim() && (
-                        <section className="study-v2-concept-review-content">
-                          <MarkdownContent markdown={conceptReview.bodyMarkdown} />
-                        </section>
-                      )}
-
-                      {conceptReview.sources.length > 0 && (
-                        <section className="study-v2-concept-review-sources">
-                          <h4>Sources</h4>
-                          {conceptReview.sources.map((source) => (
-                            <div key={source.id}>
-                              <strong>{source.title}</strong>
-                              {(source.author || source.sourceType) && (
-                                <p>
-                                  {[source.author, source.sourceType]
-                                    .filter(Boolean)
-                                    .join(' · ')}
-                                </p>
-                              )}
-                              {source.note && <p>{source.note}</p>}
-                              {source.url && (
-                                <a
-                                  href={source.url}
-                                  rel="noreferrer"
-                                  target="_blank"
-                                >
-                                  Open source
-                                </a>
-                              )}
-                            </div>
-                          ))}
-                        </section>
-                      )}
-                    </>
-                  ) : (
-                    <div className="study-v2-concept-review-status" role="alert">
-                      <p>{conceptReviewError}</p>
-                      <button
-                        type="button"
-                        onClick={() => void loadStudyConceptReview({ retry: true })}
-                      >
-                        Try again
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </section>
-            </div>
-          )}
-
-          {isAddToThisOpen && studyCandidate && (
-            <div
-              className="study-v2-modal-backdrop"
-              role="presentation"
-              onMouseDown={(event) => {
-                if (
-                  event.currentTarget === event.target &&
-                  !isAddToThisSaving
-                ) {
-                  setIsAddToThisOpen(false);
-                }
-              }}
-            >
-              <section
-                aria-labelledby="study-add-to-this-title"
-                aria-modal="true"
-                className="study-v2-modal"
-                role="dialog"
-              >
-                <div className="study-v2-modal-header">
-                  <div>
-                    <p>Private personal material</p>
-                    <h2 id="study-add-to-this-title">Add to this</h2>
-                  </div>
-                  <button
-                    aria-label="Close Add to this"
-                    disabled={isAddToThisSaving}
-                    type="button"
-                    onClick={() => setIsAddToThisOpen(false)}
-                  >
-                    ×
-                  </button>
-                </div>
-
-                <form className="study-v2-modal-form" onSubmit={saveAddToThisCard}>
-                  <div className="study-v2-read-only-context">
-                    <span>
-                      {studyCandidate.kind === 'official'
-                        ? 'Official Question · read only'
-                        : 'Current personal Card · read only'}
-                    </span>
-                    <strong>{studyCandidate.prompt}</strong>
-                    <small>
-                      {studyCandidate.kind === 'official'
-                        ? getOfficialCandidateConceptName(studyCandidate)
-                        : addToThisDestinationConcept?.name || 'Personal Concept'}
-                    </small>
-                  </div>
-
-                  <p className="study-v2-private-explainer">
-                    Start with a blank private Card. Official content will not be
-                    copied or changed, and the Card will not be added to a Personal
-                    Deck automatically.
-                  </p>
-
-                  {studyCandidate.kind === 'official' && (
-                    <div className="study-v2-destination-fields">
-                      {isAddToThisLoading ? (
-                        <p role="status">Loading private destinations…</p>
-                      ) : addToThisOverlayMatches.length === 1 ? (
-                        <div className="study-v2-read-only-field">
-                          <span>Private Concept destination</span>
-                          <strong>{addToThisOverlayMatches[0].name}</strong>
-                          <small>
-                            {getPersonalTopicPath(
-                              addToThisOverlayMatches[0].topicId
-                            )}
-                          </small>
-                        </div>
-                      ) : addToThisOverlayMatches.length > 1 ? (
-                        <label>
-                          Private Concept destination
-                          <select
-                            required
-                            value={addToThisConceptId}
-                            onChange={(event) => {
-                              setAddToThisConceptId(event.target.value);
-                              setAddToThisError('');
-                            }}
+                              }`}
+                            key={value}
+                            type="button"
+                            onClick={() =>
+                              void persistFinalStudyResponse(
+                                value as Exclude<StudyResponse, null>
+                              )
+                            }
                           >
-                            <option value="">Choose a private Concept</option>
-                            {addToThisOverlayMatches.map((match) => (
-                              <option
-                                key={match.personalConceptId}
-                                value={match.personalConceptId}
-                              >
-                                {match.name} — {getPersonalTopicPath(match.topicId)}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                      ) : (
-                        <>
-                          {personalTopics.length === 0 ? (
-                            <div className="study-v2-modal-warning">
-                              <strong>Create a personal Topic first.</strong>
-                              <p>
-                                Add to this will not create a hidden Topic. Open Study
-                                Creator, create a visible personal Topic, then return.
-                              </p>
-                              <Link href="/study-creator">Open Study Creator</Link>
-                            </div>
-                          ) : (
-                            <>
-                              <label>
-                                Personal Topic <small>Canonical home</small>
-                                <select
-                                  required
-                                  value={addToThisPersonalTopicId}
-                                  onChange={(event) => {
-                                    setAddToThisPersonalTopicId(event.target.value);
-                                    setAddToThisError('');
-                                  }}
-                                >
-                                  <option value="">Choose one of My Topics</option>
-                                  {personalTopics.map((topic) => (
-                                    <option key={topic.id} value={topic.id}>
-                                      {getPersonalTopicPath(topic.id)}
-                                    </option>
-                                  ))}
-                                </select>
-                              </label>
-                              <label>
-                                Personal Concept name
-                                <input
-                                  maxLength={160}
-                                  required
-                                  value={addToThisConceptName}
-                                  onChange={(event) => {
-                                    setAddToThisConceptName(event.target.value);
-                                    setAddToThisError('');
-                                  }}
-                                />
-                              </label>
-                              {officialCandidatePlacements.length === 1 ? (
-                                <div className="study-v2-read-only-field">
-                                  <span>Official location</span>
-                                  <strong>
-                                    {getNodePath(
-                                      nodesById.get(
-                                        officialCandidatePlacements[0].library_node_id
-                                      ) as LibraryNode,
-                                      nodesById
-                                    )}
-                                  </strong>
-                                </div>
-                              ) : (
-                                <label>
-                                  Official location
-                                  <select
-                                    required
-                                    value={addToThisOfficialNodeId}
-                                    onChange={(event) => {
-                                      setAddToThisOfficialNodeId(event.target.value);
-                                      setAddToThisError('');
-                                    }}
-                                  >
-                                    <option value="">Choose the official location</option>
-                                    {officialCandidatePlacements.map((placement) => {
-                                      const node = nodesById.get(
-                                        placement.library_node_id
-                                      );
-                                      return node ? (
-                                        <option key={node.id} value={node.id}>
-                                          {getNodePath(node, nodesById)}
-                                        </option>
-                                      ) : null;
-                                    })}
-                                  </select>
-                                </label>
-                              )}
-                            </>
-                          )}
-                        </>
-                      )}
+                            <strong>{label}</strong>
+                            <span>{subtitle}</span>
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   )}
+                </>
+              )}
+            </article>
 
-                  {studyCandidate.kind === 'personal' && (
-                    <div className="study-v2-read-only-field">
-                      <span>Private Concept destination · locked</span>
-                      <strong>
-                        {addToThisDestinationConcept?.name || 'Personal Concept'}
-                      </strong>
-                      <small>No Concept reassignment</small>
-                    </div>
-                  )}
-
-                  <label>
-                    Question / Front
-                    <textarea
-                      autoFocus
-                      maxLength={10000}
-                      required
-                      value={addToThisFront}
-                      onChange={(event) => {
-                        setAddToThisFront(event.target.value);
-                        setAddToThisError('');
-                      }}
-                    />
-                  </label>
-                  <label>
-                    Answer / Back
-                    <textarea
-                      maxLength={20000}
-                      required
-                      value={addToThisBack}
-                      onChange={(event) => {
-                        setAddToThisBack(event.target.value);
-                        setAddToThisError('');
-                      }}
-                    />
-                  </label>
-
-                  <div className="study-v2-modal-footer">
-                    <p aria-live="polite" role="status">
-                      {addToThisError}
-                    </p>
+            {isConceptReviewOpen && studyCandidate?.kind === 'official' && (
+              <div
+                className="study-v2-modal-backdrop"
+                role="presentation"
+                onMouseDown={(event) => {
+                  if (event.currentTarget === event.target) {
+                    setIsConceptReviewOpen(false);
+                  }
+                }}
+              >
+                <section
+                  aria-labelledby="study-concept-review-title"
+                  aria-modal="true"
+                  className="study-v2-modal study-v2-concept-review-modal"
+                  ref={conceptReviewDialogRef}
+                  role="dialog"
+                  tabIndex={-1}
+                >
+                  <div className="study-v2-modal-header">
+                    <h2 id="study-concept-review-title">Review Concept</h2>
                     <button
-                      className="study-v2-modal-secondary"
+                      aria-label="Close Concept review"
+                      type="button"
+                      onClick={() => setIsConceptReviewOpen(false)}
+                    >
+                      ×
+                    </button>
+                  </div>
+
+                  <div
+                    aria-busy={isConceptReviewLoading}
+                    className="study-v2-concept-review-body"
+                  >
+                    {isConceptReviewLoading ? (
+                      <p className="study-v2-concept-review-status" role="status">
+                        Loading Concept review…
+                      </p>
+                    ) : conceptReview ? (
+                      <>
+                        <h3>{conceptReview.name}</h3>
+
+                        {!hasConceptReviewContent && (
+                          <p className="study-v2-concept-review-empty">
+                            No Concept review content is available yet.
+                          </p>
+                        )}
+
+                        {conceptReview.summary?.trim() && (
+                          <section>
+                            <h4>Summary</h4>
+                            <p>{conceptReview.summary}</p>
+                          </section>
+                        )}
+
+                        {conceptReview.whyItMatters?.trim() && (
+                          <section>
+                            <h4>Why it matters</h4>
+                            <p>{conceptReview.whyItMatters}</p>
+                          </section>
+                        )}
+
+                        {conceptReview.bodyMarkdown.trim() && (
+                          <section className="study-v2-concept-review-content">
+                            <MarkdownContent markdown={conceptReview.bodyMarkdown} />
+                          </section>
+                        )}
+
+                        {conceptReview.sources.length > 0 && (
+                          <section className="study-v2-concept-review-sources">
+                            <h4>Sources</h4>
+                            {conceptReview.sources.map((source) => (
+                              <div key={source.id}>
+                                <strong>{source.title}</strong>
+                                {(source.author || source.sourceType) && (
+                                  <p>
+                                    {[source.author, source.sourceType]
+                                      .filter(Boolean)
+                                      .join(' · ')}
+                                  </p>
+                                )}
+                                {source.note && <p>{source.note}</p>}
+                                {source.url && (
+                                  <a
+                                    href={source.url}
+                                    rel="noreferrer"
+                                    target="_blank"
+                                  >
+                                    Open source
+                                  </a>
+                                )}
+                              </div>
+                            ))}
+                          </section>
+                        )}
+                      </>
+                    ) : (
+                      <div className="study-v2-concept-review-status" role="alert">
+                        <p>{conceptReviewError}</p>
+                        <button
+                          type="button"
+                          onClick={() => void loadStudyConceptReview({ retry: true })}
+                        >
+                          Try again
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </section>
+              </div>
+            )}
+
+            {isAddToThisOpen && studyCandidate && (
+              <div
+                className="study-v2-modal-backdrop"
+                role="presentation"
+                onMouseDown={(event) => {
+                  if (
+                    event.currentTarget === event.target &&
+                    !isAddToThisSaving
+                  ) {
+                    setIsAddToThisOpen(false);
+                  }
+                }}
+              >
+                <section
+                  aria-labelledby="study-add-to-this-title"
+                  aria-modal="true"
+                  className="study-v2-modal"
+                  role="dialog"
+                >
+                  <div className="study-v2-modal-header">
+                    <div>
+                      <p>Private personal material</p>
+                      <h2 id="study-add-to-this-title">Add to this</h2>
+                    </div>
+                    <button
+                      aria-label="Close Add to this"
                       disabled={isAddToThisSaving}
                       type="button"
                       onClick={() => setIsAddToThisOpen(false)}
                     >
-                      Cancel
-                    </button>
-                    <button
-                      className="study-v2-modal-primary"
-                      disabled={
-                        isAddToThisLoading ||
-                        isAddToThisSaving ||
-                        !addToThisDestinationReady ||
-                        !addToThisFront.trim() ||
-                        !addToThisBack.trim()
-                      }
-                      type="submit"
-                    >
-                      {isAddToThisSaving ? 'Saving…' : 'Save Card'}
+                      ×
                     </button>
                   </div>
-                </form>
-              </section>
-            </div>
-          )}
 
-          {isFlagModalOpen && studyCandidate && (
-            <div
-              className="study-v2-modal-backdrop"
-              role="presentation"
-              onMouseDown={(event) => {
-                if (event.currentTarget === event.target && !isFlagSaving) {
-                  setIsFlagModalOpen(false);
-                }
-              }}
-            >
-              <section
-                aria-labelledby="study-flag-title"
-                aria-modal="true"
-                className="study-v2-modal study-v2-flag-modal"
-                role="dialog"
-              >
-                <div className="study-v2-modal-header">
-                  <div>
-                    <p>Private reminder</p>
-                    <h2 id="study-flag-title">
-                      {candidateFlag ? 'Edit Flag' : 'Flag this Card'}
-                    </h2>
-                  </div>
-                  <button
-                    aria-label="Close Flag"
-                    disabled={isFlagSaving}
-                    type="button"
-                    onClick={() => setIsFlagModalOpen(false)}
-                  >
-                    ×
-                  </button>
-                </div>
-                <form className="study-v2-modal-form" onSubmit={saveCandidateFlag}>
-                  <p className="study-v2-private-explainer">
-                    Only you can see this flag. It does not affect scheduling,
-                    mastery, or whether this Card appears in Study Mode.
-                  </p>
-                  <label>
-                    Note <small>Optional</small>
-                    <textarea
-                      autoFocus
-                      maxLength={4000}
-                      placeholder="Why do you want to revisit this?"
-                      value={flagNote}
-                      onChange={(event) => {
-                        setFlagNote(event.target.value);
-                        setFlagError('');
-                      }}
-                    />
-                  </label>
-                  <div className="study-v2-modal-footer">
-                    <p aria-live="polite" role="status">
-                      {flagError}
+                  <form className="study-v2-modal-form" onSubmit={saveAddToThisCard}>
+                    <div className="study-v2-read-only-context">
+                      <span>
+                        {studyCandidate.kind === 'official'
+                          ? 'Official Question · read only'
+                          : 'Current personal Card · read only'}
+                      </span>
+                      <strong>{studyCandidate.prompt}</strong>
+                      <small>
+                        {studyCandidate.kind === 'official'
+                          ? getOfficialCandidateConceptName(studyCandidate)
+                          : addToThisDestinationConcept?.name || 'Personal Concept'}
+                      </small>
+                    </div>
+
+                    <p className="study-v2-private-explainer">
+                      Start with a blank private Card. Official content will not be
+                      copied or changed, and the Card will not be added to a Personal
+                      Deck automatically.
                     </p>
-                    {candidateFlag && (
-                      <button
-                        className="study-v2-modal-danger"
-                        disabled={isFlagSaving}
-                        type="button"
-                        onClick={() => void removeCandidateFlag()}
-                      >
-                        Remove Flag
-                      </button>
+
+                    {studyCandidate.kind === 'official' && (
+                      <div className="study-v2-destination-fields">
+                        {isAddToThisLoading ? (
+                          <p role="status">Loading private destinations…</p>
+                        ) : addToThisOverlayMatches.length === 1 ? (
+                          <div className="study-v2-read-only-field">
+                            <span>Private Concept destination</span>
+                            <strong>{addToThisOverlayMatches[0].name}</strong>
+                            <small>
+                              {getPersonalTopicPath(
+                                addToThisOverlayMatches[0].topicId
+                              )}
+                            </small>
+                          </div>
+                        ) : addToThisOverlayMatches.length > 1 ? (
+                          <label>
+                            Private Concept destination
+                            <select
+                              required
+                              value={addToThisConceptId}
+                              onChange={(event) => {
+                                setAddToThisConceptId(event.target.value);
+                                setAddToThisError('');
+                              }}
+                            >
+                              <option value="">Choose a private Concept</option>
+                              {addToThisOverlayMatches.map((match) => (
+                                <option
+                                  key={match.personalConceptId}
+                                  value={match.personalConceptId}
+                                >
+                                  {match.name} — {getPersonalTopicPath(match.topicId)}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        ) : (
+                          <>
+                            {personalTopics.length === 0 ? (
+                              <div className="study-v2-modal-warning">
+                                <strong>Create a personal Topic first.</strong>
+                                <p>
+                                  Add to this will not create a hidden Topic. Open Study
+                                  Creator, create a visible personal Topic, then return.
+                                </p>
+                                <Link href="/study-creator">Open Study Creator</Link>
+                              </div>
+                            ) : (
+                              <>
+                                <label>
+                                  Personal Topic <small>Canonical home</small>
+                                  <select
+                                    required
+                                    value={addToThisPersonalTopicId}
+                                    onChange={(event) => {
+                                      setAddToThisPersonalTopicId(event.target.value);
+                                      setAddToThisError('');
+                                    }}
+                                  >
+                                    <option value="">Choose one of My Topics</option>
+                                    {personalTopics.map((topic) => (
+                                      <option key={topic.id} value={topic.id}>
+                                        {getPersonalTopicPath(topic.id)}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </label>
+                                <label>
+                                  Personal Concept name
+                                  <input
+                                    maxLength={160}
+                                    required
+                                    value={addToThisConceptName}
+                                    onChange={(event) => {
+                                      setAddToThisConceptName(event.target.value);
+                                      setAddToThisError('');
+                                    }}
+                                  />
+                                </label>
+                                {officialCandidatePlacements.length === 1 ? (
+                                  <div className="study-v2-read-only-field">
+                                    <span>Official location</span>
+                                    <strong>
+                                      {getNodePath(
+                                        nodesById.get(
+                                          officialCandidatePlacements[0].library_node_id
+                                        ) as LibraryNode,
+                                        nodesById
+                                      )}
+                                    </strong>
+                                  </div>
+                                ) : (
+                                  <label>
+                                    Official location
+                                    <select
+                                      required
+                                      value={addToThisOfficialNodeId}
+                                      onChange={(event) => {
+                                        setAddToThisOfficialNodeId(event.target.value);
+                                        setAddToThisError('');
+                                      }}
+                                    >
+                                      <option value="">Choose the official location</option>
+                                      {officialCandidatePlacements.map((placement) => {
+                                        const node = nodesById.get(
+                                          placement.library_node_id
+                                        );
+                                        return node ? (
+                                          <option key={node.id} value={node.id}>
+                                            {getNodePath(node, nodesById)}
+                                          </option>
+                                        ) : null;
+                                      })}
+                                    </select>
+                                  </label>
+                                )}
+                              </>
+                            )}
+                          </>
+                        )}
+                      </div>
                     )}
+
+                    {studyCandidate.kind === 'personal' && (
+                      <div className="study-v2-read-only-field">
+                        <span>Private Concept destination · locked</span>
+                        <strong>
+                          {addToThisDestinationConcept?.name || 'Personal Concept'}
+                        </strong>
+                        <small>No Concept reassignment</small>
+                      </div>
+                    )}
+
+                    <label>
+                      Question / Front
+                      <textarea
+                        autoFocus
+                        maxLength={10000}
+                        required
+                        value={addToThisFront}
+                        onChange={(event) => {
+                          setAddToThisFront(event.target.value);
+                          setAddToThisError('');
+                        }}
+                      />
+                    </label>
+                    <label>
+                      Answer / Back
+                      <textarea
+                        maxLength={20000}
+                        required
+                        value={addToThisBack}
+                        onChange={(event) => {
+                          setAddToThisBack(event.target.value);
+                          setAddToThisError('');
+                        }}
+                      />
+                    </label>
+
+                    <div className="study-v2-modal-footer">
+                      <p aria-live="polite" role="status">
+                        {addToThisError}
+                      </p>
+                      <button
+                        className="study-v2-modal-secondary"
+                        disabled={isAddToThisSaving}
+                        type="button"
+                        onClick={() => setIsAddToThisOpen(false)}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        className="study-v2-modal-primary"
+                        disabled={
+                          isAddToThisLoading ||
+                          isAddToThisSaving ||
+                          !addToThisDestinationReady ||
+                          !addToThisFront.trim() ||
+                          !addToThisBack.trim()
+                        }
+                        type="submit"
+                      >
+                        {isAddToThisSaving ? 'Saving…' : 'Save Card'}
+                      </button>
+                    </div>
+                  </form>
+                </section>
+              </div>
+            )}
+
+            {isFlagModalOpen && studyCandidate && (
+              <div
+                className="study-v2-modal-backdrop"
+                role="presentation"
+                onMouseDown={(event) => {
+                  if (event.currentTarget === event.target && !isFlagSaving) {
+                    setIsFlagModalOpen(false);
+                  }
+                }}
+              >
+                <section
+                  aria-labelledby="study-flag-title"
+                  aria-modal="true"
+                  className="study-v2-modal study-v2-flag-modal"
+                  role="dialog"
+                >
+                  <div className="study-v2-modal-header">
+                    <div>
+                      <p>Private reminder</p>
+                      <h2 id="study-flag-title">
+                        {candidateFlag ? 'Edit Flag' : 'Flag this Card'}
+                      </h2>
+                    </div>
                     <button
-                      className="study-v2-modal-secondary"
+                      aria-label="Close Flag"
                       disabled={isFlagSaving}
                       type="button"
                       onClick={() => setIsFlagModalOpen(false)}
                     >
-                      Cancel
-                    </button>
-                    <button
-                      className="study-v2-modal-primary"
-                      disabled={isFlagSaving}
-                      type="submit"
-                    >
-                      {isFlagSaving
-                        ? 'Saving…'
-                        : candidateFlag
-                          ? 'Save Changes'
-                          : 'Save Flag'}
+                      ×
                     </button>
                   </div>
-                </form>
-              </section>
-            </div>
-          )}
+                  <form className="study-v2-modal-form" onSubmit={saveCandidateFlag}>
+                    <p className="study-v2-private-explainer">
+                      Only you can see this flag. It does not affect scheduling,
+                      mastery, or whether this Card appears in Study Mode.
+                    </p>
+                    <label>
+                      Note <small>Optional</small>
+                      <textarea
+                        autoFocus
+                        maxLength={4000}
+                        placeholder="Why do you want to revisit this?"
+                        value={flagNote}
+                        onChange={(event) => {
+                          setFlagNote(event.target.value);
+                          setFlagError('');
+                        }}
+                      />
+                    </label>
+                    <div className="study-v2-modal-footer">
+                      <p aria-live="polite" role="status">
+                        {flagError}
+                      </p>
+                      {candidateFlag && (
+                        <button
+                          className="study-v2-modal-danger"
+                          disabled={isFlagSaving}
+                          type="button"
+                          onClick={() => void removeCandidateFlag()}
+                        >
+                          Remove Flag
+                        </button>
+                      )}
+                      <button
+                        className="study-v2-modal-secondary"
+                        disabled={isFlagSaving}
+                        type="button"
+                        onClick={() => setIsFlagModalOpen(false)}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        className="study-v2-modal-primary"
+                        disabled={isFlagSaving}
+                        type="submit"
+                      >
+                        {isFlagSaving
+                          ? 'Saving…'
+                          : candidateFlag
+                            ? 'Save Changes'
+                            : 'Save Flag'}
+                      </button>
+                    </div>
+                  </form>
+                </section>
+              </div>
+            )}
 
-          <p
-            aria-live="polite"
-            className="study-v2-action-status"
-            role="status"
-          >
-            {studyActionStatus}
-          </p>
-        </section>
-      </main>
+            <p
+              aria-live="polite"
+              className="study-v2-action-status"
+              role="status"
+            >
+              {studyActionStatus}
+            </p>
+          </section>
+        </main>
 
-      <style jsx global>{`
+        <style jsx global>{`
         .study-v2-header {
           align-items: center;
           background: linear-gradient(180deg, #061846, #041238);
@@ -5254,9 +5248,9 @@ if (mode === 'study') {
           }
         }
       `}</style>
-    </>
-  );
-}
+      </>
+    );
+  }
 
   return (
     <>
@@ -5275,7 +5269,8 @@ if (mode === 'study') {
 
                 return item.href ? (
                   <Link
-                    className="home-v2-rail-card"
+                    className={`home-v2-rail-card${item.label === 'Creator Studio' ? ' home-v2-rail-card-primary' : ''
+                      }`}
                     href={item.href}
                     key={item.label}
                     onClick={
@@ -5461,11 +5456,21 @@ if (mode === 'study') {
                 aria-labelledby="home-v2-setup-title"
               >
                 <div className="home-v2-setup-heading">
-                  <div>
-                    <h3 id="home-v2-setup-title">Deck settings</h3>
-                    <p>
-                      Choose eligible areas and balance new material with mastery review.
-                    </p>
+                  <div className="home-v2-setup-title-row">
+                    <span className="home-v2-deck-icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24">
+                        <path d="M12 3 3 7.5 12 12l9-4.5L12 3Z" />
+                        <path d="m3 12 9 4.5 9-4.5" />
+                        <path d="m3 16.5 9 4.5 9-4.5" />
+                      </svg>
+                    </span>
+
+                    <div>
+                      <h3 id="home-v2-setup-title">Deck settings</h3>
+                      <p>
+                        Choose eligible areas and balance new material with mastery review.
+                      </p>
+                    </div>
                   </div>
 
                   {renderLibrarySubjectSwitcher(activeLibrary.slug)}
