@@ -1,0 +1,12 @@
+.card {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  line-height: 1.6;
+}
+.card > :first-child { margin-top: 0; }
+.card > :last-child { margin-bottom: 0; }
+.card h2, .card h3 { line-height: 1.3; }
+.card ul, .card ol { padding-inline-start: 1.5em; }
+.card blockquote { margin-inline: 0; padding-inline-start: 1em; border-inline-start: 2px solid currentColor; }
+.card a { text-decoration: underline; }

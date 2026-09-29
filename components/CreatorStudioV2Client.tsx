@@ -1,5 +1,7 @@
 'use client';
 
+import { applyMarkdownEdit, type MarkdownFormat } from '@/lib/markdown-editing';
+
 import { CreatorLearnerQuestionsWorkspace } from './creator/CreatorLearnerQuestionsWorkspace';
 import { StandaloneCustomCardWorkspace, type StandaloneCardRequest } from './creator/StandaloneCustomCardWorkspace';
 import { deleteStandaloneCard, standaloneCardMatchesTopic, standaloneCardAttachment, type CreatorStandaloneCard, type StandaloneCardAttachment } from '@/lib/standalone-custom-cards';
@@ -248,14 +250,6 @@ type QuestionSearchCursor = {
 
 type EditorMode = 'write' | 'preview';
 type QuestionDifficulty = 'easy' | 'medium' | 'hard';
-type MarkdownFormat =
-  | 'bold'
-  | 'italic'
-  | 'heading'
-  | 'bulleted-list'
-  | 'numbered-list'
-  | 'link'
-  | 'quote';
 type DialogMode = 'add' | 'add-personal' | 'rename' | 'move' | null;
 type PersonalTopicCreationContext = Readonly<{
   parentPersonalTopicId: string | null;
@@ -3196,62 +3190,7 @@ export function CreatorStudioV2Client({
     const editor = conceptEditorRef.current;
     const start = editor?.selectionStart ?? concept.length;
     const end = editor?.selectionEnd ?? concept.length;
-    const selectedText = concept.slice(start, end);
-    let replacement = '';
-    let selectionStart = start;
-    let selectionEnd = start;
-
-    const wrapSelection = (
-      prefix: string,
-      suffix: string,
-      placeholder: string
-    ) => {
-      const innerText = selectedText || placeholder;
-      replacement = `${prefix}${innerText}${suffix}`;
-      selectionStart = start + prefix.length;
-      selectionEnd = selectionStart + innerText.length;
-    };
-
-    const prefixLines = (prefix: string, placeholder: string) => {
-      const innerText = selectedText || placeholder;
-      replacement = innerText
-        .split(/\r?\n/)
-        .map((line) => `${prefix}${line || placeholder}`)
-        .join('\n');
-      selectionStart = start + prefix.length;
-      selectionEnd = start + replacement.length;
-    };
-
-    switch (format) {
-      case 'bold':
-        wrapSelection('**', '**', 'bold text');
-        break;
-      case 'italic':
-        wrapSelection('*', '*', 'italic text');
-        break;
-      case 'heading':
-        prefixLines('## ', 'Heading');
-        break;
-      case 'bulleted-list':
-        prefixLines('- ', 'Item');
-        break;
-      case 'numbered-list':
-        prefixLines('1. ', 'Item');
-        break;
-      case 'link': {
-        const linkText = selectedText || 'link text';
-        replacement = `[${linkText}](https://example.com)`;
-        selectionStart = start + 1;
-        selectionEnd = selectionStart + linkText.length;
-        break;
-      }
-      case 'quote':
-        prefixLines('> ', 'Quote');
-        break;
-    }
-
-    const nextConcept =
-      concept.slice(0, start) + replacement + concept.slice(end);
+    const { source: nextConcept, selectionStart, selectionEnd } = applyMarkdownEdit(concept, start, end, format);
     setConcept(nextConcept);
     setStatus(null);
     setEditorMode('write');

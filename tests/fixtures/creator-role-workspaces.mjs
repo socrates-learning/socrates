@@ -1,3 +1,4 @@
+import * as markdownEditing from '../../lib/markdown-editing.ts';
 import * as topicSelection from '../../lib/topic-selection-presentation.ts';
 import * as homeSettings from '../../lib/home-deck-settings.ts';
 // Disposable in-memory characterization only. No Auth, network, or database is used.
@@ -129,6 +130,7 @@ export function editor({ role = 'admin', editing = false, response, references =
     './creator/CreatorLearnerQuestionsWorkspace': { CreatorLearnerQuestionsWorkspace() {} },
     './creator/StandaloneCustomCardWorkspace': { StandaloneCustomCardWorkspace: () => null },
     '@/lib/standalone-custom-cards': standaloneCards,
+    '@/lib/markdown-editing': markdownEditing,
     '@/lib/topic-selection-presentation': topicSelection,
     '@/lib/home-deck-settings': homeSettings,
     '@/components/creator/CreatorStudioChrome': {

@@ -1,3 +1,4 @@
+import * as markdownEditing from '../lib/markdown-editing.ts';
 import * as topicSelection from '../lib/topic-selection-presentation.ts';
 import * as homeSettings from '../lib/home-deck-settings.ts';
 import * as standaloneCards from '../lib/standalone-custom-cards.ts';
@@ -117,6 +118,7 @@ function editor({ role = 'learner', editing = false, response, references = [], 
     './creator/CreatorLearnerQuestionsWorkspace': { CreatorLearnerQuestionsWorkspace() {} },
     './creator/StandaloneCustomCardWorkspace': { StandaloneCustomCardWorkspace: () => null },
     '@/lib/standalone-custom-cards': standaloneCards,
+    '@/lib/markdown-editing': markdownEditing,
     '@/lib/topic-selection-presentation': topicSelection,
     '@/lib/home-deck-settings': homeSettings,
     '@/components/creator/CreatorStudioChrome': {
