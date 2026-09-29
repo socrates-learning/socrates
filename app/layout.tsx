@@ -1,4 +1,5 @@
 import './globals.css';
+import { SocratesShellProvider } from '@/components/application-shell/SocratesShell';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
@@ -9,7 +10,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body><SocratesShellProvider>{children}</SocratesShellProvider></body>
     </html>
   );
 }

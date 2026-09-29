@@ -143,6 +143,7 @@ function editor({ role = 'learner', editing = false, response, references = [], 
     './CreatorAlgorithmDiagnostics': {},
     './CreatorTopicTreeInteraction': {},
     '@/lib/creator-topic-positioning': topicPositioning,
+    '@/components/application-shell/SocratesShell': { useSocratesNavigationGuard() {} },
     './CreatorStudioV2Client.module.css': { default: {} },
   };
   const context = {

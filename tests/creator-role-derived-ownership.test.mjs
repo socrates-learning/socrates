@@ -145,6 +145,7 @@ function editor({ role = 'admin', editing = false, response, references = [], ca
     './CreatorAlgorithmDiagnostics': {},
     './CreatorTopicTreeInteraction': {},
     '@/lib/creator-topic-positioning': topicPositioning,
+    '@/components/application-shell/SocratesShell': { useSocratesNavigationGuard() {} },
     './CreatorStudioV2Client.module.css': { __esModule: true, default: new Proxy({}, { get: (_target, key) => String(key) }) },
   };
   const context = {

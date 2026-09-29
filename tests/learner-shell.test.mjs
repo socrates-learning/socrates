@@ -58,12 +58,16 @@ function header(role, mode, overrides = {}) {
   }).renderHeader();
 }
 function rail(overrides = {}) {
-  const a=planner.indexOf('<HomeRail'), b=planner.indexOf('/>',a);
-  assert.ok(a>=0 && b>a);
-  return compile('export function render(){return ('+planner.slice(a,b+2)+');}', {
-    ...components, homeRailItems:railItems, email:'fixture@example.invalid', handleCreatorClick:noop,
-    openStatsTab:noop, handleLogout:noop, ...overrides,
-  }).render();
+  return components.HomeRail({
+    items: railItems.map(item => item.href ? {
+      kind: 'link', label:item.label, icon:item.icon, href:item.href,
+      className:`home-v2-rail-card${item.label === 'Creator Studio' ? ' home-v2-rail-card-primary' : ''}`,
+      onClick:item.href.startsWith('/creator') ? (overrides.handleCreatorClick ?? noop) : undefined,
+    } : {
+      kind:'button', label:item.label, icon:item.icon, className:'home-v2-rail-card',
+      onClick:item.label === 'Stats' ? () => (overrides.openStatsTab ?? noop)('progress') : undefined,
+    }), onLogout:overrides.handleLogout ?? noop,
+  });
 }
 function switcher(role, availableLibraries, currentSlug, standalone=false) {
   return compile('export '+block(planner, 'function renderLibrarySubjectSwitcher(', "if (homeBootstrapView === 'loading')"), {

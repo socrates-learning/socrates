@@ -1,3 +1,4 @@
+import { SocratesShell } from '@/components/application-shell/SocratesShell';
 import { Header, HeaderSessionProvider } from '@/components/Header';
 import {
   canActorAccessSharedCreator,
@@ -38,7 +39,7 @@ export default async function CreatorLayout({
       email={email ?? 'Account'}
       role={role}
     >
-      {children}
+      <SocratesShell>{children}</SocratesShell>
     </HeaderSessionProvider>
   );
 }

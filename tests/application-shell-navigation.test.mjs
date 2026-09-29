@@ -62,7 +62,7 @@ test('released route destinations and no-action Menu are frozen, not future shel
     { label: 'Creator Studio', href: '/creator', icon: 'edit' }, { label: 'Stats', icon: 'bars' },
     { label: 'Account Settings', href: '/account', icon: 'gear' }, { label: 'Menu', icon: 'people' },
   ]);
-  assert.match(planner, /onClick: item.label === 'Stats' \? \(\) => openStatsTab\('progress'\) : undefined/);
+  assert.match(planner, /onStats=\{\(\) => openStatsTab\('progress'\)\}/);
   assert.match(read('app/creator/page.tsx'), /export default NewConceptPage/);
   assert.match(read('app/account/page.tsx'), /redirect\('\/login\?next=\/account'\)/);
   assert.match(read('app/account/page.tsx'), /href="\/"[\s\S]*Back to Home/);
@@ -126,4 +126,47 @@ test('native Library switch retains server membership checks and safe Account re
     if(scenario.role==='learner'&&!scenario.anonymous)assert.ok(queries.includes('user_libraries'));
   }
   assert.equal(safe('https://external.invalid','/account'),'/account');
+});
+
+// Execute the shared navigation with inert framework boundaries; no workspace is reconstructed.
+function shellFixture(allowed = true) {
+  const calls = [], exports = {};
+  const jsx = (type, props) => ({ type, props });
+  const definitions = compile(read('lib/application-shell-navigation.ts'), {});
+  const modules = {
+    react: { createContext: () => ({}), useContext: () => ({ allowNavigation: () => { calls.push('guard'); return allowed; } }), useState: () => [false, () => {}], useRef: () => ({ current: false }) },
+    'react/jsx-runtime': { jsx, jsxs: jsx }, 'next/link': { default: 'a', __esModule: true },
+    'next/navigation': { useRouter: () => ({ push: path => calls.push(path) }) },
+    '@/lib/supabase': { supabase: {} }, '@/lib/application-shell-navigation': definitions,
+    './SocratesShell.module.css': { default: {}, __esModule: true },
+  };
+  vm.runInNewContext(ts.transpileModule(read('components/application-shell/SocratesShell.tsx'), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText, {
+    exports, require: name => { assert.ok(name in modules, name); return modules[name]; },
+  });
+  const tree = exports.ApplicationNavigation({ active: 'creator', onLogout: () => calls.push('logout') });
+  const elements = []; function walk(n) { if (Array.isArray(n)) n.forEach(walk); else if (n?.props) { elements.push(n); walk(n.props.children); } } walk(tree);
+  return { calls, definitions, elements };
+}
+test('shared entries retain URLs, native semantics, current state and inert Menu', () => {
+  const h = shellFixture(); assert.deepEqual(h.calls, []);
+  const links = h.elements.filter(n => n.type === 'a');
+  assert.deepEqual(links.map(n => n.props.href), ['/', '/creator', '/#stats', '/account']);
+  assert.equal(links.find(n => n.props.href === '/creator').props['aria-current'], 'page');
+  assert.equal(h.elements.find(n => n.props['aria-label'] === 'Menu').props.onClick, undefined);
+  assert.equal(h.elements.find(n => n.type === 'nav').props['aria-label'], 'Socrates workspaces');
+  for (const hash of ['#stats', '#stats-history', '#stats-algorithm']) assert.equal(h.definitions.workspaceFromLocation('/', hash), 'stats');
+  assert.equal(h.definitions.workspaceFromLocation('/creator/concepts/example', ''), 'creator');
+});
+for (const allowed of [true, false]) test(`shell navigation and Logout delegate guard exactly once: allowed=${allowed}`, async () => {
+  for (const href of ['/', '/#stats', '/account']) {
+    const h = shellFixture(allowed); let prevented = 0;
+    h.elements.find(n => n.props.href === href).props.onClick({ button: 0, preventDefault: () => prevented++ });
+    assert.equal(prevented, 1); assert.deepEqual(h.calls, allowed ? ['guard', href] : ['guard']);
+  }
+  const h = shellFixture(allowed); h.elements.find(n => n.props['aria-label'] === 'Log Out').props.onClick();
+  await Promise.resolve(); assert.deepEqual(h.calls, allowed ? ['guard', 'logout'] : ['guard']);
+});
+test('modified link activation neither discards nor reroutes current workspace', () => {
+  const h = shellFixture(); h.elements.find(n => n.props.href === '/account').props.onClick({ button: 0, ctrlKey: true, preventDefault: () => assert.fail('native new tab must remain native') });
+  assert.deepEqual(h.calls, []);
 });

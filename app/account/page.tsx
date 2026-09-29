@@ -1,3 +1,4 @@
+import { SocratesShell } from '@/components/application-shell/SocratesShell';
 import Link from 'next/link';
 import { Header, HeaderSessionProvider } from '@/components/Header';
 import { LibrarySwitcher } from '@/components/LibrarySwitcher';
@@ -111,6 +112,7 @@ export default async function AccountPage() {
   return (
     <HeaderSessionProvider email={context.user.email} role={context.role}>
       <Header />
+      <SocratesShell>
       <main className="layout" style={{ gridTemplateColumns: '1fr' }}>
         <section
           className="stack"
@@ -238,6 +240,7 @@ export default async function AccountPage() {
           />
         </section>
       </main>
+      </SocratesShell>
     </HeaderSessionProvider>
   );
 }

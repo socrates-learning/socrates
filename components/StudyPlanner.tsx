@@ -9,10 +9,11 @@ import {
   type MouseEvent,
 } from 'react';
 import dynamic from 'next/dynamic';
+import { SocratesShell } from '@/components/application-shell/SocratesShell';
 import { usePathname, useRouter } from 'next/navigation';
 import { Header, HeaderSessionProvider } from '@/components/Header';
 import { MarkdownContent } from '@/components/MarkdownContent';
-import { LearnerHeader, HomeRail, LibrarySubjectSwitcher, PlannerFallback, type LearnerHeaderPrefix, type LearnerNavIcon, type HeaderItem, type RailItem } from '@/components/study-planner/LearnerShell';
+import { LearnerHeader, LibrarySubjectSwitcher, PlannerFallback, type LearnerHeaderPrefix, type LearnerNavIcon, type HeaderItem } from '@/components/study-planner/LearnerShell';
 import { PlannerStats } from '@/components/study-planner/PlannerStats';
 import { StudyModeStyles } from '@/components/study-planner/StudyModeStyles';
 import {
@@ -2976,22 +2977,12 @@ export function StudyPlanner({
       <LearnerHeader classPrefix="home-v2" brandHref="/" onHomeClick={handleHomeClick} items={items} />
       <main className={`home-v2-shell${mode === 'stats' ? ' home-v2-shell-stats' : ''}`}>
         {mode !== 'stats' && (
-          <HomeRail
-            items={homeRailItems.map((item): RailItem => item.href ? {
-              kind: 'link', label: item.label, icon: item.icon, href: item.href,
-              className: `home-v2-rail-card${item.label === 'Creator Studio' ? ' home-v2-rail-card-primary' : ''}`,
-              onClick: item.href === '/creator' || item.href.startsWith('/creator/') ? handleCreatorClick : undefined,
-            } : {
-              kind: 'button', label: item.label, icon: item.icon, className: 'home-v2-rail-card',
-              title: item.label === 'Account Settings' && email ? `Signed in as ${email}` : undefined,
-              onClick: item.label === 'Stats' ? () => openStatsTab('progress') : undefined,
-            })}
-            onLogout={handleLogout}
-          />
+          <SocratesShell variant="home" active="home" onHome={handleHomeClick} onStats={() => openStatsTab('progress')} onLogout={handleLogout} onCreator={handleCreatorClick} />
         )}
 
         <section className="home-v2-workspace">
           {mode === 'stats' ? (
+            <SocratesShell active="stats" onHome={handleHomeClick} onStats={() => openStatsTab('progress')} onLogout={handleLogout} onCreator={handleCreatorClick}>
             <PlannerStats
               activeTab={statsTab} onTabChange={openStatsTab}
               libraryName={activeLibrary.name} progress={learnerProgress} progressError={learnerProgressError}
@@ -3009,6 +3000,7 @@ export function StudyPlanner({
                 </div>
               ) : null}
             />
+            </SocratesShell>
           ) : (
             <>
               <div className="home-v2-topline">

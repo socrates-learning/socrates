@@ -46,3 +46,19 @@ test('existing header/history gaps and absent Creator Logout are explicit baseli
   // Creator has no current Logout/global Stats/Account control. Future shell
   // controls must not interpret those absent paths as already guarded.
 });
+
+for (const kind of ['Concept', 'Question']) test(`global shell delegates ${kind} discard permission exactly once without routing or saving`, () => {
+  const h = editor({ confirm: () => false }); let e = h.render();
+  if (kind === 'Question') { button(e.tree, 'Questions').props.onClick(); e = h.render(); e.selectQuestionConcept('concept'); e = h.render(); e.setQuestionPrompt('Draft'); }
+  else e.setConcept('Draft');
+  h.render(); assert.equal(h.runShellGuard(), false);
+  assert.deepEqual(h.confirmations, ['You have unsaved changes. Leave without saving?']);
+  assert.deepEqual(h.routes, []); assert.deepEqual(h.calls, []);
+});
+for (const state of ['clean', 'dirty', 'busy']) test(`global shell delegates standalone ${state} guard once`, () => {
+  const h = editor({ placed: true, confirm: () => false }); button(h.render().tree, 'Add Custom Card').props.onClick(); const e = h.render();
+  e.standaloneEditorRef.current = { dirty: state === 'dirty', busy: state === 'busy' };
+  assert.equal(h.runShellGuard(), state === 'clean');
+  assert.equal(h.confirmations.length, state === 'dirty' ? 1 : 0);
+  assert.deepEqual(h.routes, []); assert.deepEqual(h.calls, []);
+});

@@ -1,5 +1,7 @@
 'use client';
 
+import { useSocratesNavigationGuard } from '@/components/application-shell/SocratesShell';
+
 import { applyMarkdownEdit, type MarkdownFormat } from '@/lib/markdown-editing';
 
 import { CreatorLearnerQuestionsWorkspace } from './creator/CreatorLearnerQuestionsWorkspace';
@@ -3930,6 +3932,13 @@ export function CreatorStudioV2Client({
     setReferenceStatus(null);
     setStatus(null);
   }
+
+  // Draft state stays in Creator. New global navigation consults this guard once.
+  useSocratesNavigationGuard(() => {
+    if (isDirty && !window.confirm('You have unsaved changes. Leave without saving?')) return false;
+    if (standaloneRequest && !closeStandaloneEditor()) return false;
+    return true;
+  });
 
   function navigateFromCreator(destination: string) {
     if (window.location.pathname === destination) {

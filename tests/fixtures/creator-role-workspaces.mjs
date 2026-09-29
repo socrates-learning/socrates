@@ -123,6 +123,7 @@ export function editor({ role = 'admin', editing = false, response, references =
           client_id: r.client_id, source_id: 'source', attribution_id: 'attribution',
         })) }, error: null };
   }
+  let shellGuard;
   const modules = {
     react: hooks,
     'react/jsx-runtime': { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }) },
@@ -156,6 +157,7 @@ export function editor({ role = 'admin', editing = false, response, references =
     './CreatorAlgorithmDiagnostics': {},
     './CreatorTopicTreeInteraction': { CreatorTopicTreeInteraction() {}, TopicDropRow() {}, TopicDragHandle() {} },
     '@/lib/creator-topic-positioning': topicPositioning,
+    '@/components/application-shell/SocratesShell': { useSocratesNavigationGuard(guard) { shellGuard = guard; } },
     './CreatorStudioV2Client.module.css': { __esModule: true, default: new Proxy({}, { get: (_target, key) => String(key) }) },
   };
   const confirmations = [];
@@ -191,7 +193,7 @@ export function editor({ role = 'admin', editing = false, response, references =
     props.initialPersonalContent.cards.forEach(card => { card.question = 'Question'; });
   }
   function render() { cursor = 0; const tree = context.exports.CreatorStudioV2Client(props); return { ...api, tree }; }
-  return { render, calls, reads, orders, routes, confirmations, focusTarget, props, listeners, runUnloadEffect: () => unloadEffect(), runSelectionEffect: () => selectionEffect(), runStructureEffect: () => structureEffect() };
+  return { runShellGuard: () => shellGuard(), render, calls, reads, orders, routes, confirmations, focusTarget, props, listeners, runUnloadEffect: () => unloadEffect(), runSelectionEffect: () => selectionEffect(), runStructureEffect: () => structureEffect() };
 }
 
 export function nodes(tree) {
