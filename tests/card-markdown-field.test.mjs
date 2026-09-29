@@ -46,8 +46,7 @@ test('toolbar cannot exceed field limit and rejected insertion leaves source int
  const h=field({value:'12345',maxLength:5});h.button('Bold').props.onClick();assert.equal(h.writes.length,0);assert.equal(h.frames.length,0);
  const error=h.nodes(h.render()).find(n=>n.props?.role==='alert');assert.match(error.props.children,/5 characters/);assert.equal(h.props.value,'12345');
 });
-test('new primitives are not enabled in any existing Card/Study/Flagged path',()=>{
- for(const file of ['components/creator/StandaloneCustomCardWorkspace.tsx','components/creator/CreatorLearnerQuestionsWorkspace.tsx','components/StudyPlanner.tsx','components/StudyCreatorFlaggedBrowser.tsx']) {
-  const source=readFileSync(new URL('../'+file,import.meta.url),'utf8');assert.doesNotMatch(source,/CardMarkdownField|mode=["']card["']|cardMarkdownSummary/);
- }
+test('Card field stays presentation-only with no saving, routing or database dependency',()=>{
+ const source=readFileSync(new URL('../components/creator/CardMarkdownField.tsx',import.meta.url),'utf8');
+ assert.doesNotMatch(source,/supabase|saveStandaloneCard|fetch\(|useRouter|dangerouslySetInnerHTML/);
 });

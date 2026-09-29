@@ -3,12 +3,19 @@ import test from 'node:test';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import ts from 'typescript';
+import React from 'react';
+import * as jsx from 'react/jsx-runtime';
 import { editor, nodes, text } from './fixtures/creator-role-workspaces.mjs';
 
+const markdownModules = { react: React, 'react/jsx-runtime': jsx, './MarkdownContent.module.css': { default: { card: 'card' } } };
+const markdownContext = { exports: {}, URL, require(name) { assert.ok(name in markdownModules, name); return markdownModules[name]; } };
+vm.runInNewContext(ts.transpileModule(readFileSync(new URL('../components/MarkdownContent.tsx', import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText, markdownContext);
+const markdown = markdownContext.exports;
 const childSource = readFileSync(new URL('../components/creator/CreatorLearnerQuestionsWorkspace.tsx', import.meta.url), 'utf8');
 function presentation(props) {
   let search = '';
   const modules = {
+    '@/components/MarkdownContent': markdown,
     react: { useState: () => [search, value => { search = value; }] },
     'react/jsx-runtime': { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }) },
     '../CreatorStudioV2Client.module.css': { __esModule: true, default: new Proxy({}, { get: (_, key) => String(key) }) },
@@ -97,4 +104,19 @@ test('My Cards search and results belong to the left authoring pane above its ed
  assert.ok(left);assert.ok(nodes(left).some(n=>n.props?.['aria-label']==='Your Cards'));
  assert.ok(nodes(left).some(n=>n.props?.type==='search'));assert.match(text(left),/My Cards.*Alpha.*Question \/ Answer.*EDITOR/);
  assert.doesNotMatch(text(left),/TREE/);
+});
+
+
+test('standalone results use noninteractive summaries while source search and legacy labels stay unchanged', () => {
+  const front = '## Title\n[**Safe**](https://example.com)';
+  const render = presentation({ editor: null, topicTree: null, busy: false, cards: [
+    { id: 'standalone', front, back: 'Back', standalone: true },
+    { id: 'legacy', front, back: 'Back', standalone: false },
+  ], onOpen() {}, onNew() {} });
+  nodes(render()).find(n => n.props?.type === 'search').props.onChange({ target: { value: 'https://example.com' } });
+  const hits = nodes(render()).filter(n => n.props?.className === 'questionSearchResult');
+  assert.equal(hits.length, 2);
+  assert.equal(hits[0].props.children, 'Title Safe');
+  assert.equal(hits[1].props.children, front);
+  assert.equal(nodes(hits).filter(n => n.type === 'a').length, 0);
 });

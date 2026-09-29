@@ -2497,7 +2497,9 @@ export function StudyPlanner({
                 </div>
               ) : !isAnswerVisible ? (
                 <div className="study-v2-question-content">
-                  <h1>{studyCandidate?.prompt}</h1>
+                  {studyCandidate?.kind === 'personal' && studyCandidate.personalConceptId === null
+                    ? <MarkdownContent markdown={studyCandidate.prompt} mode="card" interactiveLinks={false} />
+                    : <h1>{studyCandidate?.prompt}</h1>}
                   <p
                     className="study-v2-sr-only"
                     id="study-card-reveal-instruction"
@@ -2530,16 +2532,21 @@ export function StudyPlanner({
                       aria-labelledby="study-revealed-question-heading"
                     >
                       <p>Question</p>
-                      <h2 id="study-revealed-question-heading">
+                      {studyCandidate?.kind === 'personal' && studyCandidate.personalConceptId === null ? <>
+                        <h2 id="study-revealed-question-heading" className="study-v2-sr-only">{studyCandidate.prompt}</h2>
+                        <MarkdownContent markdown={studyCandidate.prompt} mode="card" />
+                      </> : <h2 id="study-revealed-question-heading">
                         {studyCandidate?.prompt}
-                      </h2>
+                      </h2>}
                     </section>
                     <section
                       className="study-v2-answer-section"
                       aria-labelledby="study-answer-heading"
                     >
                       <h1 id="study-answer-heading">Answer</h1>
-                      <p>{studyAnswer}</p>
+                      {studyCandidate?.kind === 'personal' && studyCandidate.personalConceptId === null
+                        ? <MarkdownContent markdown={studyAnswer ?? ''} mode="card" />
+                        : <p>{studyAnswer}</p>}
                     </section>
                     {authoredStudyExplanation && (
                       <section

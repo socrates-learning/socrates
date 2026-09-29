@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { MarkdownContent, cardMarkdownSummary } from '@/components/MarkdownContent';
 import { supabase } from '@/lib/supabase';
 import type { CreatorPersonalContent } from '@/lib/creator-personal-content';
 import { StudyCreatorIcon as Icon } from './StudyCreatorIcon';
@@ -228,7 +229,7 @@ export function StudyCreatorFlaggedBrowser({
               type="button"
             >
               {!neutralPresentation && <i className={item.owner === 'official' ? styles.officialOwnerMark : styles.personalOwnerMark}>{item.owner === 'official' ? 'S' : 'M'}</i>}
-              <span><strong>{item.title}</strong><small>{item.context} · {new Date(item.flag.created_at).toLocaleDateString()}</small></span>
+              <span><strong>{item.card?.concept_id === null ? cardMarkdownSummary(item.title) : item.title}</strong><small>{item.context} · {new Date(item.flag.created_at).toLocaleDateString()}</small></span>
               <Icon name="chevron-right" />
             </button>
           ))}
@@ -251,8 +252,8 @@ export function StudyCreatorFlaggedBrowser({
         <div className={styles.inspectorBody}>
           {selected ? (
             <div className={styles.flagReviewCard}>
-              <div><span>{neutralPresentation || selected.owner === 'official' ? 'Question' : 'Card'}</span><p>{selected.title}</p></div>
-              {selected.card && <div><span>Answer</span><p>{selected.card.answer}</p></div>}
+              <div><span>{neutralPresentation || selected.owner === 'official' ? 'Question' : 'Card'}</span>{selected.card?.concept_id === null ? <MarkdownContent markdown={selected.title} mode="card" /> : <p>{selected.title}</p>}</div>
+              {selected.card && <div><span>Answer</span>{selected.card.concept_id === null ? <MarkdownContent markdown={selected.card.answer} mode="card" /> : <p>{selected.card.answer}</p>}</div>}
               {selected.question && !learnerPresentation && <div className={styles.flagMetadata}><span>{selected.question.difficulty ?? 'Unspecified difficulty'}</span><span>{selected.question.testing_angle ?? 'General angle'}</span></div>}
               {selected.flag.note && <div><span>Your note</span><p>{selected.flag.note}</p></div>}
               <div><span>Flagged</span><p>{new Date(selected.flag.created_at).toLocaleString()}</p></div>

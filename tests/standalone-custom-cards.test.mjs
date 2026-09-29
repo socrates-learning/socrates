@@ -70,11 +70,11 @@ test('standalone Study delivery preserves null Concept and attempt response reje
   assert.throws(()=>adaptPersonalStudyAttemptResult({...response,personalConceptId:'real'}),/missing state/);
 });
 
-function workspace(db, request=null, canCreate=true) {
-  const slots=[];let cursor=0,tree;let props={ownerId:'owner',canCreate,target,topicName:'Topic',cards:[],request,
+function workspace(db, request=null, canCreate=true, richText=false) {
+  const slots=[];let cursor=0,tree;let props={ownerId:'owner',canCreate,richText,target,topicName:'Topic',cards:[],request,
     onRequest(value){props={...props,request:value};},onSaved(card){props={...props,cards:[card]};},onDeleted(){props={...props,cards:[]};},onEditorState(){}};
   const hooks={useState(initial){const i=cursor++;if(!(i in slots))slots[i]=initial;return [slots[i],v=>{slots[i]=v;}];},useRef(initial){const i=cursor++;if(!(i in slots))slots[i]={current:initial};return slots[i];},useEffect(){}};
-  const modules={react:hooks,'react/jsx-runtime':{jsx:(type,props)=>({type,props}),jsxs:(type,props)=>({type,props})},'@/lib/supabase':{supabase:db},'@/lib/standalone-custom-cards':cards,'../CreatorStudioV2Client.module.css':new Proxy({}, {get:(_,k)=>k})};
+  const modules={'./CardMarkdownField':{CardMarkdownField: function CardMarkdownField(){}},react:hooks,'react/jsx-runtime':{jsx:(type,props)=>({type,props}),jsxs:(type,props)=>({type,props})},'@/lib/supabase':{supabase:db},'@/lib/standalone-custom-cards':cards,'../CreatorStudioV2Client.module.css':new Proxy({}, {get:(_,k)=>k})};
   const context={Error,exports:{},require(name){assert.ok(name in modules);return modules[name];},window:{confirm:()=>true},requestAnimationFrame(){}};
   vm.runInNewContext(ts.transpileModule(readFileSync(new URL('../components/creator/StandaloneCustomCardWorkspace.tsx',import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText,context);
   function render(){cursor=0;tree=context.exports.StandaloneCustomCardWorkspace(props);return tree;}
@@ -100,4 +100,21 @@ test('actual workspace offers minimal learner authoring, saves and retains faile
 
 test('closed embedded Card editor renders no separate workspace', () => {
   const ui=workspace(store(),null,false);assert.equal(ui.render(),null);
+});
+
+
+test('rich learner fields retain independent source, limits, explicit saving, duplicate-save guard and failed drafts', async () => {
+ const db=store(),ui=workspace(db,{card:null,attachment:target,topicName:'Topic'},true,true);
+ const fields=()=>ui.nodes().filter(n=>n.type?.name==='CardMarkdownField');
+ assert.equal(fields().length,2);assert.deepEqual(fields().map(n=>n.props.maxLength),[10000,20000]);
+ const front='## Front\n**Strong** [link](https://example.com)',back='> Back\n- Item';
+ fields()[0].props.onChange(front);fields()[1].props.onChange(back);ui.render();
+ assert.equal(ui.props.cards.length,0);assert.deepEqual(fields().map(n=>n.props.value),[front,back]);
+ const submit=ui.nodes().find(n=>n.type==='form').props.onSubmit;
+ submit({preventDefault(){}});submit({preventDefault(){}});await new Promise(resolve=>setImmediate(resolve));ui.render();
+ assert.equal(ui.props.cards.length,1);assert.equal(ui.props.cards[0].question,front);assert.equal(ui.props.cards[0].answer,back);
+ fields()[0].props.onChange('**Unsaved**');ui.render();db.fail('Rejected save');
+ ui.nodes().find(n=>n.type==='form').props.onSubmit({preventDefault(){}});await new Promise(resolve=>setImmediate(resolve));ui.render();
+ assert.equal(fields()[0].props.value,'**Unsaved**');assert.equal(fields()[1].props.value,back);
+ assert.equal(ui.text(ui.nodes().find(n=>n.props?.role==='alert')),'Rejected save');
 });

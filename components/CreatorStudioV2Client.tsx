@@ -33,7 +33,7 @@ import {
   buildConceptTopicTree,
   type ConceptTopic as Topic,
 } from '@/lib/concept-topic-tree';
-import { MarkdownContent } from '@/components/MarkdownContent';
+import { MarkdownContent, cardMarkdownSummary } from '@/components/MarkdownContent';
 import { supabase } from '@/lib/supabase';
 import { movePersonalStructure, refreshPersonalStructure } from '@/lib/creator-personal-structure';
 import { CreatorTopicTreeInteraction, TopicDropRow, TopicDragHandle } from './CreatorTopicTreeInteraction';
@@ -6300,7 +6300,7 @@ export function CreatorStudioV2Client({
               {!isLearnerReadOnly && standaloneTarget && <div className={styles.existingQuestionList} aria-label="Cards attached to selected Topic">
                 {standaloneCards.filter((card) => standaloneCardMatchesTopic(card, standaloneTarget)).map((card) => (
                   <button key={`personal:card:${card.id}`} className={styles.questionSearchResult} type="button"
-                    onClick={() => selectExistingQuestion(mapStandaloneCard(card))}>{card.question}</button>
+                    onClick={() => selectExistingQuestion(mapStandaloneCard(card))}>{cardMarkdownSummary(card.question)}</button>
                 ))}
               </div>}
               <p className={styles.treeFooter}>
@@ -6313,12 +6313,13 @@ export function CreatorStudioV2Client({
   const learnerCards = isLearnerReadOnly ? filterPersonalCardsForSearch(EMPTY_QUESTION_SEARCH_FILTERS) : [];
   const learnerQuestions = <CreatorLearnerQuestionsWorkspace
       busy={isSaving || isSavingQuestion || isMutatingTopic}
-      cards={learnerCards.map(card => ({ id: card.id, front: card.prompt,
+      cards={learnerCards.map(card => ({ id: card.id, front: card.prompt, standalone: card.conceptId === null,
         back: standaloneCards.find(item => item.id === card.id)?.answer || personalCards.find(item => item.id === card.id)?.answer || '' }))}
       onOpen={id => { const card = learnerCards.find(item => item.id === id); if (card) selectExistingQuestion(card); }}
       onNew={() => openLearnerDraft(standaloneRequest?.attachment || null, standaloneRequest?.topicName || 'Selected Topic')}
       topicTree={contentTopicPanel}
       editor={standaloneRequest ? <StandaloneCustomCardWorkspace
+        richText
         key={`${standaloneEditorVersion}:${standaloneRequest.card?.id || 'new-card'}`}
         ownerId={initialPersonalContent.ownerId}
         canCreate={creatorCapabilities.personal.createCard && creatorCapabilities.library.canAccessActiveLibrary}

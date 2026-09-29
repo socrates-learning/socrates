@@ -4,11 +4,13 @@ import { useEffect, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { saveStandaloneCard,
   type CreatorStandaloneCard, type StandaloneCardAttachment } from '@/lib/standalone-custom-cards';
+import { CardMarkdownField } from './CardMarkdownField';
 import styles from '../CreatorStudioV2Client.module.css';
 
 export type StandaloneCardRequest = { card: CreatorStandaloneCard | null; attachment: StandaloneCardAttachment; topicName: string };
 
-export function StandaloneCustomCardWorkspace({ ownerId, canCreate, request, onRequest, onSaved, onEditorState }: {
+export function StandaloneCustomCardWorkspace({ ownerId, canCreate, request, onRequest, onSaved, onEditorState, richText = false }: {
+  richText?: boolean;
   ownerId: string; canCreate: boolean; request: StandaloneCardRequest | null;
   onRequest: (request: StandaloneCardRequest | null) => void;
   onEditorState: (dirty: boolean, busy: boolean) => void;
@@ -46,10 +48,15 @@ export function StandaloneCustomCardWorkspace({ ownerId, canCreate, request, onR
   if (!request) return null;
   return <>
     <form onSubmit={(event) => { event.preventDefault(); void save(); }}>
+      {richText ? <>
+        <CardMarkdownField label="Front" value={front} onChange={setFront} maxLength={10000} required disabled={busy} />
+        <CardMarkdownField label="Back" value={back} onChange={setBack} maxLength={20000} required disabled={busy} />
+      </> : <>
       <label className={styles.personalField}>Front<textarea ref={frontRef} value={front} maxLength={10000} required disabled={busy}
         onChange={(event) => setFront(event.target.value)} /></label>
       <label className={styles.personalField}>Back<textarea value={back} maxLength={20000} required disabled={busy}
         onChange={(event) => setBack(event.target.value)} /></label>
+      </>}
       <button type="submit" className={styles.primaryButton} disabled={busy || !front.trim() || !back.trim()}>Save Card</button>
       <button type="button" className={styles.secondaryButton} disabled={busy} onClick={() => open(null)}>Cancel</button>
     </form>
