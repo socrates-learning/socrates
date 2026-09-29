@@ -2663,10 +2663,6 @@ export function StudyPlanner({
       },
     ];
   });
-  const totalQuestions = Object.values(selectedDeckQuestionCounts).reduce(
-    (total, count) => total + count,
-    0
-  );
   const homeBootstrapView = getHomeBootstrapView({
     activeLibraryId: activeLibrary?.id,
     availableLibraryCount: availableLibraries.length,
