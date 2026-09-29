@@ -13,6 +13,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { Header, HeaderSessionProvider } from '@/components/Header';
 import { MarkdownContent } from '@/components/MarkdownContent';
 import { LearnerHeader, HomeRail, LibrarySubjectSwitcher, PlannerFallback, type LearnerHeaderPrefix, type LearnerNavIcon, type HeaderItem, type RailItem } from '@/components/study-planner/LearnerShell';
+import { PlannerStats } from '@/components/study-planner/PlannerStats';
 import { StudyModeStyles } from '@/components/study-planner/StudyModeStyles';
 import {
   getBootstrapErrorMessage,
@@ -240,17 +241,6 @@ function getStatsTabFromHash(hash: string): StatsTab | null {
   return null;
 }
 
-function HomeProgressBar({ value }: { value: number }) {
-  return (
-    <div
-      className="home-v2-progress"
-      aria-label={`${value}% coverage-adjusted progress`}
-    >
-      <span style={{ width: `${value}%` }} />
-    </div>
-  );
-}
-
 function StudyFeedbackIcon({ type }: { type: 'up' | 'more' | 'down' }) {
   if (type === 'more') {
     return <span className="study-v2-other-label">Other</span>;
@@ -418,6 +408,7 @@ export function StudyPlanner({
     return () => { cancelled = true; };
   }, [settingsDeckId, settingsLibraryId, userId, initialDeckData]);
 
+  // Bootstrap supplies initial progress/history; confirmed Study activity refreshes it.
   const [learnerProgress, setLearnerProgress] =
     useState<LearnerProgressResponse>(
       initialDeckData?.learnerProgress || emptyLearnerProgress
@@ -1177,6 +1168,7 @@ export function StudyPlanner({
     }
   }, [mode, statsTab]);
 
+  // Tab changes own mode/hash navigation; they do not fetch progress.
   function openStatsTab(tab: StatsTab) {
     if (tab === 'algorithm' && !canViewAlgorithmDiagnostics) return;
 
@@ -1678,15 +1670,6 @@ export function StudyPlanner({
     });
   }
 
-  function formatProgressDetail(metric: LearnerProgressMetric) {
-    const assessedAverage =
-      metric.assessed_mastery_percent === null
-        ? 'no assessed mastery yet'
-        : `${Math.round(metric.assessed_mastery_percent)}% assessed average`;
-
-    return `${metric.assessed_concepts}/${metric.total_concepts} assessed · ${metric.unseen_concepts} unseen · ${assessedAverage}`;
-  }
-
   const classPrefix: LearnerHeaderPrefix = mode === 'study' ? 'study-v2' : 'home-v2';
   const isEditor = role === 'editor' || role === 'admin';
   const isAdmin = role === 'admin';
@@ -1715,49 +1698,6 @@ export function StudyPlanner({
       return { ...presentation, kind: 'button', disabled: true };
     }
   }).filter((item): item is HeaderItem => item !== null);
-
-  function renderHomeTreeRow(
-    node: LibraryNode,
-    depth: number
-  ): ReactNode {
-    const childNodes = nodes
-      .filter((candidate) => candidate.parent_id === node.id)
-      .sort((left, right) => left.name.localeCompare(right.name));
-    const hasChildren = childNodes.length > 0;
-    const isExpanded = homeExpandedIds.has(node.id);
-    const metric =
-      learnerProgressByNodeId.get(node.id) || emptyLearnerProgress.summary;
-    const progress = Math.round(metric.coverage_adjusted_progress_percent);
-
-    return (
-      <div key={node.id}>
-        <div className="home-v2-tree-row" style={{ paddingLeft: 10 + depth * 34 }}>
-          <button
-            aria-label={
-              hasChildren
-                ? `${isExpanded ? 'Collapse' : 'Expand'} ${node.name}`
-                : undefined
-            }
-            className="home-v2-chevron"
-            disabled={!hasChildren}
-            type="button"
-            onClick={() => toggleHomeExpanded(node.id)}
-          >
-            {hasChildren ? (isExpanded ? '⌄' : '›') : ''}
-          </button>
-          <span className="home-v2-topic-copy">
-            <span className="home-v2-topic-name">{node.name}</span>
-            <small>{formatProgressDetail(metric)}</small>
-          </span>
-          <HomeProgressBar value={progress} />
-          <span className="home-v2-percent">{progress}%</span>
-        </div>
-        {hasChildren &&
-          isExpanded &&
-          childNodes.map((child) => renderHomeTreeRow(child, depth + 1))}
-      </div>
-    );
-  }
 
   function descendantNodeIds(nodeId: string) {
     const ids = new Set<string>([nodeId]);
@@ -1871,6 +1811,7 @@ export function StudyPlanner({
     );
   }
 
+  // Shared progress/history read model; keep existing data when refresh fails.
   async function refreshLearnerProgress() {
     if (!activeLibrary?.id) return;
 
@@ -3044,105 +2985,23 @@ export function StudyPlanner({
 
         <section className="home-v2-workspace">
           {mode === 'stats' ? (
-            <>
-              <div className="home-v2-topline home-v2-stats-heading">
-                <div>
-                  <h2>Stats</h2>
-                  <p>Track your progress and learning activity.</p>
-                </div>
-              </div>
-
-              <nav className="home-v2-stats-tabs" aria-label="Stats sections" role="tablist">
-                {(['progress', 'history'] as const).map((tab) => (
-                  <button
-                    aria-selected={statsTab === tab}
-                    key={tab}
-                    onClick={() => openStatsTab(tab)}
-                    role="tab"
-                    type="button"
-                  >
-                    {tab === 'progress' ? 'Progress' : 'Study History'}
-                  </button>
-                ))}
-                {canViewAlgorithmDiagnostics && (
-                  <button
-                    aria-selected={statsTab === 'algorithm'}
-                    onClick={() => openStatsTab('algorithm')}
-                    role="tab"
-                    type="button"
-                  >
-                    Algorithm
-                  </button>
-                )}
-              </nav>
-
-              {statsTab === 'progress' && (
-                <section className="home-v2-deck-card" aria-labelledby="tree-title">
-                  <h3 id="tree-title">
-                    Current Deck: <span>{activeLibrary.name}</span>
-                  </h3>
-                  <p className="home-v2-progress-overview">
-                    {learnerProgress.summary.assessed_concepts}/
-                    {learnerProgress.summary.total_concepts} Concepts assessed ·{' '}
-                    {learnerProgress.summary.unseen_concepts} unseen ·{' '}
-                    {learnerProgress.summary.questions_answered} Questions answered ·{' '}
-                    {learnerProgress.summary.recent_session_count} recent sessions
-                  </p>
-                  {learnerProgressError && (
-                    <p className="home-v2-progress-overview">{learnerProgressError}</p>
-                  )}
-                  <div className="home-v2-tree">
-                    {rootNodes.map((node) => renderHomeTreeRow(node, 0))}
-                  </div>
-                </section>
-              )}
-
-              {statsTab === 'history' && (
-                <section className="home-v2-deck-card" aria-labelledby="study-history-title">
-                  <h3 id="study-history-title">
-                    Study History: <span>{activeLibrary.name}</span>
-                  </h3>
-                  <p className="home-v2-progress-overview">
-                    Your five most recent recorded Study Sessions in this Library.
-                  </p>
-                  {learnerProgressError && (
-                    <p className="home-v2-progress-overview">{learnerProgressError}</p>
-                  )}
-                  {learnerProgress.recent_sessions.length ? (
-                    <div className="home-v2-history-list">
-                      {learnerProgress.recent_sessions.map((session) => (
-                        <article className="home-v2-history-row" key={session.id}>
-                          <div>
-                            <strong>{session.deck_name || 'Study Session'}</strong>
-                            <time dateTime={session.started_at} suppressHydrationWarning>
-                              {new Date(session.started_at).toLocaleString()}
-                            </time>
-                          </div>
-                          <span>
-                            {session.answered_count}{' '}
-                            {session.answered_count === 1 ? 'response' : 'responses'}
-                          </span>
-                          <small>{session.ended_at ? 'Completed' : 'In progress'}</small>
-                        </article>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="home-v2-history-empty">
-                      No recorded Study Sessions in this Library yet.
-                    </p>
-                  )}
-                </section>
-              )}
-
-              {statsTab === 'algorithm' && canViewAlgorithmDiagnostics && (
+            <PlannerStats
+              activeTab={statsTab} onTabChange={openStatsTab}
+              libraryName={activeLibrary.name} progress={learnerProgress} progressError={learnerProgressError}
+              nodes={nodes} rootNodes={rootNodes} progressByNodeId={learnerProgressByNodeId}
+              fallbackProgressMetric={emptyLearnerProgress.summary}
+              expandedNodeIds={homeExpandedIds} onToggleNode={toggleHomeExpanded}
+              showAlgorithmTab={canViewAlgorithmDiagnostics}
+              // Preserve the existing diagnostics owner, request scope and conditional mounting.
+              algorithmPanel={statsTab === 'algorithm' && canViewAlgorithmDiagnostics ? (
                 <div className="home-v2-algorithm-workspace">
                   <CreatorAlgorithmDiagnostics
                     libraryId={activeLibrary.id}
                     requestScope={userId ?? 'signed-out'}
                   />
                 </div>
-              )}
-            </>
+              ) : null}
+            />
           ) : (
             <>
               <div className="home-v2-topline">

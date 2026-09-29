@@ -62,7 +62,8 @@ test('Creator Studio stays authoring-only while Stats owns Algorithm diagnostics
   assert.match(creatorChromeSource, /\{ id: 'tags', label: 'Tags' \}/);
   assert.doesNotMatch(creatorSource, /CreatorAlgorithmDiagnostics/);
   assert.match(studyPlannerSource, /import\('\.\/CreatorAlgorithmDiagnostics'\)/);
-  assert.match(studyPlannerSource, /'progress', 'history'/);
+  const statsSource = readFileSync(new URL('../components/study-planner/PlannerStats.tsx', import.meta.url), 'utf8');
+  assert.match(statsSource, /'progress', 'history'/);
   assert.match(studyPlannerSource, /canViewAlgorithmDiagnostics/);
   assert.match(studyPlannerSource, /#stats-algorithm/);
   assert.match(studyPlannerSource, /mode !== 'stats'/);

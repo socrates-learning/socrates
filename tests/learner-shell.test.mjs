@@ -51,7 +51,7 @@ const nav = compile(block(planner, 'const learnerNavItems:', 'function createHom
 const railItems = compile('export '+block(planner, 'function createHomeRailItems(', 'const CreatorAlgorithmDiagnostics')).createHomeRailItems({ label: 'Creator Studio', href: '/creator' });
 const libraries = [{id:'one',slug:'nursing',name:'Nursing'},{id:'two',slug:'science',name:'Science'}];
 function header(role, mode, overrides = {}) {
-  const descriptors = block(planner, '  const classPrefix: LearnerHeaderPrefix =', '  function renderHomeTreeRow(');
+  const descriptors = block(planner, '  const classPrefix: LearnerHeaderPrefix =', '  function descendantNodeIds(');
   return compile('export function renderHeader(){'+descriptors+'return <LearnerHeader classPrefix={classPrefix} brandHref="/" onHomeClick={handleHomeClick} items={items} />;}', {
     ...components, role, mode, learnerNavItems:nav, email:'fixture@example.invalid', isSaving:false,
     handleHomeClick:noop, handleCreatorClick:noop, openStudyMode:noop, handleLogout:noop, ...overrides,
