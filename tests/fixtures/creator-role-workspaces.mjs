@@ -30,6 +30,7 @@ vm.runInNewContext(ts.transpileModule(readFileSync(new URL('../../lib/creator-st
   compilerOptions: { module: ts.ModuleKind.CommonJS },
 }).outputText, runtimeContext);
 const exposed = [
+    'browseQuestionConcept', 'associateQuestionConcept', 'makeQuestionConceptPrimary', 'draftQuestionPrimaryId', 'setNeedsQuestionsOnly',
   'navigateFromCreator', 'goBackFromCreator', 'isDirty', 'confirmDiscardQuestionChanges',
   'learnerDeck', 'setLearnerDeck', 'learnerSelectionError', 'learnerSelectionBusy', 'saveLearnerTopicSelection', 'renderLearnerStudyCheckbox', 'learnerSelectionContext',
   'personalQuestionConceptId', 'closeTopicDialog', 'creatorAuthority', 'loadQuestionSearchPage', 'questionSearchResults', 'deleteSelectedStandaloneCard', 'activeCreatorTab', 'standaloneEditorRef', 'closeStandaloneEditor', 'standaloneRequest', 'filterPersonalCardsForSearch', 'setStandaloneCards',
@@ -131,6 +132,7 @@ export function editor({ role = 'admin', editing = false, response, references =
     'lucide-react': new Proxy({}, { get: (_target, key) => `icon:${String(key)}` }),
     '@/components/Header': {},
     '@/components/MarkdownContent': { cardMarkdownSummary: source => source },
+    './creator/CreatorQuestionSearchPanel': { CreatorQuestionSearchPanel },
     './creator/CreatorLearnerQuestionsWorkspace': { CreatorLearnerQuestionsWorkspace() {} },
     './creator/StandaloneCustomCardWorkspace': { StandaloneCustomCardWorkspace: () => null },
     '@/lib/standalone-custom-cards': standaloneCards,
@@ -199,6 +201,7 @@ export function editor({ role = 'admin', editing = false, response, references =
 export function nodes(tree) {
   if (!tree || typeof tree !== 'object') return [];
   if (Array.isArray(tree)) return tree.flatMap(nodes);
+  if (tree.type === CreatorQuestionSearchPanel) return nodes(CreatorQuestionSearchPanel(tree.props));
   return [tree, ...nodes(tree.props?.children), ...(tree.type?.name === 'CreatorLearnerQuestionsWorkspace' ? [...nodes(tree.props.editor), ...nodes(tree.props.topicTree)] : [])];
 }
 
@@ -214,6 +217,7 @@ export const chrome = chromeContext.exports;
 export function expandChrome(tree) {
   if (!tree || typeof tree !== 'object') return tree;
   if (Array.isArray(tree)) return tree.map(expandChrome);
+  if (tree.type === CreatorQuestionSearchPanel) return expandChrome(CreatorQuestionSearchPanel(tree.props));
   if (Object.values(chrome).includes(tree.type)) return expandChrome(tree.type(tree.props));
   return { ...tree, props: { ...tree.props, children: expandChrome(tree.props?.children) } };
 }
@@ -229,7 +233,7 @@ export function button(tree, label) {
   return matches[0];
 }
 export const roles = ['admin', 'editor', 'learner'];
-export const currentTabLabels = ['Content', 'Questions', 'Tags', 'Flagged'];
+export const currentTabLabels = ['Content', 'Questions', 'Tags', 'Flagged', 'Search'];
 
 // Frozen from released a48ea5fb Creator source, verified byte-identical to HEAD.
 // Rendered attributes/styles/text and child-component props; functions retain names,
@@ -248,3 +252,14 @@ export const releasedStaffRenderHashes = {
     "flagged": "a28674503b404993811f3cea30189ff3781d04126f4cb37ac869928a41f5b66c"
   }
 };
+
+// Exercise the real Search presentation while keeping its parent-owned callbacks observable.
+const searchPanelContext = { exports: {}, require(name) {
+  if (name === 'react/jsx-runtime') return { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }) };
+  if (name === 'lucide-react') return { Search: 'icon:Search' };
+  if (name === '@/lib/creator-entity-contracts') return { createCreatorEntityKey: (source, kind, id) => `${source}:${kind}:${id}` };
+  if (name === '../CreatorStudioV2Client.module.css') return { __esModule: true, default: new Proxy({}, {get: (_, key) => String(key)}) };
+  throw new Error(`Unexpected Search dependency: ${name}`);
+} };
+vm.runInNewContext(ts.transpileModule(readFileSync(new URL('../../components/creator/CreatorQuestionSearchPanel.tsx', import.meta.url), 'utf8'), {compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText, searchPanelContext);
+export const CreatorQuestionSearchPanel = searchPanelContext.exports.CreatorQuestionSearchPanel;

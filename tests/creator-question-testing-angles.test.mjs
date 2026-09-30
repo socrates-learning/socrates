@@ -85,6 +85,7 @@ function editor({ editing = false, response, references = [] } = {}) {
     'lucide-react': {},
     '@/components/Header': {},
     '@/components/MarkdownContent': { cardMarkdownSummary: source => source },
+    './creator/CreatorQuestionSearchPanel': { CreatorQuestionSearchPanel() {} },
     './creator/CreatorLearnerQuestionsWorkspace': { CreatorLearnerQuestionsWorkspace() {} },
     './creator/StandaloneCustomCardWorkspace': { StandaloneCustomCardWorkspace: () => null },
     '@/lib/standalone-custom-cards': standaloneCards,
@@ -193,12 +194,66 @@ test('reload restores Additional and edits can clear them', async () => {
  h.render().setQuestionAdditionalTestingAngles([]);await h.render().saveQuestion();assert.equal(h.calls[0].payload.p_additional_testing_angles.length,0);assert.equal(h.render().isQuestionDirty,false);
 });
 function nodes(tree,predicate,result=[]) {if(!tree||typeof tree!=='object')return result;if(predicate(tree))result.push(tree);for(const child of [tree.props?.children].flat(Infinity))nodes(child,predicate,result);return result;}
-test('Primary control promotion visibly removes Additional with case normalized identity',()=>{
- const h=editor({editing:true});h.render().setActiveCreatorTab('questions');h.render().setQuestionAdditionalTestingAngles(['Recall','Application']);
- let e=h.render();const controls=nodes(e.tree,n=>n.type==='select'&&n.props.value===e.questionTestingAngle);
- assert.equal(controls.length,1);controls[0].props.onChange({target:{value:'Recall'}});
- e=h.render();assert.equal(e.questionTestingAngle,'Recall');assert.deepEqual([...e.questionAdditionalTestingAngles],['Application']);
- assert.equal(nodes(e.tree,n=>n.type==='input'&&n.props.type==='search'&&n.props['aria-label']==='Search Additional Testing Angles').length,1);
+function control(h, label) {
+ const matches=nodes(h.render().tree,n=>n.props?.['aria-label']===label);
+ assert.equal(matches.length,1,label);return matches[0];
+}
+function angle(h, label) { return control(h,`Select Testing Angle ${label}`); }
+test('unified angle list locks Primary, adds/removes Additional, and never writes automatically',()=>{
+ const h=editor({editing:true});h.render().setActiveCreatorTab('questions');
+ assert.equal(angle(h,'General Understanding').props.checked,true);
+ assert.equal(angle(h,'General Understanding').props.disabled,true);
+ assert.equal(nodes(h.render().tree,n=>n.type==='select'&&n.props.value===h.render().questionTestingAngle).length,0);
+ angle(h,'Clinical Application').props.onChange({target:{checked:true}});
+ assert.deepEqual([...h.render().questionAdditionalTestingAngles],['Clinical Application']);
+ assert.equal(h.render().isQuestionDirty,true);
+ assert.equal(angle(h,'Clinical Application').props.checked,true);
+ control(h,'Make Clinical Application the Primary Testing Angle');
+ angle(h,'Clinical Application').props.onChange({target:{checked:false}});
+ assert.deepEqual([...h.render().questionAdditionalTestingAngles],[]);
+ assert.equal(nodes(h.render().tree,n=>n.props?.['aria-label']==='Make Clinical Application the Primary Testing Angle').length,0);
+ assert.equal(h.calls.length,0);
+});
+test('promotion swaps Primary and Additional without losing the former Primary or overlapping',()=>{
+ const h=editor({editing:true});h.render().setActiveCreatorTab('questions');
+ h.render().setQuestionAdditionalTestingAngles(['Recall','Application']);
+ let focused=0;
+ const promotionEvent={currentTarget:{closest:()=>({querySelector:()=>({focus:()=>{focused++;}})})}};
+ control(h,'Make Recall the Primary Testing Angle').props.onClick(promotionEvent);
+ assert.equal(focused,1,'promotion moves focus to the retained search control');
+ assert.equal(h.render().questionTestingAngle,'Recall');
+ assert.deepEqual([...h.render().questionAdditionalTestingAngles],['Application','General Understanding']);
+ assert.equal(angle(h,'Recall').props.checked,true);assert.equal(angle(h,'Recall').props.disabled,true);
+ assert.equal(nodes(h.render().tree,n=>n.type==='strong'&&n.props.children==='PRIMARY').length,1);
+ assert.equal(h.render().isQuestionDirty,true);assert.equal(h.calls.length,0);
+ control(h,'Make General Understanding the Primary Testing Angle').props.onClick(promotionEvent);
+ assert.equal(h.render().questionTestingAngle,'General Understanding');
+ assert.deepEqual([...h.render().questionAdditionalTestingAngles],['Application','Recall']);
+});
+test('filter retains Primary, preserves selections, and normalized historical values render once',()=>{
+ const h=editor({editing:true});h.render().setActiveCreatorTab('questions');
+ h.render().setQuestionTestingAngle('Historical Primary');
+ h.render().setQuestionAdditionalTestingAngles(['clinical application','Recall']);
+ control(h,'Search Testing Angles').props.onChange({target:{value:'clinical application'}});
+ angle(h,'Historical Primary');angle(h,'clinical application');
+ assert.equal(nodes(h.render().tree,n=>n.props?.['aria-label']==='Select Testing Angle Recall').length,0);
+ assert.deepEqual([...h.render().questionAdditionalTestingAngles],['clinical application','Recall']);
+ assert.equal(nodes(h.render().tree,n=>n.props?.['aria-label']?.toLowerCase()==='select testing angle clinical application').length,1);
+ control(h,'Search Testing Angles').props.onChange({target:{value:'no match'}});
+ assert.equal(nodes(h.render().tree,n=>n.type==='input'&&n.props.type==='checkbox'&&n.props['aria-label']?.startsWith('Select Testing Angle')).length,1);
+ assert.equal(h.calls.length,0);
+});
+test('hydrated unified selections preserve Primary and Additional; explicit New resets angle defaults',async()=>{
+ const h=editor({editing:true,response:name=>({data:name==='get_creator_questions'?[{id:'q',concept_id:'existing-concept',prompt:'Question',testing_angle:'Mechanism',additional_testing_angles:['Recall','Application'],question_accepted_answers:[{answer_text:'Answer'}]}]:{id:'q'},error:null})});
+ const [q]=await h.render().fetchExistingQuestions('existing-concept','library');
+ h.render().selectExistingQuestion(q);h.render().setActiveCreatorTab('questions');
+ assert.equal(angle(h,'Mechanism').props.disabled,true);
+ assert.equal(angle(h,'Recall').props.checked,true);assert.equal(angle(h,'Application').props.checked,true);
+ assert.equal(h.render().isQuestionDirty,false);
+ h.render().startNewQuestion();
+ assert.equal(h.render().questionTestingAngle,'General Understanding');
+ assert.deepEqual([...h.render().questionAdditionalTestingAngles],[]);
+ assert.equal(h.render().isQuestionDirty,false);assert.equal(h.calls.length,0);
 });
 
 test('Additional-only change is dirty, including clearing a retained batch cluster',async()=>{

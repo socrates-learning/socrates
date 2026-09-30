@@ -15,16 +15,18 @@ const migration = readFileSync(
   'utf8'
 );
 
-test('Questions tab exposes the required Library-wide filters', () => {
-  assert.match(creatorSource, /Library Question Search/);
-  assert.match(creatorSource, />Question text</);
-  assert.match(creatorSource, />Difficulty</);
-  assert.match(creatorSource, />Primary Testing Angle</);
-  assert.match(creatorSource, />Additional Testing Angle</);
-  assert.match(creatorSource, />Primary Concept</);
-  assert.match(creatorSource, />Related Concept</);
-  assert.match(creatorSource, />Status</);
-  assert.match(creatorSource, />Tag</);
+const searchSource = readFileSync(new URL('../components/creator/CreatorQuestionSearchPanel.tsx', import.meta.url), 'utf8');
+
+test('Search tab exposes the required Library-wide filters', () => {
+  assert.match(searchSource, /Library Question Search/);
+  assert.match(searchSource, />Question text</);
+  assert.match(searchSource, />Difficulty</);
+  assert.match(searchSource, />Primary Testing Angle</);
+  assert.match(searchSource, />Additional Testing Angle</);
+  assert.match(searchSource, />Primary Concept</);
+  assert.match(searchSource, />Related Concept</);
+  assert.match(searchSource, />Status</);
+  assert.match(searchSource, />Tag</);
   assert.match(creatorSource, /search_creator_questions/);
 });
 
@@ -33,13 +35,13 @@ test('Question search uses a bounded keyset page and deduplicates appended rows'
   assert.match(creatorSource, /p_before_created_at: cursor\?\.createdAt \|\| null/);
   assert.match(creatorSource, /fetched\.slice\(0, QUESTION_SEARCH_PAGE_SIZE\)/);
   assert.match(creatorSource, /new Map\([\s\S]*question\.id/);
-  assert.match(creatorSource, /Load more Questions/);
+  assert.match(searchSource, /Load more Questions/);
   assert.match(creatorStyles, /\.questionSearchResults\s*{[\s\S]*max-height: 390px/);
 });
 
 test('search result selection reuses the existing editor with true metadata', () => {
   assert.match(
-    creatorSource,
+    searchSource,
     /onClick=\{\(\) => selectQuestionSearchResult\(question\)\}/
   );
   assert.match(

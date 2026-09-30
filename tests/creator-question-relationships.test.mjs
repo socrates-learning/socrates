@@ -85,6 +85,7 @@ function editor({ editing = false, response, references = [] } = {}) {
     'lucide-react': {},
     '@/components/Header': {},
     '@/components/MarkdownContent': { cardMarkdownSummary: source => source },
+    './creator/CreatorQuestionSearchPanel': { CreatorQuestionSearchPanel() {} },
     './creator/CreatorLearnerQuestionsWorkspace': { CreatorLearnerQuestionsWorkspace() {} },
     './creator/StandaloneCustomCardWorkspace': { StandaloneCustomCardWorkspace: () => null },
     '@/lib/standalone-custom-cards': standaloneCards,

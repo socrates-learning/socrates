@@ -14,7 +14,7 @@ for (const role of ['admin', 'editor']) {
     assert.equal(e.creationDestination, 'official');
     const tabs = nodes(tree).filter(n => n.props?.role === 'tab');
     assert.deepEqual(tabs.map(n => text(n)), currentTabLabels);
-    assert.deepEqual(tabs.map(n => n.props['aria-selected']), [true, false, false, false]);
+    assert.deepEqual(tabs.map(n => n.props['aria-selected']), [true, false, false, false, false]);
     assert.ok(nodes(tree).some(n => n.props?.['aria-label'] === 'Creator Studio sections' && n.props.role === 'tablist'));
     const concept = nodes(tree).find(n => n.props?.['aria-label'] === 'Concept or explanation');
     assert.ok(concept); assert.equal(concept.props.readOnly, false);
@@ -23,18 +23,24 @@ for (const role of ['admin', 'editor']) {
     assert.equal(h.calls.length, 0); assert.equal(h.reads.length, 0); assert.deepEqual(h.routes, []);
   });
 
-  test(`${role}: Questions retains search, official authoring and classification controls`, () => {
+  test(`${role}: Questions retains official authoring and classification; Library search lives in Search`, () => {
     const h = editor({ role, placed: true });
     button(h.render().tree, 'Questions').props.onClick();
     const e = h.render(); const tree = expandChrome(e.tree);
     assert.equal(e.activeCreatorTab, 'questions');
     assert.equal(e.questionSource, 'official');
-    for (const label of ['Question front of card', 'Answer back of card', 'Question Topic Tree', 'Question status']) {
+    for (const label of ['Question front of card', 'Answer back of card', 'Question Topic Tree']) {
       assert.ok(nodes(tree).some(n => n.props?.['aria-label'] === label), label);
     }
-    for (const label of ['Difficulty', 'Primary Testing Angle', 'Additional Testing Angle', 'Status']) assert.ok(text(tree).includes(label), label);
+    assert.ok(text(tree).includes('Testing Angles'));
+    assert.equal(nodes(tree).filter(n => n.props?.['aria-label'] === 'Testing Angle selections').length, 1);
+    assert.equal(nodes(tree).filter(n => n.type === 'strong' && text(n) === 'PRIMARY').length, 1);
     assert.equal(button(tree, 'Save Question').props.disabled, false);
-    assert.ok(nodes(tree).some(n => n.props?.className?.split(' ').includes('questionSearchPanel')));
+    assert.ok(!nodes(tree).some(n => n.props?.['aria-label'] === 'Question status'));
+    assert.ok(!nodes(tree).some(n => n.type === 'select' && nodes(n).some(child => child.type === 'option' && child.props.value === 'hard')));
+    assert.ok(!nodes(tree).some(n => n.props?.className?.split(' ').includes('questionSearchPanel')));
+    button(e.tree, 'Search').props.onClick();
+    assert.ok(nodes(expandChrome(h.render().tree)).some(n => n.props?.className?.split(' ').includes('questionSearchPanel')));
     assert.equal(h.calls.length, 0, 'Changing tabs alone does not execute effects in this harness');
   });
 
@@ -109,12 +115,36 @@ test('keyboard/pointer Topic positioning keeps its active accessibility and canc
   for (const pattern of [/aria-label="Move or reorder Topic"/, /aria-label=\{`Move or reorder \$\{node.name\}`\}/, /onPointerDown=/, /onKeyDown=/, /e.key === 'Escape'/, /onClick=\{cancel\}/, /focus\(/]) assert.match(source, pattern);
 });
 
-for (const role of ['admin', 'editor']) test(`${role}: full rendered section snapshots match the released staff baseline`, () => {
-  const h = editor({ role, placed: true });
-  for (const tab of ['content', 'questions', 'tags', 'flagged']) {
-    h.render().setActiveCreatorTab(tab);
-    const rendered = JSON.stringify(expandChrome(h.render().tree), (_key, value) =>
-      typeof value === 'function' ? `[function:${value.name}]` : value);
-    assert.equal(createHash('sha256').update(rendered).digest('hex'), releasedStaffRenderHashes[role][tab], `${role}/${tab}`);
-  }
+// Frozen before Gate 3, at 2b59248. Original full fingerprints remain in the fixture.
+function withoutNavigation(tree) {
+  if (!tree || typeof tree !== 'object') return tree;
+  if (Array.isArray(tree)) return tree.map(withoutNavigation);
+  if (tree.props?.['aria-label'] === 'Creator Studio sections') return null;
+  return {...tree, props:{...tree.props, children:withoutNavigation(tree.props?.children)}};
+}
+function fingerprint(tree) {
+  return createHash('sha256').update(JSON.stringify(tree, (_key, value) => typeof value === 'function' ? `[function:${value.name}]` : value)).digest('hex');
+}
+const releasedBodies = {
+  "content": "0b1c6a5bee83f737f6c236e384218ab464c50c7856652f9b568a8e337415eed0",
+  "tags": "8dfd59d8dabb4640d7f114ca6dcdb8c6f61cb81df5047401dfa5e4a97f5e7299",
+  "flagged": "3bbae02c9c5dd613573a76830f4c8d9863c4290e0c8248d7ff277f20f6061104"
+};
+for (const role of ['admin','editor']) test(`${role}: Content, Tags and Flagged bodies/callback wiring remain frozen`, () => {
+ const h=editor({role,placed:true});
+ for(const tab of ['content','tags','flagged']) {
+  h.render().setActiveCreatorTab(tab);
+  const tree=expandChrome(h.render().tree);
+  assert.equal(fingerprint(withoutNavigation(tree)),releasedBodies[tab],`${role}/${tab}`);
+  const nav=nodes(tree).find(n=>n.props?.['aria-label']==='Creator Studio sections');
+  assert.deepEqual(Array.from(nav.props.children, text),['Content','Questions','Tags','Flagged','Search']);
+  // Remove only the approved fifth entry: the historical full tree must still match.
+  nav.props.children=nav.props.children.slice(0,4);
+  assert.equal(fingerprint(tree),releasedStaffRenderHashes[role][tab]);
+ }
+ assert.equal(releasedStaffRenderHashes[role].questions,'fcd03e32a744203c05acdcb2b11f4219c8ae239ad40e58fc81cb8efd7fc22b30');
+});
+const releasedLearner = {"questions": "1a5045046af27c7ad945bc7e903e6557ccccf1840e6640859cf0760a3f64d09a", "flagged": "2e08e60d643eab957e0135b2a516fae85a54bf2b306f8f257f6a765f1aaddcd6"};
+test('learner full workspace fingerprints remain exact with only Questions and Flagged',()=>{
+ const h=editor({role:'learner',placed:true});for(const tab of ['questions','flagged']){h.render().setActiveCreatorTab(tab);assert.equal(fingerprint(expandChrome(h.render().tree)),releasedLearner[tab]);}
 });

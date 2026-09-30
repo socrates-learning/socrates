@@ -4,7 +4,7 @@ import { StudyCreatorFlaggedBrowser } from '@/components/StudyCreatorFlaggedBrow
 import type { CreatorPersonalContent } from '@/lib/creator-personal-content';
 import styles from '../CreatorStudioV2Client.module.css';
 
-export type CreatorStudioTab = 'content' | 'questions' | 'tags' | 'flagged';
+export type CreatorStudioTab = 'content' | 'questions' | 'tags' | 'flagged' | 'search';
 
 export function CreatorStudioFlaggedTab({
   material,
@@ -109,6 +109,7 @@ const creatorStudioTabs: ReadonlyArray<{
   { id: 'questions', label: 'Questions' },
   { id: 'tags', label: 'Tags' },
   { id: 'flagged', label: 'Flagged' },
+  { id: 'search', label: 'Search' },
 ];
 
 export function CreatorStudioTabs({

@@ -21,7 +21,7 @@ import {
 // regression tests, not browser or database integration tests.
 const source = readFileSync(new URL('../components/CreatorStudioV2Client.tsx', import.meta.url), 'utf8');
 const exposed = [
-  'saveConcept', 'saveQuestion', 'startNewConcept', 'selectExistingQuestion',
+  'saveConcept', 'saveQuestion', 'startNewQuestion', 'startNewConcept', 'selectExistingQuestion',
   'setConcept', 'setConceptRecordStatus', 'setQuestionPrompt', 'setQuestionAnswer',
   'setQuestionDifficulty', 'setQuestionTestingAngle', 'setQuestionRecordStatus',
   'conceptId', 'concept', 'conceptRecordStatus', 'selectedTopicIds', 'references',
@@ -84,6 +84,7 @@ function editor({ editing = false, response, references = [] } = {}) {
     'lucide-react': {},
     '@/components/Header': {},
     '@/components/MarkdownContent': { cardMarkdownSummary: source => source },
+    './creator/CreatorQuestionSearchPanel': { CreatorQuestionSearchPanel() {} },
     './creator/CreatorLearnerQuestionsWorkspace': { CreatorLearnerQuestionsWorkspace() {} },
     './creator/StandaloneCustomCardWorkspace': { StandaloneCustomCardWorkspace: () => null },
     '@/lib/standalone-custom-cards': standaloneCards,
@@ -192,7 +193,7 @@ for (const lifecycle of ['published', 'draft']) {
     assert.equal(h.calls[1].payload.p_status, 'published');
   });
 
-  test(`new Question saves ${lifecycle}, clears only content, and retains authoring context`, async () => {
+  test(`new Question ignores stale ${lifecycle} status and resets hidden compatibility defaults`, async () => {
     const h = editor({ editing: true });
     let e = h.render();
     assert.equal(e.questionRecordStatus, 'published');
@@ -201,18 +202,21 @@ for (const lifecycle of ['published', 'draft']) {
     e.setQuestionRecordStatus(lifecycle);
     await h.render().saveQuestion();
     e = h.render();
-    assert.equal(h.calls[0].payload.p_status, lifecycle);
+    assert.equal(h.calls[0].payload.p_status, 'published');
+    assert.equal(h.calls[0].payload.p_difficulty, 'medium');
     assert.equal(h.calls[0].payload.p_accepted_answers[0].answer_text, 'First answer');
     assert.equal(e.questionId, null);
     assert.equal(e.questionPrompt, ''); assert.equal(e.questionAnswer, '');
     assert.equal(e.questionConceptId, 'existing-concept');
-    assert.equal(e.questionDifficulty, 'hard');
+    assert.equal(e.questionDifficulty, 'medium');
     assert.equal(e.questionTestingAngle, 'Clinical Application');
-    assert.equal(e.questionRecordStatus, lifecycle);
+    assert.equal(e.questionRecordStatus, 'published');
     assert.equal(e.isQuestionDirty, false);
     e.setQuestionPrompt('Second prompt'); e.setQuestionAnswer('Second answer');
     await h.render().saveQuestion();
     assert.equal(h.calls[1].payload.p_question_id, null);
+    assert.equal(h.calls[1].payload.p_status, 'published');
+    assert.equal(h.calls[1].payload.p_difficulty, 'medium');
     assert.equal(h.calls[1].payload.p_concept_id, 'existing-concept');
 
   });
@@ -259,3 +263,15 @@ test('pending save disables editor and prevents another save handler from submit
   finish({ data: { concept_id: 'saved-concept', references: [] }, error: null });
   await saving; e = h.render(); assert.equal(e.isSaving, false); assert.equal(e.concept, '');
 });
+
+for (const difficulty of ['easy','medium','hard']) for (const status of ['draft','published','archived']) {
+ test(`existing ${difficulty}/${status} Question preserves hidden metadata and identity`, async()=>{
+  const h=editor({editing:true});
+  h.render().selectExistingQuestion({id:'existing-question',conceptId:'existing-concept',primaryConceptName:'Existing',relatedConceptIds:[],prompt:'Old',answer:'Answer',difficulty,testingAngle:'Recall',status,tags:[]});
+  h.render().setQuestionPrompt('Unrelated text edit');await h.render().saveQuestion();
+  const e=h.render(),call=h.calls.find(c=>c.name==='save_question_with_relationships_v2');
+  assert.equal(call.payload.p_question_id,'existing-question');assert.equal(call.payload.p_difficulty,difficulty);assert.equal(call.payload.p_status,status);
+  assert.equal(e.questionId,'existing-question');assert.equal(e.questionDifficulty,difficulty);assert.equal(e.questionRecordStatus,status);assert.equal(e.isQuestionDirty,false);
+  e.startNewQuestion();assert.equal(h.render().questionDifficulty,'medium');assert.equal(h.render().questionRecordStatus,'published');
+ });
+}

@@ -108,13 +108,15 @@ test('extracted tabs and save toolbar remain controlled and dispatch once', () =
     onSelect: (tab) => selected.push(tab),
   });
   const tabButtons = tabs.props.children;
-  assert.equal(tabButtons.length, 4);
+  assert.equal(tabButtons.length, 5);
   assert.equal(
     Array.from(tabButtons, (button) => button.props['aria-selected']).join(','),
-    'false,true,false,false'
+    'false,true,false,false,false'
   );
   tabButtons[3].props.onClick();
   assert.deepEqual(selected, ['flagged']);
+  tabButtons[4].props.onClick();
+  assert.deepEqual(selected, ['flagged', 'search']);
 
   let saves = 0;
   const toolbar = chrome.CreatorStudioSaveToolbar({

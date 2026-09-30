@@ -19,11 +19,11 @@ const flagged = await readFile(
   'utf8'
 );
 
-test('canonical Creator Studio exposes exactly Content, Questions, Tags, and Flagged', () => {
+test('canonical Creator Studio exposes exactly Content, Questions, Tags, Flagged, and Search for staff', () => {
   const tabLabels = [...chrome.matchAll(/\{ id: '[^']+', label: '([^']+)' \}/g)]
     .map((match) => match[1]);
 
-  assert.deepEqual(tabLabels, ['Content', 'Questions', 'Tags', 'Flagged']);
+  assert.deepEqual(tabLabels, ['Content', 'Questions', 'Tags', 'Flagged', 'Search']);
   assert.match(chrome, /'content' \| 'questions' \| 'tags' \| 'flagged'/);
 });
 

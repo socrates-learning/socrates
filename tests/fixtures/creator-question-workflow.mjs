@@ -27,6 +27,7 @@ vm.runInNewContext(ts.transpileModule(readFileSync(new URL('../../lib/creator-st
     compilerOptions: { module: ts.ModuleKind.CommonJS },
 }).outputText, runtimeContext);
 const exposed = [
+    'browseQuestionConcept', 'associateQuestionConcept', 'makeQuestionConceptPrimary', 'draftQuestionPrimaryId', 'setNeedsQuestionsOnly',
     'questionTags', 'setQuestionTags', 'questionRelatedConceptIds', 'setQuestionRelatedConceptIds', 'questionAdditionalTestingAngles', 'setQuestionAdditionalTestingAngles', 'existingQuestions', 'setExistingQuestions', 'primaryQuestionConceptId', 'editingQuestionPrimary', 'questionTopicId', 'setQuestionTopicId', 'setQuestionConceptId', 'questionConceptOptions', 'questionSearchFilters', 'setQuestionSearchFilters', 'questionSearchCursor', 'questionSearchHasMore', 'questionSearchError', 'isSearchingQuestions', 'selectQuestionSearchResult', 'loadMoreQuestionSearchResults', 'submitQuestionSearch', 'clearQuestionSearch', 'fetchExistingQuestions', 'refreshExistingQuestionList', 'positioningContext', 'positionTopicFromTree', 'renderQuestionTopic', 'renderPersonalQuestionTopic',
     'navigateFromCreator', 'goBackFromCreator', 'isDirty', 'confirmDiscardQuestionChanges',
     'learnerDeck', 'setLearnerDeck', 'learnerSelectionError', 'learnerSelectionBusy', 'saveLearnerTopicSelection', 'renderLearnerStudyCheckbox', 'learnerSelectionContext',
@@ -142,7 +143,8 @@ export function editor({ role = 'admin', editing = false, response, references =
         'lucide-react': new Proxy({}, { get: (_target, key) => `icon:${String(key)}` }),
         '@/components/Header': {},
         '@/components/MarkdownContent': { cardMarkdownSummary: source => source },
-        './creator/CreatorLearnerQuestionsWorkspace': { CreatorLearnerQuestionsWorkspace() { } },
+        './creator/CreatorQuestionSearchPanel': { CreatorQuestionSearchPanel },
+    './creator/CreatorLearnerQuestionsWorkspace': { CreatorLearnerQuestionsWorkspace() { } },
         './creator/StandaloneCustomCardWorkspace': { StandaloneCustomCardWorkspace: () => null },
         '@/lib/standalone-custom-cards': standaloneCards,
         '@/lib/markdown-editing': markdownEditing,
@@ -214,7 +216,8 @@ export function nodes(tree) {
         return [];
     if (Array.isArray(tree))
         return tree.flatMap(nodes);
-    return [tree, ...nodes(tree.props?.children), ...(tree.type?.name === 'CreatorLearnerQuestionsWorkspace' ? [...nodes(tree.props.editor), ...nodes(tree.props.topicTree)] : [])];
+    if (tree.type === CreatorQuestionSearchPanel) return nodes(CreatorQuestionSearchPanel(tree.props));
+  return [tree, ...nodes(tree.props?.children), ...(tree.type?.name === 'CreatorLearnerQuestionsWorkspace' ? [...nodes(tree.props.editor), ...nodes(tree.props.topicTree)] : [])];
 }
 const chromeSource = readFileSync(new URL('../../components/creator/CreatorStudioChrome.tsx', import.meta.url), 'utf8');
 const chromeContext = { exports: {}, require(name) {
@@ -233,7 +236,8 @@ export function expandChrome(tree) {
         return tree;
     if (Array.isArray(tree))
         return tree.map(expandChrome);
-    if (Object.values(chrome).includes(tree.type))
+    if (tree.type === CreatorQuestionSearchPanel) return expandChrome(CreatorQuestionSearchPanel(tree.props));
+  if (Object.values(chrome).includes(tree.type))
         return expandChrome(tree.type(tree.props));
     return { ...tree, props: { ...tree.props, children: expandChrome(tree.props?.children) } };
 }
@@ -261,3 +265,14 @@ export function question(overrides = {}) {
 export function row(overrides = {}) {
     return { id: 'q1', concept_id: 'primary', primary_concept_name: 'Primary', related_concepts: [{ id: 'related', name: 'Related' }], prompt: 'Question?', question_accepted_answers: [{ answer_text: 'Answer', sort_order: 0 }], difficulty: 'medium', testing_angle: 'General Understanding', additional_testing_angles: [], status: 'published', question_tags: [], created_at: '2026-01-02T00:00:00Z', updated_at: '2026-01-02T00:00:00Z', ...overrides };
 }
+
+// Exercise the real Search presentation while keeping its parent-owned callbacks observable.
+const searchPanelContext = { exports: {}, require(name) {
+  if (name === 'react/jsx-runtime') return { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }) };
+  if (name === 'lucide-react') return { Search: 'icon:Search' };
+  if (name === '@/lib/creator-entity-contracts') return { createCreatorEntityKey: (source, kind, id) => `${source}:${kind}:${id}` };
+  if (name === '../CreatorStudioV2Client.module.css') return { __esModule: true, default: new Proxy({}, {get: (_, key) => String(key)}) };
+  throw new Error(`Unexpected Search dependency: ${name}`);
+} };
+vm.runInNewContext(ts.transpileModule(readFileSync(new URL('../../components/creator/CreatorQuestionSearchPanel.tsx', import.meta.url), 'utf8'), {compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText, searchPanelContext);
+export const CreatorQuestionSearchPanel = searchPanelContext.exports.CreatorQuestionSearchPanel;

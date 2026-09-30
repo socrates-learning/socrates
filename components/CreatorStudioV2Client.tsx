@@ -4,6 +4,7 @@ import { useSocratesNavigationGuard } from '@/components/application-shell/Socra
 
 import { applyMarkdownEdit, type MarkdownFormat } from '@/lib/markdown-editing';
 
+import { CreatorQuestionSearchPanel } from './creator/CreatorQuestionSearchPanel';
 import { CreatorLearnerQuestionsWorkspace } from './creator/CreatorLearnerQuestionsWorkspace';
 import { StandaloneCustomCardWorkspace, type StandaloneCardRequest } from './creator/StandaloneCustomCardWorkspace';
 import { deleteStandaloneCard, standaloneCardMatchesTopic, standaloneCardAttachment, type CreatorStandaloneCard, type StandaloneCardAttachment } from '@/lib/standalone-custom-cards';
@@ -162,7 +163,7 @@ type ExistingQuestionBase = {
   updatedAt: string;
 };
 
-type ExistingQuestion =
+export type ExistingQuestion =
   | (ExistingQuestionBase & {
       source: 'official';
       kind: 'question';
@@ -234,7 +235,7 @@ type LearnerPublishedQuestionRow = {
   question_tags: ExistingQuestionRow['question_tags'];
 };
 
-type QuestionSearchFilters = {
+export type QuestionSearchFilters = {
   text: string;
   difficulty: '' | QuestionDifficulty;
   primaryTestingAngle: string;
@@ -245,7 +246,7 @@ type QuestionSearchFilters = {
   tagId: string;
 };
 
-type QuestionSearchCursor = {
+export type QuestionSearchCursor = {
   createdAt: string;
   id: string;
 };
@@ -1023,8 +1024,9 @@ export function CreatorStudioV2Client({
   const [questionRelatedConceptIds, setQuestionRelatedConceptIds] = useState<string[]>([]);
   const [questionAdditionalTestingAngles, setQuestionAdditionalTestingAngles] = useState<string[]>([]);
   const [additionalAngleSearch, setAdditionalAngleSearch] = useState('');
-  const [relatedConceptSearch, setRelatedConceptSearch] = useState('');
-  const primaryQuestionConceptId = editingQuestionPrimary?.id || questionConceptId;
+  // Association ownership is independent of the Concept being browsed.
+  const [draftQuestionPrimaryId, setDraftQuestionPrimaryId] = useState<string | null>(resolvedConcept.id);
+  const primaryQuestionConceptId = editingQuestionPrimary?.id || draftQuestionPrimaryId;
   const [questionPrompt, setQuestionPrompt] = useState('');
   const [questionAnswer, setQuestionAnswer] = useState('');
   const [questionExplanation, setQuestionExplanation] = useState('');
@@ -1274,7 +1276,7 @@ export function CreatorStudioV2Client({
     ]
   );
   useEffect(() => {
-    if (isLearnerReadOnly || activeCreatorTab !== 'questions') return;
+    if (isLearnerReadOnly || activeCreatorTab !== 'search') return;
 
     if (!activeLibraryId) {
       questionSearchLibraryRef.current = null;
@@ -1464,7 +1466,7 @@ export function CreatorStudioV2Client({
     (questionSource === 'official' && !creatorAuthority.canSaveQuestion);
   const isDirty =
     (activeCreatorTab === 'content' ? !isCurrentContentReadOnly && isContentDirty :
-      activeCreatorTab === 'questions' ? !isCurrentQuestionReadOnly && isQuestionDirty : false);
+      (activeCreatorTab === 'questions' || activeCreatorTab === 'search') ? !isCurrentQuestionReadOnly && isQuestionDirty : false);
   const visibleSaveFeedback =
     saveFeedback === 'saving' || (saveFeedback === 'saved' && !isDirty)
       ? saveFeedback
@@ -1742,6 +1744,7 @@ export function CreatorStudioV2Client({
     }
     if (
       activeCreatorTab !== 'questions' &&
+      activeCreatorTab !== 'search' &&
       !contentConceptSearch.trim() &&
       !isConceptBrowseOpen &&
       !isPrerequisiteBrowseOpen &&
@@ -1878,40 +1881,6 @@ export function CreatorStudioV2Client({
       isMounted = false;
     };
   }, [activeCreatorTab, activeLibraryId, isLearnerReadOnly, questionConceptsByTopicId]);
-
-  const previousQuestionConceptIdRef = useRef(questionConceptId);
-  useEffect(() => {
-    if (previousQuestionConceptIdRef.current === questionConceptId) return;
-
-    previousQuestionConceptIdRef.current = questionConceptId;
-    setQuestionEditorState(
-      createOfficialQuestionEditorState(null, activeLibraryId)
-    );
-    setEditingQuestionPrimary(null);
-    setQuestionRelatedConceptIds([]);
-    setQuestionAdditionalTestingAngles([]);
-    setQuestionPrompt('');
-    setQuestionAnswer('');
-    setQuestionExplanation('');
-    setQuestionDifficulty('medium');
-    setQuestionTestingAngle('General Understanding');
-    setQuestionRecordStatus('published');
-    setSavedQuestionFingerprint(
-      questionDraftFingerprint({
-        questionId: null,
-        conceptId: questionConceptId,
-        prompt: '',
-        answer: '',
-        difficulty: 'medium',
-        testingAngle: 'General Understanding',
-        recordStatus: 'published',
-        tagIds: [],
-      })
-    );
-    setQuestionTags([]);
-    setQuestionTagDraft('');
-    setQuestionTagStatus(null);
-  }, [activeLibraryId, questionConceptId]);
 
   const rootTopicId = topics[0]?.id || ROOT_TOPIC_ID;
   const unifiedTopicComposition = useMemo(
@@ -2211,16 +2180,16 @@ export function CreatorStudioV2Client({
     return displayPath.map((topic) => topic.name).join(' > ');
   }, [questionTopicId, topics]);
   const linkedQuestionConcept = useMemo(() => {
-    if (!questionConceptId) return null;
+    if (!primaryQuestionConceptId) return null;
 
     let name =
-      resolvedConcept.id === questionConceptId ? resolvedConcept.name : '';
+      resolvedConcept.id === primaryQuestionConceptId ? resolvedConcept.name : '';
     const paths: Array<{ topicId: string; label: string }> = [];
 
     Object.entries(questionConceptsByTopicId).forEach(
       ([topicId, conceptOptions]) => {
         const option = conceptOptions.find(
-          (conceptOption) => conceptOption.id === questionConceptId
+          (conceptOption) => conceptOption.id === primaryQuestionConceptId
         );
         if (!option) return;
         if (!name) name = option.name;
@@ -2245,7 +2214,7 @@ export function CreatorStudioV2Client({
       path: preferredPath,
     };
   }, [
-    questionConceptId,
+    primaryQuestionConceptId,
     questionConceptsByTopicId,
     questionTopicId,
     resolvedConcept.id,
@@ -2531,17 +2500,18 @@ export function CreatorStudioV2Client({
   }
 
   function resetQuestionEditor(conceptId: string | null, preserveContext = false) {
-    const difficulty = preserveContext ? questionDifficulty : 'medium';
+    const difficulty = 'medium';
     const testingAngle = preserveContext ? questionTestingAngle : 'General Understanding';
-    const recordStatus = preserveContext ? questionRecordStatus : 'published';
+    const recordStatus = 'published';
     const tags = preserveContext ? questionTags : [];
     const additionalTestingAngles = preserveContext ? questionAdditionalTestingAngles : [];
     setQuestionAdditionalTestingAngles(additionalTestingAngles);
     setAdditionalAngleSearch('');
     const relatedConceptIds = preserveContext ? questionRelatedConceptIds : [];
     setEditingQuestionPrimary(null);
+    setDraftQuestionPrimaryId(conceptId);
     setQuestionRelatedConceptIds(relatedConceptIds);
-    setRelatedConceptSearch('');
+
     setQuestionEditorState(
       createOfficialQuestionEditorState(null, activeLibraryId)
     );
@@ -2596,6 +2566,50 @@ export function CreatorStudioV2Client({
     if (standaloneEditorRef.current.busy) return false;
     if (isQuestionDirty && !window.confirm('Discard the unsaved changes to this question?')) return false;
     return !standaloneRequest || closeStandaloneEditor();
+  }
+
+  function browseQuestionConcept(conceptId: string, topicId?: string) {
+    if (isSavingQuestion || questionSaveLockRef.current) return;
+    if (questionSource === 'personal') {
+      if (!selectQuestionConcept(conceptId, topicId)) return;
+    } else {
+      setQuestionConceptId(conceptId);
+      if (topicId) {
+        setActivePersonalTopicId(null);
+        setActiveTopicId(topicId);
+        setQuestionTopicId(topicId);
+      }
+    }
+  }
+
+  function isQuestionConceptAssociated(id: string) {
+    return questionSource === 'official' &&
+      (primaryQuestionConceptId === id || questionRelatedConceptIds.includes(id));
+  }
+
+  function associateQuestionConcept(id: string, checked: boolean) {
+    if (questionSource !== 'official' || isSavingQuestion || questionSaveLockRef.current) return;
+    if (!Object.values(questionConceptsByTopicId).some(options => options.some(option => option.id === id))) return;
+    if (id === primaryQuestionConceptId) return;
+    if (checked && !primaryQuestionConceptId) {
+      setDraftQuestionPrimaryId(id);
+      setQuestionConceptId(current => current || id);
+    } else {
+      setQuestionRelatedConceptIds(current => checked
+        ? [...new Set([...current, id])]
+        : current.filter(value => value !== id));
+    }
+    setQuestionStatus(null);
+  }
+
+  function makeQuestionConceptPrimary(id: string) {
+    if (questionSource !== 'official' || questionId || isSavingQuestion || questionSaveLockRef.current ||
+      !questionRelatedConceptIds.includes(id) || !primaryQuestionConceptId) return;
+    setQuestionRelatedConceptIds(current => [...new Set([
+      ...current.filter(value => value !== id), primaryQuestionConceptId,
+    ])]);
+    setDraftQuestionPrimaryId(id);
+    setQuestionStatus(null);
   }
 
   function selectQuestionConcept(
@@ -2685,7 +2699,7 @@ export function CreatorStudioV2Client({
       setStandaloneRequest({ card, attachment, topicName: attachment.source === 'official'
         ? findTopic(topics, attachment.topicId)?.name || 'Selected Topic'
         : personalTopics.find((topic) => topic.id === attachment.topicId)?.name || 'Selected Topic' });
-      return;
+      return true;
     }
     if (question.source === 'personal') {
       const card = personalCards.find((item) => item.id === question.id);
@@ -2721,7 +2735,7 @@ export function CreatorStudioV2Client({
         )
       );
       setQuestionStatus({ tone: 'info', message: 'Question selected' });
-      return;
+      return true;
     }
 
     setActivePersonalTopicId(null);
@@ -2758,18 +2772,21 @@ export function CreatorStudioV2Client({
   }
 
   function selectQuestionSearchResult(question: ExistingQuestion) {
+    if (isSavingQuestion || questionSaveLockRef.current) return;
     if (
-      isSavingQuestion ||
       isQuestionEditorIdentity(
         questionEditorStateRef.current,
         question.source,
         question.id
       )
-    ) return;
+    ) {
+      setActiveCreatorTab('questions');
+      return;
+    }
     if (!confirmDiscardQuestionChanges()) return;
 
     if (question.source === 'personal') {
-      selectExistingQuestion(question, true);
+      if (selectExistingQuestion(question, true) && question.conceptId !== null) setActiveCreatorTab('questions');
       return;
     }
 
@@ -2783,7 +2800,6 @@ export function CreatorStudioV2Client({
           )
       ) || null;
 
-    previousQuestionConceptIdRef.current = question.conceptId;
     setQuestionConceptId(question.conceptId);
     if (primaryConceptTopicId) {
       setActiveTopicId(primaryConceptTopicId);
@@ -2793,6 +2809,7 @@ export function CreatorStudioV2Client({
       );
     }
     selectExistingQuestion(question, true);
+    setActiveCreatorTab('questions');
   }
 
   function updateQuestionSearchFilter<FilterKey extends keyof QuestionSearchFilters>(
@@ -5010,12 +5027,15 @@ export function CreatorStudioV2Client({
       saveState.mode !== 'official-question' &&
       saveState.mode !== 'new-official-question'
     ) return;
+    // Hidden compatibility values are fixed for creation; loaded metadata survives edits.
+    const difficulty = questionIdToSave === null ? 'medium' : questionDifficulty;
+    const recordStatus = questionIdToSave === null ? 'published' : questionRecordStatus;
     const prompt = questionPrompt.trim();
     const answer = questionAnswer.trim();
     const testingAngle = questionTestingAngle.trim() || 'General Understanding';
     const primaryConceptId = primaryQuestionConceptId;
 
-    if (!questionConceptId || !primaryConceptId) {
+    if (!primaryConceptId) {
       setQuestionStatus({
         tone: 'error',
         message: 'Choose a topic and concept before saving the question.',
@@ -5041,7 +5061,7 @@ export function CreatorStudioV2Client({
       p_explanation: null,
       p_review_article_concept_id: null,
       p_sort_order: 0,
-      p_difficulty: questionDifficulty,
+      p_difficulty: difficulty,
       p_testing_angle: testingAngle,
     };
 
@@ -5065,7 +5085,7 @@ export function CreatorStudioV2Client({
       p_related_concept_ids: questionRelatedConceptIds,
       p_additional_testing_angles: questionAdditionalTestingAngles,
       ...questionPayload,
-      p_status: questionRecordStatus,
+      p_status: recordStatus,
       p_accepted_answers: [{ answer_text: answer, sort_order: 0 }],
       p_options: null,
       p_source_ids: null,
@@ -5102,9 +5122,9 @@ export function CreatorStudioV2Client({
       conceptId: primaryConceptId,
       prompt,
       answer,
-      difficulty: questionDifficulty,
+      difficulty,
       testingAngle,
-      recordStatus: questionRecordStatus,
+      recordStatus,
       tagIds: questionTags.map((tag) => tag.id),
       relatedConceptIds: questionRelatedConceptIds,
       additionalTestingAngles: questionAdditionalTestingAngles,
@@ -5113,10 +5133,10 @@ export function CreatorStudioV2Client({
     const targetStillCurrent = isSaveTargetCurrent();
     if (targetStillCurrent) {
       if (questionIdToSave === null) {
-        resetQuestionEditor(questionConceptId, true);
+        resetQuestionEditor(primaryConceptId, true);
         setQuestionStatus({
           tone: 'success',
-          message: `Question saved as ${questionRecordStatus}. Ready for another Question.`,
+          message: `Question saved as ${recordStatus}. Ready for another Question.`,
         });
       } else {
         setQuestionPrompt(prompt);
@@ -5126,7 +5146,7 @@ export function CreatorStudioV2Client({
       }
     }
     const refreshTasks: Array<Promise<unknown>> = [
-      refreshExistingQuestionList(questionConceptId),
+      refreshExistingQuestionList(questionConceptId || primaryConceptId),
       loadTagCatalog(),
     ];
     if (questionSearchLibraryRef.current === activeLibraryId) {
@@ -5432,6 +5452,12 @@ export function CreatorStudioV2Client({
     return topic.children.some(unifiedTopicMatchesSearch);
   }
 
+  function questionTopicHasAssociations(topic: UnifiedCreatorTopicNode): boolean {
+    return (topic.source === 'official' && (questionConceptsByTopicId[topic.id] || []).some(
+      concept => isQuestionConceptAssociated(concept.id)
+    )) || topic.children.some(questionTopicHasAssociations);
+  }
+
   function unifiedTopicHasNeedsQuestions(topic: UnifiedCreatorTopicNode): boolean {
     if (topic.source === 'personal') return true;
     return (
@@ -5451,12 +5477,12 @@ export function CreatorStudioV2Client({
 
   function renderQuestionTopic(topic: UnifiedCreatorTopicNode, depth = 0) {
     const searching = Boolean(normalizedSearch);
-    if (searching && !unifiedTopicMatchesSearch(topic)) return null;
-    if (needsQuestionsOnly && !unifiedTopicHasNeedsQuestions(topic)) return null;
+    if (searching && !unifiedTopicMatchesSearch(topic) && !questionTopicHasAssociations(topic)) return null;
+    if (needsQuestionsOnly && !unifiedTopicHasNeedsQuestions(topic) && !questionTopicHasAssociations(topic)) return null;
     const hasChildren = topic.children.length > 0;
     const directConcepts = (questionConceptsByTopicId[topic.id] || []).filter(
       (conceptOption) =>
-        !needsQuestionsOnly ||
+        !needsQuestionsOnly || isQuestionConceptAssociated(conceptOption.id) ||
         (questionCountsByConceptId[conceptOption.id] || 0) === 0
     );
     const personalOverlayConcepts = personalOverlays
@@ -5469,11 +5495,11 @@ export function CreatorStudioV2Client({
     const hasNeedsQuestionsVisibleChild = topic.children.some(
       unifiedTopicHasNeedsQuestions
     );
-    const isExpanded = needsQuestionsOnly
+    const isExpanded = questionTopicHasAssociations(topic) || (needsQuestionsOnly
       ? directConcepts.length > 0 || hasNeedsQuestionsVisibleChild
       : searching
         ? hasSearchVisibleChild
-        : expandedTopicIds.has(topic.id);
+        : expandedTopicIds.has(topic.id));
     const isActive = !activePersonalTopicId && activeTopicId === topic.id;
     const conceptCountInBranch =
       questionConceptCountByTopicId.get(topic.id) || 0;
@@ -5548,32 +5574,31 @@ export function CreatorStudioV2Client({
         {directConcepts.length > 0 && (!hasChildren || isExpanded) && (
           <div style={{ display: 'grid', gap: 3 }}>
             {directConcepts.map((conceptOption) => {
-              const isSelected = questionConceptId === conceptOption.id;
-
+              const isSelected = isQuestionConceptAssociated(conceptOption.id);
+              const isPrimary = questionSource === 'official' && primaryQuestionConceptId === conceptOption.id;
               return (
-                <label
-                  key={`${topic.id}-${conceptOption.id}`}
-                  style={questionConceptChoiceStyle(isSelected, isSavingQuestion, depth)}
-                >
-                  <input
-                    className={styles.topicCheckbox}
-                    type="checkbox"
+                <div key={createCreatorEntityKey('official', 'concept', conceptOption.id)}
+                  style={questionConceptChoiceStyle(isSelected, isSavingQuestion, depth)}>
+                  <input className={styles.topicCheckbox} type="checkbox"
+                    aria-label={`Associate ${conceptOption.name} with Question`}
                     checked={isSelected}
+                    disabled={isSavingQuestion || questionSource !== 'official' || isPrimary}
+                    title={isPrimary ? (questionId ? 'Saved Question Primary cannot be changed.' : 'Use Make Primary on a Related Concept to change Primary.') : undefined}
+                    onChange={event => associateQuestionConcept(conceptOption.id, event.target.checked)} />
+                  <button type="button" className={styles.topicActivationButton}
+                    aria-label={`Browse Questions for ${conceptOption.name}`}
+                    aria-pressed={questionConceptId === conceptOption.id}
                     disabled={isSavingQuestion}
-                    onChange={(event) => {
-                      selectQuestionConcept(
-                        event.target.checked ? conceptOption.id : null,
-                        topic.id
-                      );
-                    }}
-                  />
-                  <span>
-                    {conceptOption.name} ·{' '}
-                    {questionCountLabel(
-                      questionCountsByConceptId[conceptOption.id] || 0
-                    )}
-                  </span>
-                </label>
+                    onClick={() => browseQuestionConcept(conceptOption.id, topic.id)}>
+                    {conceptOption.name} · {questionCountLabel(questionCountsByConceptId[conceptOption.id] || 0)}
+                  </button>
+                  {isSelected && <span>{isPrimary ? 'Primary' : 'Related'}</span>}
+                  {isSelected && !isPrimary && !questionId && (
+                    <button type="button" className={styles.secondaryButton}
+                      aria-label={`Make ${conceptOption.name} Primary`} disabled={isSavingQuestion}
+                      onClick={() => makeQuestionConceptPrimary(conceptOption.id)}>Make Primary</button>
+                  )}
+                </div>
               );
             })}
           </div>
@@ -6417,7 +6442,11 @@ export function CreatorStudioV2Client({
           <CreatorStudioTabs
             activeTab={activeCreatorTab}
             onSelect={(tab) => {
-              if (tab !== activeCreatorTab && standaloneRequest && !confirmDiscardQuestionChanges()) return;
+              const isQuestionSearchTransition =
+                (activeCreatorTab === 'questions' && tab === 'search') ||
+                (activeCreatorTab === 'search' && tab === 'questions');
+              if (isQuestionSearchTransition && (isSavingQuestion || questionSaveLockRef.current || standaloneEditorRef.current.busy)) return;
+              if (tab !== activeCreatorTab && !isQuestionSearchTransition && standaloneRequest && !confirmDiscardQuestionChanges()) return;
               setActiveCreatorTab(tab);
               if (tab === 'questions') {
                 setActiveTopicId(questionTopicId);
@@ -7639,373 +7668,30 @@ export function CreatorStudioV2Client({
               )}
               </>)}
             </>
+          ) : activeCreatorTab === 'search' && !isLearnerReadOnly ? (
+            <CreatorQuestionSearchPanel
+              questionSearchResults={questionSearchResults}
+              questionSearchHasMore={questionSearchHasMore}
+              submitQuestionSearch={submitQuestionSearch}
+              questionSearchFilters={questionSearchFilters}
+              updateQuestionSearchFilter={updateQuestionSearchFilter}
+              isLearnerReadOnly={isLearnerReadOnly}
+              prerequisiteConceptOptions={prerequisiteConceptOptions}
+              availableTags={availableTags}
+              testingAngleOptions={testingAngleOptions}
+              isSearchingQuestions={isSearchingQuestions}
+              clearQuestionSearch={clearQuestionSearch}
+              questionSearchError={questionSearchError}
+              personalCardEditorId={personalCardEditorId}
+              questionId={questionId}
+              appliedQuestionSearchFilters={appliedQuestionSearchFilters}
+              isSavingQuestion={isSavingQuestion}
+              selectQuestionSearchResult={selectQuestionSearchResult}
+              questionSearchCursor={questionSearchCursor}
+              loadMoreQuestionSearchResults={loadMoreQuestionSearchResults}
+            />
           ) : activeCreatorTab === 'questions' ? (
             <>
-              <section
-                className={`${styles.panel} ${styles.questionSearchPanel}`}
-                aria-labelledby="library-question-search-heading"
-              >
-                <div className={styles.questionSearchHeading}>
-                  <div>
-                    <h2 id="library-question-search-heading">
-                      Library Question Search
-                    </h2>
-                    <p>
-                      Find any Question in the active Library, then load it in
-                      the existing editor below.
-                    </p>
-                  </div>
-                  <span className={styles.questionSearchCount}>
-                    {questionSearchResults.length}
-                    {questionSearchHasMore ? '+' : ''} loaded · newest first
-                  </span>
-                </div>
-
-                <form
-                  className={styles.questionSearchForm}
-                  onSubmit={submitQuestionSearch}
-                >
-                  <label className={styles.questionSearchText}>
-                    <span>Question text</span>
-                    <input
-                      type="search"
-                      name="question-search-text"
-                      value={questionSearchFilters.text}
-                      onChange={(event) =>
-                        updateQuestionSearchFilter('text', event.target.value)
-                      }
-                      placeholder="Search question, answer, or explanation"
-                    />
-                  </label>
-
-                  <div className={styles.questionSearchFilters}>
-                    <label>
-                      <span>Difficulty</span>
-                      <select
-                        name="question-search-difficulty"
-                        value={questionSearchFilters.difficulty}
-                        onChange={(event) =>
-                          updateQuestionSearchFilter(
-                            'difficulty',
-                            event.target.value as '' | QuestionDifficulty
-                          )
-                        }
-                      >
-                        <option value="">All difficulties</option>
-                        <option value="easy">Easy</option>
-                        <option value="medium">Medium</option>
-                        <option value="hard">Hard</option>
-                      </select>
-                    </label>
-
-                    <label>
-                      <span>Primary Testing Angle</span>
-                      <input
-                        type="search"
-                        name="question-search-primary-angle"
-                        list="question-search-angle-options"
-                        value={questionSearchFilters.primaryTestingAngle}
-                        onChange={(event) =>
-                          updateQuestionSearchFilter(
-                            'primaryTestingAngle',
-                            event.target.value
-                          )
-                        }
-                        placeholder="All primary angles"
-                      />
-                    </label>
-
-                    <label>
-                      <span>Additional Testing Angle</span>
-                      <input
-                        type="search"
-                        name="question-search-additional-angle"
-                        list="question-search-angle-options"
-                        value={questionSearchFilters.additionalTestingAngle}
-                        disabled={isLearnerReadOnly}
-                        title={isLearnerReadOnly ? 'Additional Testing Angles are authoring-only metadata.' : undefined}
-                        onChange={(event) =>
-                          updateQuestionSearchFilter(
-                            'additionalTestingAngle',
-                            event.target.value
-                          )
-                        }
-                        placeholder="All additional angles"
-                      />
-                    </label>
-
-                    <label>
-                      <span>Primary Concept</span>
-                      <select
-                        name="question-search-primary-concept"
-                        value={questionSearchFilters.primaryConceptId}
-                        onChange={(event) =>
-                          updateQuestionSearchFilter(
-                            'primaryConceptId',
-                            event.target.value
-                          )
-                        }
-                      >
-                        <option value="">All primary Concepts</option>
-                        {prerequisiteConceptOptions.map((conceptOption) => (
-                          <option
-                            key={`primary-concept-search-${conceptOption.id}`}
-                            value={conceptOption.id}
-                          >
-                            {conceptOption.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-
-                    <label>
-                      <span>Related Concept</span>
-                      <select
-                        name="question-search-related-concept"
-                        value={questionSearchFilters.relatedConceptId}
-                        disabled={isLearnerReadOnly}
-                        title={isLearnerReadOnly ? 'Related Concepts are authoring-only metadata.' : undefined}
-                        onChange={(event) =>
-                          updateQuestionSearchFilter(
-                            'relatedConceptId',
-                            event.target.value
-                          )
-                        }
-                      >
-                        <option value="">All related Concepts</option>
-                        {prerequisiteConceptOptions.map((conceptOption) => (
-                          <option
-                            key={`related-concept-search-${conceptOption.id}`}
-                            value={conceptOption.id}
-                          >
-                            {conceptOption.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-
-                    <label>
-                      <span>Status</span>
-                      <select
-                        name="question-search-status"
-                        value={isLearnerReadOnly ? 'published' : questionSearchFilters.status}
-                        disabled={isLearnerReadOnly}
-                        onChange={(event) =>
-                          updateQuestionSearchFilter(
-                            'status',
-                            event.target.value as '' | LifecycleStatus
-                          )
-                        }
-                      >
-                        <option value="">All statuses</option>
-                        <option value="published">Published</option>
-                        <option value="draft">Draft</option>
-                        <option value="archived">Archived</option>
-                      </select>
-                    </label>
-
-                    <label>
-                      <span>Tag</span>
-                      <select
-                        name="question-search-tag"
-                        value={questionSearchFilters.tagId}
-                        onChange={(event) =>
-                          updateQuestionSearchFilter('tagId', event.target.value)
-                        }
-                      >
-                        <option value="">All tags</option>
-                        {availableTags.map((tag) => (
-                          <option key={`tag-search-${tag.id}`} value={tag.id}>
-                            {tag.name}
-                            {tag.status === 'archived' ? ' (Archived)' : ''}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  </div>
-
-                  <datalist id="question-search-angle-options">
-                    {Array.from(
-                      new Set([
-                        ...testingAngleOptions,
-                        ...questionSearchResults.flatMap((question) => [
-                          question.testingAngle,
-                          ...question.additionalTestingAngles,
-                        ]),
-                      ])
-                    )
-                    .filter((angle): angle is string => Boolean(angle))
-                      .sort((left, right) => left.localeCompare(right))
-                      .map((angle) => (
-                        <option key={`question-search-angle-${angle}`} value={angle} />
-                      ))}
-                  </datalist>
-
-                  <div className={styles.questionSearchActions}>
-                    <button
-                      className={styles.primaryButton}
-                      type="submit"
-                      disabled={isSearchingQuestions}
-                    >
-                      <Search size={17} />
-                      {isSearchingQuestions ? 'Searching…' : 'Search Questions'}
-                    </button>
-                    <button
-                      className={styles.secondaryButton}
-                      type="button"
-                      disabled={isSearchingQuestions}
-                      onClick={clearQuestionSearch}
-                    >
-                      Clear filters
-                    </button>
-                  </div>
-                </form>
-
-                {questionSearchError ? (
-                  <div
-                    className={`${styles.status} ${styles.error} ${styles.questionSearchStatus}`}
-                    role="alert"
-                  >
-                    {questionSearchError}
-                  </div>
-                ) : (
-                  <div
-                    className={styles.questionSearchResults}
-                    aria-label="Library Question search results"
-                    aria-busy={isSearchingQuestions}
-                    tabIndex={0}
-                  >
-                    {questionSearchResults.map((question) => {
-                      const isSelected = question.source === 'personal'
-                        ? question.id === personalCardEditorId
-                        : question.id === questionId;
-                      const primaryConceptMatch =
-                        appliedQuestionSearchFilters.primaryConceptId ===
-                        question.conceptId;
-                      const relatedConceptMatch =
-                        Boolean(appliedQuestionSearchFilters.relatedConceptId) &&
-                        question.relatedConceptIds.includes(
-                          appliedQuestionSearchFilters.relatedConceptId
-                        );
-                      const primaryAngleMatch =
-                        Boolean(
-                          appliedQuestionSearchFilters.primaryTestingAngle
-                        ) &&
-                          question.testingAngle?.toLocaleLowerCase() ===
-                          appliedQuestionSearchFilters.primaryTestingAngle.toLocaleLowerCase();
-                      const additionalAngleMatch =
-                        Boolean(
-                          appliedQuestionSearchFilters.additionalTestingAngle
-                        ) &&
-                        question.additionalTestingAngles.some(
-                          (angle) =>
-                            angle.toLocaleLowerCase() ===
-                            appliedQuestionSearchFilters.additionalTestingAngle.toLocaleLowerCase()
-                        );
-
-                      return (
-                        <button
-                          className={styles.questionSearchResult}
-                          key={createCreatorEntityKey(
-                            question.source,
-                            question.kind,
-                            question.id
-                          )}
-                          type="button"
-                          aria-pressed={isSelected}
-                          disabled={isSavingQuestion}
-                          onClick={() => selectQuestionSearchResult(question)}
-                        >
-                          <span className={styles.questionSearchPrompt}>
-                            {question.prompt || 'Untitled Question'}
-                          </span>
-                          <span className={styles.questionSearchMetadata}>
-                            <span>{question.status || 'Lifecycle · N/A'}</span>
-                            <span>{question.difficulty || 'Difficulty · N/A'}</span>
-                            {question.conceptId && <span>
-                              Primary Concept: {question.primaryConceptName}
-                            </span>}
-                            <span>
-                              Primary Angle: {question.testingAngle || 'N/A'}
-                            </span>
-                            {question.relatedConcepts.length > 0 && (
-                              <span>
-                                Related:{' '}
-                                {question.relatedConcepts
-                                  .map((conceptOption) => conceptOption.name)
-                                  .join(', ')}
-                              </span>
-                            )}
-                            {question.additionalTestingAngles.length > 0 && (
-                              <span>
-                                Additional:{' '}
-                                {question.additionalTestingAngles.join(', ')}
-                              </span>
-                            )}
-                            {question.tags.length > 0 && (
-                              <span>
-                                Tags:{' '}
-                                {question.tags
-                                  .map(
-                                    (tag) =>
-                                      `${tag.name}${
-                                        tag.status === 'archived'
-                                          ? ' (Archived)'
-                                          : ''
-                                      }`
-                                  )
-                                  .join(', ')}
-                              </span>
-                            )}
-                          </span>
-                          {(primaryConceptMatch ||
-                            relatedConceptMatch ||
-                            primaryAngleMatch ||
-                            additionalAngleMatch) && (
-                            <span className={styles.questionSearchMatches}>
-                              {primaryConceptMatch && (
-                                <span>Primary Concept match</span>
-                              )}
-                              {relatedConceptMatch && (
-                                <span>Related Concept match</span>
-                              )}
-                              {primaryAngleMatch && (
-                                <span>Primary Angle match</span>
-                              )}
-                              {additionalAngleMatch && (
-                                <span>Additional Angle match</span>
-                              )}
-                            </span>
-                          )}
-                        </button>
-                      );
-                    })}
-                    {!questionSearchResults.length && !isSearchingQuestions && (
-                      <p className={styles.emptySelection}>
-                        No Questions match these Library filters.
-                      </p>
-                    )}
-                    {isSearchingQuestions && !questionSearchResults.length && (
-                      <p className={styles.emptySelection}>
-                        Loading Library Questions…
-                      </p>
-                    )}
-                  </div>
-                )}
-
-                {questionSearchHasMore && questionSearchCursor && (
-                  <div className={styles.questionSearchFooter}>
-                    <button
-                      className={styles.secondaryButton}
-                      type="button"
-                      disabled={isSearchingQuestions}
-                      onClick={loadMoreQuestionSearchResults}
-                    >
-                      {isSearchingQuestions ? 'Loading…' : 'Load more Questions'}
-                    </button>
-                  </div>
-                )}
-              </section>
 
               <div className={styles.mainGrid}>
                 <section className={`${styles.panel} ${styles.conceptPanel}`}>
@@ -8035,27 +7721,7 @@ export function CreatorStudioV2Client({
                     </div>
                   )}
 
-                  <div
-                    style={{
-                      borderBottom: '1px solid #e2e8f0',
-                      marginBottom: 18,
-                      paddingBottom: 16,
-                    }}
-                  >
-                    <div
-                      style={{
-                        alignItems: 'center',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        flexWrap: 'wrap',
-                        gap: 12,
-                        marginBottom: 10,
-                      }}
-                    >
-                      <h3 style={{ margin: 0 }}>
-                        Existing Questions · Newest first
-                      </h3>
-                      <span style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  <span style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                         <button
                           className={styles.secondaryButton}
                           type="button"
@@ -8090,104 +7756,8 @@ export function CreatorStudioV2Client({
                           </button>
                         )}
                       </span>
-                    </div>
 
-                    {questionSource === 'personal' && !personalQuestionConceptId ? (
-                      <p className={styles.emptySelection}>
-                        Select an editable Concept to view its questions.
-                      </p>
-                    ) : questionSource === 'official' && !questionConceptId ? (
-                      <p className={styles.emptySelection}>
-                        Select a concept to view its questions.
-                      </p>
-                    ) : isLoadingExistingQuestions ? (
-                      <p className={styles.emptySelection}>
-                        Loading questions…
-                      </p>
-                    ) : existingQuestions.length ? (
-                      <div key={existingQuestions[0].id} className={styles.existingQuestionList} tabIndex={0} aria-label="Existing Questions, newest first">
-                        {existingQuestions.map((question) => {
-                          const isSelected = question.source === 'personal'
-                            ? question.id === personalCardEditorId
-                            : question.id === questionId;
 
-                          return (
-                            <button
-                              key={createCreatorEntityKey(question.source, question.kind, question.id)}
-                              type="button"
-                              disabled={isSavingQuestion}
-                              aria-pressed={isSelected}
-                              onClick={() => selectExistingQuestion(question)}
-                              style={{
-                                alignItems: 'stretch',
-                                background: isSelected ? '#e8f0ff' : '#f7f9fc',
-                                border: isSelected
-                                  ? '1px solid #8eb2f3'
-                                  : '1px solid #d8e1ef',
-                                borderRadius: 8,
-                                color: isSelected ? '#0f4eb8' : '#334155',
-                                cursor: isSavingQuestion
-                                  ? 'not-allowed'
-                                  : 'pointer',
-                                display: 'grid',
-                                gap: 3,
-                                padding: '8px 10px',
-                                textAlign: 'left',
-                              }}
-                            >
-                              <span
-                                title={question.prompt}
-                                style={{
-                                  fontWeight: 700,
-                                  overflow: 'hidden',
-                                  textOverflow: 'ellipsis',
-                                  whiteSpace: 'nowrap',
-                                }}
-                              >
-                                {question.prompt || 'Untitled question'}
-                              </span>
-                              <small style={{ color: '#687386' }}>
-                                {question.source === 'official'
-                                  ? `${question.difficulty} · ${question.testingAngle} · ${question.status} · ${question.conceptId === questionConceptId ? 'Primary Question' : 'Related Question'}`
-                                  : 'Difficulty · N/A · Testing Angle · N/A'}
-                                {' · Concept: '}{question.primaryConceptName}
-                              </small>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <p className={styles.emptySelection}>No questions yet.</p>
-                    )}
-                  </div>
-
-                  <fieldset hidden={questionSource === 'personal'} disabled={isLearnerReadOnly || isSavingQuestion} style={{ border: '1px solid #cbd5e1', borderRadius: 8, padding: 12, marginBottom: 16, minWidth: 0 }}>
-                    <legend>Related Concepts · authoring only</legend>
-                    <p>Use Related Concepts to find this Question. Only the Primary Concept receives mastery evidence. Selections carry over to the next new Question.</p>
-                    <label style={{ display: 'grid', gap: 6 }}>
-                      Search Related Concepts or Topic paths
-                      <input value={relatedConceptSearch} onChange={(event) => setRelatedConceptSearch(event.target.value)} type="search" />
-                    </label>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBlock: 8 }}>
-                      {questionRelatedConceptIds.map((id) => (
-                        <button className={styles.secondaryButton} style={{ whiteSpace: 'normal', overflowWrap: 'anywhere' }} type="button" key={id} onClick={() => setQuestionRelatedConceptIds((current) => current.filter((value) => value !== id))}>
-                          Related: {Object.values(questionConceptsByTopicId).flat().find((concept) => concept.id === id)?.name || id} ×
-                        </button>
-                      ))}
-                    </div>
-                    <div style={{ maxHeight: 220, overflowY: 'auto', display: 'grid', gap: 8 }} tabIndex={0} aria-label="Related Concepts choices">
-                      {Array.from(new Map(flattenTopics(topics).flatMap((topic) =>
-                        (questionConceptsByTopicId[topic.id] || []).map((concept) => ({ ...concept, path: topic.label }))
-                      ).filter((concept) => concept.id !== primaryQuestionConceptId &&
-                        `${concept.name} ${concept.path}`.toLocaleLowerCase().includes(relatedConceptSearch.toLocaleLowerCase())
-                      ).map((concept) => [concept.id, concept])).values()).map((concept) => (
-                        <label key={concept.id} style={{ display: 'flex', alignItems: 'start', gap: 8 }}>
-                          <input type="checkbox" checked={questionRelatedConceptIds.includes(concept.id)} onChange={(event) => setQuestionRelatedConceptIds((current) => event.target.checked ? [...new Set([...current, concept.id])] : current.filter((id) => id !== concept.id))} />
-                          <span>{concept.name}<small style={{ display: 'block', color: '#64748b' }}>{concept.path}</small></span>
-                        </label>
-                      ))}
-                    </div>
-                  </fieldset>
 
                   <label style={{ display: 'grid', gap: 8 }}>
                     <strong>Question</strong>
@@ -8222,6 +7792,7 @@ export function CreatorStudioV2Client({
                       aria-label="Answer back of card"
                     />
                   </label>
+
 
                   {questionSource === 'personal' && (
                     <label className={styles.personalField} style={{ marginTop: 18 }}>
@@ -8327,14 +7898,8 @@ export function CreatorStudioV2Client({
                               type="button"
                               disabled={isSavingQuestion}
                               onClick={() => {
-                                if (
-                                  selectQuestionConcept(
-                                    option.id,
-                                    questionTopicId
-                                  )
-                                ) {
-                                  setQuestionConceptSearch('');
-                                }
+                                browseQuestionConcept(option.id, questionTopicId);
+                                setQuestionConceptSearch('');
                               }}
                               style={{
                                 alignItems: 'flex-start',
@@ -8595,76 +8160,46 @@ export function CreatorStudioV2Client({
                     marginTop: 16,
                   }}
                 >
-                  <label style={{ display: 'grid', gap: 8 }}>
-                    <strong>Difficulty</strong>
-                    <select
-                      value={questionDifficulty}
-                      disabled={isLearnerReadOnly || isSavingQuestion}
-                      onChange={(event) => {
-                        setQuestionDifficulty(event.target.value as QuestionDifficulty);
-                        setQuestionStatus(null);
-                      }}
-                    >
-                      <option value="easy">Easy</option>
-                      <option value="medium">Medium</option>
-                      <option value="hard">Hard</option>
-                    </select>
-                  </label>
-
-                  <label style={{ display: 'grid', gap: 8 }}>
-                    <strong>Primary Testing Angle</strong>
-                    <select
-                      value={questionTestingAngle}
-                      disabled={isLearnerReadOnly || isSavingQuestion}
-                      onChange={(event) => {
-                        const nextPrimary = event.target.value;
-                        const removed = questionAdditionalTestingAngles.some((angle) => angle.trim().toLowerCase() === nextPrimary.trim().toLowerCase());
-                        setQuestionTestingAngle(nextPrimary);
-                        setQuestionAdditionalTestingAngles((angles) => angles.filter((angle) => angle.trim().toLowerCase() !== nextPrimary.trim().toLowerCase()));
-                        setQuestionStatus(removed ? { tone: 'success', message: `${nextPrimary} is now Primary and was removed from Additional Testing Angles.` } : null);
-                      }}
-                    >
-                      {Array.from(new Set([questionTestingAngle, ...testingAngleOptions])).map((angle) => (
-                        <option key={angle} value={angle}>
-                          {angle}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <fieldset disabled={isLearnerReadOnly || isSavingQuestion} style={{ minWidth: 0, margin: 0 }}>
-                    <legend>Additional Testing Angles</legend>
-                    <p>Classification only. Learner evidence uses the Primary Testing Angle.</p>
-                    <input type="search" aria-label="Search Additional Testing Angles" value={additionalAngleSearch} onChange={(event) => setAdditionalAngleSearch(event.target.value)} style={{ width: '100%', boxSizing: 'border-box' }} />
-                    <div style={{ maxHeight: 180, overflowY: 'auto', display: 'grid', gap: 8 }}>
-                      {Array.from(new Map([...questionAdditionalTestingAngles, ...testingAngleOptions].map((angle) => [angle.trim().toLowerCase(), angle])).values()).filter((angle) => angle.trim().toLowerCase() !== questionTestingAngle.trim().toLowerCase() && angle.toLowerCase().includes(additionalAngleSearch.toLowerCase())).map((angle) => (
-                        <label key={angle} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                          <input type="checkbox" checked={questionAdditionalTestingAngles.some((value) => value.trim().toLowerCase() === angle.trim().toLowerCase())} onChange={(event) => setQuestionAdditionalTestingAngles((angles) => event.target.checked ? [...angles, angle] : angles.filter((value) => value.trim().toLowerCase() !== angle.trim().toLowerCase()))} />
-                          {angle}
-                        </label>
-                      ))}
+                  <fieldset disabled={isLearnerReadOnly || isSavingQuestion} style={{ minWidth: 0, margin: 0, padding: 12, border: '1px solid #e2e8f0', borderRadius: 8 }}>
+                    <legend style={{ fontWeight: 700 }}>Testing Angles</legend>
+                    <p style={{ margin: '0 0 10px' }}>Choose one Primary angle and any additional angles. Primary guides learner evidence; Additional angles classify the Question.</p>
+                    <input type="search" aria-label="Search Testing Angles" value={additionalAngleSearch} onChange={(event) => setAdditionalAngleSearch(event.target.value)} style={{ width: '100%', boxSizing: 'border-box', marginBottom: 8 }} />
+                    <div role="group" aria-label="Testing Angle selections" style={{ display: 'grid', gap: 4 }}>
+                      {Array.from(new Map([...testingAngleOptions, ...questionAdditionalTestingAngles, questionTestingAngle].map((angle) => [angle.trim().toLowerCase(), angle])).values()).filter((angle) => angle.trim().toLowerCase() === questionTestingAngle.trim().toLowerCase() || angle.toLowerCase().includes(additionalAngleSearch.toLowerCase())).map((angle) => {
+                        const normalizedAngle = angle.trim().toLowerCase();
+                        const isPrimary = normalizedAngle === questionTestingAngle.trim().toLowerCase();
+                        const isAdditional = questionAdditionalTestingAngles.some((value) => value.trim().toLowerCase() === normalizedAngle);
+                        return (
+                          <div key={normalizedAngle} style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', padding: '6px 8px', borderRadius: 6, background: isPrimary || isAdditional ? '#f1f5f9' : 'transparent' }}>
+                            <label style={{ display: 'flex', gap: 8, alignItems: 'center', flex: '1 1 180px', minWidth: 0, textAlign: 'left' }}>
+                              <input type="checkbox" style={{ width: 16, height: 16, margin: 0, flex: '0 0 16px' }} aria-label={`Select Testing Angle ${angle}`} checked={isPrimary || isAdditional} disabled={isPrimary} onChange={(event) => {
+                                if (isPrimary) return;
+                                setQuestionAdditionalTestingAngles((angles) => event.target.checked
+                                  ? [...angles.filter((value) => value.trim().toLowerCase() !== normalizedAngle), angle]
+                                  : angles.filter((value) => value.trim().toLowerCase() !== normalizedAngle));
+                              }} />
+                              <span>{angle}</span>
+                            </label>
+                            {isPrimary ? <strong style={{ fontSize: 11 }}>PRIMARY</strong> : isAdditional ? (
+                              <>
+                                <span style={{ fontSize: 12 }}>Additional</span>
+                                <button type="button" aria-label={`Make ${angle} the Primary Testing Angle`} onClick={(event) => {
+                                  event.currentTarget.closest('fieldset')?.querySelector<HTMLInputElement>('input[type="search"]')?.focus();
+                                  const formerPrimary = questionTestingAngle;
+                                  setQuestionTestingAngle(angle);
+                                  setQuestionAdditionalTestingAngles((angles) => Array.from(new Map([...angles, formerPrimary]
+                                    .filter((value) => value.trim().toLowerCase() !== normalizedAngle)
+                                    .map((value) => [value.trim().toLowerCase(), value])).values()));
+                                  setQuestionStatus(null);
+                                }} style={{ padding: '4px 8px', fontSize: 12, flexShrink: 0 }}>Make Primary</button>
+                              </>
+                            ) : null}
+                          </div>
+                        );
+                      })}
                     </div>
-                    <small>{questionAdditionalTestingAngles.length ? `Selected: ${questionAdditionalTestingAngles.join(', ')}` : 'No Additional Testing Angles'}</small>
                   </fieldset>
 
-                  <label style={{ display: 'grid', gap: 8 }}>
-                    <strong>Status</strong>
-                    <select
-                      aria-label="Question status"
-                      value={questionRecordStatus}
-                      disabled={isLearnerReadOnly || isSavingQuestion}
-                      onChange={(event) => {
-                        setQuestionRecordStatus(
-                          event.target.value as LifecycleStatus
-                        );
-                        setQuestionStatus(null);
-                      }}
-                    >
-                      <option value="draft">Draft</option>
-                      <option value="published">Published</option>
-                      <option value="archived">Archived</option>
-                    </select>
-                  </label>
                 </div>
 
                 <div
@@ -8777,12 +8312,83 @@ export function CreatorStudioV2Client({
                 </section>
               )}
 
+              <section className={`${styles.panel} ${styles.selectedPanel}`} aria-label="Concept-specific Existing Questions">
+                <h3>Existing Questions · Newest first</h3>
+                    {questionSource === 'personal' && !personalQuestionConceptId ? (
+                      <p className={styles.emptySelection}>
+                        Select an editable Concept to view its questions.
+                      </p>
+                    ) : questionSource === 'official' && !questionConceptId ? (
+                      <p className={styles.emptySelection}>
+                        Select a Concept to view its existing Questions.
+                      </p>
+                    ) : isLoadingExistingQuestions ? (
+                      <p className={styles.emptySelection}>
+                        Loading questions…
+                      </p>
+                    ) : existingQuestions.length ? (
+                      <div key={existingQuestions[0].id} className={styles.existingQuestionList} tabIndex={0} aria-label="Existing Questions, newest first">
+                        {existingQuestions.map((question) => {
+                          const isSelected = question.source === 'personal'
+                            ? question.id === personalCardEditorId
+                            : question.id === questionId;
+
+                          return (
+                            <button
+                              key={createCreatorEntityKey(question.source, question.kind, question.id)}
+                              type="button"
+                              disabled={isSavingQuestion}
+                              aria-pressed={isSelected}
+                              onClick={() => selectExistingQuestion(question)}
+                              style={{
+                                alignItems: 'stretch',
+                                background: isSelected ? '#e8f0ff' : '#f7f9fc',
+                                border: isSelected
+                                  ? '1px solid #8eb2f3'
+                                  : '1px solid #d8e1ef',
+                                borderRadius: 8,
+                                color: isSelected ? '#0f4eb8' : '#334155',
+                                cursor: isSavingQuestion
+                                  ? 'not-allowed'
+                                  : 'pointer',
+                                display: 'grid',
+                                gap: 3,
+                                padding: '8px 10px',
+                                textAlign: 'left',
+                              }}
+                            >
+                              <span
+                                title={question.prompt}
+                                style={{
+                                  fontWeight: 700,
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                }}
+                              >
+                                {question.prompt || 'Untitled question'}
+                              </span>
+                              <small style={{ color: '#687386' }}>
+                                {question.source === 'official'
+                                  ? `${question.difficulty} · ${question.testingAngle} · ${question.status} · ${question.conceptId === questionConceptId ? 'Primary Question' : 'Related Question'}`
+                                  : 'Difficulty · N/A · Testing Angle · N/A'}
+                                {' · Concept: '}{question.primaryConceptName}
+                              </small>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className={styles.emptySelection}>No questions yet.</p>
+                    )}
+              </section>
+
               <footer className={styles.bottomActions}>
                 <div className={styles.infoMessage}>
                   <Info size={22} />
                   <span>
                     {questionSource === 'official'
-                      ? 'New questions default to Published. Choose Draft to save unfinished work for the selected Concept.'
+                      ? 'New Questions are saved as Published. Existing Questions retain their current status.'
                       : 'Use the Question, Answer, and optional Source fields.'}
                   </span>
                 </div>

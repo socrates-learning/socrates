@@ -1,3 +1,4 @@
+import { CreatorQuestionSearchPanel } from './fixtures/creator-role-workspaces.mjs';
 import * as markdownEditing from '../lib/markdown-editing.ts';
 import * as topicSelection from '../lib/topic-selection-presentation.ts';
 import * as homeSettings from '../lib/home-deck-settings.ts';
@@ -117,6 +118,7 @@ function editor({ role = 'admin', editing = false, response, references = [], ca
     'lucide-react': new Proxy({}, { get: (_target, key) => `icon:${String(key)}` }),
     '@/components/Header': {},
     '@/components/MarkdownContent': { cardMarkdownSummary: source => source },
+    './creator/CreatorQuestionSearchPanel': { CreatorQuestionSearchPanel },
     './creator/CreatorLearnerQuestionsWorkspace': { CreatorLearnerQuestionsWorkspace() {} },
     './creator/StandaloneCustomCardWorkspace': { StandaloneCustomCardWorkspace: () => null },
     '@/lib/standalone-custom-cards': standaloneCards,
@@ -184,6 +186,7 @@ function editor({ role = 'admin', editing = false, response, references = [], ca
 function nodes(tree) {
   if (!tree || typeof tree !== 'object') return [];
   if (Array.isArray(tree)) return tree.flatMap(nodes);
+  if (tree.type === CreatorQuestionSearchPanel) return nodes(CreatorQuestionSearchPanel(tree.props));
   return [tree, ...nodes(tree.props?.children), ...(tree.type?.name === 'CreatorLearnerQuestionsWorkspace' ? [...nodes(tree.props.editor), ...nodes(tree.props.topicTree)] : [])];
 }
 for (const role of ['learner', 'admin', 'editor']) {
@@ -423,8 +426,15 @@ test('official and owner-qualified Concept choices share selection paint and que
   e.setExpandedPersonalTopicIds(new Set(['mine-topic'])); e = h.render();
   const official = { id: 'topic', key: 'official:topic:topic', name: 'Topic', source: 'official', children: [] };
   const personal = { id: 'mine-topic', key: 'personal:topic:mine-topic', name: 'Topic', source: 'personal', children: [] };
-  const choice = topic => nodes(e.renderUnifiedQuestionTopic(topic, 1)).find(n => n.type === 'label' && visibleText(n).includes('Concept'));
-  assert.equal(visibleText(choice(official)).replace(/\s+/g, ' ').trim(), visibleText(choice(personal)).replace(/\s+/g, ' ').trim());
+  const choice = topic => nodes(e.renderUnifiedQuestionTopic(topic, 1)).find(n =>
+    n.props?.style && visibleText(n).includes('Concept') &&
+    [n.props.children].flat().some(child => child?.type === 'input' && child.props?.type === 'checkbox') &&
+    (n.type === 'label' || nodes(n).some(child => child.props?.['aria-label'] === 'Browse Questions for Concept'))
+  );
+  const officialName = nodes(choice(official)).find(n => n.props?.['aria-label'] === 'Browse Questions for Concept');
+  assert.ok(officialName);
+  assert.equal(visibleText(officialName.props.children).replace(/\s+/g, ' ').trim(), visibleText(choice(personal)).replace(/\s+/g, ' ').trim());
+  assert.doesNotMatch(visibleText(choice(official)) + visibleText(choice(personal)), /\b(Mine|Personal|Official)\b/);
   assert.deepEqual(choice(official).props.style, choice(personal).props.style);
   assert.ok(!choice(personal).props.className);
 });
@@ -451,7 +461,7 @@ test('Question search prompt styling is source-neutral and does not erase backen
   const h = editor({ placed: true, neutralFixture: true }); let e = h.render();
   const common = {id:'question-id',conceptId:'concept',primaryConceptName:'Concept',relatedConcepts:[],prompt:'Equivalent Question',status:null,difficulty:null,testingAngle:null,additionalTestingAngles:[],tags:[]};
   e.setQuestionSearchResults([{...common,source:'official',kind:'question'},{...common,source:'personal',kind:'card'}]);
-  e.setActiveCreatorTab('questions'); e = h.render();
+  e.setActiveCreatorTab('search'); e = h.render();
   const prompts=nodes(e.tree).filter(n => n.props?.className==='questionSearchPrompt');
   assert.equal(prompts.length,2);
   assert.deepEqual(paint(prompts[0]),paint(prompts[1]));

@@ -45,7 +45,7 @@ for (const role of ['admin', 'editor']) {
         assert.equal(e.primaryQuestionConceptId, 'related');
         assert.deepEqual(plain(e.questionRelatedConceptIds), []);
     });
-    test(`${role}: successful new save clears source, carries metadata; explicit New resets defaults`, async () => {
+    test(`${role}: successful new save carries visible metadata and resets hidden defaults`, async () => {
         const h = questions({ role });
         let e = draft(h);
         e.setQuestionDifficulty('hard');
@@ -67,8 +67,10 @@ for (const role of ['admin', 'editor']) {
         assert.equal(e.questionAnswer, '');
         assert.equal(e.questionId, null);
         assert.equal(e.questionConceptId, 'primary');
-        assert.equal(e.questionDifficulty, 'hard');
-        assert.equal(e.questionRecordStatus, 'draft');
+        assert.equal(command.payload.p_difficulty, 'medium');
+        assert.equal(command.payload.p_status, 'published');
+        assert.equal(e.questionDifficulty, 'medium');
+        assert.equal(e.questionRecordStatus, 'published');
         assert.deepEqual(plain(e.questionRelatedConceptIds), ['related']);
         assert.deepEqual(plain(e.questionAdditionalTestingAngles), ['Safety']);
         assert.equal(e.questionTags[0].id, 'tag');
@@ -299,14 +301,14 @@ test('discard acceptance permits explicit New; busy standalone prevents any Ques
     assert.equal(e.confirmDiscardQuestionChanges(), false);
     assert.equal(h.confirmations.length, 1);
 });
-test('search effect is staff Questions-only and initializes once per Library', async () => {
+test('search effect is staff Search-only and initializes once per Library', async () => {
     for (const role of ['admin', 'editor', 'learner']) {
         const h = editor({ role });
         h.render();
         h.runEffect('questionSearchLibraryRef.current ===');
         await settle();
         assert.equal(h.reads.filter(r => r.rpc === 'search_creator_questions').length, 0);
-        h.render().setActiveCreatorTab('questions');
+        h.render().setActiveCreatorTab('search');
         h.render();
         h.runEffect('questionSearchLibraryRef.current ===');
         await settle();
@@ -463,3 +465,179 @@ test('Existing Questions rendered keys distinguish official Questions from perso
     const list = nodes(h.render().tree).find(n => n.props?.['aria-label'] === 'Existing Questions, newest first');
     assert.deepEqual(nodes(list).filter(n => n.type === 'button').map(n => n.key), ['official:question:shared','personal:card:shared']);
 });
+
+function questionSnapshot(h) {
+    const e = h.render();
+    const fields = ['questionId', 'questionSource', 'questionPrompt', 'questionAnswer', 'questionDifficulty', 'questionTestingAngle', 'questionRecordStatus', 'questionConceptId', 'primaryQuestionConceptId', 'editingQuestionPrimary', 'questionTopicId', 'questionRelatedConceptIds', 'questionAdditionalTestingAngles', 'questionTags', 'questionEditorState', 'questionStatus', 'isQuestionDirty'];
+    return Object.fromEntries(fields.map(key => [key, plain(e[key])]));
+}
+function selectTab(h, tab) {
+    const tabs = nodes(h.render().tree).find(n => n.type?.name === 'CreatorStudioTabs');
+    assert.ok(tabs);
+    tabs.props.onSelect(tab);
+}
+for (const role of ['admin', 'editor']) {
+    test(`${role}: Questions layout keeps writing first, Existing Questions last after Tags, Search separate`, () => {
+        const h = questions({ role });
+        const tree = expandChrome(h.render().tree);
+        const content = text(tree);
+        assert.doesNotMatch(content, /Library Question Search|Related Concepts · authoring only|Related Concepts choices/);
+        const ordered = ['1. Question / Answer', '2. Topic Tree', '3. Additional Options', 'Add a question tag', 'Existing Questions · Newest first', 'New Questions are saved as Published'];
+        let position = -1;
+        for (const label of ordered) { const next = content.indexOf(label); assert.ok(next > position, label); position = next; }
+        const existing = nodes(tree).find(n => n.props?.['aria-label'] === 'Concept-specific Existing Questions');
+        assert.equal(existing.type, 'section');
+        assert.match(text(existing), /Select a Concept to view its existing Questions/);
+        selectTab(h, 'search');
+        const search = text(expandChrome(h.render().tree));
+        assert.match(search, /Library Question Search/);
+        assert.doesNotMatch(search, /1\. Question \/ Answer/);
+        assert.equal(h.calls.length, 0);
+    });
+    for (const existing of [false, true]) {
+        test(`${role}: ${existing ? 'existing' : 'new'} Question draft survives Search round-trip without prompt or write`, () => {
+            const h = questions({ role, confirm: () => false });
+            h.render().selectQuestionConcept('primary', 'topic');
+            if (existing) h.render().selectExistingQuestion(question());
+            const e = h.render();
+            e.setQuestionPrompt('Unsaved question');
+            e.setQuestionAnswer('Unsaved answer');
+            e.setQuestionDifficulty('hard');
+            e.setQuestionTestingAngle('Priority');
+            e.setQuestionRecordStatus('draft');
+            e.setQuestionRelatedConceptIds(['related', 'other']);
+            e.setQuestionAdditionalTestingAngles(['Safety']);
+            e.setQuestionTags([{ id: 'tag', name: 'Tag', slug: 'tag', status: 'active' }]);
+            const before = questionSnapshot(h);
+            assert.equal(before.isQuestionDirty, true);
+            selectTab(h, 'search');
+            assert.equal(h.render().activeCreatorTab, 'search');
+            assert.deepEqual(questionSnapshot(h), before);
+            assert.equal(h.render().isDirty, true);
+            selectTab(h, 'questions');
+            assert.equal(h.render().activeCreatorTab, 'questions');
+            assert.deepEqual(questionSnapshot(h), before);
+            assert.equal(h.confirmations.length, 0);
+            assert.equal(h.calls.length, 0);
+        });
+    }
+    test(`${role}: same Search result preserves the dirty draft; different result retains released discard guard`, () => {
+        let accept = false;
+        const h = questions({ role, confirm: () => accept });
+        h.render().selectQuestionConcept('primary', 'topic');
+        h.render().selectExistingQuestion(question());
+        h.render().setQuestionPrompt('Unsaved replacement');
+        h.render().setQuestionAnswer('Unsaved answer');
+        h.render().setQuestionDifficulty('hard');
+        const before = questionSnapshot(h);
+        selectTab(h, 'search');
+        h.render().selectQuestionSearchResult(question());
+        assert.equal(h.render().activeCreatorTab, 'questions');
+        assert.deepEqual(questionSnapshot(h), before);
+        assert.equal(h.confirmations.length, 0);
+        selectTab(h, 'search');
+        h.render().selectQuestionSearchResult(question({ id: 'q2', prompt: 'Different persisted Question' }));
+        assert.equal(h.render().activeCreatorTab, 'search');
+        assert.deepEqual(questionSnapshot(h), before);
+        assert.equal(h.confirmations.length, 1);
+        accept = true;
+        h.render().selectQuestionSearchResult(question({ id: 'q2', prompt: 'Different persisted Question' }));
+        assert.equal(h.render().activeCreatorTab, 'questions');
+        assert.equal(h.render().questionId, 'q2');
+        assert.equal(h.render().questionPrompt, 'Different persisted Question');
+        assert.equal(h.render().primaryQuestionConceptId, 'primary');
+        assert.equal(h.render().isQuestionDirty, false);
+        assert.equal(h.confirmations.length, 2);
+        assert.equal(h.calls.length, 0);
+    });
+    test(`${role}: in-flight Question save blocks Search until completion`, async () => {
+        let finish;
+        const h = questions({ role, response: name => name === 'save_question_with_relationships_v2' ? new Promise(resolve => { finish = resolve; }) : undefined });
+        const e = draft(h);
+        const before = questionSnapshot(h);
+        const staleTabs = nodes(e.tree).find(n => n.type?.name === 'CreatorStudioTabs');
+        const saving = e.saveCurrentQuestion();
+        staleTabs.props.onSelect('search');
+        e.selectQuestionSearchResult(question({ id: 'q2' }));
+        assert.deepEqual(questionSnapshot(h), before, 'synchronous save lock protects callbacks captured before busy rerender');
+        selectTab(h, 'search');
+        h.render().selectQuestionSearchResult(question({ id: 'q2' }));
+        assert.equal(h.render().activeCreatorTab, 'questions');
+        assert.equal(h.confirmations.length, 0);
+        finish({ data: null, error: { message: 'Synthetic failure' } });
+        await saving;
+        assert.equal(h.render().questionPrompt, 'Question?');
+    });
+    test(`${role}: Search result and same-selected result return to the existing editor`, () => {
+        const h = questions({ role });
+        h.render().setQuestionConceptsByTopicId({ topic: [{ id: 'primary', name: 'Primary' }] });
+        selectTab(h, 'search');
+        h.render().selectQuestionSearchResult(question());
+        let e = h.render();
+        assert.equal(e.activeCreatorTab, 'questions');
+        assert.equal(e.questionId, 'q1');
+        assert.equal(e.primaryQuestionConceptId, 'primary');
+        assert.deepEqual(plain(e.questionRelatedConceptIds), ['related']);
+        selectTab(h, 'search');
+        h.render().selectQuestionSearchResult(question());
+        e = h.render();
+        assert.equal(e.activeCreatorTab, 'questions');
+        assert.equal(e.questionId, 'q1');
+        assert.equal(h.confirmations.length, 0);
+        assert.equal(h.calls.length, 0);
+    });
+}
+test('Search cannot hide a retained Question draft from the existing shell guard', () => {
+    const h = questions({ confirm: () => false });
+    draft(h);
+    selectTab(h, 'content');
+    selectTab(h, 'search');
+    assert.equal(h.render().isDirty, true);
+    assert.equal(h.runShellGuard(), false);
+    assert.equal(h.render().questionPrompt, 'Question?');
+});
+
+for (const role of ['admin', 'editor']) {
+ test(`${role}: tree associations and browsing are independent; promotion is draft-only`, async () => {
+  const h = questions({role});
+  h.render().setQuestionConceptsByTopicId({topic:[{id:'primary',name:'Primary'},{id:'related',name:'Related'},{id:'other',name:'Other'}]});
+  h.render().associateQuestionConcept('primary',true);
+  h.render().associateQuestionConcept('related',true);
+  let e=h.render();e.setQuestionPrompt('Draft question');e.setQuestionAnswer('Draft answer');
+  const dirtyBefore=h.render().isQuestionDirty;
+  h.render().browseQuestionConcept('other','topic');
+  e=h.render();assert.equal(e.primaryQuestionConceptId,'primary');assert.equal(e.questionConceptId,'other');
+  assert.equal(e.questionAnswer,'Draft answer');assert.equal(e.isQuestionDirty,dirtyBefore);assert.equal(h.confirmations.length,0);
+  e.makeQuestionConceptPrimary('related');e=h.render();
+  assert.equal(e.primaryQuestionConceptId,'related');assert.deepEqual(plain(e.questionRelatedConceptIds),['primary']);
+  e.associateQuestionConcept('related',false);assert.equal(h.render().primaryQuestionConceptId,'related');
+  await h.render().saveCurrentQuestion();e=h.render();
+  assert.equal(e.primaryQuestionConceptId,'related','successful save carries actual Primary, not browse');
+  assert.equal(e.questionConceptId,'other');assert.equal(e.questionAnswer,'');assert.equal(e.isQuestionDirty,false);
+  e.startNewQuestion();e=h.render();assert.equal(e.primaryQuestionConceptId,'other');assert.deepEqual(plain(e.questionRelatedConceptIds),[]);
+  e.selectExistingQuestion(question());e=h.render();e.makeQuestionConceptPrimary('related');
+  assert.equal(h.render().primaryQuestionConceptId,'primary');assert.equal(h.render().questionId,'q1');
+  e.associateQuestionConcept('related',false);assert.deepEqual(plain(h.render().questionRelatedConceptIds),[]);
+ });
+ test(`${role}: tree selection stays visible under Needs Questions and duplicate placements`, () => {
+  const h=questions({role});h.render().setQuestionConceptsByTopicId({topic:[{id:'primary',name:'Primary'},{id:'related',name:'Related'}],other:[{id:'primary',name:'Primary'}]});
+  h.render().setQuestionCountsByConceptId({primary:3,related:2});
+  h.render().associateQuestionConcept('primary',true);h.render().associateQuestionConcept('related',true);
+  h.render().setNeedsQuestionsOnly(true);const e=h.render();
+  for(const id of ['topic','other']) {
+   const tree=e.renderQuestionTopic({id,key:`official:topic:${id}`,source:'official',name:id,children:[]});
+   const check=nodes(tree).find(n=>n.props?.['aria-label']==='Associate Primary with Question');
+   assert.equal(check.props.checked,true);assert.equal(check.props.disabled,true);
+  }
+  const tree=e.renderQuestionTopic({id:'topic',key:'official:topic:topic',source:'official',name:'Topic',children:[]});
+  assert.ok(text(tree).includes('Related'));
+  assert.ok(nodes(tree).some(n=>n.props?.['aria-label']==='Make Related Primary'));
+ });
+ test(`${role}: failed association save preserves draft and relationship selection`, async()=>{
+  const h=questions({role,response:name=>name==='save_question_with_relationships_v2'?{data:null,error:{message:'Rejected'}}:undefined});
+  h.render().setQuestionConceptsByTopicId({topic:[{id:'primary',name:'Primary'},{id:'related',name:'Related'}]});
+  h.render().associateQuestionConcept('primary',true);h.render().associateQuestionConcept('related',true);
+  h.render().setQuestionPrompt('Draft');h.render().setQuestionAnswer('Answer');await h.render().saveCurrentQuestion();
+  const e=h.render();assert.equal(e.primaryQuestionConceptId,'primary');assert.deepEqual(plain(e.questionRelatedConceptIds),['related']);assert.equal(e.questionAnswer,'Answer');assert.equal(e.isQuestionDirty,true);
+ });
+}
