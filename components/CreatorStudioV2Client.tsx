@@ -5508,7 +5508,7 @@ export function CreatorStudioV2Client({
 
     return (
       <div className={styles.topicBranch} key={`question-${topic.key}`}>
-        <div
+        <TopicDropRow topicKey={topic.key}
           className={`${styles.topicRow} ${isActive ? styles.activeTopicRow : ''}`}
           style={{
             background: hasConceptsInBranch ? undefined : '#f8fafc',
@@ -5516,6 +5516,7 @@ export function CreatorStudioV2Client({
             paddingLeft: `${12 + depth * 38}px`,
           }}
         >
+          <TopicDragHandle topicKey={topic.key} />
           <button
             className={styles.expandButton}
             type="button"
@@ -5570,7 +5571,7 @@ export function CreatorStudioV2Client({
                 : 'No concepts'}
             </span>
           </button>
-        </div>
+        </TopicDropRow>
         {directConcepts.length > 0 && (!hasChildren || isExpanded) && (
           <div style={{ display: 'grid', gap: 3 }}>
             {directConcepts.map((conceptOption) => {
@@ -6015,7 +6016,7 @@ export function CreatorStudioV2Client({
     const isActive = activePersonalTopicId === topic.id;
     return (
       <div className={styles.topicBranch} key={`personal-question-${topic.id}`}>
-        <div
+        <TopicDropRow topicKey={topic.key}
           className={`${styles.topicRow} ${isActive ? styles.activeTopicRow : ''}`}
           style={{
             background: hasConceptsInBranch ? undefined : '#f8fafc',
@@ -6023,6 +6024,7 @@ export function CreatorStudioV2Client({
             paddingLeft: `${12 + depth * 38}px`,
           }}
         >
+          <TopicDragHandle topicKey={topic.key} />
           <button
             className={styles.expandButton}
             type="button"
@@ -6053,7 +6055,7 @@ export function CreatorStudioV2Client({
               : 'No concepts'}
           </span>
 
-        </div>
+        </TopicDropRow>
         {isExpanded && (
           <div>
             {directConcepts.map((item) => {
@@ -8099,6 +8101,7 @@ export function CreatorStudioV2Client({
                     </div>
                   )}
 
+                  <CreatorTopicTreeInteraction context={positioningContext} disabled={isMutatingTopic || !!dialogMode} onMove={positionTopicFromTree} viewportLabel="Question Topic Tree">
                   <div
                     className={`${styles.treeViewport} ${styles.questionConceptBrowser}`}
                     tabIndex={0}
@@ -8139,6 +8142,7 @@ export function CreatorStudioV2Client({
                       </div>
                     )}
                   </div>
+                  </CreatorTopicTreeInteraction>
 
                 </section>
               </div>

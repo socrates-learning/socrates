@@ -20,11 +20,12 @@ type Interaction = {
     keyboard: (key: string, button: HTMLButtonElement, fromPointer: boolean) => void;
 };
 const InteractionContext = createContext<Interaction | null>(null);
-export function CreatorTopicTreeInteraction({ context, disabled, onMove, children }: {
+export function CreatorTopicTreeInteraction({ context, disabled, onMove, children, viewportLabel = 'Topic Tree' }: {
     context: PositionContext;
     disabled: boolean;
     onMove: (plan: PositionPlan) => Promise<void>;
     children: ReactNode;
+    viewportLabel?: string;
 }) {
     const [session, setSession] = useState<Session | null>(null), [pick, setPick] = useState<Pick | null>(null), [keyboard, setKeyboard] = useState(false);
     const [submitting, setSubmitting] = useState(false);
@@ -98,7 +99,7 @@ export function CreatorTopicTreeInteraction({ context, disabled, onMove, childre
             }
         };
         const tick = () => {
-            const p = pointer.current, viewport = root.current?.querySelector<HTMLElement>('[aria-label="Topic Tree"]');
+            const p = pointer.current, viewport = root.current?.querySelector<HTMLElement>(`[aria-label="${CSS.escape(viewportLabel)}"]`);
             if (p?.active && viewport) {
                 const r = viewport.getBoundingClientRect();
                 if (p.x >= r.left && p.x <= r.right) {

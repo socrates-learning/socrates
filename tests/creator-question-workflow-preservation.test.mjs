@@ -219,11 +219,11 @@ test('staff personal legacy search result uses owner-qualified Card identity; st
     assert.equal(e.activeCreatorTab, 'content');
     assert.equal(e.standaloneRequest.card.id, 'standalone');
 });
-test('Questions tree has shared structural controls but no Content drag handles', () => {
+test('Questions tree shares Content structural controls and dedicated Topic drag handles', () => {
     const h = questions({ placed: true });
     let e = h.render();
     const tree = expandChrome(e.tree);
-    assert.equal(nodes(tree).filter(n => n.type?.name === 'TopicDragHandle').length, 0);
+    assert.ok(nodes(tree).some(n => n.type?.name === 'TopicDragHandle'));
     assert.match(text(tree), /Add Subtopic/);
     assert.match(text(tree), /Rename/);
     assert.match(text(tree), /Move/);
@@ -249,8 +249,8 @@ test('Question tree activation never writes selection; dirty existing Question r
     assert.equal(h.render().questionPrompt, 'Question?');
 });
 test('structural handlers retain parent ownership and separate state channels', () => {
-    const questionTree = source.slice(source.indexOf('function renderQuestionTopic'), source.indexOf('function renderUnifiedQuestionTopic'));
-    assert.doesNotMatch(questionTree, /TopicDragHandle/);
+    const questionTree = source.slice(source.indexOf('function renderQuestionTopic'), source.indexOf('function renderPrerequisiteBrowseTopic'));
+    assert.match(questionTree, /TopicDragHandle topicKey=\{topic.key\}/);
     assert.match(source, /onMove=\{positionTopicFromTree\}/);
     assert.match(source, /outcome\.message/);
     assert.match(source, /\{questionStatus &&/);
@@ -345,7 +345,7 @@ test('Questions personal Topic names remain non-activating; Concept choice selec
     const name = nodes(tree).find(n => n.props?.title === 'Personal Topic');
     assert.equal(name.type, 'span');
     assert.equal(name.props.onClick, undefined);
-    assert.equal(nodes(tree).filter(n => n.type?.name === 'TopicDragHandle').length, 0);
+    assert.ok(nodes(tree).some(n => n.type?.name === 'TopicDragHandle'));
     e.setExpandedPersonalTopicIds(new Set(['mine-topic']));
     e = h.render();
     tree = e.renderPersonalQuestionTopic(personal);
