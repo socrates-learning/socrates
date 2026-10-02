@@ -31,6 +31,11 @@ const rows = [
   { id: 'adult-health', name: 'Adult Health', parent_id: 'nursing', sort_order: 1 },
 ];
 
+test('official Concept details delegate only their body to authorized media rendering', () => {
+  assert.match(officialBrowserSource, /<ConceptMediaContent markdown=\{concept\.bodyMarkdown\} conceptId=\{concept\.id\} libraryId=\{data\?\.libraryId\} \/>/);
+  assert.equal((officialBrowserSource.match(/<ConceptMediaContent /g) || []).length, 1);
+});
+
 test('shared Topic utilities preserve arbitrary-depth paths and search ancestors', () => {
   const tree = buildConceptTopicTree(rows);
 

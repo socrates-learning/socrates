@@ -1,3 +1,5 @@
+import { questionImageBoundary } from './fixtures/question-media-authoring.mjs';
+import { conceptMedia, conceptImageBoundary, conceptContentBoundary } from './fixtures/concept-media-authoring.mjs';
 import { CreatorQuestionSearchPanel } from './fixtures/creator-role-workspaces.mjs';
 import * as markdownEditing from '../lib/markdown-editing.ts';
 import * as topicSelection from '../lib/topic-selection-presentation.ts';
@@ -98,6 +100,7 @@ function editor({ role = 'admin', editing = false, response, references = [], ca
     },
   };
   function rpcResult(name, payload) {
+      if (name === 'get_creator_questions_with_media') name = 'get_creator_questions';
       if (name === 'get_creator_questions') return { data: [], error: null };
       calls.push({ name, payload });
       if (response) return response(name, payload);
@@ -118,6 +121,10 @@ function editor({ role = 'admin', editing = false, response, references = [], ca
     'lucide-react': new Proxy({}, { get: (_target, key) => `icon:${String(key)}` }),
     '@/components/Header': {},
     '@/components/MarkdownContent': { cardMarkdownSummary: source => source },
+    '@/components/ConceptMediaContent': conceptContentBoundary,
+    '@/components/creator/QuestionImageAuthoring': questionImageBoundary,
+    '@/components/creator/ConceptImageAuthoring': conceptImageBoundary,
+    '@/lib/concept-media': conceptMedia,
     './creator/CreatorQuestionSearchPanel': { CreatorQuestionSearchPanel },
     './creator/CreatorLearnerQuestionsWorkspace': { CreatorLearnerQuestionsWorkspace() {} },
     './creator/StandaloneCustomCardWorkspace': { StandaloneCustomCardWorkspace: () => null },

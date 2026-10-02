@@ -1,3 +1,5 @@
+import { questionImageBoundary } from './fixtures/question-media-authoring.mjs';
+import { conceptMedia, conceptImageBoundary, conceptContentBoundary } from './fixtures/concept-media-authoring.mjs';
 import * as markdownEditing from '../lib/markdown-editing.ts';
 import * as topicSelection from '../lib/topic-selection-presentation.ts';
 import * as homeSettings from '../lib/home-deck-settings.ts';
@@ -35,7 +37,7 @@ const compiled = ts.transpileModule(source.replace(
   `  capture({ ${exposed} });\n  return (\n    <>\n      <Header />`,
 ), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText;
 
-function editor({ editing = false, response, references = [] } = {}) {
+function editor({ editing = false, response, references = [], media } = {}) {
   const slots = [];
   let cursor = 0;
   let api;
@@ -59,7 +61,7 @@ function editor({ editing = false, response, references = [] } = {}) {
   };
   const database = {
     async rpc(name, payload) {
-      if (name === 'get_creator_questions') return { data: [], error: null };
+      if (name === 'get_creator_questions_with_media') return { data: [], error: null };
       calls.push({ name, payload });
       if (response) return response(name, payload);
       return { data: name === 'save_question_with_relationships_v2'
@@ -84,6 +86,10 @@ function editor({ editing = false, response, references = [] } = {}) {
     'lucide-react': {},
     '@/components/Header': {},
     '@/components/MarkdownContent': { cardMarkdownSummary: source => source },
+    '@/components/ConceptMediaContent': conceptContentBoundary,
+    '@/components/creator/QuestionImageAuthoring': questionImageBoundary,
+    '@/components/creator/ConceptImageAuthoring': media ? { ...conceptImageBoundary, useConceptImageAuthoring: () => media } : conceptImageBoundary,
+    '@/lib/concept-media': conceptMedia,
     './creator/CreatorQuestionSearchPanel': { CreatorQuestionSearchPanel() {} },
     './creator/CreatorLearnerQuestionsWorkspace': { CreatorLearnerQuestionsWorkspace() {} },
     './creator/StandaloneCustomCardWorkspace': { StandaloneCustomCardWorkspace: () => null },
@@ -168,6 +174,29 @@ function editor({ editing = false, response, references = [] } = {}) {
   function render() { cursor = 0; const tree = context.exports.CreatorStudioV2Client(props); return { ...api, tree }; }
   return { render, calls, orders, routes };
 }
+
+test('Concept image confirmation waits for the media transaction and complete authoritative reference readback', async () => {
+  for (const editing of [false, true]) for (const count of [1, 2]) {
+    let finish;
+    const media = { ...conceptImageBoundary.useConceptImageAuthoring(), usesMedia: true, items: Array(count).fill({}), save: () => new Promise(resolve => { finish = resolve; }) };
+    const h = editor({ editing, media });
+    h.render().setConcept('Concept with images');
+    const pending = h.render().saveConcept();
+    assert.doesNotMatch(h.render().status?.message || '', /Concept saved with image/);
+    finish({ data: { concept_id: editing ? 'existing-concept' : 'saved-concept', references: [], placements: media.items }, error: null });
+    await pending;
+    assert.equal(h.render().status.message, `Concept saved with ${count === 1 ? 'image' : 'images'}${editing ? '' : '. Ready for another Concept.'}`);
+    assert.equal(h.calls.length, 0, 'No parallel legacy save');
+  }
+  for (const result of [{ data: null, error: { message: 'Uncertain media save' } }, { data: { concept_id: 'saved-concept', placements: [{}] }, error: null }]) {
+    const media = { ...conceptImageBoundary.useConceptImageAuthoring(), usesMedia: true, items: [{}], save: async () => result };
+    const h = editor({ media }); h.render().setConcept('Preserved media draft');
+    await h.render().saveConcept();
+    assert.equal(h.render().status.tone, 'error');
+    assert.doesNotMatch(h.render().status.message, /Concept saved with image/);
+    assert.equal(h.render().concept, 'Preserved media draft');
+  }
+});
 
 for (const lifecycle of ['published', 'draft']) {
   test(`new Concept saves ${lifecycle} on first save, clears fields, and retains placement`, async () => {

@@ -168,6 +168,15 @@ test('unseen Concept is distinct from zero-percent mastery', () => {
   });
 });
 
+test('Concept media receives only the existing Concept and active Library context', async () => {
+  const { tree, types } = await renderConceptPage();
+  const tabs = findElement(tree, types.ConceptTabs);
+  assert.equal(tabs.props.conceptId, conceptId);
+  assert.equal(tabs.props.libraryId, 'library-a');
+  const source = readFileSync(new URL('../components/ConceptTabs.tsx', import.meta.url), 'utf8');
+  assert.match(source, /<ConceptMediaContent markdown=\{bodyMarkdown \|\| ''\} conceptId=\{conceptId\} libraryId=\{libraryId\} \/>/);
+});
+
 test('canonical mastery uses the persisted zero-to-one estimate', () => {
   assert.deepEqual(
     presentCanonicalConceptMastery({

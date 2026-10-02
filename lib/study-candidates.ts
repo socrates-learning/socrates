@@ -1,7 +1,9 @@
+import type { QuestionMediaHint } from './question-media';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 export type OfficialStudyCandidate = {
   kind: 'official';
+  mediaHint?: QuestionMediaHint | null;
   candidateId: string;
   questionId: string;
   conceptId: string;
@@ -31,6 +33,7 @@ export type StudyCandidate =
   | PersonalStudyCandidate;
 
 export type StudyCandidateRow = {
+  question_media_hint?: QuestionMediaHint | null;
   candidate_type: 'official' | 'personal';
   candidate_id: string;
   official_question_id: string | null;
@@ -145,6 +148,7 @@ export function adaptStudyCandidateRow(row: StudyCandidateRow): StudyCandidate {
 
     return {
       kind: 'official',
+      ...(row.question_media_hint === undefined ? {} : { mediaHint: row.question_media_hint }),
       candidateId: row.candidate_id,
       questionId,
       conceptId,
@@ -228,7 +232,7 @@ export async function selectNextStudyCandidate(
   supabase: SupabaseClient,
   studySessionId: string
 ): Promise<StudyCandidate | null> {
-  const { data, error } = await supabase.rpc('select_next_study_candidate', {
+  const { data, error } = await supabase.rpc('select_next_study_candidate_with_media', {
     p_study_session_id: studySessionId,
     p_include_debug: false,
   });
@@ -249,7 +253,7 @@ export async function startStudySessionWithCandidate(
   sessionRequestId: string
 ): Promise<StudySessionStartup> {
   const { data, error } = await supabase.rpc(
-    'start_study_session_with_candidate',
+    'start_study_session_with_candidate_and_media',
     {
       p_study_deck_id: deckId,
       p_new_mastery_balance: newMasteryBalance,

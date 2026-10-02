@@ -17,7 +17,8 @@
     "next": "16.3.4",
     "react": "latest",
     "react-dom": "latest",
-    "patch-package": "8.0.1"
+    "patch-package": "8.0.1",
+    "socrates-media-sharp": "npm:sharp@0.35.5"
   },
   "devDependencies": {
     "@types/node": "latest",

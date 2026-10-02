@@ -1,3 +1,4 @@
+import { questionContentBoundary } from './fixtures/question-media-authoring.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
@@ -55,7 +56,7 @@ test('only learner standalone authoring opts in; staff remains plain and legacy 
 });
 function flag(kind){
  let cursor=0;const states=[[{id:'flag',personal_card_id:'card',question_id:null,note:'Keep this note',created_at:'2026-01-01T00:00:00Z'}],[],[],'flag','',false,null,''];
- const modules={react:{useState:()=>[states[cursor++],()=>{}],useMemo:f=>f(),useCallback:f=>f,useEffect(){}},'react/jsx-runtime':jsx,'@/lib/supabase':{supabase:{}},'@/components/MarkdownContent':markdown,'./StudyCreatorIcon':{StudyCreatorIcon:()=>null},'./StudyCreatorClient.module.css':{default:{}}};
+ const modules={react:{useState:()=>[states[cursor++],()=>{}],useMemo:f=>f(),useCallback:f=>f,useEffect(){}},'react/jsx-runtime':jsx,'@/components/QuestionMediaContent': questionContentBoundary, '@/lib/supabase':{supabase:{}},'@/components/MarkdownContent':markdown,'./StudyCreatorIcon':{StudyCreatorIcon:()=>null},'./StudyCreatorClient.module.css':{default:{}}};
  const {StudyCreatorFlaggedBrowser}=load(read('components/StudyCreatorFlaggedBrowser.tsx'),modules);
  const card={id:'card',concept_id:kind==='standalone'?null:'concept',question:rich,answer:rich};
  return renderToStaticMarkup(React.createElement(StudyCreatorFlaggedBrowser,{ownerId:'owner',neutralPresentation:true,material:{cards:kind==='standalone'?[]:[card],standaloneCards:kind==='standalone'?[card]:[],concepts:[],topics:[],overlays:[]}}));

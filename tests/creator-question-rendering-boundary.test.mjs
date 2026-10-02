@@ -1,3 +1,4 @@
+import { questionContentBoundary } from './fixtures/question-media-authoring.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
@@ -60,7 +61,7 @@ function flagHtml(kind) {
     let cursor = 0;
     const official = kind === 'official';
     const states = [[{ id: 'flag', personal_card_id: official ? null : 'card', question_id: official ? 'question' : null, note: 'Preserved note', created_at: '2026-01-01T00:00:00Z' }], official ? [{ id: 'question', concept_id: 'primary', prompt: literal, difficulty: 'medium', testing_angle: 'Safety' }] : [], [{ id: 'primary', name: 'Primary' }], 'flag', '', false, null, ''];
-    const modules = { react: { useState: () => [states[cursor++], () => { }], useMemo: fn => fn(), useCallback: fn => fn, useEffect() { } }, 'react/jsx-runtime': jsx, '@/lib/supabase': { supabase: {} }, '@/components/MarkdownContent': markdown, './StudyCreatorIcon': { StudyCreatorIcon: () => null }, './StudyCreatorClient.module.css': { default: {} } };
+    const modules = { react: { useState: () => [states[cursor++], () => { }], useMemo: fn => fn(), useCallback: fn => fn, useEffect() { } }, 'react/jsx-runtime': jsx, '@/components/QuestionMediaContent': questionContentBoundary, '@/lib/supabase': { supabase: {} }, '@/components/MarkdownContent': markdown, './StudyCreatorIcon': { StudyCreatorIcon: () => null }, './StudyCreatorClient.module.css': { default: {} } };
     const { StudyCreatorFlaggedBrowser } = load(read('components/StudyCreatorFlaggedBrowser.tsx'), modules);
     const card = { id: 'card', concept_id: kind === 'standalone' ? null : 'primary', question: literal, answer: literal };
     return renderToStaticMarkup(React.createElement(StudyCreatorFlaggedBrowser, { ownerId: 'owner', neutralPresentation: true, material: { cards: kind === 'legacy' ? [card] : [], standaloneCards: kind === 'standalone' ? [card] : [], concepts: [], topics: [], overlays: [] } }));

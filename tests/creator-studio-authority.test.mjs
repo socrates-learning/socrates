@@ -200,15 +200,15 @@ test('learner authority denies every official command before an RPC target is re
   }
 });
 
-test('learner data paths are published-only while staff authoring RPCs remain unchanged', () => {
+test('learner data paths remain published-only while staff reads use the approved media wrappers', () => {
   assert.match(creatorSource, /if \(isLearnerReadOnly\)/);
   assert.match(creatorSource, /\.eq\('status', 'published'\)/);
   assert.match(creatorSource, /\.eq\('concepts\.status', 'published'\)/);
   assert.match(creatorSource, /concepts!questions_concept_id_fkey!inner/);
   assert.match(creatorSource, /prompt, explanation, difficulty/);
   assert.match(creatorSource, /supabase\.rpc\('get_concept_prerequisites'/);
-  assert.match(creatorSource, /supabase\.rpc\('search_creator_questions'/);
-  assert.match(creatorSource, /supabase\.rpc\('get_creator_questions'/);
+  assert.match(creatorSource, /supabase\.rpc\('search_creator_questions_with_media'/);
+  assert.match(creatorSource, /supabase\.rpc\('get_creator_questions_with_media'/);
 });
 
 test('learner mode exposes read-only and disabled semantics without changing the shared tabs', () => {

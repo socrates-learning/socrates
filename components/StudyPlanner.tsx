@@ -1,5 +1,7 @@
 'use client';
 
+import QuestionMediaContent from './QuestionMediaContent';
+
 import {
   useEffect,
   useMemo,
@@ -13,6 +15,7 @@ import { SocratesShell } from '@/components/application-shell/SocratesShell';
 import { usePathname, useRouter } from 'next/navigation';
 import { Header, HeaderSessionProvider } from '@/components/Header';
 import { MarkdownContent } from '@/components/MarkdownContent';
+import ConceptMediaContent from '@/components/ConceptMediaContent';
 import { LearnerHeader, LibrarySubjectSwitcher, PlannerFallback, type LearnerHeaderPrefix, type LearnerNavIcon, type HeaderItem } from '@/components/study-planner/LearnerShell';
 import { PlannerStats } from '@/components/study-planner/PlannerStats';
 import { StudyModeStyles } from '@/components/study-planner/StudyModeStyles';
@@ -2497,10 +2500,11 @@ export function StudyPlanner({
                   </div>
                 </div>
               ) : !isAnswerVisible ? (
-                <div className="study-v2-question-content">
+                <div className="study-v2-question-content" style={studyCandidate?.kind === 'official' && studyCandidate.mediaHint?.front ? { justifyContent: 'flex-start' } : undefined}>
                   {studyCandidate?.kind === 'personal' && studyCandidate.personalConceptId === null
                     ? <MarkdownContent markdown={studyCandidate.prompt} mode="card" interactiveLinks={false} />
-                    : <h1>{studyCandidate?.prompt}</h1>}
+                    : <h1 style={studyCandidate?.kind === 'official' && studyCandidate.mediaHint?.front ? { margin: '0 auto', flexShrink: 0 } : undefined}>{studyCandidate?.prompt}</h1>}
+                  {studyCandidate?.kind === 'official' && <QuestionMediaContent questionId={studyCandidate.questionId} hint={studyCandidate.mediaHint} surface="front" prompt={studyCandidate.prompt} answer={studyCandidate.answer} presentation="study" />}
                   <p
                     className="study-v2-sr-only"
                     id="study-card-reveal-instruction"
@@ -2539,6 +2543,7 @@ export function StudyPlanner({
                       </> : <h2 id="study-revealed-question-heading">
                         {studyCandidate?.prompt}
                       </h2>}
+                      {studyCandidate?.kind === 'official' && <QuestionMediaContent questionId={studyCandidate.questionId} hint={studyCandidate.mediaHint} surface="front" prompt={studyCandidate.prompt} answer={studyCandidate.answer} presentation="study" />}
                     </section>
                     <section
                       className="study-v2-answer-section"
@@ -2548,6 +2553,7 @@ export function StudyPlanner({
                       {studyCandidate?.kind === 'personal' && studyCandidate.personalConceptId === null
                         ? <MarkdownContent markdown={studyAnswer ?? ''} mode="card" />
                         : <p>{studyAnswer}</p>}
+                      {studyCandidate?.kind === 'official' && <QuestionMediaContent questionId={studyCandidate.questionId} hint={studyCandidate.mediaHint} surface="answer" prompt={studyCandidate.prompt} answer={studyCandidate.answer} presentation="study" />}
                     </section>
                     {authoredStudyExplanation && (
                       <section
@@ -2820,7 +2826,7 @@ export function StudyPlanner({
 
                         {conceptReview.bodyMarkdown.trim() && (
                           <section className="study-v2-concept-review-content">
-                            <MarkdownContent markdown={conceptReview.bodyMarkdown} />
+                            <ConceptMediaContent markdown={conceptReview.bodyMarkdown} conceptId={conceptReview.conceptId} libraryId={activeLibrary?.id} />
                           </section>
                         )}
 

@@ -1,3 +1,5 @@
+import { questionImageBoundary } from './question-media-authoring.mjs';
+import { conceptMedia, conceptImageBoundary, conceptContentBoundary } from './concept-media-authoring.mjs';
 import * as markdownEditing from '../../lib/markdown-editing.ts';
 import * as topicSelection from '../../lib/topic-selection-presentation.ts';
 import * as homeSettings from '../../lib/home-deck-settings.ts';
@@ -55,7 +57,7 @@ const exposed = [
 const renderMarker = '  return (\n    <>\n      <Header />';
 assert.equal(source.split(renderMarker).length, 2, 'Expected one main Creator render boundary');
 const compiled = ts.transpileModule(source.replace('  return (\n    <>\n      <Header />', `  capture({ ${exposed} });\n  return (\n    <>\n      <Header />`), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText;
-export function editor({ role = 'admin', editing = false, response, references = [], cards = true, placed = false, neutralFixture = false, readResponse, confirm = () => true } = {}) {
+export function editor({ role = 'admin', editing = false, response, references = [], cards = true, placed = false, neutralFixture = false, readResponse, confirm = () => true, questionImages } = {}) {
     const slots = [];
     let effects = [];
     let unloadEffect;
@@ -113,7 +115,7 @@ export function editor({ role = 'admin', editing = false, response, references =
         },
     };
     function rpcResult(name, payload) {
-        if (name === 'get_creator_questions')
+        if (name === 'get_creator_questions_with_media')
             return response?.(name, payload) || { data: [], error: null };
         calls.push({ name, payload });
         if (response) {
@@ -121,7 +123,7 @@ export function editor({ role = 'admin', editing = false, response, references =
             if (result !== undefined)
                 return result;
         }
-        if (name === 'search_creator_questions')
+        if (name === 'search_creator_questions_with_media')
             return { data: [], error: null };
         if (name === 'create_personal_topic')
             return { data: { id: 'new-topic', owner_id: 'owner', name: payload.p_name, parent_id: payload.p_parent_personal_topic_id }, error: null };
@@ -143,6 +145,10 @@ export function editor({ role = 'admin', editing = false, response, references =
         'lucide-react': new Proxy({}, { get: (_target, key) => `icon:${String(key)}` }),
         '@/components/Header': {},
         '@/components/MarkdownContent': { cardMarkdownSummary: source => source },
+    '@/components/ConceptMediaContent': conceptContentBoundary,
+    '@/components/creator/ConceptImageAuthoring': conceptImageBoundary,
+    '@/components/creator/QuestionImageAuthoring': questionImages ? { ...questionImageBoundary, useQuestionImageAuthoring: () => questionImages } : questionImageBoundary,
+    '@/lib/concept-media': conceptMedia,
         './creator/CreatorQuestionSearchPanel': { CreatorQuestionSearchPanel },
     './creator/CreatorLearnerQuestionsWorkspace': { CreatorLearnerQuestionsWorkspace() { } },
         './creator/StandaloneCustomCardWorkspace': { StandaloneCustomCardWorkspace: () => null },

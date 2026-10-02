@@ -1,5 +1,8 @@
 'use client';
 
+import QuestionMediaContent from '@/components/QuestionMediaContent';
+import type { QuestionMediaHint } from '@/lib/question-media';
+
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { MarkdownContent, cardMarkdownSummary } from '@/components/MarkdownContent';
 import { supabase } from '@/lib/supabase';
@@ -16,6 +19,7 @@ type FlagRow = {
 };
 
 type OfficialQuestion = {
+  question_media_hint?: QuestionMediaHint | null;
   id: string;
   concept_id: string;
   prompt: string;
@@ -83,7 +87,7 @@ export function StudyCreatorFlaggedBrowser({
     if (questionIds.length) {
       const questionResult = await supabase
         .from('questions')
-        .select('id, concept_id, prompt, difficulty, testing_angle')
+        .select('id, concept_id, prompt, difficulty, testing_angle, question_media_hint')
         .in('id', questionIds);
       if (questionResult.error) {
         setError(messageFor(questionResult.error));
@@ -253,6 +257,7 @@ export function StudyCreatorFlaggedBrowser({
           {selected ? (
             <div className={styles.flagReviewCard}>
               <div><span>{neutralPresentation || selected.owner === 'official' ? 'Question' : 'Card'}</span>{selected.card?.concept_id === null ? <MarkdownContent markdown={selected.title} mode="card" /> : <p>{selected.title}</p>}</div>
+              {selected.question && <QuestionMediaContent questionId={selected.question.id} hint={selected.question.question_media_hint} surface="front" prompt={selected.question.prompt} />}
               {selected.card && <div><span>Answer</span>{selected.card.concept_id === null ? <MarkdownContent markdown={selected.card.answer} mode="card" /> : <p>{selected.card.answer}</p>}</div>}
               {selected.question && !learnerPresentation && <div className={styles.flagMetadata}><span>{selected.question.difficulty ?? 'Unspecified difficulty'}</span><span>{selected.question.testing_angle ?? 'General angle'}</span></div>}
               {selected.flag.note && <div><span>Your note</span><p>{selected.flag.note}</p></div>}

@@ -30,7 +30,7 @@ export default async function EditConceptPage({
       .maybeSingle(),
     supabase
       .from('concepts')
-      .select('id, name, body_markdown')
+      .select('id, name, body_markdown, current_version_id')
       .eq('id', id)
       .maybeSingle(),
     loadCreatorPersonalContent(supabase, capabilities.subject.userId),
@@ -119,6 +119,7 @@ export default async function EditConceptPage({
         id: concept.id,
         name: concept.name,
         bodyMarkdown: concept.body_markdown || '',
+        currentVersionId: concept.current_version_id,
         placementIds: (placements || []).map(
           (placement) => placement.library_node_id
         ),

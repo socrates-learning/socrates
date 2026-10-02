@@ -31,7 +31,8 @@ function renderInline(text: string) {
   return parts;
 }
 
-function LegacyMarkdownContent({ markdown }: { markdown: string }) {
+type ConceptBlockRenderer = (line: string, index: number) => React.ReactNode | undefined;
+function LegacyMarkdownContent({ markdown, renderConceptBlock }: { markdown: string; renderConceptBlock?: ConceptBlockRenderer }) {
   const lines = markdown.split(/\r?\n/);
   const elements: React.ReactNode[] = [];
   let index = 0;
@@ -41,6 +42,13 @@ function LegacyMarkdownContent({ markdown }: { markdown: string }) {
     const trimmed = line.trim();
 
     if (!trimmed) {
+      index += 1;
+      continue;
+    }
+
+    const resolvedBlock = renderConceptBlock?.(line, index);
+    if (resolvedBlock !== undefined) {
+      elements.push(<React.Fragment key={index}>{resolvedBlock}</React.Fragment>);
       index += 1;
       continue;
     }
@@ -254,9 +262,9 @@ export function cardMarkdownSummary(markdown: string): string {
   return text(parseCard(markdown, false)).replace(/\s+/g, ' ').trim();
 }
 
-export function MarkdownContent({ markdown, mode = 'concept', interactiveLinks = true }: {
-  markdown: string; mode?: 'concept' | 'card'; interactiveLinks?: boolean;
+export function MarkdownContent({ markdown, mode = 'concept', interactiveLinks = true, renderConceptBlock }: {
+  markdown: string; mode?: 'concept' | 'card'; interactiveLinks?: boolean; renderConceptBlock?: ConceptBlockRenderer;
 }) {
   if (mode === 'card') return <div className={styles.card}>{parseCard(markdown, interactiveLinks)}</div>;
-  return <LegacyMarkdownContent markdown={markdown} />;
+  return <LegacyMarkdownContent markdown={markdown} renderConceptBlock={renderConceptBlock} />;
 }

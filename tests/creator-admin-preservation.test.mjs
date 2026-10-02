@@ -125,6 +125,15 @@ function withoutNavigation(tree) {
 function fingerprint(tree) {
   return createHash('sha256').update(JSON.stringify(tree, (_key, value) => typeof value === 'function' ? `[function:${value.name}]` : value)).digest('hex');
 }
+// Project away only the approved Image extension, retaining the released hashes.
+function withoutConceptImageExtension(tree) {
+  if (!tree || typeof tree !== 'object') return tree;
+  if (Array.isArray(tree)) return tree.filter(n => !n?.props?.['data-concept-image-action'] && n?.type?.name !== 'ConceptImageAuthoring').map(withoutConceptImageExtension);
+  const props = { ...tree.props };
+  delete props['data-concept-image-action'];
+  props.children = withoutConceptImageExtension(props.children);
+  return { ...tree, props };
+}
 const releasedBodies = {
   "content": "0b1c6a5bee83f737f6c236e384218ab464c50c7856652f9b568a8e337415eed0",
   "tags": "8dfd59d8dabb4640d7f114ca6dcdb8c6f61cb81df5047401dfa5e4a97f5e7299",
@@ -134,7 +143,12 @@ for (const role of ['admin','editor']) test(`${role}: Content, Tags and Flagged 
  const h=editor({role,placed:true});
  for(const tab of ['content','tags','flagged']) {
   h.render().setActiveCreatorTab(tab);
-  const tree=expandChrome(h.render().tree);
+  const rendered=expandChrome(h.render().tree);
+  if(tab==='content') {
+   assert.equal(nodes(rendered).filter(n=>n.props?.['data-concept-image-action']==='true').length,1);
+   assert.equal(nodes(rendered).filter(n=>n.type?.name==='ConceptImageAuthoring').length,1);
+  }
+  const tree=tab==='content'?withoutConceptImageExtension(rendered):rendered;
   assert.equal(fingerprint(withoutNavigation(tree)),releasedBodies[tab],`${role}/${tab}`);
   const nav=nodes(tree).find(n=>n.props?.['aria-label']==='Creator Studio sections');
   assert.deepEqual(Array.from(nav.props.children, text),['Content','Questions','Tags','Flagged','Search']);

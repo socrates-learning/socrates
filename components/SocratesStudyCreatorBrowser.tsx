@@ -1,5 +1,8 @@
 'use client';
 
+import QuestionMediaContent from '@/components/QuestionMediaContent';
+import type { QuestionMediaHint } from '@/lib/question-media';
+
 import { useEffect, useMemo, useState } from 'react';
 import {
   buildConceptTopicTree,
@@ -7,7 +10,7 @@ import {
   findConceptTopicPath,
   type ConceptTopic,
 } from '@/lib/concept-topic-tree';
-import { MarkdownContent } from './MarkdownContent';
+import ConceptMediaContent from './ConceptMediaContent';
 import { StudyCreatorIcon as Icon } from './StudyCreatorIcon';
 import type {
   PersonalCard,
@@ -35,6 +38,7 @@ type OfficialConcept = {
 };
 
 type OfficialQuestion = {
+  question_media_hint?: QuestionMediaHint | null;
   id: string;
   concept_id: string;
   prompt: string;
@@ -902,7 +906,7 @@ export function SocratesStudyCreatorBrowser({
                 <div>
                   <span>Concept content</span>
                   <div className={styles.officialBody}>
-                    <MarkdownContent markdown={concept.bodyMarkdown} />
+                    <ConceptMediaContent markdown={concept.bodyMarkdown} conceptId={concept.id} libraryId={data?.libraryId} />
                   </div>
                 </div>
               )}
@@ -924,6 +928,7 @@ export function SocratesStudyCreatorBrowser({
           <div>
             <span>Question</span>
             <p>{question.prompt}</p>
+            <QuestionMediaContent questionId={question.id} hint={question.question_media_hint} surface="front" prompt={question.prompt} />
           </div>
           <div>
             <span>Official Concept</span>

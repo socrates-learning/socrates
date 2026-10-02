@@ -37,6 +37,11 @@ import {
   type ConceptTopic as Topic,
 } from '@/lib/concept-topic-tree';
 import { MarkdownContent, cardMarkdownSummary } from '@/components/MarkdownContent';
+import ConceptMediaContent from '@/components/ConceptMediaContent';
+import QuestionImageAuthoring, { useQuestionImageAuthoring } from '@/components/creator/QuestionImageAuthoring';
+import type { QuestionMediaHint } from '@/lib/question-media';
+import ConceptImageAuthoring, { ConceptImageWriteEditor, useConceptImageAuthoring, type ConceptImageEditorHandle } from '@/components/creator/ConceptImageAuthoring';
+import { withoutConceptMediaTokens } from '@/lib/concept-media';
 import { supabase } from '@/lib/supabase';
 import { movePersonalStructure, refreshPersonalStructure } from '@/lib/creator-personal-structure';
 import { CreatorTopicTreeInteraction, TopicDropRow, TopicDragHandle } from './CreatorTopicTreeInteraction';
@@ -167,6 +172,7 @@ export type ExistingQuestion =
   | (ExistingQuestionBase & {
       source: 'official';
       kind: 'question';
+      mediaHint?: QuestionMediaHint | null;
       difficulty: QuestionDifficulty;
       testingAngle: string;
       status: LifecycleStatus;
@@ -181,6 +187,7 @@ export type ExistingQuestion =
     });
 
 type ExistingQuestionRow = {
+  question_media_hint?: QuestionMediaHint | null;
   id: string;
   concept_id: string;
   primary_concept_name: string;
@@ -272,6 +279,7 @@ type InitialConcept = {
   name: string;
   bodyMarkdown: string;
   placementIds: string[];
+  currentVersionId?: string | null;
 };
 
 type CreatorStudioV2ClientProps = {
@@ -598,6 +606,7 @@ function mapExistingQuestionRow(
     id: question.id,
     conceptId: question.concept_id,
     primaryConceptName: question.primary_concept_name,
+    mediaHint: question.question_media_hint,
     relatedConcepts,
     relatedConceptIds: relatedConcepts.map((concept) => concept.id),
     prompt: question.prompt || '',
@@ -727,6 +736,7 @@ export function CreatorStudioV2Client({
   }
   const router = useRouter();
   const conceptEditorRef = useRef<HTMLTextAreaElement | null>(null);
+  const conceptImageEditorRef = useRef<ConceptImageEditorHandle | null>(null);
   const loadedConceptPlacementKeyRef = useRef<string | null>(null);
   const availableTagsRef = useRef<CatalogTag[]>([]);
   const resolvedTopics = initialTopics || prototypeTopics;
@@ -775,6 +785,26 @@ export function CreatorStudioV2Client({
       : 'official';
   const [conceptName, setConceptName] = useState(resolvedConcept.name);
   const [concept, setConcept] = useState(resolvedConcept.bodyMarkdown);
+  const [conceptMediaBase, setConceptMediaBase] = useState({ body: resolvedConcept.bodyMarkdown, version: initialConcept?.currentVersionId || null });
+  const conceptImages = useConceptImageAuthoring({
+    libraryId: activeLibraryId, conceptId,
+    enabled: conceptSource === 'official' && creatorAuthority.canSaveConcept,
+    source: concept, baseSource: conceptMediaBase.body, initialVersionId: conceptMediaBase.version,
+    onSource: (value, selection) => {
+      setConcept(value);
+      setStatus(null);
+      if (selection !== undefined) {
+        setEditorMode('write');
+        window.requestAnimationFrame(() => {
+          if (conceptImageEditorRef.current) conceptImageEditorRef.current.focusSelection(selection, selection);
+          else {
+            conceptEditorRef.current?.focus();
+            conceptEditorRef.current?.setSelectionRange(selection, selection);
+          }
+        });
+      }
+    },
+  });
   const [conceptRecordStatus, setConceptRecordStatus] =
     useState<LifecycleStatus>(resolvedConcept.id ? 'draft' : 'published');
   const [personalConceptSourceReference, setPersonalConceptSourceReference] =
@@ -1030,6 +1060,11 @@ export function CreatorStudioV2Client({
   const [questionPrompt, setQuestionPrompt] = useState('');
   const [questionAnswer, setQuestionAnswer] = useState('');
   const [questionExplanation, setQuestionExplanation] = useState('');
+  const [questionMediaRecord, setQuestionMediaRecord] = useState<{ hint: QuestionMediaHint | null; prompt: string; answer: string }>({ hint: null, prompt: '', answer: '' });
+  const questionImages = useQuestionImageAuthoring({
+    libraryId: activeLibraryId || '', questionId, enabled: questionSource === 'official' && creatorAuthority.canSaveQuestion,
+    hint: questionMediaRecord.hint, basePrompt: questionMediaRecord.prompt, baseAnswer: questionMediaRecord.answer,
+  });
   const [questionDifficulty, setQuestionDifficulty] =
     useState<QuestionDifficulty>('medium');
   const [questionTestingAngle, setQuestionTestingAngle] = useState(
@@ -1208,7 +1243,7 @@ export function CreatorStudioV2Client({
         return;
       }
 
-      const { data, error } = await supabase.rpc('search_creator_questions', {
+      const { data, error } = await supabase.rpc('search_creator_questions_with_media', {
         p_active_library_id: activeLibraryId,
         p_search_text: filters.text.trim() || null,
         p_difficulty: filters.difficulty || null,
@@ -1440,7 +1475,7 @@ export function CreatorStudioV2Client({
     return Object.values(referenceDraft).some((value) => value.trim());
   }, [editingReference, referenceDraft]);
   const hasQuestionDraft = Boolean(
-    questionId ||
+    (questionSource === 'official' && questionImages.dirty) || questionId ||
       personalCardEditorId ||
       questionPrompt.trim() ||
       questionAnswer.trim() ||
@@ -1455,16 +1490,17 @@ export function CreatorStudioV2Client({
   const isQuestionDirty = hasQuestionDraft &&
     (questionSource === 'personal'
       ? currentPersonalCardFingerprint !== savedPersonalCardFingerprint
-      : currentQuestionFingerprint !== savedQuestionFingerprint);
+      : currentQuestionFingerprint !== savedQuestionFingerprint || questionImages.dirty);
   const isContentDirty = conceptSource === 'personal'
     ? currentPersonalConceptFingerprint !== savedPersonalConceptFingerprint
-    : currentDraftFingerprint !== savedDraftFingerprint || hasPendingReferenceDraft;
+    : currentDraftFingerprint !== savedDraftFingerprint || hasPendingReferenceDraft || conceptImages.dirty;
   const isCurrentContentReadOnly =
     conceptSource === 'official' && !creatorAuthority.canSaveConcept;
   const isCurrentQuestionReadOnly =
     questionEditorState.mode === 'none' ||
     (questionSource === 'official' && !creatorAuthority.canSaveQuestion);
-  const isDirty =
+  const isDirty = (conceptImages.guardActive && !isCurrentContentReadOnly && isContentDirty) ||
+    (questionImages.guardActive && !isCurrentQuestionReadOnly && isQuestionDirty) ||
     (activeCreatorTab === 'content' ? !isCurrentContentReadOnly && isContentDirty :
       (activeCreatorTab === 'questions' || activeCreatorTab === 'search') ? !isCurrentQuestionReadOnly && isQuestionDirty : false);
   const visibleSaveFeedback =
@@ -2476,7 +2512,7 @@ export function CreatorStudioV2Client({
       );
     }
 
-    const { data, error } = await supabase.rpc('get_creator_questions', {
+    const { data, error } = await supabase.rpc('get_creator_questions_with_media', {
       p_active_library_id: libraryId,
       p_concept_id: conceptId,
     });
@@ -2500,6 +2536,8 @@ export function CreatorStudioV2Client({
   }
 
   function resetQuestionEditor(conceptId: string | null, preserveContext = false) {
+    questionImages.reset();
+    setQuestionMediaRecord({ hint: null, prompt: '', answer: '' });
     const difficulty = 'medium';
     const testingAngle = preserveContext ? questionTestingAngle : 'General Understanding';
     const recordStatus = 'published';
@@ -2686,6 +2724,8 @@ export function CreatorStudioV2Client({
       )
     ) return;
     if (!skipDiscardConfirmation && !confirmDiscardQuestionChanges()) return;
+    questionImages.reset();
+    setQuestionMediaRecord({ hint: null, prompt: '', answer: '' });
 
     if (question.source === 'personal' && question.conceptId === null) {
       const card = standaloneCards.find((item) => item.id === question.id && item.owner_id === initialPersonalContent.ownerId);
@@ -2743,6 +2783,7 @@ export function CreatorStudioV2Client({
       createOfficialQuestionEditorState(question.id, activeLibraryId)
     );
     setEditingQuestionPrimary({ id: question.conceptId, name: question.primaryConceptName });
+    setQuestionMediaRecord({ hint: question.mediaHint || null, prompt: question.prompt, answer: question.answer });
     setQuestionRelatedConceptIds(question.relatedConceptIds || []);
     setQuestionPrompt(question.prompt);
     setQuestionAnswer(question.answer);
@@ -3205,18 +3246,23 @@ export function CreatorStudioV2Client({
     setStatus(null);
   }
 
-  function applyMarkdownFormat(format: MarkdownFormat) {
+  function applyMarkdownFormat(format: MarkdownFormat, imageEditor?: () => ConceptImageEditorHandle | null) {
     const editor = conceptEditorRef.current;
-    const start = editor?.selectionStart ?? concept.length;
-    const end = editor?.selectionEnd ?? concept.length;
+    const imageSelection = imageEditor?.()?.selection();
+    const start = imageSelection?.start ?? editor?.selectionStart ?? concept.length;
+    const end = imageSelection?.end ?? editor?.selectionEnd ?? concept.length;
     const { source: nextConcept, selectionStart, selectionEnd } = applyMarkdownEdit(concept, start, end, format);
     setConcept(nextConcept);
     setStatus(null);
     setEditorMode('write');
 
     window.requestAnimationFrame(() => {
-      conceptEditorRef.current?.focus();
-      conceptEditorRef.current?.setSelectionRange(selectionStart, selectionEnd);
+      const imageField = imageEditor?.();
+      if (imageField) imageField.focusSelection(selectionStart, selectionEnd);
+      else {
+        conceptEditorRef.current?.focus();
+        conceptEditorRef.current?.setSelectionRange(selectionStart, selectionEnd);
+      }
     });
   }
 
@@ -3925,13 +3971,14 @@ export function CreatorStudioV2Client({
         selectedTopicIds.size > 0 ||
         references.length > 0 ||
         prerequisites.length > 0 ||
-        referenceDraftHasContent) &&
+        referenceDraftHasContent || conceptImages.dirty) &&
       !window.confirm(
         'Clear the concept draft, selected topics, prerequisites, and references?'
       )
     ) {
       return;
     }
+    conceptImages.clear();
     setConcept('');
     setConceptName('');
     setPersonalConceptSourceReference('');
@@ -4016,7 +4063,7 @@ export function CreatorStudioV2Client({
       });
       let conceptQuery = supabase
         .from('concepts')
-        .select('id, name, body_markdown, status')
+        .select('id, name, body_markdown, status, current_version_id')
         .eq('id', selectedConceptId);
       if (isLearnerReadOnly) {
         conceptQuery = conceptQuery.eq('status', 'published');
@@ -4122,6 +4169,8 @@ export function CreatorStudioV2Client({
       );
       setConceptName(loadedConcept.name);
       setConcept(loadedConcept.body_markdown || '');
+      conceptImages.reset();
+      setConceptMediaBase({ body: loadedConcept.body_markdown || '', version: loadedConcept.current_version_id || null });
       setConceptRecordStatus(
         loadedConcept.status === 'archived'
           ? 'archived'
@@ -4369,7 +4418,9 @@ export function CreatorStudioV2Client({
     router.push('/creator/concepts/new');
   }
 
-  function resetConceptEditor(placementIds: string[] = []) {
+  function resetConceptEditor(placementIds: string[] = [], abandonMedia = true) {
+    conceptImages.reset(abandonMedia);
+    setConceptMediaBase({ body: '', version: null });
     conceptSelectionGenerationRef.current += 1;
     conceptSelectionTargetKeyRef.current = `official:concept:new:${activeLibraryId}`;
     setConceptEditorState(
@@ -4827,7 +4878,7 @@ export function CreatorStudioV2Client({
     const referencesToSave = references;
     const tagIdsToSave = conceptTags.map((tag) => tag.id);
     const name =
-      conceptName.trim() || conceptNameFromMarkdown(bodyMarkdownToSave);
+      conceptName.trim() || conceptNameFromMarkdown(withoutConceptMediaTokens(bodyMarkdownToSave));
     setIsSaving(true);
     setSaveFeedback('saving');
     setStatus(null);
@@ -4842,9 +4893,7 @@ export function CreatorStudioV2Client({
       },
       creatorAuthority
     );
-    const { data, error } = await supabase.rpc(
-      command.rpc,
-      {
+    const savePayload = {
       p_concept_id: conceptIdToSave,
       p_name: name,
       p_body_markdown: bodyMarkdownToSave,
@@ -4865,8 +4914,10 @@ export function CreatorStudioV2Client({
           target_id: prerequisite.targetId,
           strength: prerequisite.strength,
         })),
-      }
-    );
+      };
+    const { data, error } = conceptImages.usesMedia
+      ? await conceptImages.save(savePayload)
+      : await supabase.rpc(command.rpc, savePayload);
 
     if (error) {
       setIsSaving(false);
@@ -4995,6 +5046,8 @@ export function CreatorStudioV2Client({
     setIsSaving(false);
     setSaveFeedback('saved');
 
+    const savedImageCount = conceptImages.usesMedia ? (data as { placements?: unknown[] }).placements?.length || 0 : 0;
+    const mediaSaveMessage = savedImageCount ? `Concept saved with ${savedImageCount === 1 ? 'image' : 'images'}` : '';
     if (wasNewConcept) {
       // Update the local browser immediately without remounting and losing context.
       setQuestionConceptsByTopicId((current) => {
@@ -5007,10 +5060,11 @@ export function CreatorStudioV2Client({
         }
         return next;
       });
-      resetConceptEditor(placementIdsToSave);
+      resetConceptEditor(placementIdsToSave, false);
       window.history.replaceState(window.history.state, '', '/creator/concepts/new');
-      showStatus('success', `“${name}” saved as ${conceptRecordStatus}. Ready for another Concept.`);
+      showStatus('success', mediaSaveMessage ? `${mediaSaveMessage}. Ready for another Concept.` : `“${name}” saved as ${conceptRecordStatus}. Ready for another Concept.`);
     } else {
+      if (mediaSaveMessage) showStatus('success', mediaSaveMessage);
       router.refresh();
     }
   }
@@ -5018,7 +5072,7 @@ export function CreatorStudioV2Client({
   async function saveQuestion(
     saveState: CreatorQuestionEditorState = questionEditorState
   ) {
-    if (isSaving || isSavingQuestion) return;
+    if (isSaving || isSavingQuestion || questionImages.pending || questionImages.inspector) return;
     const saveTargetKey = questionEditorIdentityKey(saveState);
     const isSaveTargetCurrent = () =>
       questionEditorIdentityKey(questionEditorStateRef.current) === saveTargetKey;
@@ -5078,7 +5132,7 @@ export function CreatorStudioV2Client({
       },
       creatorAuthority
     );
-    const { data, error } = await supabase.rpc(command.rpc, {
+    const savePayload = {
       p_question_id: questionIdToSave,
       p_concept_id: primaryConceptId,
       p_active_library_id: activeLibraryId,
@@ -5090,7 +5144,10 @@ export function CreatorStudioV2Client({
       p_options: null,
       p_source_ids: null,
       p_tag_ids: questionTags.map((tag) => tag.id),
-    });
+    };
+    const { data, error } = questionImages.usesMedia
+      ? await questionImages.save(savePayload)
+      : await supabase.rpc(command.rpc, savePayload);
 
     if (error) {
       setIsSavingQuestion(false);
@@ -5143,6 +5200,9 @@ export function CreatorStudioV2Client({
         setQuestionAnswer(answer);
         setQuestionTestingAngle(testingAngle);
         setSavedQuestionFingerprint(nextFingerprint);
+        if (questionImages.usesMedia && data?.current_version_id) {
+          setQuestionMediaRecord({ hint: { questionId: savedQuestionId, libraryId: activeLibraryId || '', versionId: data.current_version_id, front: data.placements.some((p: { surface: string }) => p.surface === 'front'), answer: data.placements.some((p: { surface: string }) => p.surface === 'answer') }, prompt, answer });
+        } else setQuestionMediaRecord({ hint: null, prompt, answer });
       }
     }
     const refreshTasks: Array<Promise<unknown>> = [
@@ -6890,13 +6950,15 @@ export function CreatorStudioV2Client({
                   ['numbered-list', 'Numbered List'],
                   ['link', 'Link'],
                   ['quote', 'Quote'],
+                  ...(conceptSource === 'official' && creatorAuthority.canSaveConcept ? [['image', 'Image']] : []),
                 ].map(([format, label]) => (
                   <button
                     className={styles.toolButton}
                     key={format}
                     type="button"
-                    disabled={isCurrentContentReadOnly}
-                    onClick={() => applyMarkdownFormat(format as MarkdownFormat)}
+                    disabled={isCurrentContentReadOnly || (format === 'image' && (isSaving || conceptImages.pending))}
+                    data-concept-image-action={format === 'image' ? 'true' : undefined}
+                    onClick={() => format === 'image' ? conceptImages.open(conceptImageEditorRef.current?.selection().end ?? conceptEditorRef.current?.selectionEnd ?? concept.length) : applyMarkdownFormat(format as MarkdownFormat, () => conceptImageEditorRef.current)}
                   >
                     {label}
                   </button>
@@ -6917,7 +6979,12 @@ export function CreatorStudioV2Client({
                   </button>
                 ))}
               </div>
+              {conceptSource === 'official' && creatorAuthority.canSaveConcept ? <ConceptImageAuthoring controller={conceptImages} disabled={isSaving} /> : null}
               {editorMode === 'write' ? (
+                conceptSource === 'official' && concept.includes('[[socrates-media:') ? (
+                  <ConceptImageWriteEditor source={concept} controller={conceptImages} disabled={isCurrentContentReadOnly || isSaving}
+                    className={styles.conceptEditor} editorRef={conceptImageEditorRef} onChange={value => { setConcept(value); setStatus(null); }} />
+                ) : (
                 <textarea
                   ref={conceptEditorRef}
                   className={styles.conceptEditor}
@@ -6931,6 +6998,7 @@ export function CreatorStudioV2Client({
                   placeholder="Write your concept or explanation here..."
                   aria-label="Concept or explanation"
                 />
+                )
               ) : (
                 <div
                   className={styles.conceptEditor}
@@ -6941,13 +7009,15 @@ export function CreatorStudioV2Client({
                   aria-label="Concept preview"
                 >
                   {concept.trim() ? (
-                    <MarkdownContent markdown={concept} />
+                    conceptSource === 'official' && conceptImages.usesMedia
+                      ? <ConceptMediaContent markdown={concept} conceptId={conceptId} libraryId={activeLibraryId} context={conceptImages.context} placements={conceptImages.items} />
+                      : <MarkdownContent markdown={concept} />
                   ) : (
                     <p className="muted">Nothing to preview yet.</p>
                   )}
                 </div>
               )}
-              <div className={styles.wordCount}>Word count: {wordCount(concept)}</div>
+              <div className={styles.wordCount}>Word count: {wordCount(conceptSource === 'official' ? withoutConceptMediaTokens(concept) : concept)}</div>
                   </>)}
                 </section>
 
@@ -7767,7 +7837,7 @@ export function CreatorStudioV2Client({
                       className={styles.conceptEditor}
                       style={{ minHeight: 180 }}
                       value={questionPrompt}
-                      readOnly={isCurrentQuestionReadOnly}
+                      readOnly={isCurrentQuestionReadOnly || (questionSource === 'official' && questionImages.uncertain)}
                       disabled={isSavingQuestion}
                       onChange={(event) => {
                         setQuestionPrompt(event.target.value);
@@ -7778,13 +7848,15 @@ export function CreatorStudioV2Client({
                     />
                   </label>
 
+                  {questionSource === 'official' && creatorAuthority.canSaveQuestion && <QuestionImageAuthoring controller={questionImages} surface="front" disabled={isSavingQuestion} />}
+
                   <label style={{ display: 'grid', gap: 8, marginTop: 18 }}>
                     <strong>Answer</strong>
                     <textarea
                       className={styles.conceptEditor}
                       style={{ minHeight: 180 }}
                       value={questionAnswer}
-                      readOnly={isCurrentQuestionReadOnly}
+                      readOnly={isCurrentQuestionReadOnly || (questionSource === 'official' && questionImages.uncertain)}
                       disabled={isSavingQuestion}
                       onChange={(event) => {
                         setQuestionAnswer(event.target.value);
@@ -7795,6 +7867,8 @@ export function CreatorStudioV2Client({
                     />
                   </label>
 
+
+                  {questionSource === 'official' && creatorAuthority.canSaveQuestion && <QuestionImageAuthoring controller={questionImages} surface="answer" disabled={isSavingQuestion} />}
 
                   {questionSource === 'personal' && (
                     <label className={styles.personalField} style={{ marginTop: 18 }}>

@@ -1,3 +1,4 @@
+import { questionContentBoundary } from './fixtures/question-media-authoring.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
@@ -26,7 +27,7 @@ function flagged(source, neutralPresentation = true) {
   const modules = {
     react: { useState: () => [states[cursor++], () => {}], useMemo: fn => fn(), useCallback: fn => fn, useEffect() {} },
     'react/jsx-runtime': { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }) },
-    '@/lib/supabase': { supabase: {} },
+    '@/components/QuestionMediaContent': questionContentBoundary, '@/lib/supabase': { supabase: {} },
     '@/components/MarkdownContent': { cardMarkdownSummary: source => source, MarkdownContent: 'markdown' },
     './StudyCreatorIcon': { StudyCreatorIcon: 'icon' },
     './StudyCreatorClient.module.css': { __esModule: true, default: new Proxy({}, { get: (_target, key) => String(key) }) },

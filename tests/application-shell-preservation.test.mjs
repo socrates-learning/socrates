@@ -29,13 +29,27 @@ test('Home photo, header, desktop rail, natural scroll and Creator grid boundari
   assert.match(creator, /minmax\(330px, 0.82fr\) minmax\(560px, 1.18fr\)/);
   assert.match(creator, /@media \(max-width: 1120px\)/);
 });
-test('active Study/Cram render branch stays literally unchanged and has no application rail', () => {
+test('active Study/Cram matches the released branch after projecting only approved media presentation and has no application rail', () => {
   const planner = read('components/StudyPlanner.tsx');
   const a = planner.indexOf("  if (mode === 'study') {", planner.indexOf('if (!deck)'));
   const b = planner.indexOf('\n  return (\n    <>\n      <LearnerHeader classPrefix="home-v2"', a);
   assert.ok(a >= 0 && b > a);
   const study = planner.slice(a,b);
-  assert.equal(hash(study), 'a66d35e0842261e8a458ebffeacc0a70120710c7d3d250588d2ed10248a88048');
+  const mediaReview = '<ConceptMediaContent markdown={conceptReview.bodyMarkdown} conceptId={conceptReview.conceptId} libraryId={activeLibrary?.id} />';
+  assert.equal(study.split(mediaReview).length - 1, 1, 'Exactly the approved Concept Review body receives actual Concept and Library context');
+  let releasedStudy = study.replace(mediaReview, '<MarkdownContent markdown={conceptReview.bodyMarkdown} />');
+  for (const [surface, count] of [['front', 2], ['answer', 1]]) {
+    const expression = `{studyCandidate?.kind === 'official' && <QuestionMediaContent questionId={studyCandidate.questionId} hint={studyCandidate.mediaHint} surface="${surface}" prompt={studyCandidate.prompt} answer={studyCandidate.answer} presentation="study" />}`;
+    assert.equal(study.split(expression).length - 1, count, 'Only the three approved, actual-candidate image siblings are projected');
+    releasedStudy = releasedStudy.split('\n').filter(line => line.trim() !== expression).join('\n');
+  }
+  const front = '<div className="study-v2-question-content" style={studyCandidate?.kind === \'official\' && studyCandidate.mediaHint?.front ? { justifyContent: \'flex-start\' } : undefined}>';
+  const heading = '<h1 style={studyCandidate?.kind === \'official\' && studyCandidate.mediaHint?.front ? { margin: \'0 auto\', flexShrink: 0 } : undefined}>{studyCandidate?.prompt}</h1>';
+  for (const expression of [front, heading]) assert.equal(study.split(expression).length - 1, 1, 'Only the exact official-media Front alignment is projected');
+  assert.ok(study.indexOf(front) > study.indexOf(') : !isAnswerVisible ? ('));
+  assert.ok(study.indexOf(heading) < study.indexOf('className="study-v2-answer-body"'));
+  releasedStudy = releasedStudy.replace(front, '<div className="study-v2-question-content">').replace(heading, '<h1>{studyCandidate?.prompt}</h1>');
+  assert.equal(hash(releasedStudy), 'a66d35e0842261e8a458ebffeacc0a70120710c7d3d250588d2ed10248a88048');
   assert.doesNotMatch(study, /HomeRail|SocratesShell|ApplicationNavigation/);
 });
 

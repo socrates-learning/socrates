@@ -6,10 +6,11 @@ import { ConceptNotes } from '@/components/ConceptNotes';
 import { ConceptReview } from '@/components/ConceptReview';
 import { ConceptDistinctions } from '@/components/ConceptDistinctions';
 import { ConceptNetwork } from '@/components/ConceptNetwork';
-import { MarkdownContent } from '@/components/MarkdownContent';
+import ConceptMediaContent from '@/components/ConceptMediaContent';
 
 export function ConceptTabs({
   conceptId,
+  libraryId,
   conceptName,
   summary,
   whyItMatters,
@@ -22,6 +23,7 @@ export function ConceptTabs({
   canCreate,
 }: {
   conceptId: string;
+  libraryId?: string | null;
   conceptName: string;
   summary: string | null;
   whyItMatters: string | null;
@@ -118,7 +120,7 @@ export function ConceptTabs({
         <div className="grid">
           {hasMarkdownBody ? (
             <div className="card" style={{ gridColumn: '1 / -1' }}>
-              <MarkdownContent markdown={bodyMarkdown || ''} />
+              <ConceptMediaContent markdown={bodyMarkdown || ''} conceptId={conceptId} libraryId={libraryId} />
             </div>
           ) : (
             <>

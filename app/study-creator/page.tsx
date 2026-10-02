@@ -142,7 +142,7 @@ export default async function StudyCreatorPage() {
       ? await supabase
           .from('questions')
           .select(
-            'id, concept_id, prompt, explanation, difficulty, testing_angle, question_type, status, sort_order, created_at'
+            'id, concept_id, prompt, explanation, difficulty, testing_angle, question_type, status, sort_order, created_at, question_media_hint'
           )
           .in('concept_id', conceptIds)
           .eq('status', 'published')

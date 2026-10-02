@@ -405,6 +405,7 @@ export default async function ConceptPage({
 
           <ConceptTabs
             conceptId={concept.id}
+            libraryId={activeLibrary?.id}
             conceptName={concept.name}
             summary={concept.summary}
             whyItMatters={concept.why_it_matters}

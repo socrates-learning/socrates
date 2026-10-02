@@ -157,7 +157,7 @@ test('current official section-switch limitation: draft retained without prompt,
 });
 test('Existing Questions maps Primary/Related and accepted-answer order without reordering server results', async () => {
     const rows = [row({ id: 'new', concept_id: 'primary', created_at: '2026-02-01', question_accepted_answers: [{ answer_text: 'Second', sort_order: 1 }, { answer_text: 'First', sort_order: 0 }] }), row({ id: 'old', concept_id: 'other', related_concepts: [{ id: 'primary', name: 'Primary' }], created_at: '2026-01-01' })];
-    const h = questions({ response: name => name === 'get_creator_questions' ? { data: rows, error: null } : undefined });
+    const h = questions({ response: name => name === 'get_creator_questions_with_media' ? { data: rows, error: null } : undefined });
     h.render().selectQuestionConcept('primary', 'topic');
     await settle();
     let e = h.render();
@@ -173,13 +173,13 @@ test('Existing Questions maps Primary/Related and accepted-answer order without 
     const css = read('components/CreatorStudioV2Client.module.css');
     assert.match(css, /\.existingQuestionList\s*\{[^}]*max-height:[^}]*overflow:\s*auto/s);
 });
-test('Existing Questions empty/error readback does not invent results', async () => { const h = questions({ response: name => name === 'get_creator_questions' ? { data: null, error: { message: 'No access' } } : undefined }); assert.equal(await h.render().fetchExistingQuestions('primary', 'library'), null); h.render().setQuestionConceptId('primary'); assert.match(text(expandChrome(h.render().tree)), /No questions yet/); });
+test('Existing Questions empty/error readback does not invent results', async () => { const h = questions({ response: name => name === 'get_creator_questions_with_media' ? { data: null, error: { message: 'No access' } } : undefined }); assert.equal(await h.render().fetchExistingQuestions('primary', 'library'), null); h.render().setQuestionConceptId('primary'); assert.match(text(expandChrome(h.render().tree)), /No questions yet/); });
 test('search forwards all filters and keyset bounds; deduplicates source-qualified identities', async () => {
     const rows = Array.from({ length: 51 }, (_, i) => row({ id: i === 0 ? 'mine-card' : `q${i}`, created_at: `2026-02-${String(28 - Math.floor(i / 2)).padStart(2, '0')}` }));
-    const h = questions({ response: name => name === 'search_creator_questions' ? { data: rows, error: null } : undefined });
+    const h = questions({ response: name => name === 'search_creator_questions_with_media' ? { data: rows, error: null } : undefined });
     const filters = { ...emptyFilters, text: ' Question ', difficulty: 'hard', primaryTestingAngle: 'Priority', additionalTestingAngle: 'Safety', primaryConceptId: 'primary', relatedConceptId: 'related', status: 'published', tagId: 'tag' };
     await h.render().loadQuestionSearchPage(filters, null, false);
-    const p = h.calls.find(c => c.name === 'search_creator_questions').payload;
+    const p = h.calls.find(c => c.name === 'search_creator_questions_with_media').payload;
     assert.deepEqual(plain(p), { p_active_library_id: 'library', p_search_text: 'Question', p_difficulty: 'hard', p_primary_testing_angle: 'Priority', p_additional_testing_angle: 'Safety', p_primary_concept_id: 'primary', p_related_concept_id: 'related', p_status: 'published', p_tag_id: 'tag', p_page_size: 50, p_before_created_at: null, p_before_id: null });
     let e = h.render();
     assert.equal(e.questionSearchResults.length, 50);
@@ -196,7 +196,7 @@ test('search forwards all filters and keyset bounds; deduplicates source-qualifi
 test('search selection resolves actual Primary/topic; same-selected identity retains dirty edits', () => { const h = questions(); let e = h.render(); e.setQuestionConceptsByTopicId({ topic: [{ id: 'primary', name: 'Primary' }] }); e = h.render(); e.selectQuestionSearchResult(question()); e = h.render(); assert.equal(e.questionConceptId, 'primary'); assert.equal(e.questionTopicId, 'topic'); e.setQuestionPrompt('Unsaved'); h.render().selectQuestionSearchResult(question()); assert.equal(h.render().questionPrompt, 'Unsaved'); assert.equal(h.confirmations.length, 0); });
 test('newer Library search request wins over stale completion', async () => {
     const pending = [];
-    const h = questions({ response: name => name === 'search_creator_questions' ? new Promise(resolve => pending.push(resolve)) : undefined });
+    const h = questions({ response: name => name === 'search_creator_questions_with_media' ? new Promise(resolve => pending.push(resolve)) : undefined });
     const old = h.render().loadQuestionSearchPage(emptyFilters, null, false);
     h.props.activeLibraryId = 'next-library';
     h.props.creatorCapabilities = deriveCreatorCapabilities({ userId: 'owner', role: 'admin', library: { activeLibraryId: 'next-library', canAccessActiveLibrary: true, canManageActiveLibrary: true } });
@@ -265,7 +265,7 @@ test('learner and second learner authority cannot become staff through navigatio
     const h = editor({ role: 'learner', placed: true });
     const tabs = nodes(h.render().tree).find(n => n.type?.name === 'CreatorStudioTabs');
     assert.deepEqual(nodes(expandChrome(tabs)).filter(n => n.type === 'button').map(n => text(n)), ['Questions', 'Flagged']);
-    assert.equal(h.reads.filter(r => r.rpc === 'search_creator_questions').length, 0);
+    assert.equal(h.reads.filter(r => r.rpc === 'search_creator_questions_with_media').length, 0);
     assert.throws(() => deriveCreatorCapabilities({ userId: '', role: 'learner', library: { activeLibraryId: null, canAccessActiveLibrary: false, canManageActiveLibrary: false } }), /verified user ID/);
     const route = read('app/creator/concepts/new/page.tsx');
     assert.match(route, /redirect\(['"]\/login/);
@@ -307,7 +307,7 @@ test('search effect is staff Search-only and initializes once per Library', asyn
         h.render();
         h.runEffect('questionSearchLibraryRef.current ===');
         await settle();
-        assert.equal(h.reads.filter(r => r.rpc === 'search_creator_questions').length, 0);
+        assert.equal(h.reads.filter(r => r.rpc === 'search_creator_questions_with_media').length, 0);
         h.render().setActiveCreatorTab('search');
         h.render();
         h.runEffect('questionSearchLibraryRef.current ===');
@@ -315,7 +315,7 @@ test('search effect is staff Search-only and initializes once per Library', asyn
         h.render();
         h.runEffect('questionSearchLibraryRef.current ===');
         await settle();
-        assert.equal(h.reads.filter(r => r.rpc === 'search_creator_questions').length, role === 'learner' ? 0 : 1);
+        assert.equal(h.reads.filter(r => r.rpc === 'search_creator_questions_with_media').length, role === 'learner' ? 0 : 1);
     }
 });
 test('missing Library read authority rejects before rendering or search dispatch', () => {
@@ -327,7 +327,7 @@ test('missing Library read authority rejects before rendering or search dispatch
 });
 test('search failure clears a fresh page but retains loaded rows on append failure', async () => {
     let fail = false;
-    const h = questions({ response: name => name === 'search_creator_questions' ? (fail ? { data: null, error: { message: 'Synthetic search failure' } } : { data: [row()], error: null }) : undefined });
+    const h = questions({ response: name => name === 'search_creator_questions_with_media' ? (fail ? { data: null, error: { message: 'Synthetic search failure' } } : { data: [row()], error: null }) : undefined });
     await h.render().loadQuestionSearchPage(emptyFilters, null, false);
     fail = true;
     await h.render().loadQuestionSearchPage(emptyFilters, { id: 'q1', createdAt: '2026-01-02' }, true);
@@ -404,7 +404,7 @@ test('staff without manageable Library cannot dispatch official save', async () 
 });
 test('Existing Questions effect cleanup blocks stale completion; failed current load shows error', async () => {
     const pending = [];
-    const h = questions({ response: name => name === 'get_creator_questions' ? new Promise(resolve => pending.push(resolve)) : undefined });
+    const h = questions({ response: name => name === 'get_creator_questions_with_media' ? new Promise(resolve => pending.push(resolve)) : undefined });
     h.render().setQuestionConceptId('primary');
     h.render();
     const cleanup = h.runEffect('async function loadExistingQuestions');
@@ -422,7 +422,7 @@ test('Existing Questions effect cleanup blocks stale completion; failed current 
     assert.match(h.render().questionStatus.message, /Existing questions could not be loaded/);
 });
 test('search submit, clear and Load More dispatch applied filters exactly once', async () => {
-    const h = questions({ response: name => name === 'search_creator_questions' ? { data: Array.from({ length: 51 }, (_, i) => row({ id: 'q' + i })), error: null } : undefined });
+    const h = questions({ response: name => name === 'search_creator_questions_with_media' ? { data: Array.from({ length: 51 }, (_, i) => row({ id: 'q' + i })), error: null } : undefined });
     let e = h.render();
     e.setQuestionSearchFilters({ ...emptyFilters, text: 'needle' });
     let prevented = 0;
@@ -433,13 +433,13 @@ test('search submit, clear and Load More dispatch applied filters exactly once',
     e.setQuestionSearchFilters({ ...emptyFilters, text: 'not applied' });
     h.render().loadMoreQuestionSearchResults();
     await settle();
-    let calls = h.calls.filter(c => c.name === 'search_creator_questions');
+    let calls = h.calls.filter(c => c.name === 'search_creator_questions_with_media');
     assert.equal(calls.length, 2);
     assert.equal(calls[1].payload.p_search_text, 'needle');
     assert.equal(calls[1].payload.p_before_id, 'q49');
     h.render().clearQuestionSearch();
     await settle();
-    calls = h.calls.filter(c => c.name === 'search_creator_questions');
+    calls = h.calls.filter(c => c.name === 'search_creator_questions_with_media');
     assert.equal(calls.length, 3);
     assert.equal(calls[2].payload.p_search_text, null);
     assert.equal(h.render().questionSearchFilters.text, '');
