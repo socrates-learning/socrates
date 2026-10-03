@@ -71,17 +71,21 @@ test('retry after permanent deletion returns the terminal identity without recre
   assert.equal(result.assetId, 'deleted'); assert.equal(result.ready, false); assert.equal(result.terminal, true); assert.equal(result.state, 'deleted');
   assert.deepEqual(h.calls, ['claim', 'body']);
 });
-function cleanupHarness({ status = '404', removalError = false, unresolved = false } = {}) {
-  const calls = [];
+function cleanupHarness({ status = '404', removalError = false, unresolved = false, cached = false, transport = false } = {}) {
+  const calls = [], observations = [];
   const rpc = async (_client, _name, args) => {
     calls.push(args.p_action);
     if (args.p_action.endsWith('claim')) return { eligible: true, token: 'cleanup-token', bucket: 'private', object: 'unique' };
     assert.equal(args.p_token, 'cleanup-token');
     return { cleaned: !unresolved, observedAbsent: true, unresolved };
   };
-  const client = { storage: { from: () => ({ remove: async () => { calls.push('remove'); return { error: removalError ? new Error('uncertain') : null }; }, download: async () => { calls.push('absence'); return { error: { statusCode: status } }; } }) } };
+  const client = { storage: { from: () => ({ remove: async () => { calls.push('remove'); return { error: removalError ? new Error('uncertain') : null }; }, download: async (...args) => {
+    calls.push('absence'); observations.push(args);
+    if (transport) throw Error('Transport unavailable');
+    return cached ? { data: new Blob(['cached bytes']), error: null } : { error: { statusCode: status } };
+  } }) } };
   const cleanup = loadMediaModule('lib/content-media/cleanup.ts', { 'server-only': {}, './server': { rpc, MediaError } });
-  return { calls, client, cleanup };
+  return { calls, observations, client, cleanup };
 }
 test('temporary cleanup preserves unresolved outcomes instead of claiming physical closure', async () => {
   const h = cleanupHarness({ unresolved: true });
@@ -105,3 +109,23 @@ test('ordinary durable cleanup confirms absence before finalizing, and a lost re
   await assert.rejects(uncertain.cleanup.deleteOrphan(uncertain.client, 'asset'));
   assert.deepEqual(uncertain.calls, ['claim', 'remove', 'retry']);
 });
+test('both deletion reads bypass caches with fresh independent nonces and no-store', async () => {
+  const h = cleanupHarness();
+  await h.cleanup.cleanTemporary(h.client, 'attempt'); await h.cleanup.deleteOrphan(h.client, 'asset'); await h.cleanup.cleanTemporary(h.client, 'attempt');
+  const nonces = h.observations.map(([path, options, fetchOptions]) => {
+    assert.equal(path, 'unique'); assert.equal(fetchOptions.cache, 'no-store');
+    assert.match(options.cacheNonce, /^[0-9a-f-]{36}$/); assert.notEqual(options.cacheNonce, 'cleanup-token');
+    return options.cacheNonce;
+  });
+  assert.equal(new Set(nonces).size, 3);
+});
+for (const temporary of [true, false]) for (const failure of ['cached', '401', '403', '500', '503', 'malformed', 'transport']) {
+  test(`${temporary ? 'temporary' : 'durable'} ${failure} verification never treats deletion success as absence`, async () => {
+    const h = cleanupHarness({ status: failure === 'malformed' ? undefined : failure, cached: failure === 'cached', transport: failure === 'transport' });
+    // Explicitly absent statusCode, rather than relying on a default 404.
+    if (failure === 'malformed') h.client.storage.from = () => ({ remove: async () => ({ error: null }), download: async () => ({ error: {} }) });
+    await assert.rejects(temporary ? h.cleanup.cleanTemporary(h.client, 'attempt') : h.cleanup.deleteOrphan(h.client, 'asset'));
+    assert.equal(h.calls.at(-1), temporary ? 'temporary-retry' : 'retry');
+    assert.ok(!h.calls.includes('complete') && !h.calls.includes('temporary-observe'));
+  });
+}

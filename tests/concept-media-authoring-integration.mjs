@@ -6,7 +6,7 @@ import { execFileSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 import { createClient } from '@supabase/supabase-js';
 import { loadMediaModule, sampleImage } from './fixtures/content-media-images.mjs';
-import { loadConceptModule, ids, conceptMedia } from './fixtures/concept-media-authoring.mjs';
+import { loadConceptModule, ids, conceptMedia, hookHarness, jsx } from './fixtures/concept-media-authoring.mjs';
 
 const url = process.env.MEDIA_DISPOSABLE_URL;
 if (url !== 'http://127.0.0.1:56991' || process.env.MEDIA_DISPOSABLE_ACK !== 'media112-only') throw Error('Explicit isolated media112 environment required');
@@ -33,6 +33,73 @@ const record = name => { evidence.checks.push(name); console.log('PASS', name); 
 const snapshot = () => sql("select jsonb_build_object('users',(select count(*) from auth.users),'concepts',(select count(*) from concepts),'versions',(select count(*) from concept_versions),'objects',(select jsonb_agg(name order by name) from storage.objects));");
 const before = JSON.parse(snapshot());
 let concept, version;
+async function controllerRecovery() {
+  let savedConcept = null, manifest = null;
+  const owned = [];
+  try {
+    for (const editing of [false, true]) {
+      const hooks = hookHarness(), requests = [];
+      let draftId = null;
+      const props = { libraryId: ids.library, conceptId: savedConcept, enabled: true, source: manifest?.bodyMarkdown || '# ZZ LIFECYCLE RECOVERY', baseSource: manifest?.bodyMarkdown || '', initialVersionId: manifest?.versionId || null };
+      props.onSource = value => { props.source = value; };
+      const authoring = loadConceptModule('components/creator/ConceptImageAuthoring.tsx', { react: hooks.hooks, 'react/jsx-runtime': jsx, '@/lib/concept-media': conceptMedia, '@/components/ConceptMediaContent': {}, '@/components/ConceptMedia.module.css': {} }, { crypto: { randomUUID }, fetch: async (path, init = {}) => {
+        const body = typeof init.body === 'string' ? JSON.parse(init.body) : null;
+        const reservation = path.split('?')[0].split('/').at(-1);
+        requests.push({ method: init.method, action: body?.action, reservation });
+        try {
+          let result;
+          if (body?.action === 'create') {
+            draftId = body.draftId; result = await rpc(client, 'm114_draft', { p_actor: ids.admin, p_library: ids.library, p_draft: draftId, p_action: 'create' });
+          } else if (body?.action === 'reserve' || path === '/api/content-media/reservations') {
+            result = await rpc(client, editing ? 'm113_reserve' : 'm114_reserve', { p_actor: ids.admin, p_library: ids.library, p_key: body.idempotencyKey, ...(editing ? { p_kind: 'concept', p_target: savedConcept } : { p_draft: draftId }) });
+            owned.push({ id: result.reservationId, rpc: editing ? 'm113_upload' : 'm114_upload' });
+          } else if (init.method === 'PUT') {
+            result = await (editing ? existing.uploadImage : service.uploadConceptDraft)(client, actor, reservation, new Request(url, { method: 'PUT', body: init.body, signal: init.signal })); evidence.assets.push(result.assetId);
+          } else if (init.method === 'DELETE') result = await rpc(client, editing ? 'm113_upload' : 'm114_upload', { p_actor: ids.admin, p_library: ids.library, p_reservation: reservation, p_action: 'cancel' });
+          else if (path.includes('metadata=1')) result = (await service.conceptPreview(client, actor, savedConcept, draftId, reservation, true)).metadata;
+          else if (body?.action === 'save') result = await service.saveConceptImages(ids.library, savedConcept, draftId, body.versionId, body.payload);
+          else result = await rpc(client, 'm114_manifest', { p_actor: ids.admin, p_library: ids.library, p_concept: savedConcept });
+          return Response.json(result);
+        } catch (error) { return Response.json({ error: error.message }, { status: error.status || 422 }); }
+      } });
+      const render = () => hooks.render(() => authoring.useConceptImageAuthoring(props));
+      render(); hooks.effects();
+      while (render().pending) await new Promise(resolve => setTimeout(resolve, 5));
+      assert.equal(render().error, '');
+      render().open(props.source.length, editing ? render().items[0] : undefined, editing);
+      const start = owned.length;
+      for (let i = 0; i < 2; i++) { await render().upload(new Blob(['malformed'])); assert.match(render().error, /format or limits rejected/); }
+      assert.equal(requests.filter(r => r.method === 'DELETE').length, 0);
+      await render().upload(new Blob([await sampleImage()])); render().changeMetadata('alt', 'ZZ recovered Concept image'); render().insert();
+      const current = render().items[0];
+      const payload = { p_concept_id: savedConcept, p_name: 'ZZ LIFECYCLE RECOVERY', p_body_markdown: props.source, p_active_library_id: ids.library, p_library_node_ids: [ids.topic], p_tag_ids: [], p_status: 'published', p_references: [], p_prerequisites: [] };
+      if (!editing) {
+        const unknown = await rpc(client, 'm114_reserve', { p_actor: ids.admin, p_library: ids.library, p_draft: draftId, p_key: randomUUID() });
+        owned.push({ id: unknown.reservationId, rpc: 'm114_upload' });
+        assert.ok((await render().save(payload)).error, 'Unknown unresolved reservation must still block first save');
+        assert.equal(sql(`select state from media_service_operations where id='${unknown.reservationId}';`), 'pending');
+        assert.ok(!requests.some(r => r.method === 'DELETE' && r.reservation === unknown.reservationId));
+        await rpc(client, 'm114_upload', { p_actor: ids.admin, p_library: ids.library, p_reservation: unknown.reservationId, p_action: 'cancel' });
+      }
+      const saved = await render().save(payload); assert.equal(saved.error, null); savedConcept = saved.data.concept_id;
+      for (const failure of owned.slice(start, start + 2)) assert.equal(sql(`select state from media_service_operations where id='${failure.id}';`), 'cancelled');
+      const fresh = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+      const previous = manifest;
+      manifest = await rpc(fresh, 'm114_manifest', { p_actor: ids.admin, p_library: ids.library, p_concept: savedConcept });
+      assert.equal(manifest.bodyMarkdown, props.source); assert.equal(manifest.placements.length, 1); assert.equal(manifest.placements[0].assetId, current.assetId);
+      assert.equal(manifest.placements[0].altText, 'ZZ recovered Concept image');
+      if (previous) assert.equal(sql(`select asset_id from media_version_references where concept_version_id='${previous.versionId}';`), previous.placements[0].assetId);
+      record(`${editing ? 'existing' : 'new'} real Concept controller: repeated malformed -> valid -> Insert -> confirmed obsolete cancellation -> Save -> fresh readback`);
+    }
+  } finally {
+    for (const r of owned) await rpc(client, r.rpc, { p_actor: ids.admin, p_library: ids.library, p_reservation: r.id, p_action: 'cancel' });
+    if (savedConcept) sql(`begin;select set_config('request.jwt.claim.sub','${ids.admin}',true);select public.delete_development_content('concept','${savedConcept}');commit;`);
+    for (const r of owned) {
+      const attempts = JSON.parse(sql(`select coalesce(jsonb_agg(id),'[]') from media_service_operations where parent_id='${r.id}' and operation_type='staging';`));
+      for (const id of attempts) await cleanup.cleanTemporary(client, id);
+    }
+  }
+}
 try {
   const p = { p_actor: ids.admin, p_library: ids.library, p_draft: evidence.draft };
   await rpc(client, 'm114_draft', { ...p, p_action: 'create' });
@@ -94,6 +161,7 @@ try {
   await rpc(client, 'm114_draft', { ...p, p_draft: abandoned, p_action: 'abandon' });
   await assert.rejects(service.uploadConceptDraft(client, actor, unused.reservationId, request(input)));
   record('abandoned unsaved draft cannot upload or create a Concept');
+  await controllerRecovery();
 } finally {
   for (let i = 0; i < evidence.reservations.length; i++) await rpc(client, i === 0 ? 'm114_upload' : 'm113_upload', { p_actor: ids.admin, p_library: ids.library, p_reservation: evidence.reservations[i], p_action: 'cancel' }).catch(() => undefined);
   // Respect real orphan grace. Record pending ordinary maintenance explicitly.
@@ -101,7 +169,10 @@ try {
     await cleanup.deleteOrphan(client, asset);
     evidence.gracePending.push(JSON.parse(sql(`select row_to_json(x) from (select id,state,unreferenced_since,unreferenced_since+interval '24 hours' eligible_at from media_assets where id='${asset}') x;`)));
   }
-  await cleanup.cleanTemporaryBatch(client);
+  for (const reservation of evidence.reservations) {
+    const attempts = JSON.parse(sql(`select coalesce(jsonb_agg(id),'[]') from media_service_operations where parent_id='${reservation}' and operation_type='staging';`));
+    for (const id of attempts) await cleanup.cleanTemporary(client, id);
+  }
   evidence.after = JSON.parse(snapshot()); evidence.before = before;
   if (process.env.MEDIA_DISPOSABLE_REPORT) writeFileSync(process.env.MEDIA_DISPOSABLE_REPORT, JSON.stringify(evidence, null, 2));
 }

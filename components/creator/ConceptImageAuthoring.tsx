@@ -57,9 +57,23 @@ export function useConceptImageAuthoring({ libraryId, conceptId, enabled, source
     return () => controller.abort();
   }, [key, enabled, conceptId, libraryId, baseSource, initialVersionId]);
 
-  function cancelReservation(context: ConceptMediaContext, reservation: string) {
+  async function cancelReservation(context: ConceptMediaContext, reservation: string) {
     const url = context.kind === 'draft' ? `${conceptMediaEndpoint(context)}/drafts/${reservation}` : `/api/content-media/uploads/${reservation}`;
-    return requestJSON(url, { method: 'DELETE' });
+    const result = await requestJSON(url, { method: 'DELETE', signal: AbortSignal.timeout(30_000) });
+    if (result.cancelled !== true) throw new Error('Image cancellation was not confirmed.');
+  }
+  async function reconcileUnused(context: ConceptMediaContext | null, items: ConceptMediaPlacement[], version: number) {
+    if (!context) return;
+    const unused = uploads.current.filter(u => u.context.libraryId === context.libraryId && u.context.kind === context.kind
+      && (u.context.kind === 'draft' && context.kind === 'draft' ? u.context.draftId === context.draftId : u.context.kind === 'concept' && context.kind === 'concept' && u.context.conceptId === context.conceptId)
+      && !items.some(p => p.reservationId === u.reservation));
+    for (const upload of unused) {
+      if (generation.current !== version) throw new Error('Concept context changed. Your current draft is preserved.');
+      try { await cancelReservation(upload.context, upload.reservation); }
+      catch { throw new Error('Unused image cancellation could not be confirmed. Your draft is preserved. Retry Save or Cancel.'); }
+      if (generation.current !== version) throw new Error('Concept context changed. Your current draft is preserved.');
+      uploads.current = uploads.current.filter(u => u !== upload);
+    }
   }
   function reset(abandon = true) {
     generation.current++;
@@ -145,8 +159,7 @@ export function useConceptImageAuthoring({ libraryId, conceptId, enabled, source
     busy.current = true;
     setState(s => ({ ...s, pending: true, activity: 'cancelling' }));
     try {
-      const unused = uploads.current.filter(u => !current.items.some(p => p.reservationId === u.reservation));
-      for (const upload of unused) await cancelReservation(upload.context, upload.reservation);
+      await reconcileUnused(current.context, current.items, version);
       if (generation.current === version) {
         setState(s => ({ ...s, inspector: null, error: '', pending: false }));
         onSource(source, Math.min(source.length, current.inspector?.selection ?? source.length));
@@ -167,11 +180,15 @@ export function useConceptImageAuthoring({ libraryId, conceptId, enabled, source
   async function save(payload: Record<string, unknown>) {
     if (current.pending || current.inspector || busy.current) return { data: null, error: { message: 'Finish or cancel the image operation before saving.' } };
     const version = generation.current;
+    busy.current = true;
     try {
       if (current.error) throw new Error(current.error);
       const context = current.context;
       if (!context) throw new Error('Image context is unavailable. Your draft is preserved.');
       const placements = orderedConceptMedia(String(payload.p_body_markdown || ''), current.items);
+      setState(s => ({ ...s, pending: true, activity: 'cancelling' }));
+      await reconcileUnused(context, placements, version);
+      if (generation.current !== version) throw new Error('Concept context changed. Your current draft is preserved.');
       const data = await post(context, 'save', { versionId: context.kind === 'concept' ? current.version : null, payload: { ...payload, placements } });
       if (!data.concept_id || !data.version_id || data.bodyMarkdown !== payload.p_body_markdown || conceptMediaFingerprint(data.placements) !== conceptMediaFingerprint(placements)) throw new Error('Concept save readback differs. Your draft is preserved.');
       if (generation.current === version && context.kind === 'concept') {
@@ -181,6 +198,7 @@ export function useConceptImageAuthoring({ libraryId, conceptId, enabled, source
       }
       return { data, error: null };
     } catch (error) { return { data: null, error: { message: error instanceof Error ? error.message : 'Concept save could not be confirmed.' } }; }
+    finally { if (generation.current === version) { busy.current = false; setState(s => ({ ...s, pending: false })); } }
   }
   let fingerprint = '';
   try { fingerprint = conceptMediaFingerprint(orderedConceptMedia(source, current.items)); } catch { fingerprint = 'invalid'; }

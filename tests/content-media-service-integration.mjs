@@ -18,6 +18,15 @@ const rpc = async (db, name, args) => { const r = await db.rpc(name, args); if (
 const server = { rpc, MediaError: actualServer.MediaError, boundedBody: actualServer.boundedBody };
 const service = loadMediaModule('lib/content-media/service.ts', { 'server-only': {}, './image': loadMediaModule('lib/content-media/image.ts'), './server': server });
 const cleanup = loadMediaModule('lib/content-media/cleanup.ts', { 'server-only': {}, './server': server });
+const absenceNonces = new Set();
+const cleanupClient = { rpc: client.rpc.bind(client), storage: { from: bucket => {
+ const store = client.storage.from(bucket);
+ return { remove: store.remove.bind(store), download: (path, options, fetchOptions) => {
+  assert.match(options?.cacheNonce, /^[0-9a-f-]{36}$/); assert.equal(fetchOptions?.cache, 'no-store');
+  assert.ok(!absenceNonces.has(options.cacheNonce)); absenceNonces.add(options.cacheNonce);
+  return store.download(path, options, fetchOptions);
+ } };
+} } };
 const sql = text => execFileSync('docker', ['exec', '-i', 'socrates-media112-db', 'psql', '-X', '-qAt', '-U', 'postgres', '-d', 'media112', '-v', 'ON_ERROR_STOP=1'], { input: text, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
 assert.equal(sql('select current_database();').trim(), 'media112');
 const args = reservation => ({ p_actor: context.actor, p_library: context.library, p_reservation: reservation });
@@ -144,7 +153,7 @@ execFileSync('docker', ['exec', '-i', 'socrates-media112-db', 'psql', '-X', '-U'
 const failedDelete = { rpc: client.rpc.bind(client), storage: { from: bucket => ({ remove: async paths => { await client.storage.from(bucket).remove(paths); return { error: new Error('Synthetic lost Storage deletion response') }; } }) } };
 await assert.rejects(cleanup.deleteOrphan(failedDelete, published.assetId));
 assert.equal(sql(`select state from public.media_deletion_jobs where asset_id='${published.assetId}';`).trim(), 'retry');
-assert.equal((await cleanup.deleteOrphan(client, published.assetId)).deleted, true);
+assert.equal((await cleanup.deleteOrphan(cleanupClient, published.assetId)).deleted, true);
 const absent = await client.storage.from('socrates-content-media').download(`${context.library}/${published.assetId}`);
 assert.ok(absent.error);
 
@@ -157,18 +166,29 @@ for (const asset of assets) {
  assert.match(asset, /^[0-9a-f-]{36}$/);
  assert.equal((await cleanup.deleteOrphan(client, asset)).deleted, false);
  sql(`update public.media_assets set unreferenced_since=clock_timestamp()-interval '25 hours' where id='${asset}';`);
- assert.equal((await cleanup.deleteOrphan(client, asset)).deleted, true);
+ assert.equal((await cleanup.deleteOrphan(cleanupClient, asset)).deleted, true);
 }
 const temporaryIds = JSON.parse(sql(`select coalesce(json_agg(id),'[]') from public.media_service_operations where parent_id in (${reservations.map(id => `'${id}'`).join(',')}) and asset_id is null;`));
 let unresolved = 0, closed = 0;
+const settled = sql(`select id from media_service_operations where id in (${temporaryIds.map(id => `'${id}'`).join(',')}) and confirmed_at is not null limit 1;`).trim();
+assert.ok(settled);
+const cachedRead = { rpc: client.rpc.bind(client), storage: { from: bucket => ({ remove: paths => client.storage.from(bucket).remove(paths), download: async () => ({ data: new Blob(['cached successful bytes']), error: null }) }) } };
+await assert.rejects(cleanup.cleanTemporary(cachedRead, settled), /absence not confirmed/);
+assert.equal(sql(`select cleanup_state from media_service_operations where id='${settled}';`).trim(), 'retry');
+// Advance only this test's disposable retry deadline; never a hosted or pre-existing operation.
+sql(`update media_service_operations set cleanup_after=clock_timestamp() where id='${settled}';`);
+assert.equal((await cleanup.cleanTemporary(cleanupClient, settled)).cleaned, true);
+assert.equal(sql(`select cleanup_attempts from media_service_operations where id='${settled}';`).trim(), '2');
 for (const id of temporaryIds) {
  await assert.rejects(rpc(client, 'm113_delivery', { p_actor: context.actor, p_library: context.library, p_reference: id }));
- const result = await cleanup.cleanTemporary(client, id);
+ if (id === settled) { closed++; continue; }
+ const result = await cleanup.cleanTemporary(cleanupClient, id);
  if (result.unresolved) unresolved++;
  if (result.cleaned) closed++;
  assert.equal(result.observedAbsent, true);
 }
 assert.ok(unresolved > 0); assert.ok(closed > 0);
+assert.ok(absenceNonces.size > 2);
 const paths = trace.map(x => x.path);
 assert.equal(new Set(paths).size, paths.length);
 for (const path of paths) {

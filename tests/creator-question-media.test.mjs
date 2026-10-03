@@ -31,6 +31,68 @@ async function insert(h, surface, alt = 'Synthetic alt') {
   h.render().changeMetadata('alt', alt); h.render().changeMetadata('caption', 'Caption'); h.render().insert(); return h.render();
 }
 const payload = { p_prompt: 'Prompt', p_accepted_answers: [{ answer_text: 'Answer' }] };
+function recovery(options = {}) {
+  const reservations = [];
+  const h = setup({ ...options, reply: async args => {
+    const override = await options.reply?.(args); if (override) return override;
+    if (args.body?.action === 'reserve') { const id = webcrypto.randomUUID(); reservations.push(id); return Response.json({ reservationId: id }); }
+    if (args.init.method === 'PUT' && await args.init.body.text() === 'malformed') return Response.json({ error: 'Image rejected' }, { status: 422 });
+  } });
+  h.render(); h.hooks.effects(); return { ...h, reservations };
+}
+for (const existing of [false, true]) for (const surface of ['front', 'answer']) test(`${existing ? 'existing' : 'new'} Question reconciles failed ${surface} attempts with both current surfaces preserved`, async () => {
+  const h = recovery({ existing }); await flush();
+  await insert(h, surface === 'front' ? 'answer' : 'front', 'Retained current image');
+  h.render().open(surface);
+  await h.render().upload(new Blob(['malformed'])); await h.render().upload(new Blob(['malformed']));
+  assert.equal(h.calls.filter(c => c.init.method === 'DELETE').length, 0);
+  await h.render().upload(new Blob(['valid'])); h.render().changeMetadata('alt', 'Valid replacement'); h.render().insert();
+  const fingerprint = media.questionMediaFingerprint(h.render().items);
+  const saved = await h.render().save(payload); assert.equal(saved.error, null);
+  assert.equal(media.questionMediaFingerprint(saved.data.placements), fingerprint);
+  const deleted = h.calls.filter(c => c.init.method === 'DELETE').map(c => c.url.split('/').at(-1));
+  assert.deepEqual(deleted, h.reservations.slice(1, 3));
+  const saveAt = h.calls.findIndex(c => c.body?.action === 'save'); assert.ok(h.calls.filter(c => c.init.method === 'DELETE').every(c => h.calls.indexOf(c) < saveAt));
+  assert.equal(h.calls.filter(c => c.body?.action === 'save').length, 1);
+});
+test('Question Remove reconciles only the removed reservation, and Cancel confirms failed attempts without losing the other surface', async () => {
+  const h = recovery(); await insert(h, 'front'); await insert(h, 'answer');
+  const front = h.render().items[0], answer = h.render().items[1]; h.render().remove(front.placementId);
+  await h.render().save(payload);
+  assert.deepEqual(h.calls.filter(c => c.init.method === 'DELETE').map(c => c.url.split('/').at(-1)), [front.reservationId]);
+  assert.equal(h.render().items[0].reservationId, answer.reservationId);
+  h.render().open('front'); await h.render().upload(new Blob(['malformed'])); await h.render().close();
+  assert.equal(h.render().inspector, null); assert.equal(h.render().items[0].reservationId, answer.reservationId);
+});
+for (const failure of ['rejected', 'lost', 'timeout', 'unconfirmed']) test(`Question ${failure} cancellation prevents a save receipt until confirmed, preserving exact draft`, async () => {
+  let deny = true;
+  const h = recovery({ reply: ({ init }) => {
+    if (init.method !== 'DELETE' || !deny) return;
+    assert.ok(init.signal instanceof AbortSignal);
+    if (failure === 'lost' || failure === 'timeout') throw new Error(failure);
+    return failure === 'rejected' ? Response.json({ error: 'Unavailable' }, { status: 503 }) : Response.json({ cancelled: false });
+  } });
+  h.render().open('front'); await h.render().upload(new Blob(['malformed'])); await h.render().upload(new Blob(['valid']));
+  h.render().changeMetadata('alt', 'Keep'); h.render().insert(); await insert(h, 'answer');
+  const before = media.questionMediaFingerprint(h.render().items), context = h.render().context;
+  assert.match((await h.render().save(payload)).error.message, /Retry Save or Cancel/);
+  assert.equal(h.calls.filter(c => c.body?.action === 'save').length, 0); assert.equal(h.render().uncertain, false);
+  assert.equal(h.render().dirty, true); assert.equal(h.render().context, context); assert.equal(media.questionMediaFingerprint(h.render().items), before);
+  deny = false; assert.equal((await h.render().save(payload)).error, null);
+  assert.equal(h.calls.filter(c => c.body?.action === 'save').length, 1);
+  assert.deepEqual(h.calls.filter(c => c.init.method === 'DELETE').map(c => c.url.split('/').at(-1)), [h.reservations[0], h.reservations[0]]);
+});
+test('Question reconciliation protects its busy interval and never saves into a later Library context', async () => {
+  let resolve;
+  const h = recovery({ reply: ({ init }) => init.method === 'DELETE' ? new Promise(r => { resolve = r; }) : null });
+  h.render().open('front'); await h.render().upload(new Blob(['malformed'])); await h.render().upload(new Blob(['valid']));
+  h.render().changeMetadata('alt', 'Keep'); h.render().insert();
+  const pending = h.render().save(payload); await flush(); assert.ok((await h.render().save(payload)).error);
+  h.render().remove(h.render().items[0].placementId); assert.equal(h.render().items.length, 1);
+  h.props.libraryId = ids.asset; h.render(); h.hooks.effects(); resolve(Response.json({ cancelled: true }));
+  assert.match((await pending).error.message, /context changed/); assert.equal(h.calls.filter(c => c.body?.action === 'save').length, 0);
+  assert.equal(h.render().context, null);
+});
 test('new no-image rendering has no request, draft, dirty state or text mutation', () => {
   const h = setup(); let c = h.render(); h.hooks.effects(); c = h.render();
   assert.equal(c.usesMedia, false); assert.equal(c.dirty, false); assert.deepEqual(h.calls, []);

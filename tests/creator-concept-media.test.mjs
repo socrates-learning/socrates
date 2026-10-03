@@ -213,3 +213,72 @@ test('mismatched authoritative media readback rejects success and preserves the 
   assert.match(result.error.message, /readback differs/);
   assert.equal(s.props.source, before); assert.equal(s.render().items.length, 1); assert.equal(s.render().dirty, true);
 });
+
+function recovery(options = {}) {
+  const reservations = [];
+  const s = setup({ ...options, respond: async args => {
+    const override = await options.respond?.(args); if (override) return override;
+    if (args.body?.action === 'reserve' || args.url === '/api/content-media/reservations') {
+      const id = randomUUID(); reservations.push(id); return Response.json({ reservationId: id });
+    }
+    if (args.init.method === 'PUT' && await args.init.body.text() === 'malformed') return Response.json({ error: 'Image rejected' }, { status: 422 });
+  } });
+  return { ...s, reservations };
+}
+for (const existing of [false, true]) test(`${existing ? 'existing' : 'new'} Concept reconciles repeated obsolete failures before save without cancelling its complete current manifest`, async () => {
+  const source = m.conceptMediaToken(ids.placement);
+  const s = recovery({ props: existing ? { conceptId, source, baseSource: source } : {} }); await flush();
+  (await uploaded(s)).insert(); const retained = s.render().items.map(p => p.reservationId).filter(Boolean);
+  s.render().open(s.props.source.length);
+  for (let i = 0; i < 2; i++) await s.render().upload(new Blob(['malformed']));
+  assert.equal(s.calls.filter(c => c.method === 'DELETE').length, 0, 'Failure alone never cancels');
+  await s.render().upload(new Blob(['valid'])); s.render().changeMetadata('alt', 'Replacement'); s.render().insert();
+  const before = s.props.source, manifest = m.conceptMediaFingerprint(s.render().items);
+  const result = await s.render().save({ p_body_markdown: before }); assert.equal(result.error, null);
+  const saveAt = s.calls.findIndex(c => c.body?.action === 'save');
+  const deleted = s.calls.slice(0, saveAt).filter(c => c.method === 'DELETE').map(c => c.url.split('/').at(-1));
+  assert.deepEqual(deleted, s.reservations.slice(1, 3));
+  assert.ok(retained.every(id => !deleted.includes(id))); assert.ok(!deleted.includes(s.reservations.at(-1)));
+  assert.equal(s.props.source, before); assert.equal(m.conceptMediaFingerprint(result.data.placements), manifest);
+});
+test('Remove reconciles an unused successful upload while preserving another image; Cancel confirms only unused reservations', async () => {
+  const s = recovery(); (await uploaded(s)).insert(); const first = s.render().items[0];
+  (await uploaded(s)).insert(); const second = s.render().items.find(p => p.placementId !== first.placementId); s.render().remove(second.placementId);
+  assert.equal(s.calls.filter(c => c.method === 'DELETE').length, 0);
+  await s.render().save({ p_body_markdown: s.props.source });
+  assert.deepEqual(s.calls.filter(c => c.method === 'DELETE').map(c => c.url.split('/').at(-1)), [second.reservationId]);
+  assert.equal(s.render().items[0].reservationId, first.reservationId);
+  s.render().open(0); await s.render().upload(new Blob(['malformed'])); await s.render().close();
+  assert.equal(s.render().inspector, null); assert.equal(s.render().items[0].reservationId, first.reservationId);
+  assert.equal(s.calls.filter(c => c.method === 'DELETE').at(-1).url.split('/').at(-1), s.reservations.at(-1));
+});
+for (const failure of ['rejected', 'lost', 'timeout', 'unconfirmed']) test(`Concept ${failure} cancellation blocks content save, preserves draft and retries the same reservation`, async () => {
+  let deny = true;
+  const s = recovery({ respond: ({ init }) => {
+    if (init.method !== 'DELETE' || !deny) return;
+    assert.ok(init.signal instanceof AbortSignal);
+    if (failure === 'lost' || failure === 'timeout') throw new Error(failure);
+    return failure === 'rejected' ? Response.json({ error: 'Unavailable' }, { status: 503 }) : Response.json({});
+  } });
+  s.render().open(0); await s.render().upload(new Blob(['malformed']));
+  await s.render().upload(new Blob(['valid'])); s.render().changeMetadata('alt', 'Keep'); s.render().insert();
+  const before = s.props.source, manifest = m.conceptMediaFingerprint(s.render().items);
+  const result = await s.render().save({ p_body_markdown: before });
+  assert.match(result.error.message, /Retry Save or Cancel/); assert.equal(s.calls.filter(c => c.body?.action === 'save').length, 0);
+  assert.equal(s.props.source, before); assert.equal(m.conceptMediaFingerprint(s.render().items), manifest); assert.equal(s.render().dirty, true);
+  deny = false; assert.equal((await s.render().save({ p_body_markdown: before })).error, null);
+  assert.equal(s.calls.filter(c => c.body?.action === 'save').length, 1);
+  assert.deepEqual(s.calls.filter(c => c.method === 'DELETE').map(c => c.url.split('/').at(-1)), [s.reservations[0], s.reservations[0]]);
+});
+test('Concept reconciliation blocks duplicate Save and fences a changed Library before any content write', async () => {
+  let resolve;
+  const s = recovery({ respond: ({ init }) => init.method === 'DELETE' ? new Promise(r => { resolve = r; }) : null });
+  s.render().open(0); await s.render().upload(new Blob(['malformed'])); await s.render().upload(new Blob(['valid']));
+  s.render().changeMetadata('alt', 'Keep'); s.render().insert();
+  const pending = s.render().save({ p_body_markdown: s.props.source }); await flush();
+  assert.ok((await s.render().save({ p_body_markdown: s.props.source })).error);
+  const itemId = s.render().items[0].placementId; s.render().remove(itemId); assert.equal(s.render().items.length, 1);
+  s.props.libraryId = ids.asset; s.render(); s.hooks.effects(); resolve(Response.json({ cancelled: true }));
+  assert.match((await pending).error.message, /context changed/);
+  assert.equal(s.calls.filter(c => c.body?.action === 'save').length, 0); assert.equal(s.render().context, null);
+});

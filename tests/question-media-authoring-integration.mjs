@@ -5,7 +5,7 @@ import { execFileSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 import { createClient } from '@supabase/supabase-js';
 import { loadMediaModule, sampleImage } from './fixtures/content-media-images.mjs';
-import { loadQuestionModule, ids } from './fixtures/question-media-authoring.mjs';
+import { loadQuestionModule, ids, hookHarness, jsx, questionMedia } from './fixtures/question-media-authoring.mjs';
 const url = process.env.MEDIA_DISPOSABLE_URL;
 if (url !== 'http://127.0.0.1:56991' || process.env.MEDIA_DISPOSABLE_ACK !== 'media112-only') throw Error('Explicit isolated media112 environment required');
 const key = process.env.MEDIA_DISPOSABLE_SERVICE_KEY, token = process.env.MEDIA_DISPOSABLE_ADMIN_TOKEN;
@@ -42,6 +42,62 @@ async function upload(draftId, question = null, format = 'png') {
   await assert.rejects(service.questionPreview(client, { ...actor, actor: ids.editor, question }, question, draftId, reservation.reservationId));
   await assert.rejects(service.questionPreview(client, { ...actor, library: '11200000-0000-4000-8000-000000000011', question }, question, draftId, reservation.reservationId));
   return { ...preview.metadata, placementId: randomUUID(), reservationId: reservation.reservationId, altText: 'ZZ GATE5 synthetic image', caption: 'Synthetic image only', ordinal: 0, surface: 'front' };
+}
+async function controllerRecovery(basePayload) {
+  let question = null, manifest = null;
+  try {
+    for (const editing of [false, true]) {
+      const hooks = hookHarness(), requests = [], owned = [];
+      let draftId = null;
+      const hint = manifest ? { libraryId: ids.library, questionId: question, versionId: manifest.versionId, front: true, answer: true } : null;
+      const props = { libraryId: ids.library, questionId: question, enabled: true, hint, basePrompt: manifest?.prompt || '', baseAnswer: manifest?.answer || '' };
+      const authoring = loadQuestionModule('components/creator/QuestionImageAuthoring.tsx', { react: hooks.hooks, 'react/jsx-runtime': jsx, '@/components/VerifiedMediaImage': {}, '@/lib/question-media': questionMedia, '@/components/ConceptMedia.module.css': {} }, { crypto: { randomUUID }, fetch: async (path, init = {}) => {
+        const body = typeof init.body === 'string' ? JSON.parse(init.body) : null, reservation = path.split('?')[0].split('/').at(-1);
+        requests.push({ method: init.method, action: body?.action, reservation });
+        try {
+          let result;
+          if (body?.action === 'create') {
+            draftId = body.draftId; evidence.drafts.push({ id: draftId, question, version: body.versionId });
+            result = await rpc(client, 'm115_draft', { p_actor: ids.admin, p_library: ids.library, p_draft: draftId, p_question: question, p_expected_version: body.versionId, p_action: 'create' });
+          } else if (body?.action === 'reserve') {
+            result = await rpc(client, 'm115_reserve', { p_actor: ids.admin, p_library: ids.library, p_draft: draftId, p_question: question, p_key: body.idempotencyKey });
+            owned.push(result.reservationId); evidence.reservations.push({ id: result.reservationId, question });
+          } else if (init.method === 'PUT') {
+            result = await service.uploadQuestionDraft(client, { ...actor, question }, reservation, new Request(url, { method: 'PUT', body: init.body, signal: init.signal })); evidence.assets.push(result.assetId);
+          } else if (init.method === 'DELETE') result = await rpc(client, 'm115_upload', { p_actor: ids.admin, p_library: ids.library, p_question: question, p_reservation: reservation, p_action: 'cancel' });
+          else if (path.includes('metadata=1')) result = (await service.questionPreview(client, { ...actor, question }, question, draftId, reservation, true)).metadata;
+          else if (body?.action === 'save') result = await service.saveQuestionImages(ids.library, question, draftId, body.versionId, body.payload);
+          else result = await rpc(client, 'm115_manifest', { p_actor: ids.admin, p_library: ids.library, p_question: question });
+          return Response.json(result);
+        } catch (error) { return Response.json({ error: error.message }, { status: error.status || 422 }); }
+      } });
+      const render = () => hooks.render(() => authoring.useQuestionImageAuthoring(props)); render(); hooks.effects();
+      while (render().pending) await new Promise(resolve => setTimeout(resolve, 5));
+      assert.equal(render().error, '');
+      for (const surface of ['front', 'answer']) {
+        render().open(surface, editing ? render().items.find(p => p.surface === surface) : undefined, editing);
+        for (let i = 0; i < 2; i++) { await render().upload(new Blob(['malformed'])); assert.match(render().error, /format or limits rejected/); }
+        await render().upload(new Blob([await sampleImage()])); render().changeMetadata('alt', `ZZ recovered ${surface}`); render().insert();
+      }
+      assert.equal(requests.filter(r => r.method === 'DELETE').length, 0);
+      const fingerprint = questionMedia.questionMediaFingerprint(render().items);
+      const unknown = await rpc(client, 'm115_reserve', { p_actor: ids.admin, p_library: ids.library, p_draft: draftId, p_question: question, p_key: randomUUID() });
+      const payload = { ...basePayload, p_question_id: question, p_prompt: 'ZZ GATE5 LIFECYCLE RECOVERY' }; delete payload.front; delete payload.answer;
+      assert.ok((await render().save(payload)).error, 'Unknown pending operation still blocks both new and edit Save');
+      assert.equal(sql(`select state from media_service_operations where id='${unknown.reservationId}';`), 'pending');
+      assert.ok(!requests.some(r => r.method === 'DELETE' && r.reservation === unknown.reservationId));
+      await rpc(client, 'm115_upload', { p_actor: ids.admin, p_library: ids.library, p_question: question, p_reservation: unknown.reservationId, p_action: 'cancel' });
+      const saved = await render().save(payload); assert.equal(saved.error, null); question = saved.data.id;
+      for (const id of owned.filter((_, i) => i % 3 !== 2)) assert.equal(sql(`select state from media_service_operations where id='${id}';`), 'cancelled');
+      const fresh = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } }), previous = manifest;
+      manifest = await rpc(fresh, 'm115_manifest', { p_actor: ids.admin, p_library: ids.library, p_question: question });
+      assert.equal(questionMedia.questionMediaFingerprint(manifest.placements), fingerprint); assert.equal(manifest.prompt, payload.p_prompt);
+      if (previous) assert.equal(sql(`select count(*) from media_version_references where question_version_id='${previous.versionId}';`), '2');
+      record(`${editing ? 'existing' : 'new'} real Question controller: malformed Front/Answer -> valid -> Insert -> confirmed cancellation -> Save -> fresh readback; unknown operation still rejected`);
+    }
+  } finally {
+    if (question) sql(`begin;select set_config('request.jwt.claim.sub','${ids.admin}',true);select public.delete_development_content('question','${question}');commit;`);
+  }
 }
 try {
   const d = await draft(); const front = await upload(d); const back = { ...await upload(d, null, 'jpeg'), surface: 'answer' };
@@ -87,6 +143,7 @@ try {
   assert.equal(sql(`select count(*) from question_versions where question_id='${target}';`), '0');
   assert.equal(sql(`select count(*) from content_media_placements where question_id='${target}';`), '0');
   record('permanent Question/version/reference closure and terminal original-save retry');
+  await controllerRecovery(payload);
 } finally {
   if (target && sql(`select count(*) from questions where id='${target}' and prompt like 'ZZ GATE5%';`) === '1') sql(`begin; select set_config('request.jwt.claim.sub','${ids.admin}',true); select public.delete_development_content('question','${target}'); commit;`);
   for (const d of evidence.drafts) await rpc(client, 'm115_draft', { p_actor: ids.admin, p_library: ids.library, p_draft: d.id, p_question: d.question, p_expected_version: d.version, p_action: 'abandon' }).catch(() => undefined);

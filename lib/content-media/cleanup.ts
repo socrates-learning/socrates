@@ -1,4 +1,5 @@
 import 'server-only';
+import { randomUUID } from 'node:crypto';
 import { MediaError, rpc, type MediaClient } from './server';
 
 export async function deleteOrphan(client: MediaClient, asset: string) {
@@ -9,7 +10,7 @@ export async function deleteOrphan(client: MediaClient, asset: string) {
     const { error } = await store.remove([claim.object]);
     if (error) throw new MediaError(503, 'Storage deletion failed');
     // A transport/server/permission error is not proof of absence.
-    const readback = await store.download(claim.object);
+    const readback = await store.download(claim.object, { cacheNonce: randomUUID() }, { cache: 'no-store' });
     if (!readback.error || String((readback.error as { statusCode?: string }).statusCode) !== '404') throw new MediaError(503, 'Storage absence not confirmed');
     await rpc(client, 'm113_cleanup', { p_asset: asset, p_action: 'complete', p_token: claim.token });
     return { deleted: true };
@@ -28,7 +29,7 @@ export async function cleanTemporary(client: MediaClient, attempt: string) {
     const store = client.storage.from(claim.bucket);
     const removal = await store.remove([claim.object]);
     if (removal.error) throw new MediaError(503, 'Temporary deletion failed');
-    const readback = await store.download(claim.object);
+    const readback = await store.download(claim.object, { cacheNonce: randomUUID() }, { cache: 'no-store' });
     if (!readback.error || String((readback.error as { statusCode?: string }).statusCode) !== '404') throw new MediaError(503, 'Temporary absence not confirmed');
     return await rpc(client, 'm113_cleanup', { p_asset: attempt, p_action: 'temporary-observe', p_token: claim.token });
   } catch (error) {

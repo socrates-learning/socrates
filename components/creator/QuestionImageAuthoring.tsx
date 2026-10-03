@@ -118,14 +118,26 @@ export function useQuestionImageAuthoring({ libraryId, questionId, enabled, hint
     const items = current.items.some(p => p.placementId === placement.placementId) ? current.items.map(p => p.placementId === placement.placementId ? placement : p) : [...current.items, placement];
     setState(s => ({ ...s, items: orderedQuestionMedia(items), entered: true, inspector: null, error: '' }));
   }
+  async function reconcileUnused(context: QuestionMediaContext | null, items: QuestionMediaPlacement[], version: number) {
+    if (!context) return;
+    const unused = uploads.current.filter(u => u.context.libraryId === context.libraryId && u.context.draftId === context.draftId
+      && u.context.questionId === context.questionId && !items.some(p => p.reservationId === u.reservation));
+    for (const upload of unused) {
+      if (generation.current !== version) throw new Error('Question context changed. Your current draft is preserved.');
+      try {
+        const result = await requestJSON(`${questionMediaEndpoint(upload.context)}/drafts/${upload.reservation}`, { method: 'DELETE', signal: AbortSignal.timeout(30_000) });
+        if (result.cancelled !== true) throw new Error('Image cancellation was not confirmed.');
+      } catch { throw new Error('Unused image cancellation could not be confirmed. Your draft is preserved. Retry Save or Cancel.'); }
+      if (generation.current !== version) throw new Error('Question context changed. Your current draft is preserved.');
+      uploads.current = uploads.current.filter(u => u !== upload);
+    }
+  }
   async function close() {
     if (current.uncertain) return;
     const version = ++generation.current; abort.current?.abort(); busy.current = true;
     setState(s => ({ ...s, pending: true, activity: 'cancelling' }));
     try {
-      for (const upload of uploads.current.filter(u => !current.items.some(p => p.reservationId === u.reservation))) {
-        await requestJSON(`${questionMediaEndpoint(upload.context)}/drafts/${upload.reservation}`, { method: 'DELETE' });
-      }
+      await reconcileUnused(current.context, current.items, version);
       if (generation.current === version) setState(s => ({ ...s, pending: false, inspector: null, error: '' }));
     } catch { if (generation.current === version) setState(s => ({ ...s, pending: false, error: 'Image cancellation could not be confirmed. Please retry Cancel.' })); }
     finally { if (generation.current === version) busy.current = false; }
@@ -157,6 +169,9 @@ export function useQuestionImageAuthoring({ libraryId, questionId, enabled, hint
       const context = await ensureContext();
       if (generation.current !== version) throw new Error('Question context changed. Your current draft is preserved.');
       setState(s => ({ ...s, context, entered: true }));
+      setState(s => ({ ...s, pending: true, activity: 'cancelling' }));
+      await reconcileUnused(context, placements, version);
+      if (generation.current !== version) throw new Error('Question context changed. Your current draft is preserved.');
       let data;
       try { data = await post(context, 'save', { payload: full }); }
       catch (error) {
@@ -173,7 +188,7 @@ export function useQuestionImageAuthoring({ libraryId, questionId, enabled, hint
     } catch (error) {
       if (generation.current === version && uncertainPayload.current) setState(s => ({ ...s, uncertain: true, error: 'Save is not confirmed. Retry Save Question without changing this draft.' }));
       return { data: null, error: { message: error instanceof Error ? error.message : 'Question save could not be confirmed.' } };
-    } finally { if (generation.current === version) busy.current = false; }
+    } finally { if (generation.current === version) { busy.current = false; setState(s => ({ ...s, pending: false })); } }
   }
   const dirty = Boolean(current.inspector || current.pending || current.uncertain || current.context || (current.entered && questionMediaFingerprint(current.items) !== current.baseline));
   return { ...current, dirty, guardActive: current.entered || Boolean(current.inspector), usesMedia: current.entered || hasImages, open, upload, changeMetadata, insert, close, remove, move, reset, save,
