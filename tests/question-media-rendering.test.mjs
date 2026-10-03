@@ -30,23 +30,24 @@ test('Study-only bounds scale each image by its intrinsic ratio while other surf
   });s.h.cleanup();
  }
 });
-test('only official Front media opts out of released centering; no-image, Answer-only and personal Front styles remain absent',()=>{
+test('only official Front media or rich blocks opt out of centering; plain and personal Front styles remain absent',()=>{
  const source=read('components/StudyPlanner.tsx'),ast=ts.createSourceFile('StudyPlanner.tsx',source,ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX);let container,heading;
  function visit(n){
   if(ts.isJsxOpeningElement(n)){
    const attributes=n.attributes.properties;
    const style=attributes.find(a=>ts.isJsxAttribute(a)&&a.name.getText(ast)==='style')?.initializer;
-   if(style&&ts.isJsxExpression(style)&&style.expression?.getText(ast).startsWith("studyCandidate?.kind === 'official' && studyCandidate.mediaHint?.front ?")){
+   if(style&&ts.isJsxExpression(style)&&style.expression?.getText(ast).startsWith("studyCandidate?.kind === 'official' &&")){
     if(n.tagName.getText(ast)==='div')container=style.expression.getText(ast);
     if(n.tagName.getText(ast)==='h1')heading=style.expression.getText(ast);
    }
   }ts.forEachChild(n,visit);
  }visit(ast);assert.ok(container&&heading);
  for(const [candidate,aligned]of [[{kind:'official',mediaHint:{front:true,answer:false}},true],[{kind:'official',mediaHint:{front:true,answer:true}},true],[{kind:'official',mediaHint:{front:false,answer:true}},false],[{kind:'official'},false],[{kind:'personal',mediaHint:{front:true}},false],[null,false]]){
-  const result=vm.runInNewContext(`({container:${container},heading:${heading}})`,{studyCandidate:candidate});
+  const result=vm.runInNewContext(`({container:${container},heading:${heading}})`,{studyCandidate:candidate && {...candidate,prompt:'Plain'},questionMarkdownKind:()=> 'plain'});
   if(aligned)assert.deepEqual(JSON.parse(JSON.stringify(result)),{container:{justifyContent:'flex-start'},heading:{margin:'0 auto',flexShrink:0}});
   else{assert.equal(result.container,undefined);assert.equal(result.heading,undefined);}
  }
+ const rich=vm.runInNewContext(`(${container})`,{studyCandidate:{kind:'official',prompt:'## Heading'},questionMarkdownKind:()=> 'block'});assert.equal(rich.justifyContent,'flex-start');
 });
 test('each mounted surface contains only its ordered figures; summaries never mount image delivery',async()=>{
  for(const surface of ['front','answer']){

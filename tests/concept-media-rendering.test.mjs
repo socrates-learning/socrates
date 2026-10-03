@@ -8,6 +8,15 @@ const MarkdownContent = function MarkdownContent() {};
 const placement = { placementId: ids.placement, assetId: ids.asset, ordinal: 0, altText: 'An accessible synthetic figure', caption: '<script>literal caption</script>', mime: 'image/png', width: 2, height: 3, sha256: createHash('sha256').update('image').digest('hex') };
 const context = { kind: 'concept', conceptId: '11400000-0000-4000-8000-000000000005', libraryId: ids.library };
 const flush = () => new Promise(resolve => setImmediate(resolve));
+async function settledImage(s) {
+  for (let attempt = 0; attempt < 500; attempt += 1) {
+    const tree = s.hooks.render(() => s.renderVerified({ placement, context }));
+    const content = tree.props.children[0].props.children;
+    if (content.type !== 'span' || content.props.children !== 'Loading image…') return tree;
+    await new Promise(resolve => setTimeout(resolve, 10));
+  }
+  assert.fail('Image verification did not settle');
+}
 function setup(fetch = () => { throw Error('Unexpected media request'); }, extras = {}) {
   const hooks = hookHarness();
   const image = loadConceptModule('components/VerifiedMediaImage.tsx', { react: hooks.hooks, 'react/jsx-runtime': jsx, 'next/image': 'Image', './ConceptMedia.module.css': {} }, { fetch, crypto: webcrypto, ...extras });
@@ -25,7 +34,8 @@ test('no-image and malformed-token Concept rendering is exactly the released Mar
   for (const markdown of ['Ordinary **Markdown**', '', 'inline [[socrates-media:broken]]', `Text\n${m.conceptMediaToken(ids.placement)}`]) {
     const tree = hooks.render(() => render({ markdown, ...context })); hooks.effects();
     assert.equal(tree.type, MarkdownContent);
-    assert.deepEqual(Object.keys(tree.props), ['markdown']);
+    assert.deepEqual(Object.keys(tree.props), ['markdown', 'format']);
+    assert.equal(tree.props.format, 'legacy');
     assert.equal(tree.props.markdown, markdown);
   }
 });
@@ -58,8 +68,8 @@ test('verified image uses private digest-matching bytes, alt/caption and unoptim
   const calls = [], revoked = [];
   const browserURL = class extends URL { static createObjectURL() { return 'blob:synthetic'; } static revokeObjectURL(url) { revoked.push(url); } };
   const s = setup(async (url, options) => { calls.push({ url, options }); return new Response('image', { headers: { 'content-type': 'image/png' } }); }, { URL: browserURL });
-  s.hooks.render(() => s.renderVerified({ placement, context })); s.hooks.effects(); await flush(); await flush();
-  const tree = s.hooks.render(() => s.renderVerified({ placement, context }));
+  s.hooks.render(() => s.renderVerified({ placement, context })); s.hooks.effects();
+  const tree = await settledImage(s);
   const img = tree.props.children[0].props.children;
   assert.equal(tree.props.children[0].props.style.width, 'min(100%, 2px)', 'Small images reserve their intrinsic width without a large blank frame');
   assert.equal(img.type, 'Image'); assert.equal(img.props.alt, placement.altText); assert.equal(img.props.unoptimized, true);
@@ -70,14 +80,15 @@ test('verified image uses private digest-matching bytes, alt/caption and unoptim
 test('invalid MIME or digest never becomes a display URL', async () => {
   for (const mime of ['text/html', 'image/png']) {
     const s = setup(async () => new Response('wrong bytes', { headers: { 'content-type': mime } }), { URL: class extends URL { static createObjectURL() { throw Error('Must not display'); } } });
-    s.hooks.render(() => s.renderVerified({ placement, context })); s.hooks.effects(); await flush(); await flush();
-    assert.match(JSON.stringify(s.hooks.render(() => s.renderVerified({ placement, context }))), /Image unavailable/);
+    s.hooks.render(() => s.renderVerified({ placement, context })); s.hooks.effects();
+    assert.match(JSON.stringify(await settledImage(s)), /Image unavailable/);
+    s.hooks.cleanup();
   }
 });
 test('all four official Concept renderers pass actual context; Card and personal paths retain their boundary', () => {
-  assert.match(text('components/CreatorStudioV2Client.tsx'), /conceptSource === 'official' && conceptImages.usesMedia/);
-  assert.match(text('components/ConceptTabs.tsx'), /<ConceptMediaContent markdown=\{bodyMarkdown \|\| ''\} conceptId=\{conceptId\} libraryId=\{libraryId\}/);
-  assert.match(text('components/StudyPlanner.tsx'), /<ConceptMediaContent markdown=\{conceptReview.bodyMarkdown\} conceptId=\{conceptReview.conceptId\} libraryId=\{activeLibrary\?\.id\}/);
+  assert.match(text('components/CreatorStudioV2Client.tsx'), /conceptSource === 'official' \? <OfficialVisualField/);
+  assert.match(text('components/ConceptTabs.tsx'), /<ConceptMediaContent markdown=\{bodyMarkdown \|\| ''\} format=\{bodyFormat\} conceptId=\{conceptId\} libraryId=\{libraryId\}/);
+  assert.match(text('components/StudyPlanner.tsx'), /<ConceptMediaContent markdown=\{conceptReview.bodyMarkdown\} format=\{conceptReview.bodyFormat\} conceptId=\{conceptReview.conceptId\} libraryId=\{activeLibrary\?\.id\}/);
   assert.match(text('components/SocratesStudyCreatorBrowser.tsx'), /<ConceptMediaContent/);
   assert.doesNotMatch(text('components/ConceptMediaContent.tsx'), /dangerouslySetInnerHTML|createSignedUrl/);
   const css = text('components/ConceptMedia.module.css');

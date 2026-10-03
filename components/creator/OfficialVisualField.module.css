@@ -1,0 +1,18 @@
+.field { min-width: 0; display: grid; gap: 8px; }
+.editor { cursor: text; overflow-wrap: anywhere; }
+.editor > div { min-height: inherit; outline: none; white-space: pre-wrap; }
+.editor:focus-within { outline: 2px solid #2563eb; outline-offset: 2px; }
+.editor p { margin: 0 0 0.8em; }
+.editor p:last-child { margin-bottom: 0; }
+.editor h2 { font-size: 1.25em; margin: 0.7em 0; }
+.editor h3 { font-size: 1.1em; margin: 0.7em 0; }
+.editor ul, .editor ol { padding-left: 1.6em; }
+.editor blockquote { margin: 0.7em 0; padding-left: 1em; border-left: 3px solid #cbd5e1; }
+.editor a { color: #1d4ed8; text-decoration: underline; }
+.editor [data-placeholder]:empty::before { content: attr(data-placeholder); color: #64748b; }
+.link { display: grid; gap: 8px; min-width: 0; }
+.link label { display: grid; gap: 4px; }
+.link input { min-width: 0; width: 100%; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.error { color: #b91c1c; margin: 0; }
+.source { width: 100%; resize: vertical; }

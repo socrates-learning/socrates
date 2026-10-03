@@ -189,14 +189,14 @@ test('new media save delegates once, carries non-media context, and clears both 
   const { passiveQuestionImages } = await import('./fixtures/question-media-authoring.mjs');
   for (const fail of [false, true]) {
     const saves = []; let resets = 0;
-    const images = { ...passiveQuestionImages(), reset() { resets++; this.items = []; this.usesMedia = false; this.dirty = false; this.context = null; this.inspector = null; }, async save(value) { saves.push(value); return fail ? { data: null, error: { message: 'Synthetic save rejection' } } : { data: { id: q.question }, error: null }; } };
+    const images = { ...passiveQuestionImages(), reset() { resets++; this.items = []; this.usesMedia = false; this.dirty = false; this.context = null; this.inspector = null; }, async save(value) { saves.push(value); return fail ? { data: null, error: { message: 'Synthetic save rejection' } } : { data: { id: q.question, current_version_id: q.version, updated_at: '2026-10-03T12:00:00Z', prompt: value.p_prompt, prompt_format: value.p_prompt_format, answer: value.p_accepted_answers[0].answer_text, answer_format: value.p_accepted_answers[0].answer_format }, error: null }; } };
     const h = editor({ questionImages: images }); h.render().setActiveCreatorTab('questions'); h.render().selectQuestionConcept('primary', 'topic');
     h.render().setQuestionPrompt('Media question'); h.render().setQuestionAnswer('Media answer');
     h.render().setQuestionTestingAngle('Priority'); h.render().setQuestionAdditionalTestingAngles(['Safety']);
     Object.assign(images, { usesMedia: true, dirty: true, guardActive: true, entered: true, items: [placement('front'), placement('answer')], context: { draftId: q.draft } });
     const before = resets; await h.render().saveCurrentQuestion();
     assert.equal(saves.length, 1); assert.equal(saves[0].p_concept_id, 'primary'); assert.equal(saves[0].p_difficulty, 'medium'); assert.equal(saves[0].p_status, 'published');
-    assert.equal(h.calls.filter(c => c.name === 'save_question_with_relationships_v2').length, 0);
+    assert.equal(h.calls.filter(c => c.name === 'save_question_with_format').length, 0);
     assert.equal(images.items.length, fail ? 2 : 0); assert.equal(resets, before + (fail ? 0 : 1));
     assert.equal(h.render().questionPrompt, fail ? 'Media question' : ''); assert.equal(h.render().questionTestingAngle, 'Priority');
     assert.deepEqual(Array.from(h.render().questionAdditionalTestingAngles), ['Safety']);

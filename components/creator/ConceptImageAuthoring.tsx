@@ -3,6 +3,7 @@
 import { useEffect, useImperativeHandle, useRef, useState, type RefObject } from 'react';
 import { conceptMediaEndpoint, conceptMediaFingerprint, conceptMediaToken, conceptMediaWriteParts, editConceptMediaText, insertConceptMedia, orderedConceptMedia, removeConceptMedia, type ConceptMediaContext, type ConceptMediaManifest, type ConceptMediaPlacement } from '@/lib/concept-media';
 import { VerifiedConceptImage } from '@/components/ConceptMediaContent';
+import type { OfficialContentFormat } from '@/lib/official-content-format';
 import styles from '@/components/ConceptMedia.module.css';
 
 async function requestJSON(url: string, init?: RequestInit) {
@@ -25,8 +26,8 @@ function emptyState(key: string, version: string | null): State {
 }
 
 /** Owned by Creator's parent lifetime, including while another internal tab is visible. */
-export function useConceptImageAuthoring({ libraryId, conceptId, enabled, source, baseSource, initialVersionId, onSource }: {
-  libraryId: string; conceptId: string | null; enabled: boolean; source: string; baseSource: string;
+export function useConceptImageAuthoring({ libraryId, conceptId, enabled, source, baseSource, baseFormat = 'legacy', initialVersionId, onSource }: {
+  libraryId: string; conceptId: string | null; enabled: boolean; source: string; baseSource: string; baseFormat?: OfficialContentFormat;
   initialVersionId: string | null; onSource: (source: string, selection?: number) => void;
 }) {
   const key = `${libraryId}:${conceptId || 'new'}:${enabled}`;
@@ -50,12 +51,12 @@ export function useConceptImageAuthoring({ libraryId, conceptId, enabled, source
     void requestJSON(`/api/content-media/concepts/${conceptId}?libraryId=${encodeURIComponent(libraryId)}`, { signal: controller.signal })
       .then((manifest: ConceptMediaManifest) => {
         if (generation.current !== version || controller.signal.aborted) return;
-        if (manifest.bodyMarkdown !== baseSource || manifest.conceptId !== conceptId) throw new Error('Concept changed. Reload before editing images.');
+        if (manifest.bodyMarkdown !== baseSource || (manifest.body_format || 'legacy') !== baseFormat || manifest.conceptId !== conceptId) throw new Error('Concept changed. Reload before editing images.');
         orderedConceptMedia(baseSource, manifest.placements);
         setState({ ...emptyState(key, manifest.versionId), context: { kind: 'concept', conceptId, libraryId }, items: manifest.placements, baseline: conceptMediaFingerprint(manifest.placements), entered: true });
       }).catch(error => { if (generation.current === version && !controller.signal.aborted) setState(s => ({ ...s, pending: false, error: error.message, entered: true })); });
     return () => controller.abort();
-  }, [key, enabled, conceptId, libraryId, baseSource, initialVersionId]);
+  }, [key, enabled, conceptId, libraryId, baseSource, baseFormat, initialVersionId]);
 
   async function cancelReservation(context: ConceptMediaContext, reservation: string) {
     const url = context.kind === 'draft' ? `${conceptMediaEndpoint(context)}/drafts/${reservation}` : `/api/content-media/uploads/${reservation}`;
@@ -190,7 +191,7 @@ export function useConceptImageAuthoring({ libraryId, conceptId, enabled, source
       await reconcileUnused(context, placements, version);
       if (generation.current !== version) throw new Error('Concept context changed. Your current draft is preserved.');
       const data = await post(context, 'save', { versionId: context.kind === 'concept' ? current.version : null, payload: { ...payload, placements } });
-      if (!data.concept_id || !data.version_id || data.bodyMarkdown !== payload.p_body_markdown || conceptMediaFingerprint(data.placements) !== conceptMediaFingerprint(placements)) throw new Error('Concept save readback differs. Your draft is preserved.');
+      if (!data.concept_id || !data.version_id || data.bodyMarkdown !== payload.p_body_markdown || (payload.p_body_format !== undefined && (data.body_format !== payload.p_body_format || !data.updated_at)) || conceptMediaFingerprint(data.placements) !== conceptMediaFingerprint(placements)) throw new Error('Concept save readback differs. Your draft is preserved.');
       if (generation.current === version && context.kind === 'concept') {
         setState(s => ({ ...s, version: data.version_id, items: data.placements, baseline: conceptMediaFingerprint(data.placements), error: '' }));
         for (const upload of uploads.current) void cancelReservation(upload.context, upload.reservation).catch(() => undefined);
@@ -239,7 +240,7 @@ export default function ConceptImageAuthoring({ controller, disabled }: { contro
   </div>;
 }
 
-function ConceptImageEntry({ placement, index, controller, disabled, thumbnail = false }: {
+export function ConceptImageEntry({ placement, index, controller, disabled, thumbnail = false }: {
   placement: ConceptMediaPlacement; index: number; controller: ReturnType<typeof useConceptImageAuthoring>; disabled: boolean; thumbnail?: boolean;
 }) {
   const selected = controller.inspector?.placement?.placementId === placement.placementId;

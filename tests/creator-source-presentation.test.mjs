@@ -28,7 +28,7 @@ function flagged(source, neutralPresentation = true) {
     react: { useState: () => [states[cursor++], () => {}], useMemo: fn => fn(), useCallback: fn => fn, useEffect() {} },
     'react/jsx-runtime': { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }) },
     '@/components/QuestionMediaContent': questionContentBoundary, '@/lib/supabase': { supabase: {} },
-    '@/components/MarkdownContent': { cardMarkdownSummary: source => source, MarkdownContent: 'markdown' },
+    '@/components/MarkdownContent': { cardMarkdownSummary: source => source, questionMarkdownSummary: source => source, questionMarkdownKind: () => 'plain', MarkdownContent: 'markdown' },
     './StudyCreatorIcon': { StudyCreatorIcon: 'icon' },
     './StudyCreatorClient.module.css': { __esModule: true, default: new Proxy({}, { get: (_target, key) => String(key) }) },
   };

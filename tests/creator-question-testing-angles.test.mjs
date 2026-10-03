@@ -1,3 +1,4 @@
+import { formatSaveResponse } from './fixtures/creator-role-workspaces.mjs';
 import { questionImageBoundary } from './fixtures/question-media-authoring.mjs';
 import { conceptMedia, conceptImageBoundary, conceptContentBoundary } from './fixtures/concept-media-authoring.mjs';
 import * as markdownEditing from '../lib/markdown-editing.ts';
@@ -66,11 +67,7 @@ function editor({ editing = false, response, references = [] } = {}) {
       if (name === 'get_creator_questions') return response ? response(name, payload) : { data: [], error: null };
       calls.push({ name, payload });
       if (response) return response(name, payload);
-      return { data: name === 'save_question_with_relationships_v2'
-        ? { id: payload.p_question_id || 'saved-question' }
-        : { concept_id: payload.p_concept_id || 'saved-concept', references: payload.p_references.map(r => ({
-          client_id: r.client_id, source_id: 'source', attribution_id: 'attribution',
-        })) }, error: null };
+      return formatSaveResponse(name, payload);
     },
     from(table) {
       const query = {
@@ -87,7 +84,9 @@ function editor({ editing = false, response, references = [] } = {}) {
     'next/navigation': { useRouter: () => ({ push: path => routes.push(path), replace: path => routes.push(path), refresh: () => routes.push('refresh') }) },
     'lucide-react': {},
     '@/components/Header': {},
-    '@/components/MarkdownContent': { cardMarkdownSummary: source => source },
+    '@/components/MarkdownContent': { cardMarkdownSummary: source => source, questionMarkdownSummary: source => source },
+    './creator/QuestionMarkdownField': { QuestionMarkdownField() {} },
+    './creator/OfficialVisualField': { __esModule: true, default: function OfficialVisualField() {} },
     '@/components/ConceptMediaContent': conceptContentBoundary,
     '@/components/creator/QuestionImageAuthoring': questionImageBoundary,
     '@/components/creator/ConceptImageAuthoring': conceptImageBoundary,
@@ -136,7 +135,7 @@ function editor({ editing = false, response, references = [] } = {}) {
       isQuestionEditorIdentity: (state, source, id) => source === 'official' ? state.mode === 'official-question' && state.identity.id === id : state.mode === 'personal-card' && state.identity.id === id,
       tryAcquireMutationLock: lock => lock.current ? false : (lock.current = true),
       releaseMutationLock: lock => { lock.current = false; },
-      resolveOfficialCreatorCommand: command => ({ rpc: command.type === 'save-concept' ? 'save_concept_with_prerequisites' : command.type === 'save-question' ? 'save_question_with_relationships_v2' : command.type === 'inspect-delete' ? 'get_development_delete_summary' : command.type === 'delete-content' ? 'delete_development_content' : '' }),
+      resolveOfficialCreatorCommand: command => ({ rpc: command.type === 'save-concept' ? 'save_concept_with_format' : command.type === 'save-question' ? 'save_question_with_format' : command.type === 'inspect-delete' ? 'get_development_delete_summary' : command.type === 'delete-content' ? 'delete_development_content' : '' }),
     },
     './CreatorAlgorithmDiagnostics': {},
     './CreatorTopicTreeInteraction': {},
@@ -182,12 +181,12 @@ test('Additional angle cluster participates in dirty state and survives rapid en
  e.setQuestionAdditionalTestingAngles(['Recall','Application']); e.setQuestionTestingAngle('Mechanism');
  assert.equal(h.render().isQuestionDirty,true);
  e.setQuestionPrompt('One'); e.setQuestionAnswer('Answer'); await h.render().saveQuestion(); e=h.render();
- assert.deepEqual([...h.calls[0].payload.p_additional_testing_angles],['Recall','Application']);
+ assert.deepEqual([...h.calls[0].payload.p_payload.p_additional_testing_angles],['Recall','Application']);
  assert.equal(e.questionTestingAngle,'Mechanism'); assert.deepEqual([...e.questionAdditionalTestingAngles],['Recall','Application']);
  assert.equal(e.isQuestionDirty,false); assert.equal(e.questionPrompt,'');
  e.setQuestionAdditionalTestingAngles(['Application','Recall']); assert.equal(h.render().isQuestionDirty,false);
  e.setQuestionPrompt('Two');e.setQuestionAnswer('Answer');await h.render().saveQuestion();
- assert.equal(h.calls[1].payload.p_question_id,null);assert.equal(h.calls[1].payload.p_additional_testing_angles.length,2);
+ assert.equal(h.calls[1].payload.p_payload.p_question_id,null);assert.equal(h.calls[1].payload.p_payload.p_additional_testing_angles.length,2);
 });
 test('failed save preserves Additional angles and dirty form', async () => {
  const h=editor({editing:true,response:()=>({error:{message:'Rejected'}})});const e=h.render();
@@ -195,10 +194,10 @@ test('failed save preserves Additional angles and dirty form', async () => {
  await h.render().saveQuestion();assert.deepEqual([...h.render().questionAdditionalTestingAngles],['Recall']);assert.equal(h.render().questionPrompt,'Keep');assert.equal(h.render().isQuestionDirty,true);
 });
 test('reload restores Additional and edits can clear them', async () => {
- const h=editor({editing:true,response:name=>({data:name==='get_creator_questions'?[{id:'q',concept_id:'existing-concept',prompt:'Question',testing_angle:'Mechanism',additional_testing_angles:['Recall','Application'],question_accepted_answers:[{answer_text:'Answer'}]}]:{id:'q'},error:null})});
+ const h=editor({editing:true,response:(name,payload)=>name==='save_question_with_format'?formatSaveResponse(name,payload):({data:name==='get_creator_questions'?[{id:'q',concept_id:'existing-concept',prompt:'Question',testing_angle:'Mechanism',additional_testing_angles:['Recall','Application'],question_accepted_answers:[{answer_text:'Answer'}]}]:{id:'q'},error:null})});
  const [q]=await h.render().fetchExistingQuestions('existing-concept','library');
  h.render().selectExistingQuestion(q);assert.deepEqual([...h.render().questionAdditionalTestingAngles],['Recall','Application']);assert.equal(h.render().isQuestionDirty,false);
- h.render().setQuestionAdditionalTestingAngles([]);await h.render().saveQuestion();assert.equal(h.calls[0].payload.p_additional_testing_angles.length,0);assert.equal(h.render().isQuestionDirty,false);
+ h.render().setQuestionAdditionalTestingAngles([]);await h.render().saveQuestion();assert.equal(h.calls[0].payload.p_payload.p_additional_testing_angles.length,0);assert.equal(h.render().isQuestionDirty,false);
 });
 function nodes(tree,predicate,result=[]) {if(!tree||typeof tree!=='object')return result;if(predicate(tree))result.push(tree);for(const child of [tree.props?.children].flat(Infinity))nodes(child,predicate,result);return result;}
 function control(h, label) {
@@ -251,7 +250,7 @@ test('filter retains Primary, preserves selections, and normalized historical va
  assert.equal(h.calls.length,0);
 });
 test('hydrated unified selections preserve Primary and Additional; explicit New resets angle defaults',async()=>{
- const h=editor({editing:true,response:name=>({data:name==='get_creator_questions'?[{id:'q',concept_id:'existing-concept',prompt:'Question',testing_angle:'Mechanism',additional_testing_angles:['Recall','Application'],question_accepted_answers:[{answer_text:'Answer'}]}]:{id:'q'},error:null})});
+ const h=editor({editing:true,response:(name,payload)=>name==='save_question_with_format'?formatSaveResponse(name,payload):({data:name==='get_creator_questions'?[{id:'q',concept_id:'existing-concept',prompt:'Question',testing_angle:'Mechanism',additional_testing_angles:['Recall','Application'],question_accepted_answers:[{answer_text:'Answer'}]}]:{id:'q'},error:null})});
  const [q]=await h.render().fetchExistingQuestions('existing-concept','library');
  h.render().selectExistingQuestion(q);h.render().setActiveCreatorTab('questions');
  assert.equal(angle(h,'Mechanism').props.disabled,true);

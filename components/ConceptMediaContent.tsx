@@ -1,5 +1,7 @@
 'use client';
 
+import type { OfficialContentFormat } from '@/lib/official-content-format';
+
 import { useEffect, useState } from 'react';
 import VerifiedMediaImage from './VerifiedMediaImage';
 import { MarkdownContent } from './MarkdownContent';
@@ -19,8 +21,9 @@ export function VerifiedConceptImage({ placement, context }: { placement: Concep
   return <VerifiedMediaImage placement={placement} src={conceptImageSource(placement, context)} />;
 }
 
-export default function ConceptMediaContent({ markdown, conceptId, libraryId, context, placements }: {
+export default function ConceptMediaContent({ markdown, format = 'legacy', conceptId, libraryId, context, placements }: {
   markdown: string;
+  format?: OfficialContentFormat;
   conceptId?: string | null;
   libraryId?: string | null;
   context?: ConceptMediaContext | null;
@@ -30,7 +33,7 @@ export default function ConceptMediaContent({ markdown, conceptId, libraryId, co
   let blocks: ReturnType<typeof conceptMediaBlocks> = [];
   try { if (markdown.includes('[[socrates-media:')) blocks = conceptMediaBlocks(markdown); } catch { /* Malformed source remains literal. */ }
   const needsMedia = blocks.length > 0;
-  const key = `${libraryId}:${conceptId}:${markdown}`;
+  const key = `${libraryId}:${conceptId}:${format}:${markdown}`;
   useEffect(() => {
     if (!needsMedia || placements || !conceptId || !libraryId) return;
     const controller = new AbortController();
@@ -38,17 +41,17 @@ export default function ConceptMediaContent({ markdown, conceptId, libraryId, co
       .then(async response => {
         if (!response.ok) throw new Error('Unavailable');
         const manifest = await response.json() as ConceptMediaManifest;
-        if (manifest.conceptId !== conceptId || manifest.bodyMarkdown !== markdown) throw new Error('Concept changed');
+        if (manifest.conceptId !== conceptId || manifest.bodyMarkdown !== markdown || (manifest.body_format ?? 'legacy') !== format) throw new Error('Concept changed');
         if (!controller.signal.aborted) setLoaded({ key, manifest });
       }).catch(() => { if (!controller.signal.aborted) setLoaded({ key }); });
     return () => controller.abort();
-  }, [key, needsMedia, placements, conceptId, libraryId, markdown]);
-  if (!needsMedia) return <MarkdownContent markdown={markdown} />;
+  }, [key, needsMedia, placements, conceptId, libraryId, markdown, format]);
+  if (!needsMedia) return <MarkdownContent markdown={markdown} format={format} />;
   const current = placements || (loaded?.key === key ? loaded.manifest?.placements : undefined) || [];
   const byId = new Map(current.map(p => [p.placementId, p]));
   const byLine = new Map(blocks.map(b => [b.line, b.id]));
   const imageContext = context || (conceptId && libraryId ? { kind: 'concept' as const, conceptId, libraryId } : null);
-  return <MarkdownContent markdown={markdown} renderConceptBlock={(_line, line) => {
+  return <MarkdownContent markdown={markdown} format={format} renderConceptBlock={(_line, line) => {
     const id = byLine.get(line);
     if (!id) return undefined;
     const placement = byId.get(id);

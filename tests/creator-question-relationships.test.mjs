@@ -1,3 +1,4 @@
+import { formatSaveResponse } from './fixtures/creator-role-workspaces.mjs';
 import { questionImageBoundary } from './fixtures/question-media-authoring.mjs';
 import { conceptMedia, conceptImageBoundary, conceptContentBoundary } from './fixtures/concept-media-authoring.mjs';
 import * as markdownEditing from '../lib/markdown-editing.ts';
@@ -66,11 +67,7 @@ function editor({ editing = false, response, references = [] } = {}) {
       if (name === 'get_creator_questions') return response ? response(name, payload) : { data: [], error: null };
       calls.push({ name, payload });
       if (response) return response(name, payload);
-      return { data: name === 'save_question_with_relationships_v2'
-        ? { id: payload.p_question_id || 'saved-question' }
-        : { concept_id: payload.p_concept_id || 'saved-concept', references: payload.p_references.map(r => ({
-          client_id: r.client_id, source_id: 'source', attribution_id: 'attribution',
-        })) }, error: null };
+      return formatSaveResponse(name, payload);
     },
     from(table) {
       const query = {
@@ -87,7 +84,9 @@ function editor({ editing = false, response, references = [] } = {}) {
     'next/navigation': { useRouter: () => ({ push: path => routes.push(path), replace: path => routes.push(path), refresh: () => routes.push('refresh') }) },
     'lucide-react': {},
     '@/components/Header': {},
-    '@/components/MarkdownContent': { cardMarkdownSummary: source => source },
+    '@/components/MarkdownContent': { cardMarkdownSummary: source => source, questionMarkdownSummary: source => source },
+    './creator/QuestionMarkdownField': { QuestionMarkdownField() {} },
+    './creator/OfficialVisualField': { __esModule: true, default: function OfficialVisualField() {} },
     '@/components/ConceptMediaContent': conceptContentBoundary,
     '@/components/creator/QuestionImageAuthoring': questionImageBoundary,
     '@/components/creator/ConceptImageAuthoring': conceptImageBoundary,
@@ -136,7 +135,7 @@ function editor({ editing = false, response, references = [] } = {}) {
       isQuestionEditorIdentity: (state, source, id) => source === 'official' ? state.mode === 'official-question' && state.identity.id === id : state.mode === 'personal-card' && state.identity.id === id,
       tryAcquireMutationLock: lock => lock.current ? false : (lock.current = true),
       releaseMutationLock: lock => { lock.current = false; },
-      resolveOfficialCreatorCommand: command => ({ rpc: command.type === 'save-concept' ? 'save_concept_with_prerequisites' : command.type === 'save-question' ? 'save_question_with_relationships_v2' : command.type === 'inspect-delete' ? 'get_development_delete_summary' : command.type === 'delete-content' ? 'delete_development_content' : '' }),
+      resolveOfficialCreatorCommand: command => ({ rpc: command.type === 'save-concept' ? 'save_concept_with_format' : command.type === 'save-question' ? 'save_question_with_format' : command.type === 'inspect-delete' ? 'get_development_delete_summary' : command.type === 'delete-content' ? 'delete_development_content' : '' }),
     },
     './CreatorAlgorithmDiagnostics': {},
     './CreatorTopicTreeInteraction': {},
@@ -183,8 +182,8 @@ test('related selections participate in dirty state and persist across rapid sav
   assert.equal(h.render().isQuestionDirty, true);
   e.setQuestionPrompt('Batch 1'); e.setQuestionAnswer('Answer');
   await h.render().saveQuestion(); e = h.render();
-  assert.deepEqual([...h.calls[0].payload.p_related_concept_ids], ['related-b', 'related-a']);
-  assert.equal(h.calls[0].payload.p_active_library_id, 'library');
+  assert.deepEqual([...h.calls[0].payload.p_payload.p_related_concept_ids], ['related-b', 'related-a']);
+  assert.equal(h.calls[0].payload.p_payload.p_active_library_id, 'library');
   assert.deepEqual([...e.questionRelatedConceptIds], ['related-b', 'related-a']);
   assert.equal(e.questionPrompt, ''); assert.equal(e.questionAnswer, '');
   assert.equal(e.isQuestionDirty, false);
@@ -192,8 +191,8 @@ test('related selections participate in dirty state and persist across rapid sav
   assert.equal(h.render().isQuestionDirty, false, 'selection order is not a change');
   e.setQuestionPrompt('Batch 2'); e.setQuestionAnswer('Answer 2');
   await h.render().saveQuestion();
-  assert.equal(h.calls[1].payload.p_question_id, null);
-  assert.equal(h.calls[1].payload.p_related_concept_ids.length, 2);
+  assert.equal(h.calls[1].payload.p_payload.p_question_id, null);
+  assert.equal(h.calls[1].payload.p_payload.p_related_concept_ids.length, 2);
 });
 
 test('related browse edits retain true Primary; empty selection clears explicitly', async () => {
@@ -204,8 +203,8 @@ test('related browse edits retain true Primary; empty selection clears explicitl
   assert.equal(e.primaryQuestionConceptId, 'true-primary');
   assert.equal(e.isQuestionDirty, false);
   e.setQuestionRelatedConceptIds([]); await h.render().saveQuestion();
-  assert.equal(h.calls[0].payload.p_concept_id, 'true-primary');
-  assert.equal(h.calls[0].payload.p_related_concept_ids.length, 0);
+  assert.equal(h.calls[0].payload.p_payload.p_concept_id, 'true-primary');
+  assert.equal(h.calls[0].payload.p_payload.p_related_concept_ids.length, 0);
   assert.equal(h.render().isQuestionDirty, false);
   h.render().startNewQuestion();
   assert.equal(h.render().primaryQuestionConceptId, 'existing-concept');

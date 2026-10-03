@@ -200,7 +200,7 @@ test('Concept review dialog is scrollable, keyboard-contained, and returns focus
 });
 
 test('modal reuses safe Markdown rendering and exposes only attributed source labels', () => {
-  assert.match(planner, /<ConceptMediaContent markdown=\{conceptReview\.bodyMarkdown\} conceptId=\{conceptReview\.conceptId\} libraryId=\{activeLibrary\?\.id\} \/>/);
+  assert.match(planner, /<ConceptMediaContent markdown=\{conceptReview\.bodyMarkdown\} format=\{conceptReview\.bodyFormat\} conceptId=\{conceptReview\.conceptId\} libraryId=\{activeLibrary\?\.id\} \/>/);
   assert.match(planner, /No Concept review content is available yet\./);
   assert.match(planner, /rel="noreferrer"[\s\S]*target="_blank"/);
   const reviewStart = planner.indexOf('study-v2-concept-review-modal');

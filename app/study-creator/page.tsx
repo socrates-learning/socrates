@@ -1,3 +1,4 @@
+import type { OfficialContentFormat } from '@/lib/official-content-format';
 import { Header, HeaderSessionProvider } from '@/components/Header';
 import { StudyCreatorClient } from '@/components/StudyCreatorClient';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
@@ -67,6 +68,7 @@ export default async function StudyCreatorPage() {
             summary,
             why_it_matters,
             body_markdown,
+            body_format,
             status
           )
         `)
@@ -95,6 +97,7 @@ export default async function StudyCreatorPage() {
         summary: string | null;
         whyItMatters: string | null;
         bodyMarkdown: string;
+        bodyFormat?: OfficialContentFormat;
         placementNodeIds: string[];
       }
     >();
@@ -107,6 +110,7 @@ export default async function StudyCreatorPage() {
             summary: string | null;
             why_it_matters: string | null;
             body_markdown: string | null;
+            body_format?: OfficialContentFormat;
           }
         | Array<{
             id: string;
@@ -114,6 +118,7 @@ export default async function StudyCreatorPage() {
             summary: string | null;
             why_it_matters: string | null;
             body_markdown: string | null;
+            body_format?: OfficialContentFormat;
           }>
         | null;
       const concept = Array.isArray(related) ? related[0] : related;
@@ -133,6 +138,7 @@ export default async function StudyCreatorPage() {
         summary: concept.summary,
         whyItMatters: concept.why_it_matters,
         bodyMarkdown: concept.body_markdown ?? '',
+        bodyFormat: concept.body_format,
         placementNodeIds: [placement.library_node_id],
       });
     });
@@ -142,7 +148,7 @@ export default async function StudyCreatorPage() {
       ? await supabase
           .from('questions')
           .select(
-            'id, concept_id, prompt, explanation, difficulty, testing_angle, question_type, status, sort_order, created_at, question_media_hint'
+            'id, concept_id, prompt, prompt_format, explanation, difficulty, testing_angle, question_type, status, sort_order, created_at, question_media_hint'
           )
           .in('concept_id', conceptIds)
           .eq('status', 'published')

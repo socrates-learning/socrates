@@ -1,3 +1,4 @@
+import * as officialFormat from '../lib/official-content-format.ts';
 import { questionContentBoundary } from './fixtures/question-media-authoring.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -14,7 +15,7 @@ function load(source, modules) {
  vm.runInNewContext(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText,context);
  return context.exports;
 }
-const markdown=load(read('components/MarkdownContent.tsx'),{react:React,'react/jsx-runtime':jsx,'./MarkdownContent.module.css':{default:{card:'card'}}});
+const markdown=load(read('components/MarkdownContent.tsx'),{'@/lib/official-content-format':officialFormat,react:React,'react/jsx-runtime':jsx,'./MarkdownContent.module.css':{default:{card:'card'}}});
 const rich='## Central Line Care\nRemember **sterile technique** and *hand hygiene*.\n- Assess the site\n- Change dressing\n\n> Watch closely.\n[CDC guidance](https://www.cdc.gov)';
 const planner=read('components/StudyPlanner.tsx');
 // Compile the actual presentation expressions; no copied candidate rendering expectations.
@@ -26,19 +27,20 @@ function renderStudy(index,kind,concept){
  const source=`export function View({studyCandidate,studyAnswer}){return (${expressions[index]});}`;
  const {View}=load(source,{'react/jsx-runtime':jsx});
  // Resolve the renderer identifier without moving any production ownership.
- const context={exports:{},MarkdownContent:markdown.MarkdownContent,require:()=>jsx};
+ const context={exports:{},...markdown,require:()=>jsx};
  vm.runInNewContext(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText,context);
  assert.equal(typeof View,'function');
  return renderToStaticMarkup(React.createElement(context.exports.View,{studyCandidate:{kind,personalConceptId:concept,prompt:rich},studyAnswer:rich}));
 }
-test('all three Study/Cram content slots opt in only for standalone Cards with valid block markup',()=>{
+test('all three Study/Cram slots preserve standalone rich text and legacy plain text independently of official opt-in',()=>{
  assert.equal(expressions.length,3);
  for(let i=0;i<3;i++){
   const html=renderStudy(i,'personal',null);assert.match(html,/<h2>Central Line Care<\/h2>/);assert.match(html,/<blockquote>/);assert.match(html,/<strong>sterile technique<\/strong>/);
   assert.doesNotMatch(html,/<(?:h1|h2|p)[^>]*><div/);
   if(i===0)assert.doesNotMatch(html,/<a /);else assert.match(html,/<a href="https:\/\/www.cdc.gov"/);
+  const official=renderStudy(i,'official','concept');assert.match(official,/\*\*sterile technique\*\*/);assert.doesNotMatch(official,/<strong>|<a /);
   if(i===1)assert.match(html,/<h2 id="study-revealed-question-heading" class="study-v2-sr-only">## Central Line Care/);
-  for(const [kind,concept] of [['official','concept'],['personal','concept']]){
+  for(const [kind,concept] of [['personal','concept']]){
    const legacy=renderStudy(i,kind,concept);assert.match(legacy,/## Central Line Care/);assert.doesNotMatch(legacy,/<a |<blockquote>|<strong>/);
   }
  }

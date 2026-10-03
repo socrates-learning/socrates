@@ -57,18 +57,18 @@ for (const role of ['admin', 'editor']) {
         e = h.render();
         await e.saveCurrentQuestion();
         e = h.render();
-        const command = h.calls.find(c => c.name === 'save_question_with_relationships_v2');
+        const command = h.calls.find(c => c.name === 'save_question_with_format');
         assert.ok(command);
-        assert.equal(command.payload.p_question_id, null);
-        assert.equal(command.payload.p_concept_id, 'primary');
-        assert.equal(command.payload.p_prompt, 'Question?');
-        assert.deepEqual(plain(command.payload.p_accepted_answers), [{ answer_text: 'Answer', sort_order: 0 }]);
+        assert.equal(command.payload.p_payload.p_question_id, null);
+        assert.equal(command.payload.p_payload.p_concept_id, 'primary');
+        assert.equal(command.payload.p_payload.p_prompt, 'Question?');
+        assert.deepEqual(plain(command.payload.p_payload.p_accepted_answers), [{ id: null, answer_text: 'Answer', answer_format: 'visual_markdown_v1', sort_order: 0 }]);
         assert.equal(e.questionPrompt, '');
         assert.equal(e.questionAnswer, '');
         assert.equal(e.questionId, null);
         assert.equal(e.questionConceptId, 'primary');
-        assert.equal(command.payload.p_difficulty, 'medium');
-        assert.equal(command.payload.p_status, 'published');
+        assert.equal(command.payload.p_payload.p_difficulty, 'medium');
+        assert.equal(command.payload.p_payload.p_status, 'published');
         assert.equal(e.questionDifficulty, 'medium');
         assert.equal(e.questionRecordStatus, 'published');
         assert.deepEqual(plain(e.questionRelatedConceptIds), ['related']);
@@ -97,17 +97,17 @@ test('edit save preserves identity and Primary while updating its source', async
     assert.equal(e.questionAnswer, 'Updated');
     assert.equal(e.primaryQuestionConceptId, 'primary');
     assert.equal(e.isQuestionDirty, false);
-    const p = h.calls.find(c => c.name === 'save_question_with_relationships_v2').payload;
+    const p = h.calls.find(c => c.name === 'save_question_with_format').payload.p_payload;
     assert.equal(p.p_question_id, 'q1');
     assert.equal(p.p_concept_id, 'primary');
 });
 test('failure retains draft and releases busy state; concurrent save dispatches once', async () => {
     let release;
-    const h = questions({ response: name => name === 'save_question_with_relationships_v2' ? new Promise(resolve => { release = resolve; }) : undefined });
+    const h = questions({ response: name => name === 'save_question_with_format' ? new Promise(resolve => { release = resolve; }) : undefined });
     const e = draft(h);
     const a = e.saveCurrentQuestion();
     const b = e.saveCurrentQuestion();
-    assert.equal(h.calls.filter(c => c.name === 'save_question_with_relationships_v2').length, 1);
+    assert.equal(h.calls.filter(c => c.name === 'save_question_with_format').length, 1);
     assert.equal(h.render().isSavingQuestion, true);
     h.render().startNewQuestion();
     assert.equal(h.render().questionPrompt, 'Question?');
@@ -400,7 +400,7 @@ test('staff without manageable Library cannot dispatch official save', async () 
     h.props.creatorCapabilities = deriveCreatorCapabilities({ userId: 'owner', role: 'editor', library: { activeLibraryId: 'library', canAccessActiveLibrary: true, canManageActiveLibrary: false } });
     draft(h);
     await assert.rejects(h.render().saveCurrentQuestion(), /not permitted/);
-    assert.equal(h.calls.filter(c => c.name === 'save_question_with_relationships_v2').length, 0);
+    assert.equal(h.calls.filter(c => c.name === 'save_question_with_format').length, 0);
 });
 test('Existing Questions effect cleanup blocks stale completion; failed current load shows error', async () => {
     const pending = [];
@@ -552,7 +552,7 @@ for (const role of ['admin', 'editor']) {
     });
     test(`${role}: in-flight Question save blocks Search until completion`, async () => {
         let finish;
-        const h = questions({ role, response: name => name === 'save_question_with_relationships_v2' ? new Promise(resolve => { finish = resolve; }) : undefined });
+        const h = questions({ role, response: name => name === 'save_question_with_format' ? new Promise(resolve => { finish = resolve; }) : undefined });
         const e = draft(h);
         const before = questionSnapshot(h);
         const staleTabs = nodes(e.tree).find(n => n.type?.name === 'CreatorStudioTabs');
@@ -634,10 +634,24 @@ for (const role of ['admin', 'editor']) {
   assert.ok(nodes(tree).some(n=>n.props?.['aria-label']==='Make Related Primary'));
  });
  test(`${role}: failed association save preserves draft and relationship selection`, async()=>{
-  const h=questions({role,response:name=>name==='save_question_with_relationships_v2'?{data:null,error:{message:'Rejected'}}:undefined});
+  const h=questions({role,response:name=>name==='save_question_with_format'?{data:null,error:{message:'Rejected'}}:undefined});
   h.render().setQuestionConceptsByTopicId({topic:[{id:'primary',name:'Primary'},{id:'related',name:'Related'}]});
   h.render().associateQuestionConcept('primary',true);h.render().associateQuestionConcept('related',true);
   h.render().setQuestionPrompt('Draft');h.render().setQuestionAnswer('Answer');await h.render().saveCurrentQuestion();
   const e=h.render();assert.equal(e.primaryQuestionConceptId,'primary');assert.deepEqual(plain(e.questionRelatedConceptIds),['related']);assert.equal(e.questionAnswer,'Answer');assert.equal(e.isQuestionDirty,true);
  });
 }
+
+for (const role of ['admin', 'editor']) test(`${role}: server-qualified Article handoff loads actual Question identity and independent markers exactly once`, () => {
+  const h = editor({ role });
+  h.props.initialQuestion = row({ prompt_format: 'visual_markdown_v1', current_version_id: 'question-version', question_type: 'short_answer', question_accepted_answers: [{ id: 'answer-id', answer_text: '1. legacy answer', answer_format: 'legacy', sort_order: 0 }] });
+  h.render(); h.runEffect('questionHandoffHandler.current ='); h.runEffect('initialQuestionLoaded.current');
+  let e = h.render();
+  assert.equal(e.activeCreatorTab, 'questions'); assert.equal(e.questionId, 'q1'); assert.equal(e.primaryQuestionConceptId, 'primary');
+  const fields = nodes(e.tree).filter(n => n.type?.name === 'QuestionMarkdownField');
+  assert.deepEqual(fields.map(f => f.props.format), ['visual_markdown_v1', 'legacy']);
+  assert.equal(e.questionAnswer, '1. legacy answer'); assert.equal(e.isQuestionDirty, false); assert.equal(h.calls.length, 0);
+  fields[0].props.onChange('Retained edit', 'visual_markdown_v1'); e = h.render();
+  h.runEffect('questionHandoffHandler.current ='); h.runEffect('initialQuestionLoaded.current');
+  assert.equal(h.render().questionPrompt, 'Retained edit'); assert.equal(h.render().isQuestionDirty, true); assert.equal(h.calls.length, 0);
+});

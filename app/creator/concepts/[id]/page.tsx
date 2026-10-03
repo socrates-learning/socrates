@@ -9,8 +9,10 @@ import { createSupabaseServerClient } from '@/lib/supabase-server';
 
 export default async function EditConceptPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams?: Promise<{ question?: string }>;
 }) {
   const { id } = await params;
   const context = await resolveActiveLibraryContext({ failOnQueryError: true });
@@ -30,7 +32,7 @@ export default async function EditConceptPage({
       .maybeSingle(),
     supabase
       .from('concepts')
-      .select('id, name, body_markdown, current_version_id')
+      .select('id, name, body_markdown, body_format, current_version_id, updated_at')
       .eq('id', id)
       .maybeSingle(),
     loadCreatorPersonalContent(supabase, capabilities.subject.userId),
@@ -42,6 +44,15 @@ export default async function EditConceptPage({
   const concept = readCreatorQueryData(conceptResult, 'the requested Concept');
 
   if (!activeLibrary || !concept) notFound();
+  const questionId = (await searchParams)?.question;
+  let initialQuestion = null;
+  if (questionId) {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(questionId)) notFound();
+    const result = await supabase.rpc('get_creator_questions_with_media', { p_concept_id: concept.id, p_active_library_id: activeLibrary.id });
+    const rows = readCreatorQueryData(result, 'the requested Question');
+    initialQuestion = (rows || []).find((row: { id: string; concept_id: string }) => row.id === questionId && row.concept_id === concept.id) || null;
+    if (!initialQuestion) notFound();
+  }
   const nodes = [...(activeLibrary.library_nodes || [])].sort(
     (left, right) => {
       if (left.sort_order === null && right.sort_order !== null) return 1;
@@ -114,12 +125,15 @@ export default async function EditConceptPage({
       activeLibraryId={activeLibrary.id}
       creatorCapabilities={capabilities}
       initialPersonalContent={personalContent}
+      initialQuestion={initialQuestion}
       initialTopics={buildConceptTopicTree(nodes || [], true)}
       initialConcept={{
         id: concept.id,
         name: concept.name,
         bodyMarkdown: concept.body_markdown || '',
         currentVersionId: concept.current_version_id,
+        bodyFormat: concept.body_format,
+        updatedAt: concept.updated_at,
         placementIds: (placements || []).map(
           (placement) => placement.library_node_id
         ),

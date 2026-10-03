@@ -84,6 +84,7 @@ export default async function ConceptPage({
         summary,
         why_it_matters,
         body_markdown,
+        body_format,
         status
       `)
       .eq('id', id)
@@ -107,6 +108,7 @@ export default async function ConceptPage({
         summary,
         why_it_matters,
         body_markdown,
+        body_format,
         status
       `);
 
@@ -410,6 +412,7 @@ export default async function ConceptPage({
             summary={concept.summary}
             whyItMatters={concept.why_it_matters}
             bodyMarkdown={concept.body_markdown}
+            bodyFormat={concept.body_format}
             status={concept.status}
             sections={sectionsWithHistoricalAccuracy}
             sources={sources}

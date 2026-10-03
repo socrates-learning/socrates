@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import VerifiedMediaImage from '@/components/VerifiedMediaImage';
 import { orderedQuestionMedia, questionImageSource, questionMediaEndpoint, questionMediaFingerprint, questionMediaMatches, type QuestionMediaContext, type QuestionMediaHint, type QuestionMediaManifest, type QuestionMediaPlacement, type QuestionMediaSurface } from '@/lib/question-media';
+import type { OfficialContentFormat } from '@/lib/official-content-format';
 import styles from '@/components/ConceptMedia.module.css';
 
 class RequestFailure extends Error { constructor(message: string, public status = 0) { super(message); } }
@@ -25,8 +26,8 @@ function empty(key: string, version: string | null, loading = false): State {
 }
 
 /** Creator owns this controller across Questions/Search; neither text nor selection lives here. */
-export function useQuestionImageAuthoring({ libraryId, questionId, enabled, hint, basePrompt, baseAnswer }: {
-  libraryId: string; questionId: string | null; enabled: boolean; hint?: QuestionMediaHint | null; basePrompt: string; baseAnswer: string;
+export function useQuestionImageAuthoring({ libraryId, questionId, enabled, hint, basePrompt, baseAnswer, basePromptFormat = 'legacy', baseAnswerFormat = 'legacy' }: {
+  libraryId: string; questionId: string | null; enabled: boolean; hint?: QuestionMediaHint | null; basePrompt: string; baseAnswer: string; basePromptFormat?: OfficialContentFormat; baseAnswerFormat?: OfficialContentFormat;
 }) {
   const key = `${libraryId}:${questionId || 'new'}:${enabled}`;
   const hasImages = Boolean(enabled && questionId && (hint?.front || hint?.answer));
@@ -45,12 +46,12 @@ export function useQuestionImageAuthoring({ libraryId, questionId, enabled, hint
     if (!hasImages || !hint || !questionId) return;
     const controller = new AbortController(); abort.current = controller;
     void requestJSON(`${questionMediaEndpoint({ questionId })}?libraryId=${encodeURIComponent(libraryId)}`, { signal: controller.signal }).then((manifest: QuestionMediaManifest) => {
-      if (!questionMediaMatches(manifest, hint, basePrompt, baseAnswer)) throw new Error('Question changed. Reload before editing images.');
+      if (!questionMediaMatches(manifest, hint, basePrompt, baseAnswer) || (manifest.prompt_format || 'legacy') !== basePromptFormat || (manifest.answer_format || 'legacy') !== baseAnswerFormat) throw new Error('Question changed. Reload before editing images.');
       const items = orderedQuestionMedia(manifest.placements);
       if (generation.current === version && !controller.signal.aborted) setState({ ...empty(key, manifest.versionId), entered: true, items, baseline: questionMediaFingerprint(items) });
     }).catch(error => { if (generation.current === version && !controller.signal.aborted) setState(s => ({ ...s, pending: false, entered: true, error: error.message })); });
     return () => controller.abort();
-  }, [key, enabled, questionId, libraryId, hasImages, hint, basePrompt, baseAnswer]); // The loaded record, not typing, controls hydration.
+  }, [key, enabled, questionId, libraryId, hasImages, hint, basePrompt, baseAnswer, basePromptFormat, baseAnswerFormat]); // The loaded record, not typing, controls hydration.
 
   useEffect(() => {
     const context = state.context;
@@ -71,7 +72,7 @@ export function useQuestionImageAuthoring({ libraryId, questionId, enabled, hint
     let versionId = current.version;
     if (questionId) {
       const manifest = await requestJSON(`${questionMediaEndpoint({ questionId })}?libraryId=${encodeURIComponent(libraryId)}`) as QuestionMediaManifest;
-      if (manifest.prompt !== basePrompt || manifest.answer !== baseAnswer || manifest.questionId !== questionId || manifest.libraryId !== libraryId || (hint && manifest.versionId !== hint.versionId)) throw new Error('Question changed. Reload before adding images.');
+      if (manifest.prompt !== basePrompt || manifest.answer !== baseAnswer || (manifest.prompt_format || 'legacy') !== basePromptFormat || (manifest.answer_format || 'legacy') !== baseAnswerFormat || manifest.questionId !== questionId || manifest.libraryId !== libraryId || (hint && manifest.versionId !== hint.versionId)) throw new Error('Question changed. Reload before adding images.');
       if (questionMediaFingerprint(manifest.placements) !== current.baseline) throw new Error('Question images changed. Reload before adding images.');
       versionId = manifest.versionId;
     }
@@ -180,7 +181,7 @@ export function useQuestionImageAuthoring({ libraryId, questionId, enabled, hint
         // Reconcile a lost response using the SAME receipt and exact payload, never a fresh create.
         data = await post(context, 'save', { payload: full });
       }
-      if (!data.id || !data.current_version_id || data.prompt !== payload.p_prompt || data.answer !== (payload.p_accepted_answers as { answer_text: string }[])[0].answer_text || questionMediaFingerprint(data.placements) !== questionMediaFingerprint(placements)) throw new Error('Question save readback differs. Your draft is preserved.');
+      if (!data.id || !data.current_version_id || (payload.p_prompt_format !== undefined && (!data.updated_at || data.prompt_format !== payload.p_prompt_format || data.answer_format !== (payload.p_accepted_answers as { answer_format: string }[])[0].answer_format)) || data.prompt !== payload.p_prompt || data.answer !== (payload.p_accepted_answers as { answer_text: string }[])[0].answer_text || questionMediaFingerprint(data.placements) !== questionMediaFingerprint(placements)) throw new Error('Question save readback differs. Your draft is preserved.');
       if (generation.current !== version) throw new Error('Question context changed. Your current draft is preserved.');
       uncertainPayload.current = null;
       if (questionId) setState(s => ({ ...s, context: null, version: data.current_version_id, items: data.placements, baseline: questionMediaFingerprint(data.placements), uncertain: false, error: '' }));

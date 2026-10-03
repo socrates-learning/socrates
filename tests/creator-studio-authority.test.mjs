@@ -247,7 +247,7 @@ test('official Concept dispatch preserves the atomic versioned save target', () 
   assert.deepEqual(JSON.parse(JSON.stringify(command)), {
     source: 'official',
     transport: 'supabase-rpc',
-    rpc: 'save_concept_with_prerequisites',
+    rpc: 'save_concept_with_format',
   });
 });
 
@@ -264,7 +264,7 @@ test('official Question dispatch preserves relationships and its versioned save 
     authority()
   );
 
-  assert.equal(command.rpc, 'save_question_with_relationships_v2');
+  assert.equal(command.rpc, 'save_question_with_format');
 });
 
 test('official Topic and Tag commands resolve only their existing RPCs', () => {

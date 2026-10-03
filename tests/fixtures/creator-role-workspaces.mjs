@@ -1,3 +1,6 @@
+import * as officialFormat from '../../lib/official-content-format.ts';
+import React from 'react';
+import * as reactJsx from 'react/jsx-runtime';
 import { questionImageBoundary } from './question-media-authoring.mjs';
 import { conceptMedia, conceptImageBoundary, conceptContentBoundary } from './concept-media-authoring.mjs';
 import * as markdownEditing from '../../lib/markdown-editing.ts';
@@ -32,6 +35,7 @@ vm.runInNewContext(ts.transpileModule(readFileSync(new URL('../../lib/creator-st
   compilerOptions: { module: ts.ModuleKind.CommonJS },
 }).outputText, runtimeContext);
 const exposed = [
+    'questionMarkdownState', 'setQuestionMarkdownState', 'answerMarkdownState', 'setAnswerMarkdownState',
     'browseQuestionConcept', 'associateQuestionConcept', 'makeQuestionConceptPrimary', 'draftQuestionPrimaryId', 'setNeedsQuestionsOnly',
   'navigateFromCreator', 'goBackFromCreator', 'isDirty', 'confirmDiscardQuestionChanges',
   'learnerDeck', 'setLearnerDeck', 'learnerSelectionError', 'learnerSelectionBusy', 'saveLearnerTopicSelection', 'renderLearnerStudyCheckbox', 'learnerSelectionContext',
@@ -64,7 +68,25 @@ const compiled = ts.transpileModule(source.replace(
   `  capture({ ${exposed} });\n  return (\n    <>\n      <Header />`,
 ), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText;
 
-export function editor({ role = 'admin', editing = false, response, references = [], cards = true, placed = false, neutralFixture = false, confirm = () => true } = {}) {
+// Released editor-only representation, used solely for original whole-workspace
+// hashes. Real visual editing is exercised separately; surrounding JSX is current.
+const releasedConceptEditor = "              <div\n                aria-label=\"Concept formatting tools\"\n                style={{\n                  display: 'flex',\n                  flexWrap: 'wrap',\n                  gap: 8,\n                  alignItems: 'center',\n                }}\n              >\n                {[\n                  ['bold', 'Bold'],\n                  ['italic', 'Italic'],\n                  ['heading', 'Heading'],\n                  ['bulleted-list', 'Bulleted List'],\n                  ['numbered-list', 'Numbered List'],\n                  ['link', 'Link'],\n                  ['quote', 'Quote'],\n                  ...(conceptSource === 'official' && creatorAuthority.canSaveConcept ? [['image', 'Image']] : []),\n                ].map(([format, label]) => (\n                  <button\n                    className={styles.toolButton}\n                    key={format}\n                    type=\"button\"\n                    disabled={isCurrentContentReadOnly || (format === 'image' && (isSaving || conceptImages.pending))}\n                    data-concept-image-action={format === 'image' ? 'true' : undefined}\n                    onClick={() => format === 'image' ? conceptImages.open(conceptImageEditorRef.current?.selection().end ?? conceptEditorRef.current?.selectionEnd ?? concept.length) : applyMarkdownFormat(format as MarkdownFormat, () => conceptImageEditorRef.current)}\n                  >\n                    {label}\n                  </button>\n                ))}\n                <span style={{ flex: 1 }} />\n                {(['write', 'preview'] as const).map((mode) => (\n                  <button\n                    className={\n                      editorMode === mode\n                        ? styles.primaryButton\n                        : styles.secondaryButton\n                    }\n                    key={mode}\n                    type=\"button\"\n                    onClick={() => setEditorMode(mode)}\n                  >\n                    {mode === 'write' ? 'Write' : 'Preview'}\n                  </button>\n                ))}\n              </div>\n              {conceptSource === 'official' && creatorAuthority.canSaveConcept ? <ConceptImageAuthoring controller={conceptImages} disabled={isSaving} /> : null}\n              {editorMode === 'write' ? (\n                conceptSource === 'official' && concept.includes('[[socrates-media:') ? (\n                  <ConceptImageWriteEditor source={concept} controller={conceptImages} disabled={isCurrentContentReadOnly || isSaving}\n                    className={styles.conceptEditor} editorRef={conceptImageEditorRef} onChange={value => { setConcept(value); setStatus(null); }} />\n                ) : (\n                <textarea\n                  ref={conceptEditorRef}\n                  className={styles.conceptEditor}\n                  value={concept}\n                  readOnly={isCurrentContentReadOnly}\n                  maxLength={conceptSource === 'personal' ? 1000 : undefined}\n                  onChange={(event) => {\n                    setConcept(event.target.value);\n                    setStatus(null);\n                  }}\n                  placeholder=\"Write your concept or explanation here...\"\n                  aria-label=\"Concept or explanation\"\n                />\n                )\n              ) : (\n                <div\n                  className={styles.conceptEditor}\n                  style={{\n                    overflow: 'auto',\n                    whiteSpace: 'normal',\n                  }}\n                  aria-label=\"Concept preview\"\n                >\n                  {concept.trim() ? (\n                    conceptSource === 'official' && conceptImages.usesMedia\n                      ? <ConceptMediaContent markdown={concept} conceptId={conceptId} libraryId={activeLibraryId} context={conceptImages.context} placements={conceptImages.items} />\n                      : <MarkdownContent markdown={concept} />\n                  ) : (\n                    <p className=\"muted\">Nothing to preview yet.</p>\n                  )}\n                </div>\n              )}\n";
+const creatorAst = ts.createSourceFile('Creator.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+const editorExpressions = [];
+function visitEditor(node) {
+  if (ts.isJsxExpression(node) && node.getText(creatorAst).startsWith("{conceptSource === 'official' ? <OfficialVisualField")) editorExpressions.push(node);
+  ts.forEachChild(node, visitEditor);
+}
+visitEditor(creatorAst);
+assert.equal(editorExpressions.length, 1, 'Only the approved Concept editing expression may be projected');
+const editorExpression = editorExpressions[0];
+export const conceptVisualExpression = editorExpression.getText(creatorAst);
+const projectedSource = source.slice(0, editorExpression.getStart(creatorAst)) + releasedConceptEditor.trim() + source.slice(editorExpression.end);
+const projectedCompiled = ts.transpileModule(projectedSource.replace(renderMarker, `  capture({ ${exposed} });\n  return (\n    <>\n      <Header />`), {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
+}).outputText;
+
+export function editor({ projectOfficialTextEditor = false, role = 'admin', editing = false, response, references = [], cards = true, placed = false, neutralFixture = false, confirm = () => true } = {}) {
   const slots = [];
   let unloadEffect;
   const listeners = new Map();
@@ -120,11 +142,7 @@ export function editor({ role = 'admin', editing = false, response, references =
       if (name === 'create_library_node_in_library') return { data: { id: 'new-official-topic' }, error: null };
       if (name === 'save_personal_concept_with_overlay') return { data: { personal_concept_id: payload.p_personal_concept_id, owner_id: 'owner', topic_id: payload.p_personal_topic_id, concept_name: payload.p_name, concept_description: payload.p_description }, error: null };
 
-      return { data: name === 'save_question_with_relationships_v2'
-        ? { id: payload.p_question_id || 'saved-question' }
-        : { concept_id: payload.p_concept_id || 'saved-concept', references: payload.p_references.map(r => ({
-          client_id: r.client_id, source_id: 'source', attribution_id: 'attribution',
-        })) }, error: null };
+      return formatSaveResponse(name, payload);
   }
   let shellGuard;
   const modules = {
@@ -133,7 +151,9 @@ export function editor({ role = 'admin', editing = false, response, references =
     'next/navigation': { useRouter: () => ({ push: path => routes.push(path), replace: path => routes.push(path), refresh: () => routes.push('refresh') }) },
     'lucide-react': new Proxy({}, { get: (_target, key) => `icon:${String(key)}` }),
     '@/components/Header': {},
-    '@/components/MarkdownContent': { cardMarkdownSummary: source => source },
+    '@/components/MarkdownContent': { cardMarkdownSummary: source => source, questionMarkdownSummary: questionMarkdown.questionMarkdownSummary },
+    './creator/QuestionMarkdownField': questionField,
+    './creator/OfficialVisualField': visualFieldBoundary,
     '@/components/ConceptMediaContent': conceptContentBoundary,
     '@/components/creator/ConceptImageAuthoring': conceptImageBoundary,
     '@/components/creator/QuestionImageAuthoring': questionImageBoundary,
@@ -177,7 +197,7 @@ export function editor({ role = 'admin', editing = false, response, references =
     document: { activeElement: focusTarget }, HTMLElement: FocusTarget,
     window: { addEventListener: (name, fn) => listeners.set(name, fn), removeEventListener: name => listeners.delete(name), requestAnimationFrame: fn => fn(), confirm: message => { confirmations.push(message); return confirm(message); }, location: { pathname: '/creator' }, history: { replaceState: (_a, _b, path) => routes.push(path) } },
   };
-  vm.runInNewContext(compiled, context);
+  vm.runInNewContext(projectOfficialTextEditor ? projectedCompiled : compiled, context);
   const props = {
     activeLibraryId: 'library',
     creatorCapabilities: deriveCreatorCapabilities({ role, userId: 'owner', library: {
@@ -208,6 +228,8 @@ export function nodes(tree) {
   if (!tree || typeof tree !== 'object') return [];
   if (Array.isArray(tree)) return tree.flatMap(nodes);
   if (tree.type === CreatorQuestionSearchPanel) return nodes(CreatorQuestionSearchPanel(tree.props));
+  if (tree.type === OfficialVisualFieldBoundary) return nodes(OfficialVisualFieldBoundary(tree.props));
+  if (tree.type === questionField.QuestionMarkdownField) return [tree, ...nodes(questionField.QuestionMarkdownField(tree.props))];
   return [tree, ...nodes(tree.props?.children), ...(tree.type?.name === 'CreatorLearnerQuestionsWorkspace' ? [...nodes(tree.props.editor), ...nodes(tree.props.topicTree)] : [])];
 }
 
@@ -224,6 +246,8 @@ export function expandChrome(tree) {
   if (!tree || typeof tree !== 'object') return tree;
   if (Array.isArray(tree)) return tree.map(expandChrome);
   if (tree.type === CreatorQuestionSearchPanel) return expandChrome(CreatorQuestionSearchPanel(tree.props));
+  if (tree.type === OfficialVisualFieldBoundary) return expandChrome(OfficialVisualFieldBoundary(tree.props));
+  if (tree.type === questionField.QuestionMarkdownField) return expandChrome(questionField.QuestionMarkdownField(tree.props));
   if (Object.values(chrome).includes(tree.type)) return expandChrome(tree.type(tree.props));
   return { ...tree, props: { ...tree.props, children: expandChrome(tree.props?.children) } };
 }
@@ -260,12 +284,137 @@ export const releasedStaffRenderHashes = {
 };
 
 // Exercise the real Search presentation while keeping its parent-owned callbacks observable.
+const markdownContext = { exports: {}, URL, require(name) {
+  if (name === '@/lib/official-content-format') return officialFormat;
+  if (name === 'react') return React;
+  if (name === 'react/jsx-runtime') return reactJsx;
+  if (name === './MarkdownContent.module.css') return { __esModule: true, default: { card: 'card', question: 'question' } };
+  throw new Error(`Unexpected Markdown dependency: ${name}`);
+} };
+vm.runInNewContext(ts.transpileModule(readFileSync(new URL('../../components/MarkdownContent.tsx', import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true } }).outputText, markdownContext);
+export const questionMarkdown = markdownContext.exports;
+// Parent-workflow boundary only. The real React/ProseMirror field is mounted in
+// official-visual-field tests; this controlled input makes no visual-editor claim.
+export function OfficialVisualFieldBoundary(props) {
+  const element = (type, props) => ({ type, props });
+  return element('div', { children: [
+    element('textarea', { 'aria-label': props.ariaLabel, value: props.value,
+      disabled: props.disabled, readOnly: props.readOnly,
+      onChange: event => { if (!props.disabled && !props.readOnly) props.onChange(event.target.value, props.format); } }),
+    props.onImage ? element('button', { type: 'button', 'data-concept-image-action': 'true', children: 'Image', onClick: () => props.onImage(props.value.length) }) : null,
+    props.between,
+  ] });
+}
+export const visualFieldBoundary = { __esModule: true, default: OfficialVisualFieldBoundary };
+// The actual controlled field renders against inert DOM refs here. Mounted focus is
+// verified separately; source/presentation ownership remains the real parent's.
+const fieldContext = { exports: {}, requestAnimationFrame: fn => fn(), require(name) {
+  if (name === 'react') return { useId: () => 'question-field', useRef: value => ({ current: value }) };
+  if (name === 'react/jsx-runtime') return { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }) };
+  if (name === './OfficialVisualField') return visualFieldBoundary;
+  if (name === '@/lib/markdown-editing') return markdownEditing;
+  if (name === '@/components/MarkdownContent') return questionMarkdown;
+  if (name === '../CreatorStudioV2Client.module.css') return { __esModule: true, default: new Proxy({}, { get: (_, key) => String(key) }) };
+  throw new Error(`Unexpected Question field dependency: ${name}`);
+} };
+vm.runInNewContext(ts.transpileModule(readFileSync(new URL('../../components/creator/QuestionMarkdownField.tsx', import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText, fieldContext);
+export const questionField = fieldContext.exports;
+
 const searchPanelContext = { exports: {}, require(name) {
   if (name === 'react/jsx-runtime') return { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }) };
   if (name === 'lucide-react') return { Search: 'icon:Search' };
+  if (name === '@/components/MarkdownContent') return { questionMarkdownSummary: questionMarkdown.questionMarkdownSummary };
   if (name === '@/lib/creator-entity-contracts') return { createCreatorEntityKey: (source, kind, id) => `${source}:${kind}:${id}` };
   if (name === '../CreatorStudioV2Client.module.css') return { __esModule: true, default: new Proxy({}, {get: (_, key) => String(key)}) };
   throw new Error(`Unexpected Search dependency: ${name}`);
 } };
 vm.runInNewContext(ts.transpileModule(readFileSync(new URL('../../components/creator/CreatorQuestionSearchPanel.tsx', import.meta.url), 'utf8'), {compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText, searchPanelContext);
 export const CreatorQuestionSearchPanel = searchPanelContext.exports.CreatorQuestionSearchPanel;
+
+// Exact format-aware transaction fixture. The envelope remains visible to every
+// caller/assertion; no new RPC is aliased to a released legacy write command.
+export function formatSaveResponse(name, envelope) {
+  assert.ok(['save_concept_with_format', 'save_question_with_format'].includes(name), `Unexpected write RPC: ${name}`);
+  assert.ok(envelope.p_active_library_id);
+  assert.ok(Object.hasOwn(envelope, 'p_expected_version'));
+  assert.ok(Object.hasOwn(envelope, 'p_expected_updated_at'));
+  const p = envelope.p_payload;
+  assert.ok(p && typeof p === 'object');
+  if (name === 'save_concept_with_format') return { data: {
+    concept_id: p.p_concept_id || 'saved-concept', version_id: 'saved-concept-version', updated_at: '2026-10-03T12:00:00Z',
+    bodyMarkdown: p.p_body_markdown, body_format: envelope.p_body_format,
+    references: p.p_references.map(r => ({ client_id: r.client_id, source_id: 'source', attribution_id: 'attribution' })),
+  }, error: null };
+  assert.equal(p.p_accepted_answers.length, 1);
+  return { data: { id: p.p_question_id || 'saved-question', current_version_id: 'saved-question-version', updated_at: '2026-10-03T12:00:00Z',
+    prompt: p.p_prompt, prompt_format: p.p_prompt_format,
+    question_accepted_answers: p.p_accepted_answers.map(a => ({ ...a, id: a.id || 'saved-answer' })),
+  }, error: null };
+}
+
+// Real DOM integration harness for the mounted shared field. Each dependency is
+// explicit; no unknown module or RPC can silently fall back to a mock.
+export async function mountVisualField(initial = {}) {
+  const { JSDOM } = await import('jsdom');
+  const { loadFoundation, pm } = await import('./official-authoring.mjs');
+  const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', { pretendToBeVisual: true, url: 'https://disposable.example.test' });
+  // JSDOM has no layout. Real scrolling/geometry is verified in browser UAT.
+  dom.window.Range.prototype.getClientRects = () => [];
+  dom.window.Range.prototype.getBoundingClientRect = () => ({ left: 0, right: 0, top: 0, bottom: 0, width: 0, height: 0 });
+  const saved = new Map();
+  for (const key of ['window', 'document', 'navigator', 'MutationObserver', 'getComputedStyle', 'requestAnimationFrame', 'cancelAnimationFrame', 'HTMLElement', 'Event', 'KeyboardEvent']) {
+    saved.set(key, Object.getOwnPropertyDescriptor(globalThis, key));
+    Object.defineProperty(globalThis, key, { configurable: true, value: typeof dom.window[key] === 'function' && ['getComputedStyle', 'requestAnimationFrame', 'cancelAnimationFrame'].includes(key) ? dom.window[key].bind(dom.window) : dom.window[key] });
+  }
+  saved.set('IS_REACT_ACT_ENVIRONMENT', Object.getOwnPropertyDescriptor(globalThis, 'IS_REACT_ACT_ENVIRONMENT'));
+  globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  const { createRoot } = await import('react-dom/client');
+  const { createPortal } = await import('react-dom');
+  const loaded = new Map();
+  function component(name) {
+    if (loaded.has(name)) return loaded.get(name);
+    assert.ok(['OfficialAuthoringToolbar', 'OfficialVisualField', 'QuestionMarkdownField'].includes(name), name);
+    const modules = {
+      react: React, 'react/jsx-runtime': reactJsx, 'react-dom': { createPortal },
+      '@/components/MarkdownContent': questionMarkdown,
+      '@/lib/official-authoring/session': loadFoundation('session'),
+      'prosemirror-view': pm('prosemirror-view'),
+      '../CreatorStudioV2Client.module.css': { __esModule: true, default: new Proxy({}, { get: (_, key) => String(key) }) },
+      './OfficialVisualField.module.css': { __esModule: true, default: new Proxy({}, { get: (_, key) => String(key) }) },
+    };
+    const context = { exports: {}, document: dom.window.document, requestAnimationFrame: dom.window.requestAnimationFrame.bind(dom.window), require(id) {
+      if (id === './OfficialAuthoringToolbar') return component('OfficialAuthoringToolbar');
+      if (id === './OfficialVisualField') return component('OfficialVisualField');
+      assert.ok(Object.hasOwn(modules, id), `Unexpected mounted editor dependency: ${id}`); return modules[id];
+    } };
+    vm.runInNewContext(ts.transpileModule(readFileSync(new URL(`../../components/creator/${name}.tsx`, import.meta.url), 'utf8'), {
+      compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true },
+    }).outputText, context, { filename: name + '.tsx' });
+    loaded.set(name, context.exports); return context.exports;
+  }
+  const Field = initial.wrapper ? component('QuestionMarkdownField').QuestionMarkdownField : component('OfficialVisualField').default;
+  const writes = [], memory = { current: null }, handle = { current: null };
+  let controls, current;
+  const root = createRoot(dom.window.document.getElementById('root'));
+  function Harness() {
+    const [props, setProps] = React.useState({ label: 'Question', ariaLabel: 'Question front of card', placeholder: 'Front of card', value: 'Selected', format: 'visual_markdown_v1', flavor: 'question', documentKey: 'library:question:draft', mode: 'write', disabled: false, readOnly: false, ...initial });
+    const [shown, setShown] = React.useState(true);
+    React.useLayoutEffect(() => { current = props; controls = { setProps, setShown }; }, [props]);
+    const onChange = (value, format) => { writes.push({ value, format }); setProps(p => ({ ...p, value, format })); };
+    return shown ? React.createElement(Field, { ...props, memory, handle, onChange, onMode: mode => setProps(p => ({ ...p, mode })),
+      state: { mode: props.mode, selectionStart: 0, selectionEnd: 0 }, onStateChange: state => setProps(p => ({ ...p, mode: state.mode })) }) : null;
+  }
+  async function act(action) { await React.act(async () => { await action?.(); await new Promise(resolve => setTimeout(resolve, 0)); }); }
+  await act(() => root.render(React.createElement(Harness)));
+  return { dom, writes, memory, handle, act, get props() { return current; },
+    get view() { return memory.current?.view; }, get session() { return memory.current?.session; },
+    button(label) { const candidates = [...dom.window.document.querySelectorAll('button')].filter(b => b.textContent === label); assert.equal(candidates.length, 1, label); return candidates[0]; },
+    async click(label) { await act(() => this.button(label).click()); },
+    async update(props) { await act(() => controls.setProps(p => ({ ...p, ...props }))); },
+    async show(value) { await act(() => controls.setShown(value)); },
+    async select(from, to = from) { await act(() => this.view.dispatch(this.view.state.tr.setSelection(pm('prosemirror-state').TextSelection.create(this.view.state.doc, from, to)))); },
+    async type(text) { await act(() => this.view.dispatch(this.view.state.tr.insertText(text))); },
+    async input(element, value) { await act(() => { const setter = Object.getOwnPropertyDescriptor(element.tagName === 'TEXTAREA' ? dom.window.HTMLTextAreaElement.prototype : dom.window.HTMLInputElement.prototype, 'value').set; setter.call(element, value); element.dispatchEvent(new dom.window.Event('input', { bubbles: true })); }); },
+    async close() { await act(() => root.unmount()); dom.window.close(); for (const [key, descriptor] of saved) { if (descriptor) Object.defineProperty(globalThis, key, descriptor); else delete globalThis[key]; } },
+  };
+}

@@ -174,7 +174,7 @@ test('Concept media receives only the existing Concept and active Library contex
   assert.equal(tabs.props.conceptId, conceptId);
   assert.equal(tabs.props.libraryId, 'library-a');
   const source = readFileSync(new URL('../components/ConceptTabs.tsx', import.meta.url), 'utf8');
-  assert.match(source, /<ConceptMediaContent markdown=\{bodyMarkdown \|\| ''\} conceptId=\{conceptId\} libraryId=\{libraryId\} \/>/);
+  assert.match(source, /<ConceptMediaContent markdown=\{bodyMarkdown \|\| ''\} format=\{bodyFormat\} conceptId=\{conceptId\} libraryId=\{libraryId\} \/>/);
 });
 
 test('canonical mastery uses the persisted zero-to-one estimate', () => {

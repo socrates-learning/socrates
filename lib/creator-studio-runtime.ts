@@ -426,8 +426,8 @@ export type OfficialCreatorCommand =
     }>;
 
 type CreatorStudioRpc =
-  | 'save_concept_with_prerequisites'
-  | 'save_question_with_relationships_v2'
+  | 'save_concept_with_format'
+  | 'save_question_with_format'
   | 'create_library_node_in_library'
   | 'rename_library_node_in_library'
   | 'move_library_node_in_library'
@@ -538,7 +538,7 @@ export function resolveOfficialCreatorCommand(
         ['prerequisites', 'formal-sources', 'tags'],
         'Official Concept save'
       );
-      return rpc('save_concept_with_prerequisites');
+      return rpc('save_concept_with_format');
 
     case 'save-question':
       assertCommandCapability(authority.canSaveQuestion, 'Official Question save');
@@ -562,7 +562,7 @@ export function resolveOfficialCreatorCommand(
         ['relationships', 'testing-angles', 'tags'],
         'Official Question save'
       );
-      return rpc('save_question_with_relationships_v2');
+      return rpc('save_question_with_format');
 
     case 'create-topic':
       assertCommandCapability(authority.canManageTopicTree, 'Official Topic creation');

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
-import { editor, nodes, text, button, expandChrome, currentTabLabels, releasedStaffRenderHashes } from './fixtures/creator-role-workspaces.mjs';
+import { editor, nodes, text, button, expandChrome, conceptVisualExpression, currentTabLabels, releasedStaffRenderHashes } from './fixtures/creator-role-workspaces.mjs';
 
 // Freeze current staff presentation and callback wiring before the learner split.
 // These are render/handler tests; browser layout and database enforcement are separate gates.
@@ -140,7 +140,7 @@ const releasedBodies = {
   "flagged": "3bbae02c9c5dd613573a76830f4c8d9863c4290e0c8248d7ff277f20f6061104"
 };
 for (const role of ['admin','editor']) test(`${role}: Content, Tags and Flagged bodies/callback wiring remain frozen`, () => {
- const h=editor({role,placed:true});
+ const h=editor({role,placed:true,projectOfficialTextEditor:true});
  for(const tab of ['content','tags','flagged']) {
   h.render().setActiveCreatorTab(tab);
   const rendered=expandChrome(h.render().tree);
@@ -161,4 +161,8 @@ for (const role of ['admin','editor']) test(`${role}: Content, Tags and Flagged 
 const releasedLearner = {"questions": "1a5045046af27c7ad945bc7e903e6557ccccf1840e6640859cf0760a3f64d09a", "flagged": "2e08e60d643eab957e0135b2a516fae85a54bf2b306f8f257f6a765f1aaddcd6"};
 test('learner full workspace fingerprints remain exact with only Questions and Flagged',()=>{
  const h=editor({role:'learner',placed:true});for(const tab of ['questions','flagged']){h.render().setActiveCreatorTab(tab);assert.equal(fingerprint(expandChrome(h.render().tree)),releasedLearner[tab]);}
+});
+
+test('staff preservation projects only the approved Concept visual-field expression with real source, format and media ownership', () => {
+ for (const exact of ['value={concept} format={conceptFormat} flavor="concept"', 'memory={conceptVisualMemory} handle={conceptVisualHandle}', 'onMode={setEditorMode}', 'disabled={isSaving || conceptImages.pending} readOnly={isCurrentContentReadOnly}', 'onChange={(source, format) => { setConcept(source); setConceptFormat(format); setStatus(null); }}', 'onImage={creatorAuthority.canSaveConcept ? position => conceptImages.open(position) : undefined}', '<ConceptMediaContent markdown={concept} format={conceptFormat} conceptId={conceptId} libraryId={activeLibraryId} context={conceptImages.context} placements={conceptImages.items} />']) assert.ok(conceptVisualExpression.includes(exact), exact);
 });

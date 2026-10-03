@@ -1,3 +1,4 @@
+import * as officialFormat from '../lib/official-content-format.ts';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
@@ -7,7 +8,7 @@ import React from 'react';
 import * as jsx from 'react/jsx-runtime';
 import { editor, nodes, text } from './fixtures/creator-role-workspaces.mjs';
 
-const markdownModules = { react: React, 'react/jsx-runtime': jsx, './MarkdownContent.module.css': { default: { card: 'card' } } };
+const markdownModules = { '@/lib/official-content-format': officialFormat, react: React, 'react/jsx-runtime': jsx, './MarkdownContent.module.css': { default: { card: 'card' } } };
 const markdownContext = { exports: {}, URL, require(name) { assert.ok(name in markdownModules, name); return markdownModules[name]; } };
 vm.runInNewContext(ts.transpileModule(readFileSync(new URL('../components/MarkdownContent.tsx', import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText, markdownContext);
 const markdown = markdownContext.exports;

@@ -32,7 +32,7 @@ const rows = [
 ];
 
 test('official Concept details delegate only their body to authorized media rendering', () => {
-  assert.match(officialBrowserSource, /<ConceptMediaContent markdown=\{concept\.bodyMarkdown\} conceptId=\{concept\.id\} libraryId=\{data\?\.libraryId\} \/>/);
+  assert.match(officialBrowserSource, /<ConceptMediaContent markdown=\{concept\.bodyMarkdown\} format=\{concept\.bodyFormat\} conceptId=\{concept\.id\} libraryId=\{data\?\.libraryId\} \/>/);
   assert.equal((officialBrowserSource.match(/<ConceptMediaContent /g) || []).length, 1);
 });
 

@@ -1,3 +1,4 @@
+import type { OfficialContentFormat } from '@/lib/official-content-format';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 export type StudyConceptReviewSource = {
@@ -15,6 +16,7 @@ export type StudyConceptReview = {
   summary: string | null;
   whyItMatters: string | null;
   bodyMarkdown: string;
+  bodyFormat?: OfficialContentFormat;
   sources: StudyConceptReviewSource[];
 };
 
@@ -39,6 +41,7 @@ type ConceptReviewRow = {
   summary: string | null;
   why_it_matters: string | null;
   body_markdown: string | null;
+  body_format?: OfficialContentFormat;
   status: string;
   content_source_notes: SourceNoteRow[] | null;
 };
@@ -107,7 +110,8 @@ export function adaptStudyConceptReview(
     name: concept.name,
     summary: concept.summary,
     whyItMatters: concept.why_it_matters,
-    bodyMarkdown: normalizeStudyConceptReviewMarkdown(
+    ...(concept.body_format === undefined ? {} : { bodyFormat: concept.body_format }),
+    bodyMarkdown: concept.body_format === 'visual_markdown_v1' ? concept.body_markdown ?? '' : normalizeStudyConceptReviewMarkdown(
       concept.body_markdown ?? ''
     ),
     sources,
@@ -137,6 +141,7 @@ export async function loadOfficialStudyConceptReview(
         summary,
         why_it_matters,
         body_markdown,
+        body_format,
         status,
         content_source_notes(
           id,

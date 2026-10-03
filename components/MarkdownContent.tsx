@@ -1,4 +1,5 @@
 import React from 'react';
+import { parseOfficialContent, type OfficialContentFormat, type OfficialNode } from '@/lib/official-content-format';
 import styles from './MarkdownContent.module.css';
 
 function renderInline(text: string) {
@@ -262,9 +263,86 @@ export function cardMarkdownSummary(markdown: string): string {
   return text(parseCard(markdown, false)).replace(/\s+/g, ' ').trim();
 }
 
-export function MarkdownContent({ markdown, mode = 'concept', interactiveLinks = true, renderConceptBlock }: {
-  markdown: string; mode?: 'concept' | 'card'; interactiveLinks?: boolean; renderConceptBlock?: ConceptBlockRenderer;
+// Official content uses the same dependency-free grammar as the visual editor.
+// Legacy Questions remain literal; standalone Cards retain their separate contract.
+function officialInline(nodes: OfficialNode[], interactive: boolean, markIndex = 0): React.ReactNode[] {
+  const result: React.ReactNode[] = [];
+  for (let index = 0; index < nodes.length;) {
+    const mark = nodes[index].marks?.[markIndex];
+    if (!mark) { result.push(nodes[index].text || ''); index++; continue; }
+    let end = index + 1;
+    while (end < nodes.length && JSON.stringify(nodes[end].marks?.[markIndex]) === JSON.stringify(mark)) end++;
+    const children = officialInline(nodes.slice(index, end), interactive, markIndex + 1);
+    result.push(mark.type === 'strong' ? <strong key={index}>{children}</strong>
+      : mark.type === 'em' ? <em key={index}>{children}</em>
+      : mark.type === 'link' && interactive ? <a key={index} href={mark.attrs.href} target="_blank" rel="noopener noreferrer">{children}</a>
+      : <React.Fragment key={index}>{children}</React.Fragment>);
+    index = end;
+  }
+  return result;
+}
+
+function officialBlocks(nodes: OfficialNode[], interactive: boolean, media?: (id: string) => React.ReactNode): React.ReactNode[] {
+  return nodes.map((node, index) => {
+    if (node.type === 'concept_media') return <React.Fragment key={index}>{media?.(node.attrs!.placementId!) ?? `[[socrates-media:${node.attrs!.placementId}]]`}</React.Fragment>;
+    const children = node.type === 'paragraph' || node.type === 'heading'
+      ? officialInline(node.content || [], interactive)
+      : officialBlocks(node.content || [], interactive, media);
+    if (node.type === 'paragraph') return <p key={index}>{children}</p>;
+    if (node.type === 'heading') return node.attrs?.level === 3 ? <h3 key={index}>{children}</h3> : <h2 key={index}>{children}</h2>;
+    if (node.type === 'bullet_list') return <ul key={index}>{children}</ul>;
+    if (node.type === 'ordered_list') return <ol key={index}>{children}</ol>;
+    if (node.type === 'list_item') return <li key={index}>{children}</li>;
+    if (node.type === 'blockquote') return <blockquote key={index}>{children}</blockquote>;
+    return <React.Fragment key={index}>{children}</React.Fragment>;
+  });
+}
+
+function parseQuestion(markdown: string, interactive: boolean, format: OfficialContentFormat) {
+  if (format === 'legacy') return { kind: 'plain' as const, content: markdown };
+  const parsed = parseOfficialContent(markdown, 'question', format);
+  if (parsed.mode === 'source') return { kind: 'plain' as const, content: markdown };
+  const blocks = parsed.document.content || [];
+  if (blocks.length === 1 && blocks[0].type === 'paragraph') {
+    const nodes = blocks[0].content || [];
+    if (nodes.every(n => !n.marks?.length) && nodes.map(n => n.text || '').join('') === markdown) {
+      return { kind: 'plain' as const, content: markdown };
+    }
+    return { kind: 'inline' as const, content: officialInline(nodes, interactive) };
+  }
+  return { kind: 'block' as const, content: officialBlocks(blocks, interactive) };
+}
+
+export function questionMarkdownKind(markdown: string, format: OfficialContentFormat = 'legacy') {
+  return parseQuestion(markdown, false, format).kind;
+}
+
+export function questionMarkdownSummary(markdown: string, format: OfficialContentFormat = 'legacy'): string {
+  if (format === 'legacy') return markdown;
+  const parsed = parseOfficialContent(markdown, 'question', format);
+  if (parsed.mode === 'source') return markdown;
+  function text(node: OfficialNode): string {
+    if (node.type === 'text') return node.text || '';
+    return (node.content || []).map(text).join('') + (['paragraph', 'heading'].includes(node.type) ? '\n' : '');
+  }
+  return text(parsed.document).replace(/\s+/g, ' ').trim();
+}
+
+export function MarkdownContent({ markdown, mode = 'concept', format = 'legacy', interactiveLinks = true, renderConceptBlock }: {
+  markdown: string; mode?: 'concept' | 'card' | 'question'; format?: OfficialContentFormat; interactiveLinks?: boolean; renderConceptBlock?: ConceptBlockRenderer;
 }) {
   if (mode === 'card') return <div className={styles.card}>{parseCard(markdown, interactiveLinks)}</div>;
-  return <LegacyMarkdownContent markdown={markdown} renderConceptBlock={renderConceptBlock} />;
+  if (mode === 'question') {
+    const parsed = parseQuestion(markdown, interactiveLinks, format);
+    return parsed.kind === 'block' ? <div className={styles.question}>{parsed.content}</div> : <>{parsed.content}</>;
+  }
+  if (format === 'legacy') return <LegacyMarkdownContent markdown={markdown} renderConceptBlock={renderConceptBlock} />;
+  const parsed = parseOfficialContent(markdown, 'concept', format);
+  if (parsed.mode === 'source') return <div className={`article-body ${styles.question}`}>{markdown}</div>;
+  const lines = markdown.split(/\r?\n/);
+  return <div className={`article-body ${styles.question}`}>{officialBlocks(parsed.document.content || [], interactiveLinks, id => {
+    const token = `[[socrates-media:${id}]]`;
+    const index = lines.findIndex(line => line.trim() === token);
+    return renderConceptBlock?.(lines[index] || token, index);
+  })}</div>;
 }

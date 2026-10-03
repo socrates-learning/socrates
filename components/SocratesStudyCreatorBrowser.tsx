@@ -1,5 +1,8 @@
 'use client';
 
+import type { OfficialContentFormat } from '@/lib/official-content-format';
+
+import { MarkdownContent, questionMarkdownKind, questionMarkdownSummary } from '@/components/MarkdownContent';
 import QuestionMediaContent from '@/components/QuestionMediaContent';
 import type { QuestionMediaHint } from '@/lib/question-media';
 
@@ -34,6 +37,7 @@ type OfficialConcept = {
   summary: string | null;
   whyItMatters: string | null;
   bodyMarkdown: string;
+  bodyFormat?: OfficialContentFormat;
   placementNodeIds: string[];
 };
 
@@ -42,6 +46,7 @@ type OfficialQuestion = {
   id: string;
   concept_id: string;
   prompt: string;
+  prompt_format?: OfficialContentFormat;
   explanation: string | null;
   difficulty: string | null;
   testing_angle: string | null;
@@ -851,7 +856,7 @@ export function SocratesStudyCreatorBrowser({
                 <article key={question.id}>
                   <span className={styles.officialOwnerMark}>S</span>
                   <div>
-                    <strong>{question.prompt}</strong>
+                    <strong>{questionMarkdownSummary(question.prompt, question.prompt_format)}</strong>
                     <small>
                       {question.difficulty ?? 'Unspecified difficulty'} ·{' '}
                       {question.testing_angle ?? 'General'}
@@ -906,7 +911,7 @@ export function SocratesStudyCreatorBrowser({
                 <div>
                   <span>Concept content</span>
                   <div className={styles.officialBody}>
-                    <ConceptMediaContent markdown={concept.bodyMarkdown} conceptId={concept.id} libraryId={data?.libraryId} />
+                    <ConceptMediaContent markdown={concept.bodyMarkdown} format={concept.bodyFormat} conceptId={concept.id} libraryId={data?.libraryId} />
                   </div>
                 </div>
               )}
@@ -927,7 +932,7 @@ export function SocratesStudyCreatorBrowser({
         <div className={styles.detailCard}>
           <div>
             <span>Question</span>
-            <p>{question.prompt}</p>
+            {questionMarkdownKind(question.prompt, question.prompt_format) === 'block' ? <MarkdownContent markdown={question.prompt} mode="question" format={question.prompt_format} /> : <p><MarkdownContent markdown={question.prompt} mode="question" format={question.prompt_format} /></p>}
             <QuestionMediaContent questionId={question.id} hint={question.question_media_hint} surface="front" prompt={question.prompt} />
           </div>
           <div>
@@ -1346,7 +1351,7 @@ export function SocratesStudyCreatorBrowser({
                     />
                   </i>
                   <span>
-                    <strong>{titleFor(item)}</strong>
+                    <strong>{item.kind === 'official-question' ? questionMarkdownSummary(item.question.prompt, item.question.prompt_format) : titleFor(item)}</strong>
                     <small>{context}</small>
                   </span>
                 </span>
@@ -1433,7 +1438,7 @@ export function SocratesStudyCreatorBrowser({
                   } · ${typeFor(selectedItem)}`
                 : 'Selected Material'}
             </p>
-            <h2>{selectedItem ? titleFor(selectedItem) : 'Select material'}</h2>
+            <h2>{selectedItem ? selectedItem.kind === 'official-question' ? questionMarkdownSummary(selectedItem.question.prompt, selectedItem.question.prompt_format) : titleFor(selectedItem) : 'Select material'}</h2>
           </div>
         </div>
         <div className={styles.inspectorBody}>{renderInspector()}</div>

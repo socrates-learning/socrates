@@ -14,7 +14,7 @@ import dynamic from 'next/dynamic';
 import { SocratesShell } from '@/components/application-shell/SocratesShell';
 import { usePathname, useRouter } from 'next/navigation';
 import { Header, HeaderSessionProvider } from '@/components/Header';
-import { MarkdownContent } from '@/components/MarkdownContent';
+import { MarkdownContent, questionMarkdownKind } from '@/components/MarkdownContent';
 import ConceptMediaContent from '@/components/ConceptMediaContent';
 import { LearnerHeader, LibrarySubjectSwitcher, PlannerFallback, type LearnerHeaderPrefix, type LearnerNavIcon, type HeaderItem } from '@/components/study-planner/LearnerShell';
 import { PlannerStats } from '@/components/study-planner/PlannerStats';
@@ -2500,10 +2500,15 @@ export function StudyPlanner({
                   </div>
                 </div>
               ) : !isAnswerVisible ? (
-                <div className="study-v2-question-content" style={studyCandidate?.kind === 'official' && studyCandidate.mediaHint?.front ? { justifyContent: 'flex-start' } : undefined}>
+                <div className="study-v2-question-content" style={studyCandidate?.kind === 'official' && (studyCandidate.mediaHint?.front || questionMarkdownKind(studyCandidate.prompt, studyCandidate.promptFormat) === 'block') ? { justifyContent: 'flex-start' } : undefined}>
                   {studyCandidate?.kind === 'personal' && studyCandidate.personalConceptId === null
                     ? <MarkdownContent markdown={studyCandidate.prompt} mode="card" interactiveLinks={false} />
-                    : <h1 style={studyCandidate?.kind === 'official' && studyCandidate.mediaHint?.front ? { margin: '0 auto', flexShrink: 0 } : undefined}>{studyCandidate?.prompt}</h1>}
+                    : studyCandidate?.kind === 'official' && questionMarkdownKind(studyCandidate.prompt, studyCandidate.promptFormat) === 'block'
+                      ? <>
+                        <h1 className="study-v2-sr-only">Question</h1>
+                        <MarkdownContent markdown={studyCandidate.prompt} mode="question" format={studyCandidate.promptFormat} interactiveLinks={false} />
+                      </>
+                      : <h1 style={studyCandidate?.kind === 'official' && studyCandidate.mediaHint?.front ? { margin: '0 auto', flexShrink: 0 } : undefined}>{studyCandidate?.kind === 'official' ? <MarkdownContent markdown={studyCandidate.prompt} mode="question" format={studyCandidate.promptFormat} interactiveLinks={false} /> : studyCandidate?.prompt}</h1>}
                   {studyCandidate?.kind === 'official' && <QuestionMediaContent questionId={studyCandidate.questionId} hint={studyCandidate.mediaHint} surface="front" prompt={studyCandidate.prompt} answer={studyCandidate.answer} presentation="study" />}
                   <p
                     className="study-v2-sr-only"
@@ -2540,7 +2545,12 @@ export function StudyPlanner({
                       {studyCandidate?.kind === 'personal' && studyCandidate.personalConceptId === null ? <>
                         <h2 id="study-revealed-question-heading" className="study-v2-sr-only">{studyCandidate.prompt}</h2>
                         <MarkdownContent markdown={studyCandidate.prompt} mode="card" />
-                      </> : <h2 id="study-revealed-question-heading">
+                      </> : studyCandidate?.kind === 'official' && questionMarkdownKind(studyCandidate.prompt, studyCandidate.promptFormat) === 'block' ? <>
+                        <h2 id="study-revealed-question-heading" className="study-v2-sr-only">Question</h2>
+                        <MarkdownContent markdown={studyCandidate.prompt} mode="question" format={studyCandidate.promptFormat} />
+                      </> : studyCandidate?.kind === 'official' && questionMarkdownKind(studyCandidate.prompt, studyCandidate.promptFormat) === 'inline' ? <h2 id="study-revealed-question-heading">
+                        <MarkdownContent markdown={studyCandidate.prompt} mode="question" format={studyCandidate.promptFormat} />
+                      </h2> : <h2 id="study-revealed-question-heading">
                         {studyCandidate?.prompt}
                       </h2>}
                       {studyCandidate?.kind === 'official' && <QuestionMediaContent questionId={studyCandidate.questionId} hint={studyCandidate.mediaHint} surface="front" prompt={studyCandidate.prompt} answer={studyCandidate.answer} presentation="study" />}
@@ -2552,7 +2562,9 @@ export function StudyPlanner({
                       <h1 id="study-answer-heading">Answer</h1>
                       {studyCandidate?.kind === 'personal' && studyCandidate.personalConceptId === null
                         ? <MarkdownContent markdown={studyAnswer ?? ''} mode="card" />
-                        : <p>{studyAnswer}</p>}
+                        : studyCandidate?.kind === 'official' && questionMarkdownKind(studyAnswer ?? '', studyCandidate.answerFormat) === 'block'
+                          ? <MarkdownContent markdown={studyAnswer ?? ''} mode="question" format={studyCandidate.answerFormat} />
+                          : <p>{studyCandidate?.kind === 'official' ? <MarkdownContent markdown={studyAnswer ?? ''} mode="question" format={studyCandidate.answerFormat} /> : studyAnswer}</p>}
                       {studyCandidate?.kind === 'official' && <QuestionMediaContent questionId={studyCandidate.questionId} hint={studyCandidate.mediaHint} surface="answer" prompt={studyCandidate.prompt} answer={studyCandidate.answer} presentation="study" />}
                     </section>
                     {authoredStudyExplanation && (
@@ -2826,7 +2838,7 @@ export function StudyPlanner({
 
                         {conceptReview.bodyMarkdown.trim() && (
                           <section className="study-v2-concept-review-content">
-                            <ConceptMediaContent markdown={conceptReview.bodyMarkdown} conceptId={conceptReview.conceptId} libraryId={activeLibrary?.id} />
+                            <ConceptMediaContent markdown={conceptReview.bodyMarkdown} format={conceptReview.bodyFormat} conceptId={conceptReview.conceptId} libraryId={activeLibrary?.id} />
                           </section>
                         )}
 

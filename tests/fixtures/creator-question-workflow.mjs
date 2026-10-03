@@ -1,3 +1,4 @@
+import { formatSaveResponse, questionField, questionMarkdown, visualFieldBoundary, OfficialVisualFieldBoundary } from './creator-role-workspaces.mjs';
 import { questionImageBoundary } from './question-media-authoring.mjs';
 import { conceptMedia, conceptImageBoundary, conceptContentBoundary } from './concept-media-authoring.mjs';
 import * as markdownEditing from '../../lib/markdown-editing.ts';
@@ -29,6 +30,7 @@ vm.runInNewContext(ts.transpileModule(readFileSync(new URL('../../lib/creator-st
     compilerOptions: { module: ts.ModuleKind.CommonJS },
 }).outputText, runtimeContext);
 const exposed = [
+    'questionMarkdownState', 'setQuestionMarkdownState', 'answerMarkdownState', 'setAnswerMarkdownState',
     'browseQuestionConcept', 'associateQuestionConcept', 'makeQuestionConceptPrimary', 'draftQuestionPrimaryId', 'setNeedsQuestionsOnly',
     'questionTags', 'setQuestionTags', 'questionRelatedConceptIds', 'setQuestionRelatedConceptIds', 'questionAdditionalTestingAngles', 'setQuestionAdditionalTestingAngles', 'existingQuestions', 'setExistingQuestions', 'primaryQuestionConceptId', 'editingQuestionPrimary', 'questionTopicId', 'setQuestionTopicId', 'setQuestionConceptId', 'questionConceptOptions', 'questionSearchFilters', 'setQuestionSearchFilters', 'questionSearchCursor', 'questionSearchHasMore', 'questionSearchError', 'isSearchingQuestions', 'selectQuestionSearchResult', 'loadMoreQuestionSearchResults', 'submitQuestionSearch', 'clearQuestionSearch', 'fetchExistingQuestions', 'refreshExistingQuestionList', 'positioningContext', 'positionTopicFromTree', 'renderQuestionTopic', 'renderPersonalQuestionTopic',
     'navigateFromCreator', 'goBackFromCreator', 'isDirty', 'confirmDiscardQuestionChanges',
@@ -131,11 +133,7 @@ export function editor({ role = 'admin', editing = false, response, references =
             return { data: { id: 'new-official-topic' }, error: null };
         if (name === 'save_personal_concept_with_overlay')
             return { data: { personal_concept_id: payload.p_personal_concept_id, owner_id: 'owner', topic_id: payload.p_personal_topic_id, concept_name: payload.p_name, concept_description: payload.p_description }, error: null };
-        return { data: name === 'save_question_with_relationships_v2'
-                ? { id: payload.p_question_id || 'saved-question' }
-                : { concept_id: payload.p_concept_id || 'saved-concept', references: payload.p_references.map(r => ({
-                        client_id: r.client_id, source_id: 'source', attribution_id: 'attribution',
-                    })) }, error: null };
+        return formatSaveResponse(name, payload);
     }
     let shellGuard;
     const modules = {
@@ -144,7 +142,9 @@ export function editor({ role = 'admin', editing = false, response, references =
         'next/navigation': { useRouter: () => ({ push: path => routes.push(path), replace: path => routes.push(path), refresh: () => routes.push('refresh') }) },
         'lucide-react': new Proxy({}, { get: (_target, key) => `icon:${String(key)}` }),
         '@/components/Header': {},
-        '@/components/MarkdownContent': { cardMarkdownSummary: source => source },
+        '@/components/MarkdownContent': { cardMarkdownSummary: source => source, questionMarkdownSummary: questionMarkdown.questionMarkdownSummary },
+    './creator/QuestionMarkdownField': questionField,
+    './creator/OfficialVisualField': visualFieldBoundary,
     '@/components/ConceptMediaContent': conceptContentBoundary,
     '@/components/creator/ConceptImageAuthoring': conceptImageBoundary,
     '@/components/creator/QuestionImageAuthoring': questionImages ? { ...questionImageBoundary, useQuestionImageAuthoring: () => questionImages } : questionImageBoundary,
@@ -223,6 +223,8 @@ export function nodes(tree) {
     if (Array.isArray(tree))
         return tree.flatMap(nodes);
     if (tree.type === CreatorQuestionSearchPanel) return nodes(CreatorQuestionSearchPanel(tree.props));
+  if (tree.type === OfficialVisualFieldBoundary) return nodes(OfficialVisualFieldBoundary(tree.props));
+  if (tree.type === questionField.QuestionMarkdownField) return [tree, ...nodes(questionField.QuestionMarkdownField(tree.props))];
   return [tree, ...nodes(tree.props?.children), ...(tree.type?.name === 'CreatorLearnerQuestionsWorkspace' ? [...nodes(tree.props.editor), ...nodes(tree.props.topicTree)] : [])];
 }
 const chromeSource = readFileSync(new URL('../../components/creator/CreatorStudioChrome.tsx', import.meta.url), 'utf8');
@@ -243,6 +245,8 @@ export function expandChrome(tree) {
     if (Array.isArray(tree))
         return tree.map(expandChrome);
     if (tree.type === CreatorQuestionSearchPanel) return expandChrome(CreatorQuestionSearchPanel(tree.props));
+  if (tree.type === OfficialVisualFieldBoundary) return expandChrome(OfficialVisualFieldBoundary(tree.props));
+  if (tree.type === questionField.QuestionMarkdownField) return expandChrome(questionField.QuestionMarkdownField(tree.props));
   if (Object.values(chrome).includes(tree.type))
         return expandChrome(tree.type(tree.props));
     return { ...tree, props: { ...tree.props, children: expandChrome(tree.props?.children) } };
@@ -276,6 +280,7 @@ export function row(overrides = {}) {
 const searchPanelContext = { exports: {}, require(name) {
   if (name === 'react/jsx-runtime') return { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }) };
   if (name === 'lucide-react') return { Search: 'icon:Search' };
+  if (name === '@/components/MarkdownContent') return { questionMarkdownSummary: questionMarkdown.questionMarkdownSummary };
   if (name === '@/lib/creator-entity-contracts') return { createCreatorEntityKey: (source, kind, id) => `${source}:${kind}:${id}` };
   if (name === '../CreatorStudioV2Client.module.css') return { __esModule: true, default: new Proxy({}, {get: (_, key) => String(key)}) };
   throw new Error(`Unexpected Search dependency: ${name}`);

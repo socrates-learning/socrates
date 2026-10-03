@@ -1,3 +1,4 @@
+import { formatSaveResponse } from './fixtures/creator-role-workspaces.mjs';
 import { questionImageBoundary } from './fixtures/question-media-authoring.mjs';
 import { conceptMedia, conceptImageBoundary, conceptContentBoundary } from './fixtures/concept-media-authoring.mjs';
 import * as markdownEditing from '../lib/markdown-editing.ts';
@@ -64,11 +65,7 @@ function editor({ editing = false, response, references = [], media } = {}) {
       if (name === 'get_creator_questions_with_media') return { data: [], error: null };
       calls.push({ name, payload });
       if (response) return response(name, payload);
-      return { data: name === 'save_question_with_relationships_v2'
-        ? { id: payload.p_question_id || 'saved-question' }
-        : { concept_id: payload.p_concept_id || 'saved-concept', references: payload.p_references.map(r => ({
-          client_id: r.client_id, source_id: 'source', attribution_id: 'attribution',
-        })) }, error: null };
+      return formatSaveResponse(name, payload);
     },
     from(table) {
       const query = {
@@ -85,7 +82,9 @@ function editor({ editing = false, response, references = [], media } = {}) {
     'next/navigation': { useRouter: () => ({ push: path => routes.push(path), replace: path => routes.push(path), refresh: () => routes.push('refresh') }) },
     'lucide-react': {},
     '@/components/Header': {},
-    '@/components/MarkdownContent': { cardMarkdownSummary: source => source },
+    '@/components/MarkdownContent': { cardMarkdownSummary: source => source, questionMarkdownSummary: source => source },
+    './creator/QuestionMarkdownField': { QuestionMarkdownField() {} },
+    './creator/OfficialVisualField': { __esModule: true, default: function OfficialVisualField() {} },
     '@/components/ConceptMediaContent': conceptContentBoundary,
     '@/components/creator/QuestionImageAuthoring': questionImageBoundary,
     '@/components/creator/ConceptImageAuthoring': media ? { ...conceptImageBoundary, useConceptImageAuthoring: () => media } : conceptImageBoundary,
@@ -134,7 +133,7 @@ function editor({ editing = false, response, references = [], media } = {}) {
       isQuestionEditorIdentity: (state, source, id) => source === 'official' ? state.mode === 'official-question' && state.identity.id === id : state.mode === 'personal-card' && state.identity.id === id,
       tryAcquireMutationLock: lock => lock.current ? false : (lock.current = true),
       releaseMutationLock: lock => { lock.current = false; },
-      resolveOfficialCreatorCommand: command => ({ rpc: command.type === 'save-concept' ? 'save_concept_with_prerequisites' : command.type === 'save-question' ? 'save_question_with_relationships_v2' : command.type === 'inspect-delete' ? 'get_development_delete_summary' : command.type === 'delete-content' ? 'delete_development_content' : '' }),
+      resolveOfficialCreatorCommand: command => ({ rpc: command.type === 'save-concept' ? 'save_concept_with_format' : command.type === 'save-question' ? 'save_question_with_format' : command.type === 'inspect-delete' ? 'get_development_delete_summary' : command.type === 'delete-content' ? 'delete_development_content' : '' }),
     },
     './CreatorAlgorithmDiagnostics': {},
     './CreatorTopicTreeInteraction': {},
@@ -183,7 +182,7 @@ test('Concept image confirmation waits for the media transaction and complete au
     h.render().setConcept('Concept with images');
     const pending = h.render().saveConcept();
     assert.doesNotMatch(h.render().status?.message || '', /Concept saved with image/);
-    finish({ data: { concept_id: editing ? 'existing-concept' : 'saved-concept', references: [], placements: media.items }, error: null });
+    finish({ data: { concept_id: editing ? 'existing-concept' : 'saved-concept', version_id: 'version', updated_at: '2026-10-03T12:00:00Z', bodyMarkdown: 'Concept with images', body_format: editing ? 'legacy' : 'visual_markdown_v1', references: [], placements: media.items }, error: null });
     await pending;
     assert.equal(h.render().status.message, `Concept saved with ${count === 1 ? 'image' : 'images'}${editing ? '' : '. Ready for another Concept.'}`);
     assert.equal(h.calls.length, 0, 'No parallel legacy save');
@@ -207,8 +206,8 @@ for (const lifecycle of ['published', 'draft']) {
     e.setConceptRecordStatus(lifecycle);
     await h.render().saveConcept();
     e = h.render();
-    assert.equal(h.calls[0].payload.p_status, lifecycle);
-    assert.equal(h.calls[0].payload.p_concept_id, null);
+    assert.equal(h.calls[0].payload.p_payload.p_status, lifecycle);
+    assert.equal(h.calls[0].payload.p_payload.p_concept_id, null);
     assert.equal(e.conceptId, null);
     assert.equal(e.concept, '');
     assert.equal(e.references.length, 0);
@@ -218,8 +217,8 @@ for (const lifecycle of ['published', 'draft']) {
     assert.equal(h.routes.at(-1), '/creator/concepts/new');
     e.setConcept('# Second concept');
     await h.render().saveConcept();
-    assert.equal(h.calls[1].payload.p_concept_id, null);
-    assert.equal(h.calls[1].payload.p_status, 'published');
+    assert.equal(h.calls[1].payload.p_payload.p_concept_id, null);
+    assert.equal(h.calls[1].payload.p_payload.p_status, 'published');
   });
 
   test(`new Question ignores stale ${lifecycle} status and resets hidden compatibility defaults`, async () => {
@@ -231,9 +230,9 @@ for (const lifecycle of ['published', 'draft']) {
     e.setQuestionRecordStatus(lifecycle);
     await h.render().saveQuestion();
     e = h.render();
-    assert.equal(h.calls[0].payload.p_status, 'published');
-    assert.equal(h.calls[0].payload.p_difficulty, 'medium');
-    assert.equal(h.calls[0].payload.p_accepted_answers[0].answer_text, 'First answer');
+    assert.equal(h.calls[0].payload.p_payload.p_status, 'published');
+    assert.equal(h.calls[0].payload.p_payload.p_difficulty, 'medium');
+    assert.equal(h.calls[0].payload.p_payload.p_accepted_answers[0].answer_text, 'First answer');
     assert.equal(e.questionId, null);
     assert.equal(e.questionPrompt, ''); assert.equal(e.questionAnswer, '');
     assert.equal(e.questionConceptId, 'existing-concept');
@@ -243,10 +242,10 @@ for (const lifecycle of ['published', 'draft']) {
     assert.equal(e.isQuestionDirty, false);
     e.setQuestionPrompt('Second prompt'); e.setQuestionAnswer('Second answer');
     await h.render().saveQuestion();
-    assert.equal(h.calls[1].payload.p_question_id, null);
-    assert.equal(h.calls[1].payload.p_status, 'published');
-    assert.equal(h.calls[1].payload.p_difficulty, 'medium');
-    assert.equal(h.calls[1].payload.p_concept_id, 'existing-concept');
+    assert.equal(h.calls[1].payload.p_payload.p_question_id, null);
+    assert.equal(h.calls[1].payload.p_payload.p_status, 'published');
+    assert.equal(h.calls[1].payload.p_payload.p_difficulty, 'medium');
+    assert.equal(h.calls[1].payload.p_payload.p_concept_id, 'existing-concept');
 
   });
 }
@@ -274,7 +273,7 @@ test('failed saves preserve new drafts and dirty state', async () => {
 });
 
 test('incomplete reference confirmation retains saved Concept identity for safe retry', async () => {
-  const h = editor({ response: () => ({ data: { concept_id: 'saved-concept' }, error: null }) });
+  const h = editor({ response: (name, payload) => { const result = formatSaveResponse(name, payload); delete result.data.references; return result; } });
   h.render().setConcept('Keep this'); await h.render().saveConcept();
   const e = h.render(); assert.equal(e.concept, 'Keep this'); assert.equal(e.conceptId, 'saved-concept');
   assert.equal(e.isContentDirty, true); assert.match(e.status.message, /incomplete/);
@@ -289,7 +288,7 @@ test('pending save disables editor and prevents another save handler from submit
   const fieldset = e.tree.props.children[1].props.children;
   assert.equal(fieldset.type, 'fieldset'); assert.equal(fieldset.props.disabled, true);
   await e.saveConcept(); await e.saveQuestion(); assert.equal(h.calls.length, 1);
-  finish({ data: { concept_id: 'saved-concept', references: [] }, error: null });
+  finish(formatSaveResponse(h.calls[0].name, h.calls[0].payload));
   await saving; e = h.render(); assert.equal(e.isSaving, false); assert.equal(e.concept, '');
 });
 
@@ -298,8 +297,8 @@ for (const difficulty of ['easy','medium','hard']) for (const status of ['draft'
   const h=editor({editing:true});
   h.render().selectExistingQuestion({id:'existing-question',conceptId:'existing-concept',primaryConceptName:'Existing',relatedConceptIds:[],prompt:'Old',answer:'Answer',difficulty,testingAngle:'Recall',status,tags:[]});
   h.render().setQuestionPrompt('Unrelated text edit');await h.render().saveQuestion();
-  const e=h.render(),call=h.calls.find(c=>c.name==='save_question_with_relationships_v2');
-  assert.equal(call.payload.p_question_id,'existing-question');assert.equal(call.payload.p_difficulty,difficulty);assert.equal(call.payload.p_status,status);
+  const e=h.render(),call=h.calls.find(c=>c.name==='save_question_with_format');
+  assert.equal(call.payload.p_payload.p_question_id,'existing-question');assert.equal(call.payload.p_payload.p_difficulty,difficulty);assert.equal(call.payload.p_payload.p_status,status);
   assert.equal(e.questionId,'existing-question');assert.equal(e.questionDifficulty,difficulty);assert.equal(e.questionRecordStatus,status);assert.equal(e.isQuestionDirty,false);
   e.startNewQuestion();assert.equal(h.render().questionDifficulty,'medium');assert.equal(h.render().questionRecordStatus,'published');
  });

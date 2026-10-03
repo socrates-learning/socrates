@@ -1,6 +1,7 @@
 'use client';
 
 import type { FormEvent } from 'react';
+import { questionMarkdownSummary } from '@/components/MarkdownContent';
 import { Search } from 'lucide-react';
 import { createCreatorEntityKey } from '@/lib/creator-entity-contracts';
 import type { ExistingQuestion, QuestionSearchFilters, QuestionSearchCursor } from '../CreatorStudioV2Client';
@@ -330,7 +331,7 @@ export function CreatorQuestionSearchPanel({
                 onClick={() => selectQuestionSearchResult(question)}
               >
                 <span className={styles.questionSearchPrompt}>
-                  {question.prompt || 'Untitled Question'}
+                  {(question.source === 'official' ? questionMarkdownSummary(question.prompt, question.promptFormat) : question.prompt) || 'Untitled Question'}
                 </span>
                 <span className={styles.questionSearchMetadata}>
                   <span>{question.status || 'Lifecycle · N/A'}</span>

@@ -1,3 +1,4 @@
+import * as officialFormat from '../lib/official-content-format.ts';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
@@ -7,7 +8,7 @@ import React from 'react';
 import * as jsx from 'react/jsx-runtime';
 import { renderToStaticMarkup } from 'react-dom/server';
 const source = readFileSync(new URL('../components/MarkdownContent.tsx', import.meta.url),'utf8');
-const modules = { react: React, 'react/jsx-runtime': jsx, './MarkdownContent.module.css': {__esModule:true,default:{card:'card'}} };
+const modules = { '@/lib/official-content-format': officialFormat, react: React, 'react/jsx-runtime': jsx, './MarkdownContent.module.css': {__esModule:true,default:{card:'card'}} };
 const context = { exports:{}, URL, require(name) { assert.ok(name in modules, name); return modules[name]; } };
 vm.runInNewContext(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText,context);
 const {MarkdownContent,cardMarkdownSummary} = context.exports;

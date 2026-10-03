@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { MarkdownContent } from '@/components/MarkdownContent';
+import { MarkdownContent, questionMarkdownSummary } from '@/components/MarkdownContent';
+import type { OfficialContentFormat } from '@/lib/official-content-format';
 import { supabase } from '@/lib/supabase';
 import type { ActiveLibrary } from '@/lib/library-context';
 import { broadcastTagCatalogUsageInvalidation } from '@/lib/tag-catalog-invalidation';
@@ -76,6 +77,7 @@ type QuestionOption = {
 };
 
 type QuestionAcceptedAnswer = {
+  answer_format?: OfficialContentFormat;
   id: string;
   answer_text: string;
   sort_order: number;
@@ -89,6 +91,9 @@ type QuestionSourceLink = {
 };
 
 type QuestionRecord = {
+  prompt_format?: OfficialContentFormat;
+  current_version_id?: string | null;
+  updated_at?: string | null;
   id: string;
   concept_id: string;
   question_type: QuestionType;
@@ -112,6 +117,7 @@ type QuestionOptionForm = {
 };
 
 type QuestionAnswerForm = {
+  answer_format?: OfficialContentFormat;
   clientId: string;
   id?: string;
   answer_text: string;
@@ -119,6 +125,9 @@ type QuestionAnswerForm = {
 };
 
 type QuestionForm = {
+  prompt_format: OfficialContentFormat;
+  current_version_id: string | null;
+  updated_at: string | null;
   id: string;
   isNew: boolean;
   concept_id: string;
@@ -380,6 +389,9 @@ function normalizeJoinedConcept(row: {
 }
 
 function normalizeQuestion(row: {
+  prompt_format?: OfficialContentFormat;
+  current_version_id?: string | null;
+  updated_at?: string | null;
   id: string;
   concept_id: string;
   question_type: string | null;
@@ -397,6 +409,7 @@ function normalizeQuestion(row: {
   question_accepted_answers?: Array<{
     id: string;
     answer_text: string;
+    answer_format?: OfficialContentFormat;
     sort_order: number | null;
   }> | null;
   question_sources?: Array<{
@@ -422,6 +435,7 @@ function normalizeQuestion(row: {
     .map((answer) => ({
       id: answer.id,
       answer_text: answer.answer_text,
+      answer_format: answer.answer_format || 'legacy',
       sort_order: answer.sort_order || 0,
     }))
     .sort((a, b) => a.sort_order - b.sort_order);
@@ -440,6 +454,9 @@ function normalizeQuestion(row: {
 
   return {
     id: row.id,
+    prompt_format: row.prompt_format || 'legacy',
+    current_version_id: row.current_version_id || null,
+    updated_at: row.updated_at || null,
     concept_id: row.concept_id,
     question_type: normalizeQuestionType(row.question_type),
     prompt: row.prompt,
@@ -490,6 +507,9 @@ function createQuestionForm(
 
   return {
     id: question.id,
+    prompt_format: question.prompt_format || 'legacy',
+    current_version_id: question.current_version_id || null,
+    updated_at: question.updated_at || null,
     isNew,
     concept_id: question.concept_id,
     question_type: question.question_type,
@@ -508,6 +528,7 @@ function createQuestionForm(
             clientId: createClientId(),
             id: answer.id,
             answer_text: answer.answer_text,
+            answer_format: answer.answer_format || 'legacy',
             sort_order: answer.sort_order,
           }))
         : [createBlankAnswer(0)],
@@ -515,6 +536,10 @@ function createQuestionForm(
     tagIds: question.question_tags.map((assignment) => assignment.tag_id),
     sourceSelectId: '',
   };
+}
+
+function isConvertedQuestion(form: QuestionForm) {
+  return form.prompt_format === 'visual_markdown_v1' || form.acceptedAnswers.some(answer => answer.answer_format === 'visual_markdown_v1');
 }
 
 export function ArticleEditorClient({
@@ -689,6 +714,9 @@ export function ArticleEditorClient({
           id,
           concept_id,
           question_type,
+          prompt_format,
+          current_version_id,
+          updated_at,
           prompt,
           explanation,
           status,
@@ -704,6 +732,7 @@ export function ArticleEditorClient({
           question_accepted_answers (
             id,
             answer_text,
+            answer_format,
             sort_order
           ),
           question_sources (
@@ -801,6 +830,9 @@ export function ArticleEditorClient({
         id,
         concept_id,
         question_type,
+        prompt_format,
+        current_version_id,
+        updated_at,
         prompt,
         explanation,
         status,
@@ -816,6 +848,7 @@ export function ArticleEditorClient({
         question_accepted_answers (
           id,
           answer_text,
+          answer_format,
           sort_order
         ),
         question_sources (
@@ -907,9 +940,11 @@ export function ArticleEditorClient({
 
       if (!form) return current;
 
+      const next = updater(form);
       return {
         ...current,
-        [questionId]: updater(form),
+        [questionId]: isConvertedQuestion(form) ? { ...form, status: next.status,
+          review_article_concept_id: next.review_article_concept_id, sourceIds: next.sourceIds, sourceSelectId: next.sourceSelectId } : next,
       };
     });
   }
@@ -1058,7 +1093,12 @@ export function ArticleEditorClient({
 
     try {
       const isShortAnswer = form.question_type === 'short_answer';
-      const { data, error } = await supabase.rpc('save_question_with_version', {
+      const converted = isConvertedQuestion(form);
+      const { data, error } = converted ? await supabase.rpc('save_article_question_metadata', {
+        p_library_id: activeLibrary.id, p_article_id: articleId, p_question_id: form.id,
+        p_expected_version: form.current_version_id, p_expected_updated_at: form.updated_at,
+        p_patch: { status: form.status, review_article_concept_id: form.review_article_concept_id || null, source_ids: form.sourceIds },
+      }) : await supabase.rpc('save_question_with_version', {
         p_question_id: form.isNew ? null : form.id,
         p_concept_id: form.concept_id,
         p_question_type: form.question_type,
@@ -1075,10 +1115,16 @@ export function ArticleEditorClient({
         p_tag_ids: form.tagIds,
       });
 
-      if (error) throw error;
+      if (error) throw new Error(error.message || 'Unable to save question.');
 
       const savedQuestionId = (data as { id?: string } | null)?.id;
       if (!savedQuestionId) throw new Error('Question saved without an identifier.');
+      if (converted && (savedQuestionId !== form.id || !data.current_version_id || !data.updated_at ||
+        data.prompt !== form.prompt || data.prompt_format !== form.prompt_format || data.status !== form.status ||
+        data.review_article_concept_id !== (form.review_article_concept_id || null) ||
+        JSON.stringify([...new Set(data.source_ids || [])].sort()) !== JSON.stringify([...new Set(form.sourceIds)].sort()))) {
+        throw new Error('Question metadata save could not be confirmed. Your edits are preserved.');
+      }
 
       setQuestionMessage(form.concept_id, 'Question saved.');
       broadcastTagCatalogUsageInvalidation();
@@ -1524,13 +1570,20 @@ export function ArticleEditorClient({
     const form = questionForms[question.id];
 
     if (!form) return null;
+    const converted = isConvertedQuestion(form);
 
     return (
       <div className="card" style={{ marginTop: 12 }}>
+        {converted ? <p role="note">Formatted Question and Answer content is edited in Creator Studio. You can still update its Review Link, Sources and Status here.
+          {form.question_type === 'short_answer' && form.acceptedAnswers.length === 1
+            ? <> <Link href={`/creator/concepts/${form.concept_id}?question=${form.id}`} target="_blank" rel="noopener noreferrer">Edit in Creator Studio</Link></>
+            : ' This Question shape is read-only here; its content and answers remain preserved.'}
+        </p> : null}
         <div className="form-grid">
           <label>
             Question Type
             <select
+              disabled={converted}
               value={form.question_type}
               onChange={(event) =>
                 updateQuestionType(question.id, event.target.value as QuestionType)
@@ -1560,7 +1613,9 @@ export function ArticleEditorClient({
           </label>
         </div>
 
-        <label>
+        {converted ? <div aria-label="Question content (read-only)"><strong>Prompt</strong>
+          <MarkdownContent markdown={form.prompt} mode="question" format={form.prompt_format} />
+        </div> : (        <label>
           Prompt
           <textarea
             value={form.prompt}
@@ -1573,6 +1628,7 @@ export function ArticleEditorClient({
             placeholder="Which respiratory change would tend to lower PaCO2?"
           />
         </label>
+)}
 
         <br />
 
@@ -1610,6 +1666,7 @@ export function ArticleEditorClient({
                 >
                   <strong>{String.fromCharCode(65 + index)}</strong>
                   <input
+                    readOnly={converted}
                     value={option.option_text}
                     onChange={(event) =>
                       updateQuestionForm(question.id, (current) => ({
@@ -1625,6 +1682,7 @@ export function ArticleEditorClient({
                   />
                   <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                     <input
+                      disabled={converted}
                       type="radio"
                       name={`correct-${question.id}`}
                       checked={option.is_correct}
@@ -1643,6 +1701,7 @@ export function ArticleEditorClient({
                   <button
                     className="btn ghost"
                     type="button"
+                    disabled={converted}
                     onClick={() => removeQuestionOption(question.id, option.clientId)}
                   >
                     Remove
@@ -1654,7 +1713,8 @@ export function ArticleEditorClient({
               className="btn ghost"
               type="button"
               style={{ marginTop: 12 }}
-              onClick={() => addQuestionOption(question.id)}
+              disabled={converted}
+                    onClick={() => addQuestionOption(question.id)}
             >
               + Add Option
             </button>
@@ -1670,6 +1730,7 @@ export function ArticleEditorClient({
                 style={{ display: 'flex', gap: 8, alignItems: 'center' }}
               >
                 <input
+                  disabled={converted}
                   type="radio"
                   name={`true-false-${question.id}`}
                   checked={form.options.some(
@@ -1700,7 +1761,7 @@ export function ArticleEditorClient({
                   key={answer.clientId}
                   style={{ display: 'flex', gap: 8, alignItems: 'center' }}
                 >
-                  <input
+                  {converted ? <div aria-label="Accepted Answer (read-only)"><MarkdownContent markdown={answer.answer_text} mode="question" format={answer.answer_format || 'legacy'} /></div> : (                  <input
                     value={answer.answer_text}
                     onChange={(event) =>
                       updateQuestionForm(question.id, (current) => ({
@@ -1713,10 +1774,12 @@ export function ArticleEditorClient({
                       }))
                     }
                     placeholder="PaCO2"
-                  />
+                  />)}
+
                   <button
                     className="btn ghost"
                     type="button"
+                    disabled={converted}
                     onClick={() => removeAcceptedAnswer(question.id, answer.clientId)}
                   >
                     Remove
@@ -1728,7 +1791,8 @@ export function ArticleEditorClient({
               className="btn ghost"
               type="button"
               style={{ marginTop: 12 }}
-              onClick={() => addAcceptedAnswer(question.id)}
+              disabled={converted}
+                    onClick={() => addAcceptedAnswer(question.id)}
             >
               + Add Accepted Answer
             </button>
@@ -1740,6 +1804,7 @@ export function ArticleEditorClient({
         <label>
           Explanation
           <textarea
+            readOnly={converted}
             value={form.explanation}
             onChange={(event) =>
               updateQuestionForm(question.id, (current) => ({
@@ -2121,7 +2186,7 @@ export function ArticleEditorClient({
                                   {question.status}
                                 </p>
                                 <p>
-                                  {question.prompt || 'Untitled draft question'}
+                                  {questionMarkdownSummary(question.prompt, question.prompt_format || 'legacy') || 'Untitled draft question'}
                                 </p>
                                 {isQuestionExpanded &&
                                   renderQuestionEditor(question, link)}

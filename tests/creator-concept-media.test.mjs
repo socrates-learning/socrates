@@ -118,8 +118,8 @@ test('media dirty ownership stays in Creator across sections and successful new 
   const source = readFileSync(new URL('../components/CreatorStudioV2Client.tsx', import.meta.url), 'utf8');
   assert.match(source, /const isDirty = \(conceptImages.guardActive && !isCurrentContentReadOnly && isContentDirty\)/);
   assert.match(source, /conceptImages.reset\(abandonMedia\)/);
-  assert.match(source, /conceptImages.usesMedia\s*\? await conceptImages.save\(savePayload\)\s*: await supabase.rpc\(command.rpc, savePayload\)/);
-  assert.match(source, /onClick=\{\(\) => format === 'image' \? conceptImages.open\(conceptImageEditorRef.current\?\.selection\(\).end \?\? conceptEditorRef.current\?\.selectionEnd/);
+  assert.match(source, /conceptImages.usesMedia\s*\? await conceptImages.save\(savePayload\)\s*: await supabase.rpc\(command.rpc, \{\s*p_active_library_id: activeLibraryId,\s*p_expected_version: conceptIdToSave \? conceptRevision.version : null,\s*p_expected_updated_at: conceptIdToSave \? conceptRevision.updatedAt : null,\s*p_body_format: bodyFormatToSave,\s*p_payload: savePayload,\s*\}\)/);
+  assert.match(source, /onImage=\{creatorAuthority.canSaveConcept \? position => conceptImages.open\(position\) : undefined\}/);
 });
 
 function nodes(node) {

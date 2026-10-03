@@ -1,5 +1,7 @@
 'use client';
 
+import type { OfficialContentFormat } from '@/lib/official-content-format';
+
 import { useState } from 'react';
 import Link from 'next/link';
 import { ConceptNotes } from '@/components/ConceptNotes';
@@ -15,6 +17,7 @@ export function ConceptTabs({
   summary,
   whyItMatters,
   bodyMarkdown,
+  bodyFormat,
   status,
   sections,
   sources,
@@ -28,6 +31,7 @@ export function ConceptTabs({
   summary: string | null;
   whyItMatters: string | null;
   bodyMarkdown: string | null;
+  bodyFormat?: OfficialContentFormat;
   status: string | null;
   sections: Array<{
     id: string;
@@ -120,7 +124,7 @@ export function ConceptTabs({
         <div className="grid">
           {hasMarkdownBody ? (
             <div className="card" style={{ gridColumn: '1 / -1' }}>
-              <ConceptMediaContent markdown={bodyMarkdown || ''} conceptId={conceptId} libraryId={libraryId} />
+              <ConceptMediaContent markdown={bodyMarkdown || ''} format={bodyFormat} conceptId={conceptId} libraryId={libraryId} />
             </div>
           ) : (
             <>

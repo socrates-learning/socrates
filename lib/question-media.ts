@@ -1,9 +1,10 @@
+import type { OfficialContentFormat } from './official-content-format';
 import type { ConceptMediaPlacement } from './concept-media';
 
 export type QuestionMediaSurface = 'front' | 'answer';
 export type QuestionMediaPlacement = ConceptMediaPlacement & { surface: QuestionMediaSurface };
 export type QuestionMediaHint = { questionId: string; versionId: string | null; libraryId: string; front: boolean; answer: boolean; unavailable?: boolean };
-export type QuestionMediaManifest = { questionId: string; versionId: string | null; libraryId: string; prompt: string; answer: string; placements: QuestionMediaPlacement[] };
+export type QuestionMediaManifest = { questionId: string; versionId: string | null; libraryId: string; prompt: string; answer: string; prompt_format?: OfficialContentFormat; answer_format?: OfficialContentFormat; updated_at?: string; placements: QuestionMediaPlacement[] };
 export type QuestionMediaContext = { questionId: string | null; libraryId: string; draftId: string; versionId: string | null };
 
 export function questionMediaEndpoint(context: Pick<QuestionMediaContext, 'questionId'>) {

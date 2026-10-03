@@ -1,3 +1,4 @@
+import type { OfficialContentFormat } from '@/lib/official-content-format';
 /** Stable block references, never Storage URLs. Personal content does not use this contract. */
 export type ConceptMediaPlacement = {
   placementId: string;
@@ -18,6 +19,8 @@ export type ConceptMediaManifest = {
   conceptId: string;
   versionId: string | null;
   bodyMarkdown: string;
+  body_format?: OfficialContentFormat;
+  updated_at?: string;
   placements: ConceptMediaPlacement[];
 };
 

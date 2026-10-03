@@ -1,3 +1,4 @@
+import { formatSaveResponse } from './fixtures/creator-role-workspaces.mjs';
 import { questionImageBoundary } from './fixtures/question-media-authoring.mjs';
 import { conceptMedia, conceptImageBoundary, conceptContentBoundary } from './fixtures/concept-media-authoring.mjs';
 import * as markdownEditing from '../lib/markdown-editing.ts';
@@ -105,11 +106,7 @@ function editor({ role = 'learner', editing = false, response, references = [], 
       if (name === 'create_library_node_in_library') return { data: { id: 'new-official-topic' }, error: null };
       if (name === 'save_personal_concept_with_overlay') return { data: { personal_concept_id: payload.p_personal_concept_id, owner_id: 'owner', topic_id: payload.p_personal_topic_id, concept_name: payload.p_name, concept_description: payload.p_description }, error: null };
 
-      return { data: name === 'save_question_with_relationships_v2'
-        ? { id: payload.p_question_id || 'saved-question' }
-        : { concept_id: payload.p_concept_id || 'saved-concept', references: payload.p_references.map(r => ({
-          client_id: r.client_id, source_id: 'source', attribution_id: 'attribution',
-        })) }, error: null };
+      return formatSaveResponse(name, payload);
   }
   const modules = {
     react: hooks,
@@ -117,7 +114,9 @@ function editor({ role = 'learner', editing = false, response, references = [], 
     'next/navigation': { useRouter: () => ({ push: path => routes.push(path), replace: path => routes.push(path), refresh: () => routes.push('refresh') }) },
     'lucide-react': {},
     '@/components/Header': {},
-    '@/components/MarkdownContent': { cardMarkdownSummary: source => source },
+    '@/components/MarkdownContent': { cardMarkdownSummary: source => source, questionMarkdownSummary: source => source },
+    './creator/QuestionMarkdownField': { QuestionMarkdownField() {} },
+    './creator/OfficialVisualField': { __esModule: true, default: function OfficialVisualField() {} },
     '@/components/ConceptMediaContent': conceptContentBoundary,
     '@/components/creator/QuestionImageAuthoring': questionImageBoundary,
     '@/components/creator/ConceptImageAuthoring': conceptImageBoundary,

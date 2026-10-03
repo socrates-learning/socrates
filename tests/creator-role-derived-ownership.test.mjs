@@ -1,3 +1,4 @@
+import { formatSaveResponse, visualFieldBoundary, OfficialVisualFieldBoundary } from './fixtures/creator-role-workspaces.mjs';
 import { questionImageBoundary } from './fixtures/question-media-authoring.mjs';
 import { conceptMedia, conceptImageBoundary, conceptContentBoundary } from './fixtures/concept-media-authoring.mjs';
 import { CreatorQuestionSearchPanel } from './fixtures/creator-role-workspaces.mjs';
@@ -108,11 +109,7 @@ function editor({ role = 'admin', editing = false, response, references = [], ca
       if (name === 'create_library_node_in_library') return { data: { id: 'new-official-topic' }, error: null };
       if (name === 'save_personal_concept_with_overlay') return { data: { personal_concept_id: payload.p_personal_concept_id, owner_id: 'owner', topic_id: payload.p_personal_topic_id, concept_name: payload.p_name, concept_description: payload.p_description }, error: null };
 
-      return { data: name === 'save_question_with_relationships_v2'
-        ? { id: payload.p_question_id || 'saved-question' }
-        : { concept_id: payload.p_concept_id || 'saved-concept', references: payload.p_references.map(r => ({
-          client_id: r.client_id, source_id: 'source', attribution_id: 'attribution',
-        })) }, error: null };
+      return formatSaveResponse(name, payload);
   }
   const modules = {
     react: hooks,
@@ -120,7 +117,9 @@ function editor({ role = 'admin', editing = false, response, references = [], ca
     'next/navigation': { useRouter: () => ({ push: path => routes.push(path), replace: path => routes.push(path), refresh: () => routes.push('refresh') }) },
     'lucide-react': new Proxy({}, { get: (_target, key) => `icon:${String(key)}` }),
     '@/components/Header': {},
-    '@/components/MarkdownContent': { cardMarkdownSummary: source => source },
+    '@/components/MarkdownContent': { cardMarkdownSummary: source => source, questionMarkdownSummary: source => source },
+    './creator/QuestionMarkdownField': { QuestionMarkdownField() {} },
+    './creator/OfficialVisualField': visualFieldBoundary,
     '@/components/ConceptMediaContent': conceptContentBoundary,
     '@/components/creator/QuestionImageAuthoring': questionImageBoundary,
     '@/components/creator/ConceptImageAuthoring': conceptImageBoundary,
@@ -191,6 +190,7 @@ function editor({ role = 'admin', editing = false, response, references = [], ca
 }
 
 function nodes(tree) {
+  if (tree?.type === OfficialVisualFieldBoundary) return nodes(OfficialVisualFieldBoundary(tree.props));
   if (!tree || typeof tree !== 'object') return [];
   if (Array.isArray(tree)) return tree.flatMap(nodes);
   if (tree.type === CreatorQuestionSearchPanel) return nodes(CreatorQuestionSearchPanel(tree.props));
@@ -238,7 +238,7 @@ for (const role of ['learner', 'admin', 'editor']) {
     e.setConceptName('New concept'); e.setConcept('New content');
     await h.render().saveCurrentConcept();
     assert.equal(h.calls[0].name || h.calls[0].table,
-      destination === 'personal' ? 'personal_concepts' : 'save_concept_with_prerequisites');
+      destination === 'personal' ? 'personal_concepts' : 'save_concept_with_format');
   });
   test(`${role}: New Question/Card after personal editing saves to ${destination}`, async () => {
     const h = editor({ role, editing: true }); let e = h.render();
@@ -249,7 +249,7 @@ for (const role of ['learner', 'admin', 'editor']) {
     e.setQuestionPrompt('New question'); e.setQuestionAnswer('New answer');
     await h.render().saveCurrentQuestion();
     assert.equal(h.calls[0].name || h.calls[0].table,
-      destination === 'personal' ? 'personal_cards' : 'save_question_with_relationships_v2');
+      destination === 'personal' ? 'personal_cards' : 'save_question_with_format');
   });
   test(`${role}: existing personal Concept/Card updates preserve identity and owner`, async () => {
     const h = editor({ role }); let e = h.render();

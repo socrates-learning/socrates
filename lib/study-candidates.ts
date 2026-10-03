@@ -1,8 +1,12 @@
+import type { OfficialContentFormat } from '@/lib/official-content-format';
 import type { QuestionMediaHint } from './question-media';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 export type OfficialStudyCandidate = {
   kind: 'official';
+  promptFormat?: OfficialContentFormat;
+  answerFormat?: OfficialContentFormat;
+  questionVersionId?: string | null;
   mediaHint?: QuestionMediaHint | null;
   candidateId: string;
   questionId: string;
@@ -33,6 +37,9 @@ export type StudyCandidate =
   | PersonalStudyCandidate;
 
 export type StudyCandidateRow = {
+  prompt_format?: OfficialContentFormat;
+  answer_format?: OfficialContentFormat;
+  question_version_id?: string | null;
   question_media_hint?: QuestionMediaHint | null;
   candidate_type: 'official' | 'personal';
   candidate_id: string;
@@ -148,6 +155,9 @@ export function adaptStudyCandidateRow(row: StudyCandidateRow): StudyCandidate {
 
     return {
       kind: 'official',
+      ...(row.prompt_format === undefined ? {} : { promptFormat: row.prompt_format }),
+      ...(row.answer_format === undefined ? {} : { answerFormat: row.answer_format }),
+      ...(row.question_version_id === undefined ? {} : { questionVersionId: row.question_version_id }),
       ...(row.question_media_hint === undefined ? {} : { mediaHint: row.question_media_hint }),
       candidateId: row.candidate_id,
       questionId,

@@ -35,9 +35,31 @@ test('active Study/Cram matches the released branch after projecting only approv
   const b = planner.indexOf('\n  return (\n    <>\n      <LearnerHeader classPrefix="home-v2"', a);
   assert.ok(a >= 0 && b > a);
   const study = planner.slice(a,b);
-  const mediaReview = '<ConceptMediaContent markdown={conceptReview.bodyMarkdown} conceptId={conceptReview.conceptId} libraryId={activeLibrary?.id} />';
+  const mediaReview = '<ConceptMediaContent markdown={conceptReview.bodyMarkdown} format={conceptReview.bodyFormat} conceptId={conceptReview.conceptId} libraryId={activeLibrary?.id} />';
   assert.equal(study.split(mediaReview).length - 1, 1, 'Exactly the approved Concept Review body receives actual Concept and Library context');
   let releasedStudy = study.replace(mediaReview, '<MarkdownContent markdown={conceptReview.bodyMarkdown} />');
+  // Project only the three explicit official text alternatives; Card and legacy branches stay frozen.
+  const officialText = [
+  [
+    "studyCandidate?.kind === 'personal' && studyCandidate.personalConceptId === null\n                    ? <MarkdownContent markdown={studyCandidate.prompt} mode=\"card\" interactiveLinks={false} />\n                    : studyCandidate?.kind === 'official' && questionMarkdownKind(studyCandidate.prompt, studyCandidate.promptFormat) === 'block'\n                      ? <>\n                        <h1 className=\"study-v2-sr-only\">Question</h1>\n                        <MarkdownContent markdown={studyCandidate.prompt} mode=\"question\" format={studyCandidate.promptFormat} interactiveLinks={false} />\n                      </>\n                      : <h1 style={studyCandidate?.kind === 'official' && studyCandidate.mediaHint?.front ? { margin: '0 auto', flexShrink: 0 } : undefined}>{studyCandidate?.kind === 'official' ? <MarkdownContent markdown={studyCandidate.prompt} mode=\"question\" format={studyCandidate.promptFormat} interactiveLinks={false} /> : studyCandidate?.prompt}</h1>}",
+    "studyCandidate?.kind === 'personal' && studyCandidate.personalConceptId === null\n                    ? <MarkdownContent markdown={studyCandidate.prompt} mode=\"card\" interactiveLinks={false} />\n                    : <h1 style={studyCandidate?.kind === 'official' && studyCandidate.mediaHint?.front ? { margin: '0 auto', flexShrink: 0 } : undefined}>{studyCandidate?.prompt}</h1>}"
+  ],
+  [
+    "studyCandidate?.kind === 'personal' && studyCandidate.personalConceptId === null ? <>\n                        <h2 id=\"study-revealed-question-heading\" className=\"study-v2-sr-only\">{studyCandidate.prompt}</h2>\n                        <MarkdownContent markdown={studyCandidate.prompt} mode=\"card\" />\n                      </> : studyCandidate?.kind === 'official' && questionMarkdownKind(studyCandidate.prompt, studyCandidate.promptFormat) === 'block' ? <>\n                        <h2 id=\"study-revealed-question-heading\" className=\"study-v2-sr-only\">Question</h2>\n                        <MarkdownContent markdown={studyCandidate.prompt} mode=\"question\" format={studyCandidate.promptFormat} />\n                      </> : studyCandidate?.kind === 'official' && questionMarkdownKind(studyCandidate.prompt, studyCandidate.promptFormat) === 'inline' ? <h2 id=\"study-revealed-question-heading\">\n                        <MarkdownContent markdown={studyCandidate.prompt} mode=\"question\" format={studyCandidate.promptFormat} />\n                      </h2> : <h2 id=\"study-revealed-question-heading\">\n                        {studyCandidate?.prompt}\n                      </h2>}",
+    "studyCandidate?.kind === 'personal' && studyCandidate.personalConceptId === null ? <>\n                        <h2 id=\"study-revealed-question-heading\" className=\"study-v2-sr-only\">{studyCandidate.prompt}</h2>\n                        <MarkdownContent markdown={studyCandidate.prompt} mode=\"card\" />\n                      </> : <h2 id=\"study-revealed-question-heading\">\n                        {studyCandidate?.prompt}\n                      </h2>}"
+  ],
+  [
+    "studyCandidate?.kind === 'personal' && studyCandidate.personalConceptId === null\n                        ? <MarkdownContent markdown={studyAnswer ?? ''} mode=\"card\" />\n                        : studyCandidate?.kind === 'official' && questionMarkdownKind(studyAnswer ?? '', studyCandidate.answerFormat) === 'block'\n                          ? <MarkdownContent markdown={studyAnswer ?? ''} mode=\"question\" format={studyCandidate.answerFormat} />\n                          : <p>{studyCandidate?.kind === 'official' ? <MarkdownContent markdown={studyAnswer ?? ''} mode=\"question\" format={studyCandidate.answerFormat} /> : studyAnswer}</p>}",
+    "studyCandidate?.kind === 'personal' && studyCandidate.personalConceptId === null\n                        ? <MarkdownContent markdown={studyAnswer ?? ''} mode=\"card\" />\n                        : <p>{studyAnswer}</p>}"
+  ]
+];
+  for (const [expression, before] of officialText) {
+    assert.equal(study.split(expression).length - 1, 1, 'Exactly the approved official text expression');
+    releasedStudy = releasedStudy.replace(expression, before);
+  }
+  const richFront = "studyCandidate?.kind === 'official' && (studyCandidate.mediaHint?.front || questionMarkdownKind(studyCandidate.prompt, studyCandidate.promptFormat) === 'block')";
+  assert.equal(study.split(richFront).length - 1, 1, 'Only official rich blocks gain top alignment');
+  releasedStudy = releasedStudy.replace(richFront, "studyCandidate?.kind === 'official' && studyCandidate.mediaHint?.front");
   for (const [surface, count] of [['front', 2], ['answer', 1]]) {
     const expression = `{studyCandidate?.kind === 'official' && <QuestionMediaContent questionId={studyCandidate.questionId} hint={studyCandidate.mediaHint} surface="${surface}" prompt={studyCandidate.prompt} answer={studyCandidate.answer} presentation="study" />}`;
     assert.equal(study.split(expression).length - 1, count, 'Only the three approved, actual-candidate image siblings are projected');
@@ -45,9 +67,9 @@ test('active Study/Cram matches the released branch after projecting only approv
   }
   const front = '<div className="study-v2-question-content" style={studyCandidate?.kind === \'official\' && studyCandidate.mediaHint?.front ? { justifyContent: \'flex-start\' } : undefined}>';
   const heading = '<h1 style={studyCandidate?.kind === \'official\' && studyCandidate.mediaHint?.front ? { margin: \'0 auto\', flexShrink: 0 } : undefined}>{studyCandidate?.prompt}</h1>';
-  for (const expression of [front, heading]) assert.equal(study.split(expression).length - 1, 1, 'Only the exact official-media Front alignment is projected');
-  assert.ok(study.indexOf(front) > study.indexOf(') : !isAnswerVisible ? ('));
-  assert.ok(study.indexOf(heading) < study.indexOf('className="study-v2-answer-body"'));
+  for (const expression of [front, heading]) assert.equal(releasedStudy.split(expression).length - 1, 1, 'Only the exact official-media Front alignment is projected');
+  assert.ok(releasedStudy.indexOf(front) > releasedStudy.indexOf(') : !isAnswerVisible ? ('));
+  assert.ok(releasedStudy.indexOf(heading) < releasedStudy.indexOf('className="study-v2-answer-body"'));
   releasedStudy = releasedStudy.replace(front, '<div className="study-v2-question-content">').replace(heading, '<h1>{studyCandidate?.prompt}</h1>');
   assert.equal(hash(releasedStudy), 'a66d35e0842261e8a458ebffeacc0a70120710c7d3d250588d2ed10248a88048');
   assert.doesNotMatch(study, /HomeRail|SocratesShell|ApplicationNavigation/);

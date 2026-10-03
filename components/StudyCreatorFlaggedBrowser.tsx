@@ -1,10 +1,12 @@
 'use client';
 
+import type { OfficialContentFormat } from '@/lib/official-content-format';
+
 import QuestionMediaContent from '@/components/QuestionMediaContent';
 import type { QuestionMediaHint } from '@/lib/question-media';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { MarkdownContent, cardMarkdownSummary } from '@/components/MarkdownContent';
+import { MarkdownContent, cardMarkdownSummary, questionMarkdownKind, questionMarkdownSummary } from '@/components/MarkdownContent';
 import { supabase } from '@/lib/supabase';
 import type { CreatorPersonalContent } from '@/lib/creator-personal-content';
 import { StudyCreatorIcon as Icon } from './StudyCreatorIcon';
@@ -23,6 +25,7 @@ type OfficialQuestion = {
   id: string;
   concept_id: string;
   prompt: string;
+  prompt_format?: OfficialContentFormat;
   difficulty: string | null;
   testing_angle: string | null;
 };
@@ -87,7 +90,7 @@ export function StudyCreatorFlaggedBrowser({
     if (questionIds.length) {
       const questionResult = await supabase
         .from('questions')
-        .select('id, concept_id, prompt, difficulty, testing_angle, question_media_hint')
+        .select('id, concept_id, prompt, prompt_format, difficulty, testing_angle, question_media_hint')
         .in('id', questionIds);
       if (questionResult.error) {
         setError(messageFor(questionResult.error));
@@ -233,7 +236,7 @@ export function StudyCreatorFlaggedBrowser({
               type="button"
             >
               {!neutralPresentation && <i className={item.owner === 'official' ? styles.officialOwnerMark : styles.personalOwnerMark}>{item.owner === 'official' ? 'S' : 'M'}</i>}
-              <span><strong>{item.card?.concept_id === null ? cardMarkdownSummary(item.title) : item.title}</strong><small>{item.context} · {new Date(item.flag.created_at).toLocaleDateString()}</small></span>
+              <span><strong>{item.card?.concept_id === null ? cardMarkdownSummary(item.title) : item.question ? questionMarkdownSummary(item.title, item.question.prompt_format) : item.title}</strong><small>{item.context} · {new Date(item.flag.created_at).toLocaleDateString()}</small></span>
               <Icon name="chevron-right" />
             </button>
           ))}
@@ -256,7 +259,7 @@ export function StudyCreatorFlaggedBrowser({
         <div className={styles.inspectorBody}>
           {selected ? (
             <div className={styles.flagReviewCard}>
-              <div><span>{neutralPresentation || selected.owner === 'official' ? 'Question' : 'Card'}</span>{selected.card?.concept_id === null ? <MarkdownContent markdown={selected.title} mode="card" /> : <p>{selected.title}</p>}</div>
+              <div><span>{neutralPresentation || selected.owner === 'official' ? 'Question' : 'Card'}</span>{selected.card?.concept_id === null ? <MarkdownContent markdown={selected.title} mode="card" /> : selected.question && questionMarkdownKind(selected.title, selected.question.prompt_format) === 'block' ? <MarkdownContent markdown={selected.title} mode="question" format={selected.question.prompt_format} /> : <p>{selected.question ? <MarkdownContent markdown={selected.title} mode="question" format={selected.question.prompt_format} /> : selected.title}</p>}</div>
               {selected.question && <QuestionMediaContent questionId={selected.question.id} hint={selected.question.question_media_hint} surface="front" prompt={selected.question.prompt} />}
               {selected.card && <div><span>Answer</span>{selected.card.concept_id === null ? <MarkdownContent markdown={selected.card.answer} mode="card" /> : <p>{selected.card.answer}</p>}</div>}
               {selected.question && !learnerPresentation && <div className={styles.flagMetadata}><span>{selected.question.difficulty ?? 'Unspecified difficulty'}</span><span>{selected.question.testing_angle ?? 'General angle'}</span></div>}
