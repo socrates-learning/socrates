@@ -48,7 +48,7 @@ import {
   type StudySessionStartOutcome,
 } from '@/lib/study-session-start';
 import type { ReactNode } from 'react';
-import { composeHomeGroups, groupSelection, mutateHomeSettings, requireHomeSettings, type HomeGroup, type HomeSettings, type TopicPlacement } from '@/lib/home-deck-settings';
+import { composeHomeGroups, groupSelection, mutateHomeSettings, mutateTopicSubtreePreference, requireHomeSettings, type HomeGroup, type HomeSettings, type TopicPlacement } from '@/lib/home-deck-settings';
 
 type LibraryNode = {
   id: string;
@@ -379,6 +379,7 @@ export function StudyPlanner({
   const [settingsError, setSettingsError] = useState(initialDeckData?.settingsLoadError || '');
   const [groupDrafts, setGroupDrafts] = useState<Record<string, number>>({});
   const settingsRequest = useRef(false);
+  const preferenceGesture = useRef<{ key: string; committed: boolean } | null>(null);
   const settingsContext = useRef('');
   const settingsDeckId = deck?.id;
   const settingsLibraryId = activeLibrary?.id;
@@ -1789,6 +1790,7 @@ export function StudyPlanner({
 
   async function refreshResolvedDeck(deckId = deck?.id) {
     if (!deckId) return;
+    const context = settingsContext.current;
 
     const [resolvedResult, candidateResult] = await Promise.all([
       supabase.rpc('resolve_study_deck', {
@@ -1799,6 +1801,7 @@ export function StudyPlanner({
       }),
     ]);
 
+    if (settingsContext.current !== context) return;
     if (resolvedResult.error || candidateResult.error) {
       setMessage(
         `Deck saved, but summary could not refresh: ${resolvedResult.error?.message || candidateResult.error?.message
@@ -1834,33 +1837,42 @@ export function StudyPlanner({
     setLearnerProgressError('');
   }
 
-  async function persistNodePreference(nodeId: string, balance: number) {
-    if (!activeLibrary?.id || !deck || !userId || !selectedNodeIds.has(nodeId)) {
-      return;
-    }
-
+  async function persistNodePreference(group: HomeGroup, balance: number) {
+    if (!activeLibrary?.id || !deck || !userId || !homeSettings || settingsRequest.current
+      || isSaving || isSetupCramMode || settingsError) return;
+    settingsRequest.current = true;
+    const context = settingsContext.current;
     setIsSaving(true);
     setMessage('Saving study preference...');
-
-    const { error } = await supabase.from('study_deck_node_preferences').upsert(
-      {
-        deck_id: deck.id,
-        user_id: userId,
-        library_id: activeLibrary.id,
-        library_node_id: nodeId,
-        new_mastery_balance: balance,
-      },
-      { onConflict: 'deck_id,library_node_id' }
-    );
-
-    if (error) {
-      setMessage(`Unable to save study preference: ${error.message}`);
+    try {
+      const next = await mutateTopicSubtreePreference((name, args) => supabase.rpc(name, args),
+        deck.id, activeLibrary.id, homeSettings, group.key, balance);
+      if (settingsContext.current !== context) return;
+      setHomeSettings(next);
+      setGroupDrafts({});
+      setMessage('Study preference saved.');
+      router.refresh();
+    } catch (error) {
+      if (settingsContext.current !== context) return;
+      setGroupDrafts({});
+      setSettingsError(error instanceof Error ? error.message : 'Unable to confirm Topic preferences. Reload Home.');
+      setMessage('');
+    } finally {
+      settingsRequest.current = false;
       setIsSaving(false);
-      return;
     }
+  }
 
-    setMessage('Study preference saved.');
-    setIsSaving(false);
+  function beginPreferenceGesture(group: HomeGroup) {
+    if (isSaving || isSetupCramMode || settingsError) return;
+    preferenceGesture.current = { key: group.key, committed: false };
+  }
+
+  function commitPreferenceGesture(group: HomeGroup, balance: number) {
+    const gesture = preferenceGesture.current;
+    if (!gesture || gesture.key !== group.key || gesture.committed) return;
+    gesture.committed = true;
+    void (group.source === 'collection' ? saveGroupSetting(group, balance) : persistNodePreference(group, balance));
   }
 
   async function toggleSetupCramMode() {
@@ -1892,8 +1904,9 @@ export function StudyPlanner({
   }
 
   async function toggleNodeSelection(nodeId: string, shouldInclude: boolean) {
-    if (!activeLibrary?.id || !deck || !userId) return;
-
+    if (!activeLibrary?.id || !deck || !userId || settingsRequest.current || isSaving || settingsError) return;
+    settingsRequest.current = true;
+    const context = settingsContext.current;
     setIsSaving(true);
     setMessage(
       shouldInclude ? 'Adding topic to deck...' : 'Removing topic from deck...'
@@ -1905,9 +1918,16 @@ export function StudyPlanner({
       p_should_include: shouldInclude,
     });
 
+    if (settingsContext.current !== context) {
+      settingsRequest.current = false;
+      setIsSaving(false);
+      return;
+    }
+
     if (error) {
       setMessage(`Unable to update deck: ${error.message}`);
       setIsSaving(false);
+      settingsRequest.current = false;
       return;
     }
 
@@ -1926,15 +1946,30 @@ export function StudyPlanner({
       return next;
     });
 
-    setMessage('Deck updated.');
-    await refreshResolvedDeck();
-    router.refresh();
-    setIsSaving(false);
+    try {
+      const readback = await supabase.rpc('get_home_study_bootstrap', { p_library_id: activeLibrary.id, p_deck_id: deck.id });
+      if (readback.error) throw new Error(readback.error.message);
+      const next = requireHomeSettings(readback.data);
+      if (settingsContext.current !== context) return;
+      setHomeSettings(next);
+      setGroupDrafts({});
+      setMessage('Deck updated.');
+      await refreshResolvedDeck();
+      if (settingsContext.current === context) router.refresh();
+    } catch (error) {
+      if (settingsContext.current !== context) return;
+      setSettingsError(`Deck selection may have saved, but readback could not be confirmed: ${error instanceof Error ? error.message : 'Unknown error'}. Reload Home.`);
+      setMessage('');
+    } finally {
+      settingsRequest.current = false;
+      setIsSaving(false);
+    }
   }
 
   async function saveGroupSetting(group: HomeGroup, value: boolean | number) {
     if (!deck || !activeLibrary || !homeSettings || settingsRequest.current || isSaving) return;
     const preference = typeof value === 'number';
+    if (preference && group.source !== 'collection') return persistNodePreference(group, value);
     const saved = (group.source === 'collection' ? homeSettings.personal_collection_preferences : homeSettings.personal_topic_preferences)[group.id] ?? 50;
     if (preference && value === saved) return;
     settingsRequest.current = true;
@@ -1944,7 +1979,7 @@ export function StudyPlanner({
     try {
       const next = await mutateHomeSettings((name, args) => supabase.rpc(name, args), deck.id, activeLibrary.id,
         group.source === 'collection' ? (preference ? 'collection-preference' : 'collection-selection')
-          : (preference ? 'topic-preference' : 'topic-selection'), group.id, value);
+          : 'topic-selection', group.id, value);
       if (settingsContext.current !== context) return;
       setHomeSettings(next);
       setSelectedPersonalTopicIds(new Set(next.unified_deck_settings.included_topic_ids));
@@ -2012,8 +2047,9 @@ export function StudyPlanner({
       excludedNodeIds,
       conceptOverrides
     ) : groupSelection(node, homeSettings!);
-    const preference = isLibraryTopic ? (nodePreferences[node.id] ?? 50)
-      : (groupDrafts[node.key] ?? (isCollection ? homeSettings!.personal_collection_preferences : homeSettings!.personal_topic_preferences)[node.id] ?? 50);
+    const preference = groupDrafts[node.key] ?? (isCollection ? homeSettings!.personal_collection_preferences[node.id]
+      : homeSettings?.unified_deck_settings.topic_preference_state?.values[node.key])
+      ?? (isLibraryTopic ? nodePreferences[node.id] : homeSettings!.personal_topic_preferences[node.id]) ?? 50;
     const conceptCount = isLibraryTopic ? branchConceptCount : isCollection ? null : personalBranchCounts(node.id).concepts;
     const questionCount = isLibraryTopic ? branchAvailabilityQuestionCount(node.id)
       : isCollection ? personalCollections.find(c => c.id === node.id)?.cardCount || 0 : personalBranchCounts(node.id).cards;
@@ -2177,7 +2213,7 @@ export function StudyPlanner({
 
         </div>
 
-        {selection.explicit && configuredGroupKey === node.key && (
+        {(selection.explicit || selection.inherited) && !selection.excluded && !selection.excludedByAncestor && configuredGroupKey === node.key && (
           <div
             style={{
               marginBottom: 8,
@@ -2197,24 +2233,28 @@ export function StudyPlanner({
               <input
                 className="home-v2-preference-slider"
                 aria-label={`${node.name} New to Mastery balance`}
-                disabled={isSetupCramMode || isSaving || Boolean(settingsError)}
+                disabled={isSetupCramMode || isSaving || Boolean(settingsError) || (!isCollection && !homeSettings?.unified_deck_settings.topic_preference_state)}
                 max="100"
                 min="0"
                 type="range"
                 value={preference}
                 onChange={(event) => {
                   const nextBalance = Number(event.target.value);
-                  if (isLibraryTopic) setNodePreferences((current) => ({ ...current, [node.id]: nextBalance }));
-                  else setGroupDrafts((current) => ({ ...current, [node.key]: nextBalance }));
+                  if (preferenceGesture.current?.key !== node.key || preferenceGesture.current.committed) beginPreferenceGesture(node);
+                  setGroupDrafts((current) => ({ ...current, [node.key]: nextBalance }));
+                }}
+                onPointerDown={() => beginPreferenceGesture(node)}
+                onKeyDown={(event) => {
+                  if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown'].includes(event.key)) beginPreferenceGesture(node);
                 }}
                 onBlur={(event) =>
-                  void (isLibraryTopic ? persistNodePreference(node.id, Number(event.currentTarget.value)) : saveGroupSetting(node, Number(event.currentTarget.value)))
+                  commitPreferenceGesture(node, Number(event.currentTarget.value))
                 }
                 onKeyUp={(event) =>
-                  void (isLibraryTopic ? persistNodePreference(node.id, Number(event.currentTarget.value)) : saveGroupSetting(node, Number(event.currentTarget.value)))
+                  commitPreferenceGesture(node, Number(event.currentTarget.value))
                 }
                 onPointerUp={(event) =>
-                  void (isLibraryTopic ? persistNodePreference(node.id, Number(event.currentTarget.value)) : saveGroupSetting(node, Number(event.currentTarget.value)))
+                  commitPreferenceGesture(node, Number(event.currentTarget.value))
                 }
                 style={{
                   accentColor: '#08143b',

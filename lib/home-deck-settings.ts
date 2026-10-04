@@ -7,6 +7,11 @@ export type SettingsSnapshot = {
   version: number;
   included_topic_ids: string[]; excluded_topic_ids: string[];
   selected_collection_ids: string[]; topic_states: TopicState[];
+  topic_preference_state?: TopicPreferenceState;
+};
+export type TopicPreferenceState = {
+  version: 117; deck_id: string; library_id: string; revision: string;
+  values: Record<string, number>;
 };
 export type HomeSettings = {
   unified_deck_settings: SettingsSnapshot;
@@ -77,9 +82,47 @@ export function groupSelection(group: HomeGroup, settings: HomeSettings) {
     excludedByAncestor: state.excluded && !directExclusion };
 }
 export type SettingsRpc = (name: string, args: Record<string, unknown>) => PromiseLike<{ data: unknown; error: { message: string } | null }>;
+
+function confirmedTopicPreferences(data: unknown, deckId: string, libraryId: string): TopicPreferenceState {
+  const state = data as TopicPreferenceState | null;
+  if (state?.version !== 117 || state.deck_id !== deckId || state.library_id !== libraryId
+    || !/^[a-f0-9]{32}$/.test(state.revision) || !state.values || Array.isArray(state.values)
+    || Object.entries(state.values).some(([key, value]) => !/^(official|personal):topic:/.test(key)
+      || !Number.isInteger(value) || value < 0 || value > 100)) {
+    throw new Error('Topic preferences could not be confirmed. Reload Home before changing settings.');
+  }
+  return state;
+}
+
+/** One current-subtree transaction, then readback. Never replay an uncertain reset. */
+export async function mutateTopicSubtreePreference(rpc: SettingsRpc, deckId: string, libraryId: string,
+  settings: HomeSettings, groupKey: string, balance: number) {
+  const before = confirmedTopicPreferences(settings.unified_deck_settings.topic_preference_state, deckId, libraryId);
+  if (!(groupKey in before.values) || !Number.isInteger(balance) || balance < 0 || balance > 100) {
+    throw new Error('A confirmed Topic and balance between 0 and 100 are required.');
+  }
+  const result = await rpc('set_study_deck_topic_subtree_preference', {
+    p_deck_id: deckId, p_library_id: libraryId, p_group_key: groupKey,
+    p_balance: balance, p_expected_revision: before.revision,
+  });
+  if (result.error) throw new Error(result.error.message);
+  const saved = confirmedTopicPreferences(result.data, deckId, libraryId);
+  if (saved.values[groupKey] !== balance || saved.revision === before.revision) {
+    throw new Error('Save returned no confirmed subtree reset. Reload Home before trying again.');
+  }
+  const readback = await rpc('get_home_study_bootstrap', { p_library_id: libraryId, p_deck_id: deckId });
+  if (readback.error) throw new Error(`The change may have saved, but readback failed: ${readback.error.message}. Reload Home before trying again.`);
+  const next = requireHomeSettings(readback.data);
+  const confirmed = confirmedTopicPreferences(next.unified_deck_settings.topic_preference_state, deckId, libraryId);
+  if (confirmed.revision !== saved.revision) {
+    throw new Error('Deck settings or Topics changed during readback. Reload Home before changing settings.');
+  }
+  return next;
+}
+
 /** One mutation, then authoritative readback. Never retry a rejected write. */
 export async function mutateHomeSettings(rpc: SettingsRpc, deckId: string, libraryId: string,
-  kind: 'topic-selection' | 'collection-selection' | 'topic-preference' | 'collection-preference', id: string, value: boolean | number) {
+  kind: 'topic-selection' | 'collection-selection' | 'collection-preference', id: string, value: boolean | number) {
   const collection = kind.startsWith('collection');
   const preference = kind.endsWith('preference');
   const args = { p_deck_id: deckId, [collection ? 'p_collection_id' : 'p_topic_id']: id,

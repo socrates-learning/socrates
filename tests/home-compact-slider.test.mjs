@@ -7,15 +7,15 @@ import {createRequire} from 'node:module';
 const require=createRequire(import.meta.url);
 const source=readFileSync(new URL('../components/StudyPlanner.tsx',import.meta.url),'utf8');
 const start=source.indexOf('  function renderNode('),end=source.indexOf('  let homeGroups:',start);
-const compiled=ts.transpileModule(`export ${source.slice(start,end).trim()}`,{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText;
+const compiled=ts.transpileModule(`${source.slice(source.indexOf('  function beginPreferenceGesture('),source.indexOf('  async function toggleSetupCramMode('))}\nexport ${source.slice(start,end).trim()}`,{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText;
 const node=(id,children=[])=>({id,key:`official:topic:${id}`,source:'official',name:id,children});
 const root=node('Nursing',[node('Branch A',[node('Leaf A')]),node('Branch B',[node('Leaf B')])]);
 function fixture(){
  const writes=[];
  const context={exports:{},require,configuredGroupKey:root.key,expandedNodeIds:new Set(['Nursing']),expandedPersonalTopicIds:new Set(),
  branchConceptIds:()=>['concept'],libraryAvailabilityQuestionCounts:{concept:4},branchAvailabilityQuestionCount:()=>4,
- getTopicSelectionPresentation:()=>({checked:true,explicit:true,partial:false}),nodes:[],placements:[],selectedNodeIds:new Set(),excludedNodeIds:new Set(),conceptOverrides:{},nodePreferences:{},groupDrafts:{},homeSettings:{},isSaving:false,settingsError:'',isSetupCramMode:false,
- setConfiguredGroupKey:key=>{context.configuredGroupKey=key;},toggleNodeSelection:(...args)=>writes.push(['selection',...args]),persistNodePreference:(...args)=>writes.push(['preference',...args]),
+ getTopicSelectionPresentation:()=>({checked:true,explicit:true,partial:false}),nodes:[],placements:[],selectedNodeIds:new Set(),excludedNodeIds:new Set(),conceptOverrides:{},nodePreferences:{},groupDrafts:{},homeSettings:{unified_deck_settings:{topic_preference_state:{values:{}}}},isSaving:false,settingsError:'',isSetupCramMode:false,
+ setConfiguredGroupKey:key=>{context.configuredGroupKey=key;},toggleNodeSelection:(...args)=>writes.push(['selection',...args]),persistNodePreference:(group,value)=>writes.push(['preference',group.id,value]),preferenceGesture:{current:null},saveGroupSetting:(...args)=>writes.push(['group',...args]),setGroupDrafts:fn=>{context.groupDrafts=fn(context.groupDrafts);},
  setNodePreferences:fn=>{context.nodePreferences=fn(context.nodePreferences);},toggleExpandedNode:id=>{const s=context.expandedNodeIds;if(s.has(id))s.delete(id);else s.add(id);}};
  vm.createContext(context);vm.runInContext(compiled,context);
  const render=()=>context.exports.renderNode(root);
@@ -44,15 +44,15 @@ test('configure is source-qualified, moves one slider, and never changes selecti
 test('expansion reveals one next level and leaves other branches collapsed',()=>{
  const f=fixture();find(f,'Expand Branch A').props.onClick();assert.ok(find(f,'Expand Leaf A'));assert.equal(find(f,'Expand Leaf B'),undefined);assert.deepEqual(f.writes,[]);
 });
-test('slider retains saved value, original persistence handlers and Cram disabling',()=>{
+test('slider separates draft from saved value and retains Cram disabling',()=>{
  const f=fixture();f.context.nodePreferences={Nursing:73};assert.equal(sliders(f)[0].props.value,73);
- sliders(f)[0].props.onChange({target:{value:'31'}});assert.equal(sliders(f)[0].props.value,31);assert.deepEqual(f.writes,[]);
+ sliders(f)[0].props.onChange({target:{value:'31'}});assert.equal(sliders(f)[0].props.value,31);assert.equal(f.context.nodePreferences.Nursing,73);assert.deepEqual(f.writes,[]);
  sliders(f)[0].props.onPointerUp({currentTarget:{value:'31'}});assert.deepEqual(f.writes,[['preference','Nursing',31]]);
  f.context.isSetupCramMode=true;assert.equal(sliders(f)[0].props.disabled,true);
 });
-test('eligibility remains separate and inherited rows do not gain unsupported preference writes',()=>{
+test('eligibility stays separate while inherited rows expose the supported contextual slider',()=>{
  const f=fixture();find(f,'Include Branch A in Study').props.onChange({currentTarget:{checked:false}});assert.deepEqual(f.writes,[['selection','Branch A',false]]);
- f.context.getTopicSelectionPresentation=()=>({checked:true,explicit:false,inherited:true,partial:false});assert.equal(sliders(f).length,0);
+ f.context.getTopicSelectionPresentation=()=>({checked:true,explicit:false,inherited:true,partial:false});assert.equal(sliders(f).length,1);
 });
 
 test('Topic rows retain names and right-side counts without concept-count or selection prose',()=>{

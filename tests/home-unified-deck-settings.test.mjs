@@ -58,7 +58,6 @@ test('missing or old snapshot cannot silently present unchecked state',()=>{
 for (const [kind,name,param,value,response] of [
  ['topic-selection','set_study_deck_personal_topic_selection','p_topic_id',true,{selected_personal_topic_ids:['same'],excluded_personal_topic_ids:[]}],
  ['collection-selection','set_study_deck_personal_collection_selection','p_collection_id',true,{selected_collection_ids:['same']}],
- ['topic-preference','set_study_deck_personal_topic_preference','p_topic_id',25,{group_key:'personal:topic:same',new_mastery_balance:25}],
  ['collection-preference','set_study_deck_personal_collection_preference','p_collection_id',75,{group_key:'personal:collection:same',new_mastery_balance:75}],
 ]) test(`${kind} uses one atomic write and reconciles authoritative readback`,async()=>{
  const calls=[];const saved=snapshot([state('same',{selected:true,direct:true})],['same'],[],['same']);
@@ -92,6 +91,7 @@ test('one existing Deck Settings surface, no source label, old section, new styl
  assert.match(render,/children.map\(\(child\) => renderNode\(child, depth \+ 1\)\)/);
 });
 test('preference drafts default to 50 without a render write and restore on failure',()=>{
+ assert.match(planner,/if \(preference && group.source !== 'collection'\) return persistNodePreference/);
  assert.match(planner,/if \(preference && value === saved\) return/);
  assert.match(planner,/const saved = .*\?\? 50/);
  assert.match(planner,/catch \(error\) \{[\s\S]*setGroupDrafts\(\{\}\)/);
