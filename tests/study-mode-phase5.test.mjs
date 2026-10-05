@@ -17,9 +17,9 @@ test('retired Study authoring has no state, entry point, modal, or persistence p
   assert.doesNotMatch(planner, /getPersonalTopicPath|getOfficialCandidatePlacements|getOfficialCandidateConceptName/);
   assert.doesNotMatch(planner, /create_personal_concept_overlay|Start with a blank private Card|Choose a private Concept/);
   assert.doesNotMatch(planner, /\.insert\(/);
-  // These active count/bootstrap reads are not part of retired authoring.
-  assert.match(planner, /\.from\('personal_cards'\)/);
-  assert.match(planner, /\.from\('personal_concepts'\)/);
+  // These Library-scoped bootstrap reads are not part of retired authoring.
+  assert.match(planner, /setPersonalCards\(loaded\.personal_cards \|\| \[\]\)/);
+  assert.match(planner, /setPersonalConcepts\(loaded\.personal_concepts \|\| \[\]\)/);
 });
 
 test('active Flag keeps its Escape handler and shared dialog presentation', () => {

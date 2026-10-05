@@ -72,6 +72,7 @@ test('browsing sums each Concept once even with multiple placements', () => {
     nodes: [{ id: 'root', parent_id: null }, { id: 'a', parent_id: 'root' }, { id: 'b', parent_id: 'root' }],
     placements: [{ concept_id: 'first', library_node_id: 'a' }, { concept_id: 'first', library_node_id: 'b' }, { concept_id: 'second', library_node_id: 'b' }],
     libraryAvailabilityQuestionCounts: { first: 19, second: 25 },
+    personalCards: [], activeLibrary: { id: 'nursing' },
   });
   vm.runInContext(compiled, context);
   assert.deepEqual(plain(vm.runInContext('outcome', context)), { ids: ['first', 'second'], count: 44 });

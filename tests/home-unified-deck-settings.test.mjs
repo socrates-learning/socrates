@@ -136,15 +136,15 @@ test('Topic row markup and styles are identical across sources',async()=>{
  assert.equal(html(official),html(personal));
 });
 
-test('server bootstrap includes settings and owned Creator placements before first render',async()=>{
+test('server bootstrap includes Library-qualified settings and Creator placements before first render',async()=>{
  const {default:vm}=await import('node:vm');const {default:ts}=await import('typescript');
  const source=readFileSync(new URL('../lib/study-planner-initial-data.ts',import.meta.url),'utf8');
  const saved=snapshot([state('same')]);const calls=[];const exports={};
- const bootstrap={...saved,available_libraries:[{id:'library'}],nodes,personal_topics:topics};
+ const bootstrap={...saved,available_libraries:[{id:'library'}],nodes,personal_topics:topics,personal_topic_placements:placement};
  vm.runInNewContext(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{
   exports,require(name){if(name==='server-only')return {};if(name==='@/lib/supabase-server')return {createSupabaseServerClient:async()=>({
    rpc:async(n)=>{calls.push(n);return {data:{deck:{id:'deck',user_id:'owner'},bootstrap},error:null};},
-   from:(table)=>{assert.equal(table,'personal_topic_official_placements');return {select:()=>({eq:async(column,id)=>{assert.equal(column,'owner_id');assert.equal(id,'owner');return {data:placement,error:null};}})};},
+   from:(table)=>{throw new Error(`Unexpected unscoped read: ${table}`);},
   })};throw new Error(name);},
  });
  const loaded=await exports.loadStudyPlannerInitialData({activeLibrary:{id:'library'},role:'learner'});

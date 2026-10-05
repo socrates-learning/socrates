@@ -29,7 +29,7 @@ import {
   getTopicSelectionPresentation,
 } from '@/lib/topic-selection-presentation';
 import type { ActiveLibrary, ActiveLibraryRole } from '@/lib/library-context';
-import type { StudyPlannerInitialData } from '@/lib/study-planner-initial-data';
+import type { HomePersonalMaterial, StudyPlannerInitialData } from '@/lib/study-planner-initial-data';
 import {
   getOfficialStudyReadyQuestionCounts,
   selectNextStudyCandidate,
@@ -108,10 +108,7 @@ type PersonalConcept = {
   name: string;
 };
 
-type PersonalCard = {
-  id: string;
-  concept_id: string;
-};
+type PersonalCard = HomePersonalMaterial['personal_cards'][number];
 
 type StudyCandidateFlag = {
   id: string;
@@ -395,15 +392,19 @@ export function StudyPlanner({
     setGroupDrafts({});
     async function loadSettings() {
       try {
-        const [snapshot, placementResult] = await Promise.all([
-          supabase.rpc('get_home_study_bootstrap', { p_library_id: settingsLibraryId, p_deck_id: settingsDeckId }),
-          supabase.from('personal_topic_official_placements').select('personal_topic_id,library_node_id').eq('owner_id', userId!),
-        ]);
+        const snapshot = await supabase.rpc('get_home_study_bootstrap', { p_library_id: settingsLibraryId, p_deck_id: settingsDeckId });
         if (snapshot.error) throw new Error(snapshot.error.message);
-        if (placementResult.error) throw new Error(placementResult.error.message);
-        const loaded = requireHomeSettings(snapshot.data);
+        const loaded = requireHomeSettings(snapshot.data) as HomeSettings & HomePersonalMaterial;
+        if (!Array.isArray(loaded.personal_topic_placements)) {
+          throw new Error('Library Topic placements were not returned.');
+        }
         if (cancelled) return;
-        setHomeTopicPlacements(placementResult.data || []);
+        setHomeTopicPlacements(loaded.personal_topic_placements);
+        setPersonalTopics(loaded.personal_topics || []);
+        setPersonalConcepts(loaded.personal_concepts || []);
+        setPersonalCards(loaded.personal_cards || []);
+        setExpandedPersonalTopicIds(new Set((loaded.personal_topics || [])
+          .filter(topic => topic.parent_id === null).map(topic => `personal:topic:${topic.id}`)));
         setHomeSettings(loaded);
       } catch (error) {
         if (!cancelled) setSettingsError(error instanceof Error ? error.message : 'Unable to load Deck settings.');
@@ -821,9 +822,6 @@ export function StudyPlanner({
           resolvedResult,
           learnerProgressResult,
           libraryAvailabilityResult,
-          personalTopicsResult,
-          personalConceptsResult,
-          personalCardsResult,
           personalSelectionsResult,
           personalCollectionsResult,
           personalCollectionSelectionsResult,
@@ -859,19 +857,6 @@ export function StudyPlanner({
             p_library_id: activeLibrary.id,
           }),
           supabase
-            .from('personal_topics')
-            .select('id, parent_id, name, sort_order')
-            .order('sort_order')
-            .order('name'),
-          supabase
-            .from('personal_concepts')
-            .select('id, topic_id, name')
-            .order('name'),
-          supabase
-            .from('personal_cards')
-            .select('id, concept_id')
-            .order('created_at'),
-          supabase
             .from('study_deck_personal_topic_selections')
             .select('personal_topic_id')
             .eq('deck_id', activeDeck.id),
@@ -896,12 +881,6 @@ export function StudyPlanner({
           data: learnerProgressData,
           error: learnerProgressLoadError,
         } = learnerProgressResult;
-        const { data: personalTopicsData, error: personalTopicsError } =
-          personalTopicsResult;
-        const { data: personalConceptsData, error: personalConceptsError } =
-          personalConceptsResult;
-        const { data: personalCardsData, error: personalCardsError } =
-          personalCardsResult;
         const { data: personalSelectionsData, error: personalSelectionsError } =
           personalSelectionsResult;
         const { data: personalCollectionsData, error: personalCollectionsError } =
@@ -1013,18 +992,6 @@ export function StudyPlanner({
           )
         );
         setResolvedConcepts((resolvedData || []) as StudyDeckConcept[]);
-        const loadedPersonalTopics = personalTopicsError
-          ? []
-          : ((personalTopicsData || []) as PersonalTopic[]);
-        setPersonalTopics(loadedPersonalTopics);
-        setPersonalConcepts(
-          personalConceptsError
-            ? []
-            : ((personalConceptsData || []) as PersonalConcept[])
-        );
-        setPersonalCards(
-          personalCardsError ? [] : ((personalCardsData || []) as PersonalCard[])
-        );
         setSelectedPersonalTopicIds(
           new Set(
             personalSelectionsError
@@ -1057,13 +1024,6 @@ export function StudyPlanner({
               : (personalCollectionSelectionsData || []).map(
                 (selection) => selection.personal_collection_id
               )
-          )
-        );
-        setExpandedPersonalTopicIds(
-          new Set(
-            loadedPersonalTopics
-              .filter((topic) => topic.parent_id === null)
-              .map((topic) => `personal:topic:${topic.id}`)
           )
         );
         setLearnerProgress(
@@ -1735,7 +1695,11 @@ export function StudyPlanner({
   }
 
   function branchAvailabilityQuestionCount(nodeId: string) {
-    return branchConceptIds(nodeId).reduce(
+    const topicIds = descendantNodeIds(nodeId);
+    const standaloneIds = new Set(personalCards.filter(card => card.concept_id === null
+      && card.library_id === activeLibrary?.id && card.library_node_id !== null
+      && topicIds.has(card.library_node_id)).map(card => card.id));
+    return standaloneIds.size + branchConceptIds(nodeId).reduce(
       (total, conceptId) => total + (libraryAvailabilityQuestionCounts[conceptId] || 0),
       0
     );
@@ -1782,7 +1746,10 @@ export function StudyPlanner({
 
     return {
       concepts: conceptIds.size,
-      cards: personalCards.filter((card) => conceptIds.has(card.concept_id)).length,
+      cards: new Set(personalCards.filter(card => card.concept_id !== null
+        ? conceptIds.has(card.concept_id)
+        : card.personal_topic_id !== null && topicIds.has(card.personal_topic_id)
+      ).map(card => card.id)).size,
     };
   }
 

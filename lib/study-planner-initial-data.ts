@@ -60,7 +60,18 @@ type PersonalConcept = {
 
 type PersonalCard = {
   id: string;
-  concept_id: string;
+  concept_id: string | null;
+  library_node_id: string | null;
+  library_id: string | null;
+  personal_topic_id: string | null;
+};
+
+/** Home-only projection; collection and Study selection contracts stay separate. */
+export type HomePersonalMaterial = {
+  personal_topics: PersonalTopic[];
+  personal_topic_placements: TopicPlacement[];
+  personal_concepts: PersonalConcept[];
+  personal_cards: PersonalCard[];
 };
 
 type PersonalCollection = {
@@ -75,7 +86,7 @@ type PersonalCollectionRow = {
   card_count: number;
 };
 
-type HomeStudyBootstrapResponse = Partial<HomeSettings> & {
+type HomeStudyBootstrapResponse = Partial<HomeSettings> & HomePersonalMaterial & {
   available_libraries: ActiveLibrary[];
   nodes: LibraryNode[];
   placements: Placement[];
@@ -87,9 +98,6 @@ type HomeStudyBootstrapResponse = Partial<HomeSettings> & {
   node_preferences: Record<string, number>;
   concept_overrides: Record<string, 'included' | 'excluded'>;
   resolved_concepts: StudyDeckConcept[];
-  personal_topics: PersonalTopic[];
-  personal_concepts: PersonalConcept[];
-  personal_cards: PersonalCard[];
   selected_personal_topic_ids: string[];
   personal_collections: PersonalCollectionRow[];
   selected_personal_collection_ids: string[];
@@ -291,14 +299,10 @@ export async function loadStudyPlannerInitialData({
   let homeTopicPlacements: TopicPlacement[] = [];
   let settingsLoadError = '';
   if (bootstrap.unified_deck_settings?.version === 109) {
-    const placementResult = await supabase
-      .from('personal_topic_official_placements')
-      .select('personal_topic_id,library_node_id')
-      .eq('owner_id', activeDeck.user_id);
-    if (placementResult.error) {
-      settingsLoadError = `Unable to load Deck settings: ${placementResult.error.message}`;
+    if (!Array.isArray(bootstrap.personal_topic_placements)) {
+      settingsLoadError = 'Unable to load Deck settings: Library Topic placements were not returned.';
     } else {
-      homeTopicPlacements = placementResult.data || [];
+      homeTopicPlacements = bootstrap.personal_topic_placements;
       homeSettings = bootstrap as HomeSettings;
     }
   }
