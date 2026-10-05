@@ -142,6 +142,60 @@ type CatalogTag = ConceptTag & {
   questionUsage: number;
   articleUsage: number;
 };
+type TagSurface = 'concept' | 'question' | 'manager';
+type TagPage = {
+  open: boolean;
+  page: number;
+  tags: CatalogTag[];
+  total: number;
+  loading: boolean;
+  error: string | null;
+};
+const TAG_PAGE_SIZE = 50;
+const emptyTagPage = (): TagPage => ({ open: false, page: 0, tags: [], total: 0, loading: false, error: null });
+
+function literalTagPattern(value: string) {
+  // PostgREST LIKE treats * as a % alias. Escaped imatch keeps both literal.
+  return normalizeTagName(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+async function readTagPage({ query = '', page = 0, activeOnly = false, usage = false, ids, exactName }: {
+  query?: string; page?: number; activeOnly?: boolean; usage?: boolean; ids?: string[]; exactName?: string;
+} = {}): Promise<{ tags: CatalogTag[]; total: number }> {
+  let request = supabase.from('tags').select(
+    usage ? 'id, name, slug, status, concept_tags(count), question_tags(count), article_tags(count)' : 'id, name, slug, status',
+    { count: 'exact' }
+  ).order('name').order('id');
+  if (activeOnly) request = request.eq('status', 'active');
+  if (ids) request = request.in('id', ids);
+  if (exactName !== undefined) request = request.filter('name', 'imatch', `^${literalTagPattern(exactName)}$`);
+  else if (normalizeTagName(query)) {
+    const literal = JSON.stringify(literalTagPattern(query));
+    request = request.or(`name.imatch.${literal},slug.imatch.${literal}`);
+  }
+  const { data, error, count } = await request.range(page * TAG_PAGE_SIZE, (page + 1) * TAG_PAGE_SIZE - 1);
+  if (error) throw new Error(error.message || 'Tags could not be loaded.');
+  if (!Array.isArray(data) || !Number.isSafeInteger(count) || count === null || count < 0 || data.length > TAG_PAGE_SIZE) {
+    throw new Error('Tag catalog response was incomplete. Please retry.');
+  }
+  const rows = data as unknown as Array<ConceptTag & {
+    concept_tags?: Array<{ count: number }>; question_tags?: Array<{ count: number }>; article_tags?: Array<{ count: number }>;
+  }>;
+  function usageCount(value: Array<{ count: number }> | undefined) {
+    if (!usage) return 0;
+    if (value?.length !== 1 || !Number.isSafeInteger(value[0].count) || value[0].count < 0) {
+      throw new Error('Tag usage counts could not be confirmed. Please retry.');
+    }
+    return value[0].count;
+  }
+  return { total: count, tags: rows.map(row => {
+    if (!row.id || !row.name || !row.slug || !['active', 'archived'].includes(row.status)) {
+      throw new Error('Tag catalog response was incomplete. Please retry.');
+    }
+    return { id: row.id, name: row.name, slug: row.slug, status: row.status,
+      conceptUsage: usageCount(row.concept_tags), questionUsage: usageCount(row.question_tags), articleUsage: usageCount(row.article_tags) };
+  }) };
+}
 type QuestionConceptOption = {
   id: string;
   name: string;
@@ -476,10 +530,6 @@ function questionCountLabel(count: number): string {
 
 function normalizeTagName(value: string): string {
   return value.trim().replace(/\s+/g, ' ');
-}
-
-function tagIdentity(value: string): string {
-  return normalizeTagName(value).toLocaleLowerCase();
 }
 
 function initialExpandedTopicIds(topics: Topic[], selectedIds: string[]) {
@@ -1060,6 +1110,13 @@ export function CreatorStudioV2Client({
   const [newCatalogTagName, setNewCatalogTagName] = useState('');
   const [tagCatalogStatus, setTagCatalogStatus] = useState<Status>(null);
   const [isMutatingTagCatalog, setIsMutatingTagCatalog] = useState(false);
+  const [tagPages, setTagPages] = useState<Record<TagSurface, TagPage>>(() => ({ concept: emptyTagPage(), question: emptyTagPage(), manager: emptyTagPage() }));
+  const [tagCatalogEpoch, setTagCatalogEpoch] = useState(0);
+  const [tagAssigning, setTagAssigning] = useState({ concept: false, question: false });
+  const tagPageGeneration = useRef({ concept: 0, question: 0, manager: 0 });
+  const tagMetadataGeneration = useRef({ value: 0 });
+  const tagAssigningLock = useRef({ concept: false, question: false });
+  const tagBrowseButtons = useRef<Partial<Record<TagSurface, HTMLButtonElement | null>>>({});
   const [questionEditorState, setQuestionEditorStateValue] =
     useState<CreatorQuestionEditorState>(() =>
       creationDestination === 'official'
@@ -1707,105 +1764,109 @@ export function CreatorStudioV2Client({
     }
   }
 
-  const loadTagCatalog = useCallback(async (includeUsage = false) => {
-    const loadUsage = includeUsage;
-    const loadArticleUsage = includeUsage && !isLearnerReadOnly;
-    const [tagResult, conceptUsageResult, questionUsageResult, articleUsageResult] =
-      await Promise.all([
-        supabase
-          .from('tags')
-          .select('id, name, slug, status')
-          .order('name'),
-        loadUsage
-          ? supabase.from('concept_tags').select('tag_id')
-          : Promise.resolve({ data: [] }),
-        loadUsage
-          ? supabase.from('question_tags').select('tag_id')
-          : Promise.resolve({ data: [] }),
-        loadArticleUsage
-          ? supabase.from('article_tags').select('tag_id')
-          : Promise.resolve({ data: [] }),
-      ]);
+  const tagContext = useRef({
+    concept: '', question: '', conceptQuery: '', questionQuery: '', selectedIds: [] as string[], search: false,
+  });
+  tagContext.current = {
+    concept: `${activeLibraryId}:${conceptSource}:${conceptId}:${conceptVisualGeneration}`,
+    question: `${activeLibraryId}:${questionSource}:${questionId}:${questionVisualGeneration}`,
+    conceptQuery: tagDraft, questionQuery: questionTagDraft,
+    selectedIds: Array.from(new Set([...conceptTags, ...questionTags, ...existingQuestions.flatMap(question => question.tags)].map(tag => tag.id))),
+    search: activeCreatorTab === 'search',
+  };
 
-    if (tagResult.error) {
-      setTagCatalogStatus({
-        tone: 'error',
-        message: 'Tags could not be loaded.',
-      });
-      return;
+  const loadTagCatalog = useCallback(async () => {
+    const generation = ++tagMetadataGeneration.current.value;
+    setTagCatalogEpoch(value => value + 1);
+    try {
+      const catalog: CatalogTag[] = [];
+      if (tagContext.current.search) {
+        // The released Search filter requires the complete active/archived catalog,
+        // independently of the current authoring/Manager page.
+        let expectedTotal: number | null = null;
+        for (let page = 0; ; page++) {
+          const result = await readTagPage({ page });
+          if (generation !== tagMetadataGeneration.current.value) return false;
+          if (expectedTotal !== null && result.total !== expectedTotal) throw new Error('Tag catalog changed while loading. Please retry.');
+          expectedTotal = result.total;
+          catalog.push(...result.tags);
+          if (catalog.length >= expectedTotal) break;
+          if (!result.tags.length) throw new Error('Tag catalog response was incomplete. Please retry.');
+        }
+        if (new Set(catalog.map(tag => tag.id)).size !== expectedTotal) throw new Error('Tag catalog changed while loading. Please retry.');
+        availableTagsRef.current = catalog;
+        setAvailableTags(catalog);
+      } else {
+        const ids = tagContext.current.selectedIds;
+        for (let start = 0; start < ids.length; start += TAG_PAGE_SIZE) {
+          const result = await readTagPage({ ids: ids.slice(start, start + TAG_PAGE_SIZE) });
+          if (generation !== tagMetadataGeneration.current.value) return false;
+          catalog.push(...result.tags);
+        }
+      }
+      if (generation !== tagMetadataGeneration.current.value) return false;
+      const catalogById = new Map(catalog.map(tag => [tag.id, tag]));
+      // Selected assignments are not owned by the current Browse page. Deleted or
+      // inaccessible IDs remain in the draft for the established save validation.
+      setConceptTags(current => current.map(tag => catalogById.get(tag.id) || tag));
+      setQuestionTags(current => current.map(tag => catalogById.get(tag.id) || tag));
+      setExistingQuestions(current => current.map(question => ({ ...question, tags: question.tags.map(tag => catalogById.get(tag.id) || tag) })));
+      setTagCatalogStatus(current => current?.tone === 'error' ? null : current);
+      return true;
+    } catch (error) {
+      if (generation === tagMetadataGeneration.current.value) setTagCatalogStatus({ tone: 'error', message: error instanceof Error ? error.message : 'Tags could not be loaded.' });
+      return false;
     }
-
-    function usageCounts(rows: Array<{ tag_id: string | null }> | null) {
-      return (rows || []).reduce<Record<string, number>>((counts, row) => {
-        if (row.tag_id) counts[row.tag_id] = (counts[row.tag_id] || 0) + 1;
-        return counts;
-      }, {});
-    }
-
-    const conceptUsage = usageCounts(conceptUsageResult.data);
-    const questionUsage = usageCounts(questionUsageResult.data);
-    const articleUsage = usageCounts(articleUsageResult.data);
-    const existingCatalogById = new Map(
-      availableTagsRef.current.map((tag) => [tag.id, tag])
-    );
-    const catalog = (tagResult.data || []).map((tag) => {
-      const existingTag = existingCatalogById.get(tag.id);
-
-      return {
-        id: tag.id,
-        name: tag.name,
-        slug: tag.slug,
-        status: tag.status === 'archived' ? 'archived' : 'active',
-        conceptUsage: loadUsage
-          ? conceptUsage[tag.id] || 0
-          : existingTag?.conceptUsage || 0,
-        questionUsage: loadUsage
-          ? questionUsage[tag.id] || 0
-          : existingTag?.questionUsage || 0,
-        articleUsage: loadArticleUsage
-          ? articleUsage[tag.id] || 0
-          : existingTag?.articleUsage || 0,
-      };
-    }) satisfies CatalogTag[];
-    const catalogById = new Map(catalog.map((tag) => [tag.id, tag]));
-
-    availableTagsRef.current = catalog;
-    setAvailableTags(catalog);
-    setConceptTags((current) =>
-      current.map((tag) => catalogById.get(tag.id) || tag)
-    );
-    setQuestionTags((current) =>
-      current.map((tag) => catalogById.get(tag.id) || tag)
-    );
-    setExistingQuestions((current) =>
-      current.map((question) => ({
-        ...question,
-        tags: question.tags.map((tag) => catalogById.get(tag.id) || tag),
-      }))
-    );
-  }, [isLearnerReadOnly]);
+  }, []);
 
   useEffect(() => {
+    const generation = tagMetadataGeneration.current;
     if (!isLearnerReadOnly) void loadTagCatalog();
-  }, [isLearnerReadOnly, loadTagCatalog]);
-
-  useEffect(() => {
-    if (!isLearnerReadOnly && activeCreatorTab === 'tags') {
-      void loadTagCatalog(true);
-    }
+    return () => { ++generation.value; };
   }, [activeCreatorTab, isLearnerReadOnly, loadTagCatalog]);
 
   useEffect(() => {
     if (isLearnerReadOnly) return;
     function refreshTagCatalogUsage(event: StorageEvent) {
-      if (event.key === TAG_CATALOG_USAGE_INVALIDATION_KEY) {
-        void loadTagCatalog(true);
-      }
+      if (event.key === TAG_CATALOG_USAGE_INVALIDATION_KEY) void loadTagCatalog();
     }
-
+    function refreshTagCatalogOnFocus() { void loadTagCatalog(); }
     window.addEventListener('storage', refreshTagCatalogUsage);
-    return () => window.removeEventListener('storage', refreshTagCatalogUsage);
+    window.addEventListener('focus', refreshTagCatalogOnFocus);
+    return () => {
+      window.removeEventListener('storage', refreshTagCatalogUsage);
+      window.removeEventListener('focus', refreshTagCatalogOnFocus);
+    };
   }, [isLearnerReadOnly, loadTagCatalog]);
+
+  const loadTagBrowsePage = useCallback(async (surface: TagSurface, query: string, page: number) => {
+    const generation = ++tagPageGeneration.current[surface];
+    setTagPages(current => ({ ...current, [surface]: { ...current[surface], loading: true, error: null, tags: [] } }));
+    try {
+      const result = await readTagPage({ query, page, activeOnly: surface !== 'manager', usage: surface === 'manager' });
+      if (generation !== tagPageGeneration.current[surface]) return;
+      setTagPages(current => ({ ...current, [surface]: { ...current[surface], ...result, loading: false, error: null } }));
+    } catch (error) {
+      if (generation !== tagPageGeneration.current[surface]) return;
+      setTagPages(current => ({ ...current, [surface]: { ...current[surface], loading: false, tags: [], error: error instanceof Error ? error.message : 'Tags could not be loaded.' } }));
+    }
+  }, []);
+
+  useEffect(() => {
+    const generations = tagPageGeneration.current;
+    if (!isLearnerReadOnly && activeCreatorTab === 'content' && (tagPages.concept.open || tagDraft.trim())) void loadTagBrowsePage('concept', tagDraft, tagPages.concept.page);
+    return () => { ++generations.concept; };
+  }, [activeCreatorTab, isLearnerReadOnly, tagDraft, tagPages.concept.open, tagPages.concept.page, tagCatalogEpoch, loadTagBrowsePage]);
+  useEffect(() => {
+    const generations = tagPageGeneration.current;
+    if (!isLearnerReadOnly && activeCreatorTab === 'questions' && (tagPages.question.open || questionTagDraft.trim())) void loadTagBrowsePage('question', questionTagDraft, tagPages.question.page);
+    return () => { ++generations.question; };
+  }, [activeCreatorTab, isLearnerReadOnly, questionTagDraft, tagPages.question.open, tagPages.question.page, tagCatalogEpoch, loadTagBrowsePage]);
+  useEffect(() => {
+    const generations = tagPageGeneration.current;
+    if (!isLearnerReadOnly && activeCreatorTab === 'tags' && (tagPages.manager.open || tagCatalogSearch.trim())) void loadTagBrowsePage('manager', tagCatalogSearch, tagPages.manager.page);
+    return () => { ++generations.manager; };
+  }, [activeCreatorTab, isLearnerReadOnly, tagCatalogSearch, tagPages.manager.open, tagPages.manager.page, tagCatalogEpoch, loadTagBrowsePage]);
 
   useEffect(() => {
     if (
@@ -2505,20 +2566,6 @@ export function CreatorStudioV2Client({
     blocked.add(activeTopic.id);
     return flattenTopics(topics).filter((topic) => !blocked.has(topic.id));
   }, [activeTopic, topics]);
-  const activeCatalogTags = useMemo(
-    () => availableTags.filter((tag) => tag.status === 'active'),
-    [availableTags]
-  );
-  const filteredCatalogTags = useMemo(() => {
-    const query = tagCatalogSearch.trim().toLocaleLowerCase();
-    if (!query) return availableTags;
-    return availableTags.filter(
-      (tag) =>
-        tag.name.toLocaleLowerCase().includes(query) ||
-        tag.slug.toLocaleLowerCase().includes(query)
-    );
-  }, [availableTags, tagCatalogSearch]);
-
   function showStatus(tone: StatusTone, message: string) {
     if (activeCreatorTab === 'questions' && !isLearnerReadOnly) {
       setQuestionStatus({ tone, message });
@@ -2548,9 +2595,11 @@ export function CreatorStudioV2Client({
     }
 
     setNewCatalogTagName('');
-    await loadTagCatalog(true);
+    setTagPages(current => ({ ...current, manager: { ...current.manager, page: 0 } }));
+    const refreshed = await loadTagCatalog();
+    broadcastTagCatalogUsageInvalidation();
     setIsMutatingTagCatalog(false);
-    setTagCatalogStatus({ tone: 'success', message: 'Tag created.' });
+    if (refreshed) setTagCatalogStatus({ tone: 'success', message: 'Tag created.' });
   }
 
   async function renameCatalogTag(tag: CatalogTag) {
@@ -2579,9 +2628,11 @@ export function CreatorStudioV2Client({
       return;
     }
 
-    await loadTagCatalog(true);
+    setTagPages(current => ({ ...current, manager: { ...current.manager, page: 0 } }));
+    const refreshed = await loadTagCatalog();
+    broadcastTagCatalogUsageInvalidation();
     setIsMutatingTagCatalog(false);
-    setTagCatalogStatus({ tone: 'success', message: 'Tag renamed.' });
+    if (refreshed) setTagCatalogStatus({ tone: 'success', message: 'Tag renamed.' });
   }
 
   async function setCatalogTagStatus(
@@ -2617,9 +2668,11 @@ export function CreatorStudioV2Client({
       return;
     }
 
-    await loadTagCatalog(true);
+    setTagPages(current => ({ ...current, manager: { ...current.manager, page: 0 } }));
+    const refreshed = await loadTagCatalog();
+    broadcastTagCatalogUsageInvalidation();
     setIsMutatingTagCatalog(false);
-    setTagCatalogStatus({
+    if (refreshed) setTagCatalogStatus({
       tone: 'success',
       message: nextStatus === 'archived' ? 'Tag archived.' : 'Tag reactivated.',
     });
@@ -2664,9 +2717,11 @@ export function CreatorStudioV2Client({
       return;
     }
 
-    await loadTagCatalog(true);
+    setTagPages(current => ({ ...current, manager: { ...current.manager, page: 0 } }));
+    const refreshed = await loadTagCatalog();
+    broadcastTagCatalogUsageInvalidation();
     setIsMutatingTagCatalog(false);
-    setTagCatalogStatus({ tone: 'success', message: 'Tag deleted.' });
+    if (refreshed) setTagCatalogStatus({ tone: 'success', message: 'Tag deleted.' });
   }
 
   const fetchExistingQuestions = useCallback(async (
@@ -3363,32 +3418,42 @@ export function CreatorStudioV2Client({
     setReferenceStatus({ tone: 'success', message: 'Reference removed.' });
   }
 
-  function addTag() {
-    const name = normalizeTagName(tagDraft);
-    if (!name) return;
-
-    const catalogTag = activeCatalogTags.find(
-      (tag) => tagIdentity(tag.name) === tagIdentity(name)
-    );
-    if (!catalogTag) {
-      setTagStatus({
-        tone: 'error',
-        message: 'Choose an active tag from the Tag Catalog.',
-      });
-      return;
-    }
-
-    if (conceptTags.some((tag) => tag.id === catalogTag.id)) {
-      setTagStatus({ tone: 'info', message: 'That tag is already added.' });
-      setTagDraft('');
-      return;
-    }
-
-    setConceptTags((current) => [...current, catalogTag]);
-    setTagDraft('');
-    setTagStatus(null);
-    setStatus(null);
+  function assignTag(surface: 'concept' | 'question', tag: ConceptTag) {
+    if (isLearnerReadOnly || tag.status !== 'active' || (surface === 'question' ? questionSaveLockRef.current : conceptSaveLockRef.current)) return;
+    const selected = surface === 'concept' ? conceptTags : questionTags;
+    const setTags = surface === 'concept' ? setConceptTags : setQuestionTags;
+    const setDraft = surface === 'concept' ? setTagDraft : setQuestionTagDraft;
+    const setMessage = surface === 'concept' ? setTagStatus : setQuestionTagStatus;
+    const duplicate = selected.some(current => current.id === tag.id);
+    setTags(current => current.some(value => value.id === tag.id) ? current : [...current, tag]);
+    setDraft('');
+    setTagPages(current => ({ ...current, [surface]: { ...current[surface], page: 0 } }));
+    setMessage(duplicate ? { tone: 'info', message: 'That tag is already added.' } : null);
+    if (surface === 'concept') setStatus(null); else setQuestionStatus(null);
   }
+
+  async function addTagByName(surface: 'concept' | 'question') {
+    const query = surface === 'concept' ? tagDraft : questionTagDraft;
+    const name = normalizeTagName(query);
+    if (!name || isLearnerReadOnly || tagAssigningLock.current[surface]) return;
+    const context = tagContext.current[surface];
+    const setMessage = surface === 'concept' ? setTagStatus : setQuestionTagStatus;
+    tagAssigningLock.current[surface] = true;
+    setTagAssigning(current => ({ ...current, [surface]: true }));
+    try {
+      const result = await readTagPage({ exactName: name, activeOnly: true });
+      if (context !== tagContext.current[surface] || query !== tagContext.current[surface === 'concept' ? 'conceptQuery' : 'questionQuery']) return;
+      if (result.total !== 1 || !result.tags[0]) throw new Error('Choose an active tag from the Tag Catalog.');
+      assignTag(surface, result.tags[0]);
+    } catch (error) {
+      if (context === tagContext.current[surface]) setMessage({ tone: 'error', message: error instanceof Error ? error.message : 'Tags could not be loaded.' });
+    } finally {
+      tagAssigningLock.current[surface] = false;
+      setTagAssigning(current => ({ ...current, [surface]: false }));
+    }
+  }
+
+  function addTag() { void addTagByName('concept'); }
 
   function removeTag(tagId: string) {
     setConceptTags((current) => current.filter((tag) => tag.id !== tagId));
@@ -3396,39 +3461,133 @@ export function CreatorStudioV2Client({
     setStatus(null);
   }
 
-  function addQuestionTag() {
-    const name = normalizeTagName(questionTagDraft);
-    if (!name) return;
-
-    const catalogTag = activeCatalogTags.find(
-      (tag) => tagIdentity(tag.name) === tagIdentity(name)
-    );
-    if (!catalogTag) {
-      setQuestionTagStatus({
-        tone: 'error',
-        message: 'Choose an active tag from the Tag Catalog.',
-      });
-      return;
-    }
-    if (questionTags.some((tag) => tag.id === catalogTag.id)) {
-      setQuestionTagStatus({
-        tone: 'info',
-        message: 'That tag is already added.',
-      });
-      setQuestionTagDraft('');
-      return;
-    }
-
-    setQuestionTags((current) => [...current, catalogTag]);
-    setQuestionTagDraft('');
-    setQuestionTagStatus(null);
-    setQuestionStatus(null);
-  }
+  function addQuestionTag() { void addTagByName('question'); }
 
   function removeQuestionTag(tagId: string) {
     setQuestionTags((current) => current.filter((tag) => tag.id !== tagId));
     setQuestionTagStatus(null);
     setQuestionStatus(null);
+  }
+
+  function changeTagQuery(surface: TagSurface, query: string) {
+    ++tagPageGeneration.current[surface];
+    if (surface === 'concept') setTagDraft(query);
+    else if (surface === 'question') setQuestionTagDraft(query);
+    else setTagCatalogSearch(query);
+    setTagPages(current => ({ ...current, [surface]: { ...current[surface], page: 0, tags: [], error: null } }));
+  }
+
+  function toggleTagBrowse(surface: TagSurface) {
+    ++tagPageGeneration.current[surface];
+    setTagPages(current => ({ ...current, [surface]: { ...current[surface], open: !current[surface].open, page: 0 } }));
+  }
+
+  const conceptTagFeedback = tagStatus || (tagCatalogStatus?.tone === 'error' ? tagCatalogStatus : null);
+  const questionTagFeedback = questionTagStatus || (tagCatalogStatus?.tone === 'error' ? tagCatalogStatus : null);
+
+  function renderTagBrowseToggle(surface: TagSurface) {
+    return <button type="button" className={styles.secondaryButton} disabled={isLearnerReadOnly}
+      ref={element => { tagBrowseButtons.current[surface] = element; }}
+      aria-expanded={tagPages[surface].open} aria-controls={`${surface}-tag-browser`}
+      onClick={() => toggleTagBrowse(surface)}>{tagPages[surface].open ? 'Hide Browse' : 'Browse'}</button>;
+  }
+
+  function renderTagBrowser(surface: TagSurface) {
+    const state = tagPages[surface];
+    const query = surface === 'concept' ? tagDraft : surface === 'question' ? questionTagDraft : tagCatalogSearch;
+    if (!state.open && !query.trim()) return null;
+    const selected = surface === 'concept' ? conceptTags : questionTags;
+    const busy = surface === 'concept' ? isSaving : surface === 'question' ? isSavingQuestion : isMutatingTagCatalog;
+    return <div id={`${surface}-tag-browser`} className={styles.conceptBrowsePanel} aria-label={surface === 'manager' ? 'Tag catalog browse' : `${surface === 'concept' ? 'Concept' : 'Question'} Tag browse`}>
+      <div className={styles.conceptBrowseHeading}>
+        <strong>{query.trim() ? 'Matching Tags' : 'Browse Tags'}</strong>
+        {state.open && <button type="button" className={styles.secondaryButton} onClick={() => {
+          toggleTagBrowse(surface);
+          tagBrowseButtons.current[surface]?.focus();
+        }}>Close Browse</button>}
+      </div>
+      {state.loading ? <p role="status">Loading Tags…</p> : state.error ? <div role="alert">
+        <p>{state.error}</p><button type="button" className={styles.secondaryButton} onClick={() => void loadTagBrowsePage(surface, query, state.page)}>Retry</button>
+      </div> : <>
+        <div className={styles.conceptBrowseTree} aria-label="Tag results">
+          {state.tags.length ? state.tags.map(tag => surface === 'manager' ? renderCatalogTag(tag) : (
+            <div className={styles.conceptBrowseConceptRow} key={tag.id}>
+              <button type="button" className={styles.secondaryButton} disabled={isLearnerReadOnly || busy || selected.some(value => value.id === tag.id)}
+                onClick={() => assignTag(surface, tag)}>{tag.name}{selected.some(value => value.id === tag.id) ? ' (Added)' : ''}</button>
+            </div>
+          )) : <p className={styles.emptySelection}>No tags found.</p>}
+        </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginTop: 8 }} aria-label="Tag pages">
+          <button type="button" className={styles.secondaryButton} disabled={state.page === 0} onClick={() => {
+            ++tagPageGeneration.current[surface];
+            setTagPages(current => ({ ...current, [surface]: { ...current[surface], page: current[surface].page - 1 } }));
+          }}>Previous</button>
+          <span role="status">{state.total ? `${state.page * TAG_PAGE_SIZE + 1}–${state.page * TAG_PAGE_SIZE + state.tags.length} of ${state.total}` : '0 Tags'}</span>
+          <button type="button" className={styles.secondaryButton} disabled={(state.page + 1) * TAG_PAGE_SIZE >= state.total} onClick={() => {
+            ++tagPageGeneration.current[surface];
+            setTagPages(current => ({ ...current, [surface]: { ...current[surface], page: current[surface].page + 1 } }));
+          }}>Next</button>
+        </div>
+      </>}
+    </div>;
+  }
+
+  function renderCatalogTag(tag: CatalogTag) {
+    return (
+                    <div
+                      key={tag.id}
+                      style={{
+                        alignItems: 'center',
+                        border: '1px solid #d8e1ef',
+                        borderRadius: 8,
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        gap: 8,
+                        justifyContent: 'space-between',
+                        padding: '8px 10px',
+                      }}
+                    >
+                      <span>
+                        <strong>{tag.name}</strong>{' '}
+                        <small style={{ color: '#687386' }}>
+                          {tag.status} · {tag.conceptUsage} concepts ·{' '}
+                          {tag.questionUsage} questions
+                          {!isLearnerReadOnly && ` · ${tag.articleUsage} articles`}
+                        </small>
+                      </span>
+                      <span style={{ display: 'flex', gap: 6 }}>
+                        <button
+                          className={styles.secondaryButton}
+                          type="button"
+                          disabled={isLearnerReadOnly || isMutatingTagCatalog}
+                          onClick={() => void renameCatalogTag(tag)}
+                        >
+                          Rename
+                        </button>
+                        <button
+                          className={styles.secondaryButton}
+                          type="button"
+                          disabled={isLearnerReadOnly || isMutatingTagCatalog}
+                          onClick={() =>
+                            void setCatalogTagStatus(
+                              tag,
+                              tag.status === 'active' ? 'archived' : 'active'
+                            )
+                          }
+                        >
+                          {tag.status === 'active' ? 'Archive' : 'Reactivate'}
+                        </button>
+                        <button
+                          className={styles.secondaryButton}
+                          type="button"
+                          disabled={isLearnerReadOnly || isMutatingTagCatalog}
+                          onClick={() => void deleteCatalogTag(tag)}
+                        >
+                          Delete Tag
+                        </button>
+                      </span>
+                    </div>
+    );
   }
 
   function toggleExpanded(topicId: string) {
@@ -6813,7 +6972,7 @@ export function CreatorStudioV2Client({
                   <span className={styles.srOnly}>Search tag catalog</span>
                   <input
                     value={tagCatalogSearch}
-                    onChange={(event) => setTagCatalogSearch(event.target.value)}
+                    onChange={(event) => changeTagQuery('manager', event.target.value)}
                     placeholder="Search tags"
                   />
                   <Search size={20} />
@@ -6844,68 +7003,9 @@ export function CreatorStudioV2Client({
                 >
                   <Plus size={18} /> Create Tag
                 </button>
+                {renderTagBrowseToggle('manager')}
               </div>
-              <div style={{ display: 'grid', gap: 6, marginTop: 12 }}>
-                {filteredCatalogTags.length ? (
-                  filteredCatalogTags.map((tag) => (
-                    <div
-                      key={tag.id}
-                      style={{
-                        alignItems: 'center',
-                        border: '1px solid #d8e1ef',
-                        borderRadius: 8,
-                        display: 'flex',
-                        flexWrap: 'wrap',
-                        gap: 8,
-                        justifyContent: 'space-between',
-                        padding: '8px 10px',
-                      }}
-                    >
-                      <span>
-                        <strong>{tag.name}</strong>{' '}
-                        <small style={{ color: '#687386' }}>
-                          {tag.status} · {tag.conceptUsage} concepts ·{' '}
-                          {tag.questionUsage} questions
-                          {!isLearnerReadOnly && ` · ${tag.articleUsage} articles`}
-                        </small>
-                      </span>
-                      <span style={{ display: 'flex', gap: 6 }}>
-                        <button
-                          className={styles.secondaryButton}
-                          type="button"
-                          disabled={isLearnerReadOnly || isMutatingTagCatalog}
-                          onClick={() => void renameCatalogTag(tag)}
-                        >
-                          Rename
-                        </button>
-                        <button
-                          className={styles.secondaryButton}
-                          type="button"
-                          disabled={isLearnerReadOnly || isMutatingTagCatalog}
-                          onClick={() =>
-                            void setCatalogTagStatus(
-                              tag,
-                              tag.status === 'active' ? 'archived' : 'active'
-                            )
-                          }
-                        >
-                          {tag.status === 'active' ? 'Archive' : 'Reactivate'}
-                        </button>
-                        <button
-                          className={styles.secondaryButton}
-                          type="button"
-                          disabled={isLearnerReadOnly || isMutatingTagCatalog}
-                          onClick={() => void deleteCatalogTag(tag)}
-                        >
-                          Delete Tag
-                        </button>
-                      </span>
-                    </div>
-                  ))
-                ) : (
-                  <p className={styles.emptySelection}>No tags found.</p>
-                )}
-              </div>
+              {renderTagBrowser('manager')}
               {tagCatalogStatus && (
                 <div
                   className={`${styles.referenceStatus} ${styles[tagCatalogStatus.tone]}`}
@@ -7402,7 +7502,7 @@ export function CreatorStudioV2Client({
                     disabled={isLearnerReadOnly}
                     list="concept-tag-options"
                     onChange={(event) => {
-                      setTagDraft(event.target.value);
+                      changeTagQuery('concept', event.target.value);
                       setTagStatus(null);
                     }}
                     onKeyDown={(event) => {
@@ -7415,7 +7515,7 @@ export function CreatorStudioV2Client({
                   />
                 </label>
                 <datalist id="concept-tag-options">
-                  {activeCatalogTags
+                  {tagPages.concept.tags
                     .filter(
                       (tag) =>
                         !conceptTags.some((selected) => selected.id === tag.id)
@@ -7424,18 +7524,20 @@ export function CreatorStudioV2Client({
                       <option key={tag.id} value={tag.name} />
                     ))}
                 </datalist>
-                <button className={styles.toolButton} type="button" disabled={isLearnerReadOnly} onClick={addTag}>
+                <button className={styles.toolButton} type="button" disabled={isLearnerReadOnly || isSaving || tagAssigning.concept} onClick={addTag}>
                   <Plus size={18} /> Add Tag
                 </button>
+                {renderTagBrowseToggle('concept')}
               </div>
-              {tagStatus && (
+              {renderTagBrowser('concept')}
+              {conceptTagFeedback && (
                 <div
-                  className={`${styles.referenceStatus} ${styles[tagStatus.tone]}`}
+                  className={`${styles.referenceStatus} ${styles[conceptTagFeedback.tone]}`}
                   role="status"
                   aria-live="polite"
                   style={{ marginTop: 10 }}
                 >
-                  {tagStatus.message}
+                  {conceptTagFeedback.message}
                 </div>
               )}
             </div>
@@ -8037,7 +8139,7 @@ export function CreatorStudioV2Client({
               resolveTestingAngleFilter={resolveTestingAngleFilter}
               isSearchingQuestions={isSearchingQuestions}
               clearQuestionSearch={clearQuestionSearch}
-              questionSearchError={questionSearchError}
+              questionSearchError={questionSearchError || (tagCatalogStatus?.tone === 'error' ? tagCatalogStatus.message : '')}
               personalCardEditorId={personalCardEditorId}
               questionId={questionId}
               appliedQuestionSearchFilters={appliedQuestionSearchFilters}
@@ -8668,7 +8770,7 @@ export function CreatorStudioV2Client({
                         list="question-tag-options"
                         disabled={isLearnerReadOnly || isSavingQuestion}
                         onChange={(event) => {
-                          setQuestionTagDraft(event.target.value);
+                          changeTagQuery('question', event.target.value);
                           setQuestionTagStatus(null);
                         }}
                         onKeyDown={(event) => {
@@ -8681,7 +8783,7 @@ export function CreatorStudioV2Client({
                       />
                     </label>
                     <datalist id="question-tag-options">
-                      {activeCatalogTags
+                      {tagPages.question.tags
                         .filter(
                           (tag) =>
                             !questionTags.some(
@@ -8695,20 +8797,22 @@ export function CreatorStudioV2Client({
                     <button
                       className={styles.toolButton}
                       type="button"
-                      disabled={isLearnerReadOnly || isSavingQuestion}
+                      disabled={isLearnerReadOnly || isSavingQuestion || tagAssigning.question}
                       onClick={addQuestionTag}
                     >
                       <Plus size={18} /> Add Tag
                     </button>
+                    {renderTagBrowseToggle('question')}
                   </div>
-                  {questionTagStatus && (
+                  {renderTagBrowser('question')}
+                  {questionTagFeedback && (
                     <div
-                      className={`${styles.referenceStatus} ${styles[questionTagStatus.tone]}`}
+                      className={`${styles.referenceStatus} ${styles[questionTagFeedback.tone]}`}
                       role="status"
                       aria-live="polite"
                       style={{ marginTop: 10 }}
                     >
-                      {questionTagStatus.message}
+                      {questionTagFeedback.message}
                     </div>
                   )}
                 </div>

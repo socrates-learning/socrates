@@ -139,8 +139,8 @@ const releasedBodies = {
   "tags": "8dfd59d8dabb4640d7f114ca6dcdb8c6f61cb81df5047401dfa5e4a97f5e7299",
   "flagged": "3bbae02c9c5dd613573a76830f4c8d9863c4290e0c8248d7ff277f20f6061104"
 };
-for (const role of ['admin','editor']) test(`${role}: Content, Tags and Flagged bodies/callback wiring remain frozen`, () => {
- const h=editor({role,placed:true,projectOfficialTextEditor:true});
+for (const role of ['admin','editor']) test(`${role}: Content, Tags and Flagged bodies/callback wiring retain original fingerprints after narrowly projecting approved Tag Browse`, () => {
+ const h=editor({role,placed:true,projectOfficialTextEditor:true,projectTagBrowse:true});
  for(const tab of ['content','tags','flagged']) {
   h.render().setActiveCreatorTab(tab);
   const rendered=expandChrome(h.render().tree);

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
-import { editor, nodes, text, testingAngleVocabulary } from './fixtures/creator-role-workspaces.mjs';
+import { editor, nodes, text, expandChrome, testingAngleVocabulary } from './fixtures/creator-role-workspaces.mjs';
 
 const creatorSource = readFileSync(
   new URL('../components/CreatorStudioV2Client.tsx', import.meta.url),
@@ -132,4 +132,37 @@ test('current and former vocabulary names resolve to immutable Search keys witho
   const options = nodes(h.render().tree).filter(n => n.type === 'option').map(n => n.props.value);
   assert.ok(options.includes('Applied Practice'));
   assert.ok(options.includes('Clinical Application'));
+});
+
+
+test('Question Search retains complete active/archived Tag metadata independently of 50-row Browse pages', async () => {
+  const catalog = Array.from({ length: 1105 }, (_, index) => ({ id: `tag-${index}`, name: `Tag ${index}`, slug: `tag-${index}`, status: index === 1104 ? 'archived' : 'active' }));
+  const h = editor({ readResponse(table, read) {
+    assert.equal(table, 'tags'); assert.equal(read.options.count, 'exact');
+    assert.deepEqual(Array.from(read.order), ['name', 'id']);
+    assert.equal(read.range[1] - read.range[0], 49);
+    assert.equal(read.filters.length, 0, 'Search includes archived metadata');
+    return { data: catalog.slice(read.range[0], read.range[1] + 1), count: catalog.length, error: null };
+  } });
+  h.render().setActiveCreatorTab('search'); await h.render().loadTagCatalog();
+  const e = h.render();
+  assert.equal(e.availableTags.length, 1105); assert.equal(h.reads.length, 23);
+  assert.equal(e.tagPages.question.tags.length, 0, 'Search catalog does not populate a Browse page');
+  const late = nodes(e.tree).find(n => n.type === 'option' && n.props.value === 'tag-1104');
+  assert.ok(late); assert.match(text(late), /Tag 1104.*Archived/);
+  assert.equal(h.calls.length, 0);
+});
+
+test('Search catalog failures retain the last complete metadata and surface an error, not truncated choices', async () => {
+  let fail = false;
+  const catalog = Array.from({ length: 51 }, (_, index) => ({ id: `tag-${index}`, name: `Tag ${index}`, slug: `tag-${index}`, status: 'active' }));
+  const h = editor({ readResponse(table, read) {
+    assert.equal(table, 'tags');
+    if (fail && read.range[0] > 0) return { data: null, count: null, error: { message: 'Tag read unavailable' } };
+    return { data: catalog.slice(read.range[0], read.range[1] + 1), count: 51, error: null };
+  } });
+  h.render().setActiveCreatorTab('search'); await h.render().loadTagCatalog();
+  fail = true; assert.equal(await h.render().loadTagCatalog(), false);
+  assert.equal(h.render().availableTags.length, 51);
+  assert.match(text(expandChrome(h.render().tree)), /Tag read unavailable/);
 });

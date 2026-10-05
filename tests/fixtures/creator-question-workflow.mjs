@@ -30,6 +30,7 @@ vm.runInNewContext(ts.transpileModule(readFileSync(new URL('../../lib/creator-st
     compilerOptions: { module: ts.ModuleKind.CommonJS },
 }).outputText, runtimeContext);
 const exposed = [
+  'tagPages', 'toggleTagBrowse', 'loadTagBrowsePage', 'changeTagQuery', 'loadTagCatalog', 'availableTags', 'conceptTags', 'setConceptTags', 'tagDraft', 'questionTagDraft', 'tagStatus', 'questionTagStatus', 'tagCatalogStatus', 'tagAssigning', 'addTagByName', 'assignTag', 'addTag', 'addQuestionTag', 'removeTag', 'removeQuestionTag', 'setNewCatalogTagName', 'createCatalogTag', 'renameCatalogTag', 'setCatalogTagStatus', 'deleteCatalogTag', 'isPrerequisiteBrowseOpen', 'setIsPrerequisiteBrowseOpen', 'prerequisites', 'setPrerequisites', 'setSelectedTopicIds', 'resetConceptEditor', 'resetQuestionEditor',
     'questionMarkdownState', 'setQuestionMarkdownState', 'answerMarkdownState', 'setAnswerMarkdownState',
     'browseQuestionConcept', 'associateQuestionConcept', 'makeQuestionConceptPrimary', 'draftQuestionPrimaryId', 'setNeedsQuestionsOnly',
     'questionTags', 'setQuestionTags', 'questionRelatedConceptIds', 'setQuestionRelatedConceptIds', 'questionAdditionalTestingAngles', 'setQuestionAdditionalTestingAngles', 'existingQuestions', 'setExistingQuestions', 'primaryQuestionConceptId', 'editingQuestionPrimary', 'questionTopicId', 'setQuestionTopicId', 'setQuestionConceptId', 'questionConceptOptions', 'questionSearchFilters', 'setQuestionSearchFilters', 'questionSearchCursor', 'questionSearchHasMore', 'questionSearchError', 'isSearchingQuestions', 'selectQuestionSearchResult', 'loadMoreQuestionSearchResults', 'submitQuestionSearch', 'clearQuestionSearch', 'fetchExistingQuestions', 'refreshExistingQuestionList', 'positioningContext', 'positionTopicFromTree', 'renderQuestionTopic', 'renderPersonalQuestionTopic',
@@ -106,12 +107,15 @@ export function editor({ role = 'admin', editing = false, response, references =
             reads.push({ table, filters });
             const query = {
                 select() { return query; }, is(key, value) { filters.push([key, value]); return query; }, eq(key, value) { filters.push([key, value]); return query; },
+                range(start, end) { assert.equal(table, 'tags'); filters.push(['range', start, end]); return query; },
+                filter(key, operator, value) { assert.equal(table, 'tags'); filters.push([key, operator, value]); return query; },
+                or(value) { assert.equal(table, 'tags'); filters.push(['or', value]); return query; },
                 order(...args) { orders.push({ table, args }); return query; }, in(key, value) { filters.push([key, value]); return query; }, limit() { return query; }, ilike(key, value) { filters.push([key, value]); return query; },
                 insert(values) { mutation = { table, operation: 'insert', values, filters }; calls.push(mutation); return query; },
                 update(values) { mutation = { table, operation: 'update', values, filters }; calls.push(mutation); return query; },
                 delete() { mutation = { table, operation: 'delete', filters }; calls.push(mutation); return query; },
                 single: async () => ({ data: { id: filters.find(([key]) => key === 'id')?.[1] || 'saved-personal', ...mutation?.values }, error: null }),
-                then(resolve) { return Promise.resolve(readResponse?.(table, filters) || { data: [], error: null }).then(resolve); },
+                then(resolve) { return Promise.resolve(readResponse?.(table, filters) || { data: [], error: null, ...(table === 'tags' ? { count: 0 } : {}) }).then(resolve); },
             };
             return query;
         },

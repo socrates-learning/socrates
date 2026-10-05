@@ -41,6 +41,7 @@ vm.runInNewContext(ts.transpileModule(readFileSync(new URL('../../lib/creator-st
   compilerOptions: { module: ts.ModuleKind.CommonJS },
 }).outputText, runtimeContext);
 const exposed = [
+  'tagPages', 'toggleTagBrowse', 'loadTagBrowsePage', 'changeTagQuery', 'loadTagCatalog', 'availableTags', 'conceptTags', 'setConceptTags', 'questionTags', 'setQuestionTags', 'tagDraft', 'questionTagDraft', 'tagStatus', 'questionTagStatus', 'tagCatalogStatus', 'tagAssigning', 'addTagByName', 'assignTag', 'addTag', 'addQuestionTag', 'removeTag', 'removeQuestionTag', 'setNewCatalogTagName', 'createCatalogTag', 'renameCatalogTag', 'setCatalogTagStatus', 'deleteCatalogTag', 'isPrerequisiteBrowseOpen', 'setIsPrerequisiteBrowseOpen', 'prerequisites', 'setPrerequisites', 'setSelectedTopicIds', 'resetConceptEditor', 'resetQuestionEditor',
   'testingAngleCatalog', 'setTestingAngleCatalog', 'loadTestingAngleCatalog', 'mutateTestingAngleCatalog',
   'testingAngleCatalogStatus', 'testingAngleCatalogBusy', 'setTestingAngleNameDraft', 'setTestingAngleRename',
   'testingAngleLabel', 'resolveTestingAngleFilter', 'questionAdditionalTestingAngles', 'setQuestionAdditionalTestingAngles',
@@ -95,7 +96,25 @@ const projectedCompiled = ts.transpileModule(projectedSource.replace(renderMarke
   compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
 }).outputText;
 
-export function editor({ projectOfficialTextEditor = false, role = 'admin', editing = false, response, references = [], cards = true, placed = false, neutralFixture = false, confirm = () => true, vocabulary = testingAngleVocabulary } = {}) {
+// Only the approved Tag Browse presentation is projected to its released JSX.
+// All surrounding Content/Tags/Flagged markup and callbacks retain the old hashes.
+const releasedManagerList = "              <div style={{ display: 'grid', gap: 6, marginTop: 12 }}>\n                {filteredCatalogTags.length ? (\n                  filteredCatalogTags.map((tag) => (\n                    <div\n                      key={tag.id}\n                      style={{\n                        alignItems: 'center',\n                        border: '1px solid #d8e1ef',\n                        borderRadius: 8,\n                        display: 'flex',\n                        flexWrap: 'wrap',\n                        gap: 8,\n                        justifyContent: 'space-between',\n                        padding: '8px 10px',\n                      }}\n                    >\n                      <span>\n                        <strong>{tag.name}</strong>{' '}\n                        <small style={{ color: '#687386' }}>\n                          {tag.status} \u00b7 {tag.conceptUsage} concepts \u00b7{' '}\n                          {tag.questionUsage} questions\n                          {!isLearnerReadOnly && ` \u00b7 ${tag.articleUsage} articles`}\n                        </small>\n                      </span>\n                      <span style={{ display: 'flex', gap: 6 }}>\n                        <button\n                          className={styles.secondaryButton}\n                          type=\"button\"\n                          disabled={isLearnerReadOnly || isMutatingTagCatalog}\n                          onClick={() => void renameCatalogTag(tag)}\n                        >\n                          Rename\n                        </button>\n                        <button\n                          className={styles.secondaryButton}\n                          type=\"button\"\n                          disabled={isLearnerReadOnly || isMutatingTagCatalog}\n                          onClick={() =>\n                            void setCatalogTagStatus(\n                              tag,\n                              tag.status === 'active' ? 'archived' : 'active'\n                            )\n                          }\n                        >\n                          {tag.status === 'active' ? 'Archive' : 'Reactivate'}\n                        </button>\n                        <button\n                          className={styles.secondaryButton}\n                          type=\"button\"\n                          disabled={isLearnerReadOnly || isMutatingTagCatalog}\n                          onClick={() => void deleteCatalogTag(tag)}\n                        >\n                          Delete Tag\n                        </button>\n                      </span>\n                    </div>\n                  ))\n                ) : (\n                  <p className={styles.emptySelection}>No tags found.</p>\n                )}\n              </div>\n";
+function projectTagPresentation(value) {
+  for (const surface of ['concept', 'question', 'manager']) {
+    const toggle = `{renderTagBrowseToggle('${surface}')}`;
+    const panel = `{renderTagBrowser('${surface}')}`;
+    assert.equal(value.split(toggle).length, 2);
+    assert.equal(value.split(panel).length, 2);
+    value = value.replace(toggle, '').replace(panel, surface === 'manager' ? releasedManagerList.trim() : '');
+  }
+  return value.replace(/tagPages\.(concept|question)\.tags/g, 'availableTags.filter(tag => tag.status === "active")')
+    .replaceAll('filteredCatalogTags', 'availableTags');
+}
+const tagProjectedCompiled = ts.transpileModule(projectTagPresentation(projectedSource).replace(renderMarker, `  capture({ ${exposed} });\n  return (\n    <>\n      <Header />`), {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
+}).outputText;
+
+export function editor({ projectOfficialTextEditor = false, projectTagBrowse = false, readResponse, role = 'admin', editing = false, response, references = [], cards = true, placed = false, neutralFixture = false, confirm = () => true, prompt = () => null, vocabulary = testingAngleVocabulary } = {}) {
   const slots = [];
   let unloadEffect;
   const listeners = new Map();
@@ -130,15 +149,18 @@ export function editor({ projectOfficialTextEditor = false, role = 'admin', edit
     },
     from(table) {
       reads.push({ table });
-      let mutation; const filters = [];
+      let mutation; const filters = []; const read = reads.at(-1); read.filters = filters;
       const query = {
-        select() { return query; }, is(key,value) { filters.push([key,value]); return query; }, eq(key, value) { filters.push([key, value]); return query; },
-        order() { return query; }, in() { return query; },
+        select(columns, options) { read.columns = columns; read.options = options; return query; }, is(key,value) { filters.push([key,value]); return query; }, eq(key, value) { filters.push([key, value]); return query; },
+        order(key) { (read.order ||= []).push(key); return query; }, in(key, value) { filters.push([key, value]); return query; },
+        range(start, end) { assert.equal(table, 'tags'); read.range = [start, end]; return query; },
+        filter(key, operator, value) { assert.equal(table, 'tags'); filters.push([key, operator, value]); return query; },
+        or(value) { assert.equal(table, 'tags'); read.or = value; return query; },
         insert(values) { mutation = { table, operation: 'insert', values, filters }; calls.push(mutation); return query; },
         update(values) { mutation = { table, operation: 'update', values, filters }; calls.push(mutation); return query; },
         delete() { mutation = { table, operation: 'delete', filters }; calls.push(mutation); return query; },
         single: async () => ({ data: { id: filters.find(([key]) => key === 'id')?.[1] || 'saved-personal', ...mutation?.values }, error: null }),
-        then(resolve) { return Promise.resolve({ data: [], error: null }).then(resolve); },
+        then(resolve) { return Promise.resolve(readResponse?.(table, read) ?? { data: [], error: null, ...(table === 'tags' ? { count: 0 } : {}) }).then(resolve); },
       };
       return query;
     },
@@ -205,9 +227,10 @@ export function editor({ projectOfficialTextEditor = false, role = 'admin', edit
     exports: {}, capture: value => { api = value; },
     require(name) { assert.ok(name in modules, `Unexpected import: ${name}`); return modules[name]; },
     document: { activeElement: focusTarget }, HTMLElement: FocusTarget,
-    window: { addEventListener: (name, fn) => listeners.set(name, fn), removeEventListener: name => listeners.delete(name), requestAnimationFrame: fn => fn(), confirm: message => { confirmations.push(message); return confirm(message); }, location: { pathname: '/creator' }, history: { replaceState: (_a, _b, path) => routes.push(path) } },
+    window: { addEventListener: (name, fn) => listeners.set(name, fn), removeEventListener: name => listeners.delete(name), requestAnimationFrame: fn => fn(), prompt, confirm: message => { confirmations.push(message); return confirm(message); }, location: { pathname: '/creator' }, history: { replaceState: (_a, _b, path) => routes.push(path) } },
   };
-  vm.runInNewContext(projectOfficialTextEditor ? projectedCompiled : compiled, context);
+  assert.ok(!projectTagBrowse || projectOfficialTextEditor);
+  vm.runInNewContext(projectTagBrowse ? tagProjectedCompiled : projectOfficialTextEditor ? projectedCompiled : compiled, context);
   const props = {
     activeLibraryId: 'library',
     creatorCapabilities: deriveCreatorCapabilities({ role, userId: 'owner', library: {

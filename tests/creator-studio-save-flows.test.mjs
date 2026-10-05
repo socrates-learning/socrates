@@ -69,9 +69,11 @@ function editor({ editing = false, response, references = [], media } = {}) {
     },
     from(table) {
       const query = {
+        in() { assert.equal(table, 'tags'); return query; },
+        range() { assert.equal(table, 'tags'); return query; },
         select() { return query; }, eq() { return query; },
         order(column, options) { orders.push({ table, column, ...options }); return query; },
-        then(resolve) { return Promise.resolve({ data: [], error: null }).then(resolve); },
+        then(resolve) { return Promise.resolve({ data: [], error: null, ...(table === 'tags' ? { count: 0 } : {}) }).then(resolve); },
       };
       return query;
     },

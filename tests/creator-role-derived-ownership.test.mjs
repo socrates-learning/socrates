@@ -89,13 +89,14 @@ function editor({ role = 'admin', editing = false, response, references = [], ca
     from(table) {
       let mutation; const filters = [];
       const query = {
+        range() { assert.equal(table, 'tags'); return query; },
         select() { return query; }, is(key,value) { filters.push([key,value]); return query; }, eq(key, value) { filters.push([key, value]); return query; },
         order() { return query; }, in() { return query; },
         insert(values) { mutation = { table, operation: 'insert', values, filters }; calls.push(mutation); return query; },
         update(values) { mutation = { table, operation: 'update', values, filters }; calls.push(mutation); return query; },
         delete() { mutation = { table, operation: 'delete', filters }; calls.push(mutation); return query; },
         single: async () => ({ data: { id: filters.find(([key]) => key === 'id')?.[1] || 'saved-personal', ...mutation?.values }, error: null }),
-        then(resolve) { return Promise.resolve({ data: [], error: null }).then(resolve); },
+        then(resolve) { return Promise.resolve({ data: [], error: null, ...(table === 'tags' ? { count: 0 } : {}) }).then(resolve); },
       };
       return query;
     },

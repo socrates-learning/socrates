@@ -85,13 +85,14 @@ function editor({ role = 'learner', editing = false, response, references = [], 
     from(table) {
       let mutation; const filters = [];
       const query = {
+        range() { assert.equal(table, 'tags'); return query; },
         select() { return query; }, eq(key, value) { filters.push([key, value]); return query; },
         order() { return query; }, in() { return query; },
         insert(values) { mutation = { table, operation: 'insert', values, filters }; calls.push(mutation); return query; },
         update(values) { mutation = { table, operation: 'update', values, filters }; calls.push(mutation); return query; },
         delete() { mutation = { table, operation: 'delete', filters }; calls.push(mutation); return query; },
         single: async () => ({ data: { id: filters.find(([key]) => key === 'id')?.[1] || 'saved-personal', ...mutation?.values }, error: null }),
-        then(resolve) { return Promise.resolve({ data: table === 'personal_topics' ? refreshed?.topics ?? [] : table === 'personal_topic_official_placements' ? refreshed?.placements ?? [] : [], error: refreshError ? { message: 'refresh failed' } : null }).then(resolve); },
+        then(resolve) { return Promise.resolve({ data: table === 'personal_topics' ? refreshed?.topics ?? [] : table === 'personal_topic_official_placements' ? refreshed?.placements ?? [] : [], error: refreshError ? { message: 'refresh failed' } : null, ...(table === 'tags' ? { count: 0 } : {}) }).then(resolve); },
       };
       return query;
     },
