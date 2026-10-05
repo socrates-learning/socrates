@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
+import { editor, nodes, text, testingAngleVocabulary } from './fixtures/creator-role-workspaces.mjs';
 
 const creatorSource = readFileSync(
   new URL('../components/CreatorStudioV2Client.tsx', import.meta.url),
@@ -94,4 +95,41 @@ test('RPC is read-only and authenticated-editor scoped', () => {
     /\b(insert|update|delete)\s+(into|public\.|from)\s+public\.(questions|review_attempts|user_concept_mastery)/i
   );
   assert.doesNotMatch(migration, /select_next_study_question|resolve_study_deck/);
+});
+
+test('current and former vocabulary names resolve to immutable Search keys without changing pagination', async () => {
+  const vocabulary = structuredClone(testingAngleVocabulary);
+  vocabulary[5].display_name = 'Applied Practice';
+  vocabulary[5].reserved_names.push('applied practice');
+  vocabulary[5].status = 'retired';
+  const h = editor({ vocabulary, response(name) {
+    assert.equal(name, 'search_creator_questions_with_media');
+    return { data: [], error: null };
+  } });
+  const filters = { text: 'clinical', difficulty: 'hard', primaryTestingAngle: '', additionalTestingAngle: '',
+    primaryConceptId: 'concept-a', relatedConceptId: 'concept-b', status: 'archived', tagId: 'tag-a' };
+  for (const name of ['Applied Practice', 'Clinical Application', ' applied practice ']) {
+    await h.render().loadQuestionSearchPage({ ...filters, primaryTestingAngle: name, additionalTestingAngle: name },
+      { createdAt: '2026-01-01T00:00:00Z', id: 'cursor' }, false);
+    assert.deepEqual(JSON.parse(JSON.stringify(h.calls.at(-1).payload)), {
+      p_active_library_id: h.props.activeLibraryId, p_search_text: 'clinical', p_difficulty: 'hard',
+      p_primary_testing_angle: 'Clinical Application', p_additional_testing_angle: 'Clinical Application',
+      p_primary_concept_id: 'concept-a', p_related_concept_id: 'concept-b', p_status: 'archived', p_tag_id: 'tag-a',
+      p_page_size: 50, p_before_created_at: '2026-01-01T00:00:00Z', p_before_id: 'cursor',
+    });
+  }
+  assert.equal(h.render().resolveTestingAngleFilter('Historical unregistered key'), 'Historical unregistered key');
+  h.render().setQuestionSearchResults([{
+    source: 'official', kind: 'question', id: 'q', conceptId: 'concept-a', primaryConceptName: 'Concept',
+    prompt: 'ZZ Vocabulary Search result', promptFormat: 'legacy', answer: 'Answer', status: 'published', difficulty: 'medium',
+    testingAngle: 'Clinical Application', additionalTestingAngles: ['General Understanding'], relatedConceptIds: [], relatedConcepts: [], tags: [],
+  }]);
+  h.render().setActiveCreatorTab('search');
+  const result = nodes(h.render().tree).find(n => n.type === 'button' && text(n).includes('ZZ Vocabulary Search result'));
+  assert.ok(result);
+  assert.match(text(result).replace(/\s+/g, ' '), /Primary Angle: Applied Practice/);
+  assert.match(text(result).replace(/\s+/g, ' '), /Additional: General Understanding/);
+  const options = nodes(h.render().tree).filter(n => n.type === 'option').map(n => n.props.value);
+  assert.ok(options.includes('Applied Practice'));
+  assert.ok(options.includes('Clinical Application'));
 });

@@ -341,6 +341,7 @@ export type CreatorStudioPresentationAuthority = Readonly<{
   canSaveQuestion: boolean;
   canManageTopicTree: boolean;
   canManageTags: boolean;
+  canManageTestingAngleVocabulary: boolean;
   canManagePrerequisites: boolean;
   canManageFormalSources: boolean;
 }>;
@@ -370,6 +371,7 @@ export function createOfficialCreatorPresentationAuthority(
     canSaveQuestion: official.saveQuestion,
     canManageTopicTree: official.manageTopicTree,
     canManageTags: official.manageTags,
+    canManageTestingAngleVocabulary: official.manageTestingAngleVocabulary,
     canManagePrerequisites: official.managePrerequisites,
     canManageFormalSources: official.manageFormalSources,
   });
@@ -423,6 +425,9 @@ export type OfficialCreatorCommand =
     }>
   | Readonly<{
       type: 'create-tag' | 'rename-tag' | 'archive-tag' | 'reactivate-tag';
+    }>
+  | Readonly<{
+      type: 'create-testing-angle' | 'rename-testing-angle' | 'set-testing-angle-retired';
     }>;
 
 type CreatorStudioRpc =
@@ -436,7 +441,10 @@ type CreatorStudioRpc =
   | 'create_catalog_tag'
   | 'rename_catalog_tag'
   | 'archive_catalog_tag'
-  | 'reactivate_catalog_tag';
+  | 'reactivate_catalog_tag'
+  | 'create_testing_angle'
+  | 'rename_testing_angle'
+  | 'set_testing_angle_retired';
 
 export type ResolvedOfficialCreatorCommand = Readonly<{
   source: 'official';
@@ -622,5 +630,14 @@ export function resolveOfficialCreatorCommand(
     case 'reactivate-tag':
       assertCommandCapability(authority.canManageTags, 'Tag reactivation');
       return rpc('reactivate_catalog_tag');
+    case 'create-testing-angle':
+      assertCommandCapability(authority.canManageTestingAngleVocabulary, 'Testing Angle creation');
+      return rpc('create_testing_angle');
+    case 'rename-testing-angle':
+      assertCommandCapability(authority.canManageTestingAngleVocabulary, 'Testing Angle rename');
+      return rpc('rename_testing_angle');
+    case 'set-testing-angle-retired':
+      assertCommandCapability(authority.canManageTestingAngleVocabulary, 'Testing Angle availability');
+      return rpc('set_testing_angle_retired');
   }
 }

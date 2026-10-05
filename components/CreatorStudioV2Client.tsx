@@ -322,17 +322,15 @@ const emptyReferenceDraft: ReferenceDraft = {
   url: '',
   notes: '',
 };
-const testingAngleOptions = [
-  'General Understanding',
-  'Recognition / Definition',
-  'Mechanism / Pathophysiology',
-  'Clinical Manifestations',
-  'Assessment / Interpretation',
-  'Clinical Application',
-  'Intervention / Management',
-  'Complications / Outcomes',
-  'Differentiation / Comparison',
-];
+type TestingAngleVocabularyEntry = {
+  id: string;
+  storage_key: string;
+  display_name: string;
+  status: 'active' | 'retired';
+  reserved_names: string[];
+  sort_order: number;
+  revision: number;
+};
 const QUESTION_SEARCH_PAGE_SIZE = 50;
 const EMPTY_QUESTION_SEARCH_FILTERS: QuestionSearchFilters = {
   text: '',
@@ -1106,6 +1104,20 @@ export function CreatorStudioV2Client({
   const [questionRelatedConceptIds, setQuestionRelatedConceptIds] = useState<string[]>([]);
   const [questionAdditionalTestingAngles, setQuestionAdditionalTestingAngles] = useState<string[]>([]);
   const [additionalAngleSearch, setAdditionalAngleSearch] = useState('');
+  const [testingAngleCatalog, setTestingAngleCatalog] = useState<TestingAngleVocabularyEntry[]>([]);
+  const [testingAngleCatalogStatus, setTestingAngleCatalogStatus] = useState<Status>(null);
+  const [testingAngleCatalogBusy, setTestingAngleCatalogBusy] = useState(false);
+  const testingAngleCatalogLock = useRef(false);
+  const testingAngleCatalogRequest = useRef(0);
+  const testingAngleCatalogFocus = useRef<HTMLInputElement | null>(null);
+  const testingAngleCatalogReturnFocus = useRef(false);
+  const [testingAngleNameDraft, setTestingAngleNameDraft] = useState('');
+  const [testingAngleRename, setTestingAngleRename] = useState<{ entry: TestingAngleVocabularyEntry; name: string } | null>(null);
+  const resolveTestingAngleFilter = useCallback((value: string) => {
+    const normalized = value.trim().toLowerCase();
+    return testingAngleCatalog.find(entry => entry.storage_key.trim().toLowerCase() === normalized
+      || entry.reserved_names.includes(normalized))?.storage_key || value;
+  }, [testingAngleCatalog]);
   // Association ownership is independent of the Concept being browsed.
   const [draftQuestionPrimaryId, setDraftQuestionPrimaryId] = useState<string | null>(resolvedConcept.id);
   const primaryQuestionConceptId = editingQuestionPrimary?.id || draftQuestionPrimaryId;
@@ -1306,8 +1318,8 @@ export function CreatorStudioV2Client({
         p_active_library_id: activeLibraryId,
         p_search_text: filters.text.trim() || null,
         p_difficulty: filters.difficulty || null,
-        p_primary_testing_angle: filters.primaryTestingAngle || null,
-        p_additional_testing_angle: filters.additionalTestingAngle || null,
+        p_primary_testing_angle: resolveTestingAngleFilter(filters.primaryTestingAngle) || null,
+        p_additional_testing_angle: resolveTestingAngleFilter(filters.additionalTestingAngle) || null,
         p_primary_concept_id: filters.primaryConceptId || null,
         p_related_concept_id: filters.relatedConceptId || null,
         p_status: filters.status || null,
@@ -1367,6 +1379,7 @@ export function CreatorStudioV2Client({
       filterPersonalCardsForSearch,
       isLearnerReadOnly,
       learnerPublishedConceptIds,
+      resolveTestingAngleFilter,
     ]
   );
   useEffect(() => {
@@ -1603,6 +1616,96 @@ export function CreatorStudioV2Client({
     const timeoutId = window.setTimeout(() => setSaveFeedback(null), 1600);
     return () => window.clearTimeout(timeoutId);
   }, [saveFeedback]);
+
+  const loadTestingAngleCatalog = useCallback(async () => {
+    if (isLearnerReadOnly) return false;
+    const request = ++testingAngleCatalogRequest.current;
+    try {
+      const { data, error } = await supabase.rpc('get_testing_angle_vocabulary');
+      if (request !== testingAngleCatalogRequest.current) return false;
+      if (error) throw new Error(error.message);
+      if (!Array.isArray(data) || data.some(entry => !entry.id || typeof entry.storage_key !== 'string'
+        || typeof entry.display_name !== 'string' || !Array.isArray(entry.reserved_names)
+        || !['active', 'retired'].includes(entry.status) || !Number.isSafeInteger(entry.revision))) {
+        throw new Error('Testing Angle vocabulary readback was not confirmed.');
+      }
+      setTestingAngleCatalog(data);
+      return true;
+    } catch (error) {
+      if (request === testingAngleCatalogRequest.current) setTestingAngleCatalogStatus({ tone: 'error',
+        message: error instanceof Error ? error.message : 'Testing Angles could not be loaded. Your selections are preserved.' });
+      return false;
+    }
+  }, [isLearnerReadOnly]);
+
+  useEffect(() => {
+    if (isLearnerReadOnly) return;
+    const requests = testingAngleCatalogRequest;
+    void loadTestingAngleCatalog();
+    const refreshVocabulary = () => { void loadTestingAngleCatalog(); };
+    window.addEventListener('focus', refreshVocabulary);
+    return () => {
+      requests.current++;
+      window.removeEventListener('focus', refreshVocabulary);
+    };
+  }, [isLearnerReadOnly, loadTestingAngleCatalog]);
+
+  function testingAngleEntry(key: string) {
+    return testingAngleCatalog.find(entry => entry.storage_key.trim().toLowerCase() === key.trim().toLowerCase());
+  }
+
+  useEffect(() => {
+    if (!testingAngleCatalogBusy && testingAngleCatalogReturnFocus.current) {
+      testingAngleCatalogReturnFocus.current = false;
+      testingAngleCatalogFocus.current?.focus();
+    }
+  }, [testingAngleCatalogBusy]);
+
+  function testingAngleLabel(key: string) {
+    return testingAngleEntry(key)?.display_name || key;
+  }
+
+  const persistedTestingAngles = questionId && questionCanonicalRecord?.id === questionId
+    ? [questionCanonicalRecord.testingAngle, ...(questionCanonicalRecord.additionalTestingAngles || [])].filter(Boolean).map(value => value.trim().toLowerCase()) : [];
+  const testingAngleOptions = testingAngleCatalog.filter(entry => entry.status === 'active'
+    || persistedTestingAngles.includes(entry.storage_key.trim().toLowerCase())).map(entry => entry.storage_key);
+
+  async function mutateTestingAngleCatalog(action: 'create-testing-angle' | 'rename-testing-angle' | 'set-testing-angle-retired', entry?: TestingAngleVocabularyEntry) {
+    if (!creatorAuthority.canManageTestingAngleVocabulary || testingAngleCatalogLock.current
+      || isSavingQuestion || questionSaveLockRef.current || questionImages.pending) return false;
+    testingAngleCatalogLock.current = true;
+    setTestingAngleCatalogBusy(true);
+    setTestingAngleCatalogStatus(null);
+    try {
+      const command = resolveOfficialCreatorCommand({ type: action }, creatorAuthority);
+      const args = action === 'create-testing-angle' ? { p_name: testingAngleNameDraft.trim() }
+        : action === 'rename-testing-angle' ? { p_id: entry?.id, p_name: testingAngleRename?.name.trim(), p_expected_revision: entry?.revision }
+        : { p_id: entry?.id, p_retired: entry?.status === 'active', p_expected_revision: entry?.revision };
+      const { data, error } = await supabase.rpc(command.rpc, args);
+      if (error) throw new Error(error.message);
+      if (!data?.id || typeof data.storage_key !== 'string' || !Number.isSafeInteger(data.revision)) {
+        throw new Error('Vocabulary change could not be confirmed. Reload Testing Angles before retrying.');
+      }
+      // Retain the confirmed mutation even if the subsequent full read fails.
+      ++testingAngleCatalogRequest.current;
+      setTestingAngleCatalog(current => [...current.filter(value => value.id !== data.id), data]
+        .sort((left, right) => left.sort_order - right.sort_order));
+      if (action === 'create-testing-angle') setTestingAngleNameDraft('');
+      if (action === 'rename-testing-angle') setTestingAngleRename(null);
+      if (await loadTestingAngleCatalog()) setTestingAngleCatalogStatus({ tone: 'success', message:
+        action === 'create-testing-angle' ? 'Testing Angle added.' : action === 'rename-testing-angle' ? 'Testing Angle renamed. Existing classifications and history are unchanged.'
+          : entry?.status === 'active' ? 'Testing Angle removed from future availability. Existing Questions are preserved.' : 'Testing Angle restored.' });
+      return true;
+    } catch (error) {
+      await loadTestingAngleCatalog();
+      setTestingAngleCatalogStatus({ tone: 'error', message: error instanceof Error ? error.message : 'Testing Angle change failed.' });
+      return false;
+    } finally {
+      testingAngleCatalogLock.current = false;
+      testingAngleCatalogReturnFocus.current = true;
+      setTestingAngleCatalogBusy(false);
+    }
+  }
 
   const loadTagCatalog = useCallback(async (includeUsage = false) => {
     const loadUsage = includeUsage;
@@ -5206,7 +5309,7 @@ export function CreatorStudioV2Client({
   async function saveQuestion(
     saveState: CreatorQuestionEditorState = questionEditorState
   ) {
-    if (isSaving || isSavingQuestion || questionImages.pending || questionImages.inspector) return;
+    if (isSaving || isSavingQuestion || testingAngleCatalogLock.current || questionImages.pending || questionImages.inspector) return;
     const saveTargetKey = questionEditorIdentityKey(saveState);
     const isSaveTargetCurrent = () =>
       questionEditorIdentityKey(questionEditorStateRef.current) === saveTargetKey;
@@ -5304,6 +5407,7 @@ export function CreatorStudioV2Client({
           message: error.message || 'Question could not be saved.',
         });
       }
+      if (error.message?.includes('Testing Angle')) await loadTestingAngleCatalog();
       return;
     }
 
@@ -5360,6 +5464,7 @@ export function CreatorStudioV2Client({
         setQuestionPromptFormat(frontSurface.format);
         setQuestionAnswerFormat(answerSurface.format);
         setQuestionCanonicalRecord(current => current ? { ...current, currentVersionId: data.current_version_id, updatedAt: data.updated_at,
+          testingAngle, additionalTestingAngles: [...questionAdditionalTestingAngles],
           prompt, answer, promptFormat: frontSurface.format, answerFormat: answerSurface.format,
           acceptedAnswerId: data.question_accepted_answers?.[0]?.id || current.acceptedAnswerId } : current);
         questionVisualMemory.current = null;
@@ -7927,6 +8032,9 @@ export function CreatorStudioV2Client({
               prerequisiteConceptOptions={prerequisiteConceptOptions}
               availableTags={availableTags}
               testingAngleOptions={testingAngleOptions}
+              testingAngleVocabulary={testingAngleCatalog}
+              testingAngleLabel={testingAngleLabel}
+              resolveTestingAngleFilter={resolveTestingAngleFilter}
               isSearchingQuestions={isSearchingQuestions}
               clearQuestionSearch={clearQuestionSearch}
               questionSearchError={questionSearchError}
@@ -8437,25 +8545,27 @@ export function CreatorStudioV2Client({
                     <p style={{ margin: '0 0 10px' }}>Choose one Primary angle and any additional angles. Primary guides learner evidence; Additional angles classify the Question.</p>
                     <input type="search" aria-label="Search Testing Angles" value={additionalAngleSearch} onChange={(event) => setAdditionalAngleSearch(event.target.value)} style={{ width: '100%', boxSizing: 'border-box', marginBottom: 8 }} />
                     <div role="group" aria-label="Testing Angle selections" style={{ display: 'grid', gap: 4 }}>
-                      {Array.from(new Map([...testingAngleOptions, ...questionAdditionalTestingAngles, questionTestingAngle].map((angle) => [angle.trim().toLowerCase(), angle])).values()).filter((angle) => angle.trim().toLowerCase() === questionTestingAngle.trim().toLowerCase() || angle.toLowerCase().includes(additionalAngleSearch.toLowerCase())).map((angle) => {
+                      {Array.from(new Map([...testingAngleOptions, ...questionAdditionalTestingAngles, questionTestingAngle].map((angle) => [angle.trim().toLowerCase(), angle])).values()).filter((angle) => angle.trim().toLowerCase() === questionTestingAngle.trim().toLowerCase() || [testingAngleLabel(angle), angle, ...(testingAngleEntry(angle)?.reserved_names || [])].some(value => value.toLowerCase().includes(additionalAngleSearch.toLowerCase()))).map((angle) => {
                         const normalizedAngle = angle.trim().toLowerCase();
+                        const displayName = testingAngleLabel(angle);
+                        const retired = testingAngleEntry(angle)?.status === 'retired';
                         const isPrimary = normalizedAngle === questionTestingAngle.trim().toLowerCase();
                         const isAdditional = questionAdditionalTestingAngles.some((value) => value.trim().toLowerCase() === normalizedAngle);
                         return (
                           <div key={normalizedAngle} style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', padding: '6px 8px', borderRadius: 6, background: isPrimary || isAdditional ? '#f1f5f9' : 'transparent' }}>
                             <label style={{ display: 'flex', gap: 8, alignItems: 'center', flex: '1 1 180px', minWidth: 0, textAlign: 'left' }}>
-                              <input type="checkbox" style={{ width: 16, height: 16, margin: 0, flex: '0 0 16px' }} aria-label={`Select Testing Angle ${angle}`} checked={isPrimary || isAdditional} disabled={isPrimary} onChange={(event) => {
+                              <input type="checkbox" style={{ width: 16, height: 16, margin: 0, flex: '0 0 16px' }} aria-label={`Select Testing Angle ${displayName}`} checked={isPrimary || isAdditional} disabled={isPrimary} onChange={(event) => {
                                 if (isPrimary) return;
                                 setQuestionAdditionalTestingAngles((angles) => event.target.checked
                                   ? [...angles.filter((value) => value.trim().toLowerCase() !== normalizedAngle), angle]
                                   : angles.filter((value) => value.trim().toLowerCase() !== normalizedAngle));
                               }} />
-                              <span>{angle}</span>
+                              <span>{displayName}{retired ? ' (Retired)' : ''}</span>
                             </label>
                             {isPrimary ? <strong style={{ fontSize: 11 }}>PRIMARY</strong> : isAdditional ? (
                               <>
                                 <span style={{ fontSize: 12 }}>Additional</span>
-                                <button type="button" aria-label={`Make ${angle} the Primary Testing Angle`} onClick={(event) => {
+                                <button type="button" aria-label={`Make ${displayName} the Primary Testing Angle`} onClick={(event) => {
                                   event.currentTarget.closest('fieldset')?.querySelector<HTMLInputElement>('input[type="search"]')?.focus();
                                   const formerPrimary = questionTestingAngle;
                                   setQuestionTestingAngle(angle);
@@ -8470,6 +8580,38 @@ export function CreatorStudioV2Client({
                         );
                       })}
                     </div>
+                    {creatorAuthority.canManageTestingAngleVocabulary && <details style={{ marginTop: 12 }} onToggle={(event) => { if (event.currentTarget.open) void loadTestingAngleCatalog(); }}>
+                      <summary>Manage Testing Angles</summary>
+                      <p style={{ fontSize: 13 }}>Shared Question vocabulary. Rename changes the authoring label only. Remove retires an angle; existing Questions and history stay intact.</p>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+                        <input ref={testingAngleCatalogFocus} aria-label="New Testing Angle name" value={testingAngleNameDraft} maxLength={200}
+                          disabled={testingAngleCatalogBusy} onChange={event => setTestingAngleNameDraft(event.target.value)}
+                          onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); void mutateTestingAngleCatalog('create-testing-angle'); } }} />
+                        <button type="button" disabled={testingAngleCatalogBusy || !testingAngleNameDraft.trim()} onClick={() => { void mutateTestingAngleCatalog('create-testing-angle'); }}>Add Testing Angle</button>
+                      </div>
+                      <ul aria-label="Manage Testing Angle vocabulary" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                        {testingAngleCatalog.map(entry => <li key={entry.id} style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', padding: '6px 0' }}>
+                          {testingAngleRename?.entry.id === entry.id ? <>
+                            <input aria-label={`Rename ${entry.display_name}`} value={testingAngleRename.name} maxLength={200} autoFocus disabled={testingAngleCatalogBusy}
+                              onChange={event => setTestingAngleRename({ ...testingAngleRename, name: event.target.value })}
+                              onKeyDown={event => { if (event.key === 'Escape') { setTestingAngleRename(null); testingAngleCatalogFocus.current?.focus(); } }} />
+                            <button type="button" disabled={testingAngleCatalogBusy || !testingAngleRename.name.trim()} onClick={() => { void mutateTestingAngleCatalog('rename-testing-angle', testingAngleRename.entry); }}>Save name</button>
+                            <button type="button" disabled={testingAngleCatalogBusy} onClick={() => { setTestingAngleRename(null); testingAngleCatalogFocus.current?.focus(); }}>Cancel</button>
+                          </> : <>
+                            <span style={{ flex: '1 1 180px', overflowWrap: 'anywhere' }}>{entry.display_name}{entry.status === 'retired' ? ' (Retired)' : ''}</span>
+                            <button type="button" disabled={testingAngleCatalogBusy} aria-label={`Rename ${entry.display_name}`} onClick={() => setTestingAngleRename({ entry, name: entry.display_name })}>Rename</button>
+                            <button type="button" disabled={testingAngleCatalogBusy || entry.storage_key.trim().toLowerCase() === 'general understanding'}
+                              title={entry.storage_key.trim().toLowerCase() === 'general understanding' ? 'Protected New Question default' : undefined}
+                              aria-label={`${entry.status === 'active' ? 'Remove' : 'Restore'} ${entry.display_name}${entry.status === 'active' ? ' from future availability' : ''}`}
+                              onClick={() => { void mutateTestingAngleCatalog('set-testing-angle-retired', entry); }}>{entry.status === 'active' ? 'Remove' : 'Restore'}</button>
+                          </>}
+                        </li>)}
+                      </ul>
+                    </details>}
+                    {testingAngleCatalogStatus && <p role={testingAngleCatalogStatus.tone === 'error' ? 'alert' : 'status'} className={`${styles.referenceStatus} ${styles[testingAngleCatalogStatus.tone]}`}>
+                      {testingAngleCatalogStatus.message}
+                      {testingAngleCatalogStatus.tone === 'error' && <button type="button" disabled={testingAngleCatalogBusy} onClick={async () => { if (await loadTestingAngleCatalog()) setTestingAngleCatalogStatus(null); }}>Reload Testing Angles</button>}
+                    </p>}
                   </fieldset>
 
                 </div>
@@ -8642,7 +8784,7 @@ export function CreatorStudioV2Client({
                               </span>
                               <small style={{ color: '#687386' }}>
                                 {question.source === 'official'
-                                  ? `${question.difficulty} · ${question.testingAngle} · ${question.status} · ${question.conceptId === questionConceptId ? 'Primary Question' : 'Related Question'}`
+                                  ? `${question.difficulty} · ${testingAngleLabel(question.testingAngle || '')} · ${question.status} · ${question.conceptId === questionConceptId ? 'Primary Question' : 'Related Question'}`
                                   : 'Difficulty · N/A · Testing Angle · N/A'}
                                 {' · Concept: '}{question.primaryConceptName}
                               </small>

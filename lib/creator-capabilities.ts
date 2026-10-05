@@ -21,6 +21,7 @@ export type CreatorCapabilityManifest = Readonly<{
     publishContent: boolean;
     manageTopicTree: boolean;
     manageTags: boolean;
+    manageTestingAngleVocabulary: boolean;
     managePrerequisites: boolean;
     manageFormalSources: boolean;
     manageLibraries: boolean;
@@ -88,6 +89,7 @@ export function deriveCreatorCapabilities({
       publishContent: canAuthorInLibrary,
       manageTopicTree: canAuthorInLibrary,
       manageTags: isStaff,
+      manageTestingAngleVocabulary: isStaff,
       managePrerequisites: canAuthorInLibrary,
       manageFormalSources: canAuthorInLibrary,
       manageLibraries: isStaff,

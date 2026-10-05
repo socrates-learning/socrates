@@ -1,4 +1,4 @@
-import { formatSaveResponse } from './fixtures/creator-role-workspaces.mjs';
+import { formatSaveResponse, testingAngleVocabulary } from './fixtures/creator-role-workspaces.mjs';
 import { questionImageBoundary } from './fixtures/question-media-authoring.mjs';
 import { conceptMedia, conceptImageBoundary, conceptContentBoundary } from './fixtures/concept-media-authoring.mjs';
 import * as markdownEditing from '../lib/markdown-editing.ts';
@@ -24,6 +24,7 @@ import {
 // regression tests, not browser or database integration tests.
 const source = readFileSync(new URL('../components/CreatorStudioV2Client.tsx', import.meta.url), 'utf8');
 const exposed = [
+  'setTestingAngleCatalog',
   'setActiveCreatorTab', 'setQuestionAdditionalTestingAngles', 'questionAdditionalTestingAngles', 'saveConcept', 'saveQuestion', 'startNewConcept', 'selectExistingQuestion',
   'setConcept', 'setConceptRecordStatus', 'setQuestionPrompt', 'setQuestionAnswer',
   'setQuestionDifficulty', 'setQuestionTestingAngle', 'setQuestionRecordStatus',
@@ -156,7 +157,7 @@ function editor({ editing = false, response, references = [] } = {}) {
       library: { activeLibraryId: 'library', canAccessActiveLibrary: true, canManageActiveLibrary: true },
       official: {
         browsePublished: true, readUnpublished: true, saveConcept: true, saveQuestion: true,
-        publishContent: true, manageTopicTree: true, manageTags: true,
+        publishContent: true, manageTopicTree: true, manageTags: true, manageTestingAngleVocabulary: true,
         managePrerequisites: true, manageFormalSources: true,
         manageLibraries: true, manageArticles: true,
       },
@@ -172,7 +173,12 @@ function editor({ editing = false, response, references = [] } = {}) {
     initialReferences: references,
     initialPersonalContent: { ownerId: 'owner', topics: [], concepts: [], cards: [], overlays: [], topicPlacements: [] },
   };
-  function render() { cursor = 0; const tree = context.exports.CreatorStudioV2Client(props); return { ...api, tree }; }
+  let vocabularyInitialized = false;
+  function render() {
+    cursor = 0; const tree = context.exports.CreatorStudioV2Client(props);
+    if (!vocabularyInitialized) { vocabularyInitialized = true; api.setTestingAngleCatalog(structuredClone(testingAngleVocabulary)); return render(); }
+    return { ...api, tree };
+  }
   return { render, calls, orders, routes };
 }
 
@@ -241,7 +247,7 @@ test('filter retains Primary, preserves selections, and normalized historical va
  h.render().setQuestionTestingAngle('Historical Primary');
  h.render().setQuestionAdditionalTestingAngles(['clinical application','Recall']);
  control(h,'Search Testing Angles').props.onChange({target:{value:'clinical application'}});
- angle(h,'Historical Primary');angle(h,'clinical application');
+ angle(h,'Historical Primary');angle(h,'Clinical Application');
  assert.equal(nodes(h.render().tree,n=>n.props?.['aria-label']==='Select Testing Angle Recall').length,0);
  assert.deepEqual([...h.render().questionAdditionalTestingAngles],['clinical application','Recall']);
  assert.equal(nodes(h.render().tree,n=>n.props?.['aria-label']?.toLowerCase()==='select testing angle clinical application').length,1);

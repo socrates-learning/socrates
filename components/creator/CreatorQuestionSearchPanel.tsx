@@ -20,6 +20,9 @@ type Props = {
   prerequisiteConceptOptions: Array<{ id: string; name: string }>;
   availableTags: Array<{ id: string; name: string; status: string }>;
   testingAngleOptions: string[];
+  testingAngleVocabulary?: Array<{ display_name: string; storage_key: string; reserved_names: string[] }>;
+  testingAngleLabel?: (key: string) => string;
+  resolveTestingAngleFilter?: (value: string) => string;
   isSearchingQuestions: boolean;
   clearQuestionSearch: () => void;
   questionSearchError: string;
@@ -43,6 +46,9 @@ export function CreatorQuestionSearchPanel({
   prerequisiteConceptOptions,
   availableTags,
   testingAngleOptions,
+  testingAngleVocabulary = [],
+  testingAngleLabel = value => value,
+  resolveTestingAngleFilter = value => value,
   isSearchingQuestions,
   clearQuestionSearch,
   questionSearchError,
@@ -242,6 +248,7 @@ export function CreatorQuestionSearchPanel({
           {Array.from(
             new Set([
               ...testingAngleOptions,
+              ...testingAngleVocabulary.flatMap(entry => [entry.display_name, entry.storage_key, ...entry.reserved_names]),
               ...questionSearchResults.flatMap((question) => [
                 question.testingAngle,
                 ...question.additionalTestingAngles,
@@ -306,7 +313,7 @@ export function CreatorQuestionSearchPanel({
                 appliedQuestionSearchFilters.primaryTestingAngle
               ) &&
                 question.testingAngle?.toLocaleLowerCase() ===
-                appliedQuestionSearchFilters.primaryTestingAngle.toLocaleLowerCase();
+                resolveTestingAngleFilter(appliedQuestionSearchFilters.primaryTestingAngle).toLocaleLowerCase();
             const additionalAngleMatch =
               Boolean(
                 appliedQuestionSearchFilters.additionalTestingAngle
@@ -314,7 +321,7 @@ export function CreatorQuestionSearchPanel({
               question.additionalTestingAngles.some(
                 (angle) =>
                   angle.toLocaleLowerCase() ===
-                  appliedQuestionSearchFilters.additionalTestingAngle.toLocaleLowerCase()
+                  resolveTestingAngleFilter(appliedQuestionSearchFilters.additionalTestingAngle).toLocaleLowerCase()
               );
 
             return (
@@ -340,7 +347,7 @@ export function CreatorQuestionSearchPanel({
                     Primary Concept: {question.primaryConceptName}
                   </span>}
                   <span>
-                    Primary Angle: {question.testingAngle || 'N/A'}
+                    Primary Angle: {testingAngleLabel(question.testingAngle || '') || 'N/A'}
                   </span>
                   {question.relatedConcepts.length > 0 && (
                     <span>
@@ -353,7 +360,7 @@ export function CreatorQuestionSearchPanel({
                   {question.additionalTestingAngles.length > 0 && (
                     <span>
                       Additional:{' '}
-                      {question.additionalTestingAngles.join(', ')}
+                      {question.additionalTestingAngles.map(testingAngleLabel).join(', ')}
                     </span>
                   )}
                   {question.tags.length > 0 && (

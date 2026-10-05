@@ -30,11 +30,20 @@ import {
 // responses. Effects are intentionally excluded: these are transaction/state
 // regression tests, not browser or database integration tests.
 export const source = readFileSync(new URL('../../components/CreatorStudioV2Client.tsx', import.meta.url), 'utf8');
+export const testingAngleVocabulary = [
+  'General Understanding', 'Recognition / Definition', 'Mechanism / Pathophysiology',
+  'Clinical Manifestations', 'Assessment / Interpretation', 'Clinical Application',
+  'Intervention / Management', 'Complications / Outcomes', 'Differentiation / Comparison',
+].map((name, index) => ({ id: `angle-${index}`, storage_key: name, display_name: name, status: 'active',
+  reserved_names: [name.toLowerCase()], sort_order: index, revision: 1 }));
 const runtimeContext = { exports: {}, require: () => entityContracts };
 vm.runInNewContext(ts.transpileModule(readFileSync(new URL('../../lib/creator-studio-runtime.ts', import.meta.url), 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS },
 }).outputText, runtimeContext);
 const exposed = [
+  'testingAngleCatalog', 'setTestingAngleCatalog', 'loadTestingAngleCatalog', 'mutateTestingAngleCatalog',
+  'testingAngleCatalogStatus', 'testingAngleCatalogBusy', 'setTestingAngleNameDraft', 'setTestingAngleRename',
+  'testingAngleLabel', 'resolveTestingAngleFilter', 'questionAdditionalTestingAngles', 'setQuestionAdditionalTestingAngles',
     'questionMarkdownState', 'setQuestionMarkdownState', 'answerMarkdownState', 'setAnswerMarkdownState',
     'browseQuestionConcept', 'associateQuestionConcept', 'makeQuestionConceptPrimary', 'draftQuestionPrimaryId', 'setNeedsQuestionsOnly',
   'navigateFromCreator', 'goBackFromCreator', 'isDirty', 'confirmDiscardQuestionChanges',
@@ -86,7 +95,7 @@ const projectedCompiled = ts.transpileModule(projectedSource.replace(renderMarke
   compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
 }).outputText;
 
-export function editor({ projectOfficialTextEditor = false, role = 'admin', editing = false, response, references = [], cards = true, placed = false, neutralFixture = false, confirm = () => true } = {}) {
+export function editor({ projectOfficialTextEditor = false, role = 'admin', editing = false, response, references = [], cards = true, placed = false, neutralFixture = false, confirm = () => true, vocabulary = testingAngleVocabulary } = {}) {
   const slots = [];
   let unloadEffect;
   const listeners = new Map();
@@ -136,6 +145,7 @@ export function editor({ projectOfficialTextEditor = false, role = 'admin', edit
   };
   function rpcResult(name, payload) {
       if (name === 'get_creator_questions_with_media') return { data: [], error: null };
+      if (name === 'get_testing_angle_vocabulary') return response?.(name, payload) ?? { data: structuredClone(vocabulary), error: null };
       calls.push({ name, payload });
       if (response) return response(name, payload);
       if (name === 'create_personal_topic') return { data: { id: 'new-topic', owner_id: 'owner', name: payload.p_name, parent_id: payload.p_parent_personal_topic_id }, error: null };
@@ -220,7 +230,16 @@ export function editor({ projectOfficialTextEditor = false, role = 'admin', edit
     props.initialPersonalContent.concepts[0].name = 'Concept';
     props.initialPersonalContent.cards.forEach(card => { card.question = 'Question'; });
   }
-  function render() { cursor = 0; const tree = context.exports.CreatorStudioV2Client(props); return { ...api, tree }; }
+  let vocabularyInitialized = false;
+  function render() {
+    cursor = 0; const tree = context.exports.CreatorStudioV2Client(props);
+    if (!vocabularyInitialized) {
+      vocabularyInitialized = true;
+      api.setTestingAngleCatalog(role === 'learner' ? [] : structuredClone(vocabulary));
+      return render();
+    }
+    return { ...api, tree };
+  }
   return { runShellGuard: () => shellGuard(), render, calls, reads, orders, routes, confirmations, focusTarget, props, listeners, runUnloadEffect: () => unloadEffect(), runSelectionEffect: () => selectionEffect(), runStructureEffect: () => structureEffect() };
 }
 

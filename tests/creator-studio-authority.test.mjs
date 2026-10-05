@@ -139,6 +139,7 @@ test('editor and admin capabilities preserve current official presentation autho
     assert.equal(presentation.canSaveQuestion, manifest.official.saveQuestion);
     assert.equal(presentation.canManageTopicTree, true);
     assert.equal(presentation.canManageTags, true);
+    assert.equal(presentation.canManageTestingAngleVocabulary, true);
   }
 });
 
@@ -155,8 +156,17 @@ test('learner presentation authority is published-only and has no official mutat
   assert.equal(presentation.canSaveQuestion, false);
   assert.equal(presentation.canManageTopicTree, false);
   assert.equal(presentation.canManageTags, false);
+  assert.equal(presentation.canManageTestingAngleVocabulary, false);
   assert.equal(presentation.canManagePrerequisites, false);
   assert.equal(presentation.canManageFormalSources, false);
+});
+
+test('Question-edit permission alone never grants vocabulary management', () => {
+  const restricted = { ...authority(), canManageTestingAngleVocabulary: false };
+  assert.equal(restricted.canSaveQuestion, true);
+  for (const type of ['create-testing-angle', 'rename-testing-angle', 'set-testing-angle-retired']) {
+    assert.throws(() => resolveOfficialCreatorCommand({ type }, restricted), /Testing Angle/);
+  }
 });
 
 test('learner authority denies every official command before an RPC target is returned', () => {
@@ -190,6 +200,9 @@ test('learner authority denies every official command before an RPC target is re
     { type: 'rename-tag' },
     { type: 'archive-tag' },
     { type: 'reactivate-tag' },
+    { type: 'create-testing-angle' },
+    { type: 'rename-testing-angle' },
+    { type: 'set-testing-angle-retired' },
   ];
 
   for (const command of commands) {
@@ -284,6 +297,9 @@ test('official Topic and Tag commands resolve only their existing RPCs', () => {
     [{ type: 'rename-tag' }, 'rename_catalog_tag'],
     [{ type: 'archive-tag' }, 'archive_catalog_tag'],
     [{ type: 'reactivate-tag' }, 'reactivate_catalog_tag'],
+    [{ type: 'create-testing-angle' }, 'create_testing_angle'],
+    [{ type: 'rename-testing-angle' }, 'rename_testing_angle'],
+    [{ type: 'set-testing-angle-retired' }, 'set_testing_angle_retired'],
   ];
 
   for (const [command, expectedRpc] of commands) {
