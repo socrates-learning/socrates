@@ -114,7 +114,28 @@ const tagProjectedCompiled = ts.transpileModule(projectTagPresentation(projected
   compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
 }).outputText;
 
-export function editor({ projectOfficialTextEditor = false, projectTagBrowse = false, readResponse, role = 'admin', editing = false, response, references = [], cards = true, placed = false, neutralFixture = false, confirm = () => true, prompt = () => null, vocabulary = testingAngleVocabulary } = {}) {
+// Project exactly the two staff-only Content disclosure expressions in each
+// main Topic renderer. Original full fingerprints continue protecting every
+// other node/callback; real disclosure behavior is tested without projection.
+export const contentDisclosureExpressions = [
+  "{!isLearnerReadOnly && renderConceptCountControl(topic, 'content')}",
+  "{!isLearnerReadOnly && renderContentConceptDisclosure(topic, depth)}",
+];
+function projectContentDisclosures(value) {
+  for (const expression of contentDisclosureExpressions) {
+    assert.equal(value.split(expression).length, 3, expression);
+    value = value.replaceAll(expression, '');
+  }
+  return value;
+}
+const disclosureProjectedCompiled = ts.transpileModule(projectContentDisclosures(projectTagPresentation(projectedSource)).replace(renderMarker, `  capture({ ${exposed} });\n  return (\n    <>\n      <Header />`), {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
+}).outputText;
+const learnerDisclosureProjectedCompiled = ts.transpileModule(projectContentDisclosures(source).replace(renderMarker, `  capture({ ${exposed} });\n  return (\n    <>\n      <Header />`), {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
+}).outputText;
+
+export function editor({ projectOfficialTextEditor = false, projectTagBrowse = false, projectConceptDisclosure = false, readResponse, role = 'admin', editing = false, response, references = [], cards = true, placed = false, neutralFixture = false, confirm = () => true, prompt = () => null, vocabulary = testingAngleVocabulary } = {}) {
   const slots = [];
   let unloadEffect;
   const listeners = new Map();
@@ -230,7 +251,8 @@ export function editor({ projectOfficialTextEditor = false, projectTagBrowse = f
     window: { addEventListener: (name, fn) => listeners.set(name, fn), removeEventListener: name => listeners.delete(name), requestAnimationFrame: fn => fn(), prompt, confirm: message => { confirmations.push(message); return confirm(message); }, location: { pathname: '/creator' }, history: { replaceState: (_a, _b, path) => routes.push(path) } },
   };
   assert.ok(!projectTagBrowse || projectOfficialTextEditor);
-  vm.runInNewContext(projectTagBrowse ? tagProjectedCompiled : projectOfficialTextEditor ? projectedCompiled : compiled, context);
+  assert.ok(!projectConceptDisclosure || projectTagBrowse || role === 'learner');
+  vm.runInNewContext(projectConceptDisclosure ? (role === 'learner' ? learnerDisclosureProjectedCompiled : disclosureProjectedCompiled) : projectTagBrowse ? tagProjectedCompiled : projectOfficialTextEditor ? projectedCompiled : compiled, context);
   const props = {
     activeLibraryId: 'library',
     creatorCapabilities: deriveCreatorCapabilities({ role, userId: 'owner', library: {

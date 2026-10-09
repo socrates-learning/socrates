@@ -32,7 +32,7 @@ vm.runInNewContext(ts.transpileModule(readFileSync(new URL('../lib/creator-studi
   compilerOptions: { module: ts.ModuleKind.CommonJS },
 }).outputText, runtimeContext);
 const exposed = [
-  'loadQuestionSearchPage', 'questionSearchResults', 'deleteSelectedStandaloneCard', 'activeCreatorTab', 'standaloneEditorRef', 'closeStandaloneEditor', 'standaloneRequest', 'filterPersonalCardsForSearch', 'setStandaloneCards',
+  'setConceptPlacementStatus', 'renderConceptCountControl', 'loadQuestionSearchPage', 'questionSearchResults', 'deleteSelectedStandaloneCard', 'activeCreatorTab', 'standaloneEditorRef', 'closeStandaloneEditor', 'standaloneRequest', 'filterPersonalCardsForSearch', 'setStandaloneCards',
   'setContentConceptSearch', 'contentConceptSearchResults', 'setQuestionSearchResults',
   'renderUnifiedTopic', 'renderUnifiedConceptBrowseTopic', 'renderUnifiedQuestionTopic',
   'setQuestionCountsByConceptId', 'setExpandedPersonalTopicIds', 'setExpandedBrowseTopicIds', 'setQuestionConceptsByTopicId',
@@ -434,6 +434,8 @@ test('official and owner-qualified Concept choices share selection paint and que
   e.setExpandedPersonalTopicIds(new Set(['mine-topic'])); e = h.render();
   const official = { id: 'topic', key: 'official:topic:topic', name: 'Topic', source: 'official', children: [] };
   const personal = { id: 'mine-topic', key: 'personal:topic:mine-topic', name: 'Topic', source: 'personal', children: [] };
+  e.setConceptPlacementStatus('ready');e=h.render();
+  for (const topic of [official,personal]) e.renderConceptCountControl(topic,'questions').props.onClick({stopPropagation() {}});e=h.render();
   const choice = topic => nodes(e.renderUnifiedQuestionTopic(topic, 1)).find(n =>
     n.props?.style && visibleText(n).includes('Concept') &&
     [n.props.children].flat().some(child => child?.type === 'input' && child.props?.type === 'checkbox') &&

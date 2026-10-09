@@ -200,6 +200,20 @@ type QuestionConceptOption = {
   id: string;
   name: string;
 };
+function questionConceptTopicId(
+  conceptId: string,
+  preferredTopicId: string,
+  conceptsByTopicId: Record<string, QuestionConceptOption[]>
+) {
+  return [preferredTopicId, ...Object.keys(conceptsByTopicId)].find(
+    (topicId) => topicId &&
+      (conceptsByTopicId[topicId] || []).some((concept) => concept.id === conceptId)
+  ) || null;
+}
+type TopicConceptEntry = QuestionConceptOption & {
+  source: 'official' | 'personal';
+  topicId: string;
+};
 type PrerequisiteTargetType = 'concept' | 'topic';
 type PrerequisiteStrength = 'required' | 'recommended';
 type ConceptPrerequisite = {
@@ -346,6 +360,11 @@ type CreatedPersonalTopicRow = CreatorPersonalTopic & {
 };
 type StatusTone = 'error' | 'success' | 'info';
 type Status = { tone: StatusTone; message: string } | null;
+type FlaggedQuestionRequest = {
+  generation: number;
+  libraryId: string;
+  draftFingerprint: string;
+};
 type SaveFeedback = 'saving' | 'saved' | null;
 type InitialConcept = {
   id: string | null;
@@ -1152,6 +1171,9 @@ export function CreatorStudioV2Client({
   const [questionConceptsByTopicId, setQuestionConceptsByTopicId] = useState<
     Record<string, QuestionConceptOption[]>
   >({});
+  const [conceptPlacementStatus, setConceptPlacementStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [contentConceptDisclosureKeys, setContentConceptDisclosureKeys] = useState<Set<string>>(new Set());
+  const [questionConceptDisclosureKeys, setQuestionConceptDisclosureKeys] = useState<Set<string>>(new Set());
   const [questionCountsByConceptId, setQuestionCountsByConceptId] = useState<
     Record<string, number>
   >({});
@@ -1220,6 +1242,16 @@ export function CreatorStudioV2Client({
   const [questionSearchError, setQuestionSearchError] = useState('');
   const [isSearchingQuestions, setIsSearchingQuestions] = useState(false);
   const questionSearchRequestRef = useRef(0);
+  const flaggedQuestionRequestRef = useRef(0);
+  const [flaggedQuestionPending, setFlaggedQuestionPending] = useState(false);
+  const [flaggedQuestionError, setFlaggedQuestionError] = useState('');
+  const flaggedQuestionCompletion = useRef<(request: FlaggedQuestionRequest, question: ExistingQuestion | null) => void>(() => {});
+  const cancelFlaggedQuestionEdit = useCallback(() => {
+    flaggedQuestionRequestRef.current++;
+    setFlaggedQuestionPending(false);
+    setFlaggedQuestionError('');
+  }, []);
+  useEffect(() => () => cancelFlaggedQuestionEdit(), [activeCreatorTab, activeLibraryId, cancelFlaggedQuestionEdit]);
   const [questionStatus, setQuestionStatus] = useState<Status>(null);
   const [isSavingQuestion, setIsSavingQuestion] = useState(false);
   const [referenceDraft, setReferenceDraft] = useState<ReferenceDraft>(
@@ -1649,7 +1681,7 @@ export function CreatorStudioV2Client({
   const isDirty = (conceptImages.guardActive && !isCurrentContentReadOnly && isContentDirty) ||
     (questionImages.guardActive && !isCurrentQuestionReadOnly && isQuestionDirty) ||
     (activeCreatorTab === 'content' ? !isCurrentContentReadOnly && isContentDirty :
-      (activeCreatorTab === 'questions' || activeCreatorTab === 'search') ? !isCurrentQuestionReadOnly && isQuestionDirty : false);
+      (activeCreatorTab === 'questions' || activeCreatorTab === 'search' || (!isLearnerReadOnly && activeCreatorTab === 'flagged')) ? !isCurrentQuestionReadOnly && isQuestionDirty : false);
   const visibleSaveFeedback =
     saveFeedback === 'saving' || (saveFeedback === 'saved' && !isDirty)
       ? saveFeedback
@@ -1992,6 +2024,15 @@ export function CreatorStudioV2Client({
   useEffect(() => {
     if (!activeLibraryId || !questionTopicId) {
       setQuestionConceptOptions([]);
+      // A direct editor handoff can precede the lazy placement read. Resolve
+      // its real Concept once placements arrive, without using the old Topic.
+      if (activeLibraryId && questionConceptId) {
+        const topicId = questionConceptTopicId(questionConceptId, '', questionConceptsByTopicId);
+        if (topicId) {
+          setActiveTopicId(topicId);
+          setQuestionTopicId(topicId);
+        }
+      }
       return;
     }
     if (!(questionTopicId in questionConceptsByTopicId)) return;
@@ -2010,6 +2051,7 @@ export function CreatorStudioV2Client({
     });
   }, [
     activeLibraryId,
+    questionConceptId,
     questionConceptsByTopicId,
     questionTopicId,
     resolvedConcept.id,
@@ -2019,9 +2061,11 @@ export function CreatorStudioV2Client({
     if (isLearnerReadOnly) return;
     if (!activeLibraryId) {
       setQuestionConceptsByTopicId({});
+      setConceptPlacementStatus('loading');
       return;
     }
     if (
+      activeCreatorTab !== 'content' &&
       activeCreatorTab !== 'questions' &&
       activeCreatorTab !== 'search' &&
       !contentConceptSearch.trim() &&
@@ -2036,11 +2080,12 @@ export function CreatorStudioV2Client({
     const topicIds = flattenTopics(topics).map((topic) => topic.id);
     if (!topicIds.length) {
       setQuestionConceptsByTopicId({});
+      setConceptPlacementStatus('ready');
       return;
     }
     const placementKey = `${activeLibraryId}:${topicIds.join(',')}`;
     if (loadedConceptPlacementKeyRef.current === placementKey) return;
-    loadedConceptPlacementKeyRef.current = placementKey;
+    setConceptPlacementStatus('loading');
 
     let isMounted = true;
 
@@ -2058,6 +2103,7 @@ export function CreatorStudioV2Client({
 
       if (error) {
         loadedConceptPlacementKeyRef.current = null;
+        setConceptPlacementStatus('error');
         setQuestionConceptsByTopicId({});
         setQuestionStatus({
           tone: 'error',
@@ -2091,7 +2137,9 @@ export function CreatorStudioV2Client({
       Object.values(conceptsByTopicId).forEach((concepts) =>
         concepts.sort((left, right) => left.name.localeCompare(right.name))
       );
+      loadedConceptPlacementKeyRef.current = placementKey;
       setQuestionConceptsByTopicId(conceptsByTopicId);
+      setConceptPlacementStatus('ready');
     }
 
     void loadQuestionConceptPlacements();
@@ -3090,26 +3138,87 @@ export function CreatorStudioV2Client({
       return;
     }
 
-    const primaryConceptTopicId =
-      [questionTopicId, ...Object.keys(questionConceptsByTopicId)].find(
-        (topicId, index, topicIds) =>
-          topicId &&
-          topicIds.indexOf(topicId) === index &&
-          (questionConceptsByTopicId[topicId] || []).some(
-            (conceptOption) => conceptOption.id === question.conceptId
-          )
-      ) || null;
+    const primaryConceptTopicId = questionConceptTopicId(
+      question.conceptId, questionTopicId, questionConceptsByTopicId
+    );
 
     setQuestionConceptId(question.conceptId);
+    // No known placement means unresolved context, not the previously browsed
+    // Topic. Otherwise the placement effect can clear/substitute this Concept.
+    setQuestionTopicId(primaryConceptTopicId || '');
+    setQuestionConceptOptions(primaryConceptTopicId ? questionConceptsByTopicId[primaryConceptTopicId] || [] : []);
     if (primaryConceptTopicId) {
       setActiveTopicId(primaryConceptTopicId);
-      setQuestionTopicId(primaryConceptTopicId);
-      setQuestionConceptOptions(
-        questionConceptsByTopicId[primaryConceptTopicId] || []
-      );
     }
     selectExistingQuestion(question, true);
     setActiveCreatorTab('questions');
+  }
+
+  function flaggedQuestionEditIsBusy() {
+    return isSaving || conceptSaveLockRef.current || isSavingQuestion || questionSaveLockRef.current ||
+      standaloneEditorRef.current.busy || questionImages.pending || questionImages.uncertain || Boolean(questionImages.inspector);
+  }
+
+  function flaggedQuestionDraftFingerprint() {
+    return JSON.stringify([
+      questionEditorIdentityKey(questionEditorStateRef.current), currentQuestionFingerprint, currentPersonalCardFingerprint,
+      questionCanonicalRecord?.currentVersionId, questionCanonicalRecord?.updatedAt,
+      questionImages.items, questionImages.context, questionImages.inspector, standaloneRequest, standaloneEditorRef.current,
+    ]);
+  }
+
+  // Reads may finish after a tab, Library or draft change. Only the latest live
+  // Creator render may hand a fully resolved record to the existing Search guard.
+  useEffect(() => {
+    flaggedQuestionCompletion.current = (request, question) => {
+      if (request.generation !== flaggedQuestionRequestRef.current || activeCreatorTab !== 'flagged' ||
+        request.libraryId !== activeLibraryId) return;
+      setFlaggedQuestionPending(false);
+      if (!creatorAuthority.canSaveQuestion || flaggedQuestionEditIsBusy() ||
+        request.draftFingerprint !== flaggedQuestionDraftFingerprint()) {
+        setFlaggedQuestionError('The editor changed while this Question was loading. Your draft is preserved. Try Edit Question again.');
+        return;
+      }
+      if (!question) {
+        setFlaggedQuestionError('This Question could not be opened in the active Library. Your current draft is unchanged.');
+        return;
+      }
+      if (question.source !== 'official' || (question.questionType && question.questionType !== 'short_answer') ||
+        (question.acceptedAnswerCount ?? 1) > 1) {
+        setFlaggedQuestionError('This Question uses an authoring form that Creator Studio does not support. Your current draft is unchanged.');
+        return;
+      }
+      selectQuestionSearchResult(question);
+    };
+  });
+
+  async function openFlaggedQuestion(questionIdToOpen: string, conceptIdToOpen: string) {
+    if (!creatorAuthority.canSaveQuestion || isLearnerReadOnly || activeCreatorTab !== 'flagged') return;
+    if (flaggedQuestionEditIsBusy()) {
+      setFlaggedQuestionError('Finish the current save or image operation before opening another Question.');
+      return;
+    }
+    cancelFlaggedQuestionEdit();
+    if (isQuestionEditorIdentity(questionEditorStateRef.current, 'official', questionIdToOpen)) {
+      // Reopening the current Question must never reload over its live draft.
+      if (questionCanonicalRecord?.id === questionIdToOpen) selectQuestionSearchResult(questionCanonicalRecord);
+      return;
+    }
+    const request: FlaggedQuestionRequest = {
+      generation: flaggedQuestionRequestRef.current,
+      libraryId: activeLibraryId,
+      draftFingerprint: flaggedQuestionDraftFingerprint(),
+    };
+    setFlaggedQuestionPending(true);
+    let question: ExistingQuestion | null = null;
+    try {
+      const questions = await fetchExistingQuestions(conceptIdToOpen, request.libraryId);
+      question = questions?.find(item => item.source === 'official' && item.id === questionIdToOpen &&
+        item.conceptId === conceptIdToOpen) || null;
+    } catch {
+      // Transport and permission failures never hydrate from the Flagged preview.
+    }
+    flaggedQuestionCompletion.current(request, question);
   }
 
   function updateQuestionSearchFilter<FilterKey extends keyof QuestionSearchFilters>(
@@ -5955,6 +6064,139 @@ export function CreatorStudioV2Client({
     );
   }
 
+  // Match the released Question-tree totals: official descendants plus direct
+  // personal overlays, or the personal subtree. Keep the real placement for
+  // browsing, even when the Concept is disclosed from an ancestor.
+  function conceptsForTopicDisclosure(topic: UnifiedCreatorTopicNode): TopicConceptEntry[] {
+    const entries = new Map<string, TopicConceptEntry>();
+    function add(entry: TopicConceptEntry) {
+      const key = createCreatorEntityKey(entry.source, 'concept', entry.id);
+      if (!entries.has(key)) entries.set(key, entry);
+    }
+    if (topic.source === 'official') {
+      function collect(node: Topic) {
+        (questionConceptsByTopicId[node.id] || []).forEach(concept =>
+          add({ ...concept, source: 'official', topicId: node.id })
+        );
+        node.children.forEach(collect);
+      }
+      collect(findTopic(topics, topic.id) || { ...topic, children: [] });
+      personalOverlays.filter(overlay => overlay.library_node_id === topic.id).forEach(overlay => {
+        const concept = personalConceptById.get(overlay.personal_concept_id);
+        if (concept) add({ ...concept, source: 'personal', topicId: concept.topic_id });
+      });
+    } else {
+      flattenUnifiedCreatorTopics([topic]).forEach(node => {
+        if (node.source !== 'personal') return;
+        (personalConceptsByTopicId.get(node.id) || []).forEach(concept =>
+          add({ ...concept, source: 'personal', topicId: concept.topic_id })
+        );
+      });
+    }
+    return Array.from(entries.values()).sort((a, b) => a.name.localeCompare(b.name) ||
+      createCreatorEntityKey(a.source, 'concept', a.id).localeCompare(createCreatorEntityKey(b.source, 'concept', b.id)));
+  }
+
+  function renderConceptCountControl(topic: UnifiedCreatorTopicNode, workspace: 'content' | 'questions') {
+    const count = conceptsForTopicDisclosure(topic).length;
+    const ready = topic.source === 'personal' || conceptPlacementStatus === 'ready';
+    const openKeys = workspace === 'content' ? contentConceptDisclosureKeys : questionConceptDisclosureKeys;
+    const setKeys = workspace === 'content' ? setContentConceptDisclosureKeys : setQuestionConceptDisclosureKeys;
+    const expanded = ready && count > 0 && openKeys.has(topic.key);
+    const label = ready ? (count ? `${count} ${count === 1 ? 'concept' : 'concepts'}` : 'No concepts')
+      : conceptPlacementStatus === 'error' ? 'Concepts unavailable' : 'Loading concepts…';
+    return (
+      <button type="button" className={styles.topicActivationButton}
+        data-concept-disclosure={workspace}
+        aria-label={`${expanded ? 'Hide' : 'Show'} concepts for ${topic.name}: ${label}`}
+        aria-expanded={expanded} aria-controls={`${workspace}-concepts-${topic.key}`}
+        disabled={!ready || count === 0}
+        style={{ flex: '0 0 auto', width: 'auto', minWidth: 0, color: ready && count ? '#52647a' : '#94a3b8',
+          fontSize: 12, marginLeft: 'auto', paddingRight: 10, whiteSpace: 'nowrap' }}
+        onClick={event => {
+          event.stopPropagation();
+          setKeys(current => {
+            const next = new Set(current);
+            if (next.has(topic.key)) next.delete(topic.key);
+            else next.add(topic.key);
+            return next;
+          });
+        }}>
+        {label}
+      </button>
+    );
+  }
+
+  function renderContentConceptDisclosure(topic: UnifiedCreatorTopicNode, depth: number) {
+    if (!contentConceptDisclosureKeys.has(topic.key) ||
+      (topic.source === 'official' && conceptPlacementStatus !== 'ready')) return null;
+    return (
+      <div id={`content-concepts-${topic.key}`} data-concept-list="content" style={{ display: 'grid', gap: 3 }}>
+        {conceptsForTopicDisclosure(topic).map(item => {
+          const selected = item.source === 'official' ? conceptSource === 'official' && item.id === conceptId
+            : conceptSource === 'personal' && item.id === personalConceptEditorId;
+          return (
+            <button key={createCreatorEntityKey(item.source, 'concept', item.id)}
+              type="button" className={styles.conceptBrowseConceptRow} aria-pressed={selected}
+              style={{ paddingLeft: `${48 + depth * 28}px` }}
+              onClick={() => item.source === 'official' ? openConceptFromSearch(item.id) : openPersonalConcept(item.id)}>
+              <span>{item.name}</span>
+              {selected && <small>Currently editing</small>}
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
+
+  function renderQuestionConceptDisclosure(topic: UnifiedCreatorTopicNode, depth: number) {
+    if (!questionConceptDisclosureKeys.has(topic.key) ||
+      (topic.source === 'official' && conceptPlacementStatus !== 'ready')) return null;
+    const concepts = conceptsForTopicDisclosure(topic).filter(item => item.source === 'personal' ||
+      !needsQuestionsOnly || isQuestionConceptAssociated(item.id) || (questionCountsByConceptId[item.id] || 0) === 0);
+    return (
+      <div id={`questions-concepts-${topic.key}`} data-concept-list="questions" style={{ display: 'grid', gap: 3 }}>
+        {concepts.map(item => {
+          if (item.source === 'personal') {
+            const selected = questionSource === 'personal' && personalQuestionConceptId === item.id;
+            const count = personalCardsByConceptId.get(item.id)?.length || 0;
+            return (
+              <label key={createCreatorEntityKey('personal', 'concept', item.id)}
+                style={questionConceptChoiceStyle(selected, isSavingQuestion, depth)}>
+                <input className={styles.topicCheckbox} type="checkbox" checked={selected}
+                  onChange={() => selectPersonalQuestionConcept(item.id, item.topicId)} />
+                <span>{item.name} · {count} {count === 1 ? 'question' : 'questions'}</span>
+              </label>
+            );
+          }
+          const isSelected = isQuestionConceptAssociated(item.id);
+          const isPrimary = questionSource === 'official' && primaryQuestionConceptId === item.id;
+          return (
+            <div key={createCreatorEntityKey('official', 'concept', item.id)}
+              style={questionConceptChoiceStyle(isSelected, isSavingQuestion, depth)}>
+              <input className={styles.topicCheckbox} type="checkbox"
+                aria-label={`Associate ${item.name} with Question`} checked={isSelected}
+                disabled={isSavingQuestion || questionSource !== 'official' || isPrimary}
+                title={isPrimary ? (questionId ? 'Saved Question Primary cannot be changed.' : 'Use Make Primary on a Related Concept to change Primary.') : undefined}
+                onChange={event => associateQuestionConcept(item.id, event.target.checked)} />
+              <button type="button" className={styles.topicActivationButton}
+                aria-label={`Browse Questions for ${item.name}`} aria-pressed={questionConceptId === item.id}
+                disabled={isSavingQuestion} onClick={() => browseQuestionConcept(item.id, item.topicId)}>
+                {item.name} · {questionCountLabel(questionCountsByConceptId[item.id] || 0)}
+              </button>
+              {isSelected && <span>{isPrimary ? 'Primary' : 'Related'}</span>}
+              {isSelected && !isPrimary && !questionId && (
+                <button type="button" className={styles.secondaryButton}
+                  aria-label={`Make ${item.name} Primary`} disabled={isSavingQuestion}
+                  onClick={() => makeQuestionConceptPrimary(item.id)}>Make Primary</button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
   function renderUnifiedQuestionTopic(
     topic: UnifiedCreatorTopicNode,
     depth = 0
@@ -6046,77 +6288,10 @@ export function CreatorStudioV2Client({
             <span className={styles.topicName} title={topic.name}>
               {topic.name}
             </span>
-            <span
-              style={{
-                color: hasConceptsInBranch ? '#52647a' : '#94a3b8',
-                fontSize: 12,
-                marginLeft: 'auto',
-                paddingRight: 10,
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {hasConceptsInBranch
-                ? `${conceptCountInBranch + personalOverlayConcepts.length} ${(conceptCountInBranch + personalOverlayConcepts.length) === 1 ? 'concept' : 'concepts'}`
-                : 'No concepts'}
-            </span>
           </button>
+          {renderConceptCountControl(topic, 'questions')}
         </TopicDropRow>
-        {directConcepts.length > 0 && (!hasChildren || isExpanded) && (
-          <div style={{ display: 'grid', gap: 3 }}>
-            {directConcepts.map((conceptOption) => {
-              const isSelected = isQuestionConceptAssociated(conceptOption.id);
-              const isPrimary = questionSource === 'official' && primaryQuestionConceptId === conceptOption.id;
-              return (
-                <div key={createCreatorEntityKey('official', 'concept', conceptOption.id)}
-                  style={questionConceptChoiceStyle(isSelected, isSavingQuestion, depth)}>
-                  <input className={styles.topicCheckbox} type="checkbox"
-                    aria-label={`Associate ${conceptOption.name} with Question`}
-                    checked={isSelected}
-                    disabled={isSavingQuestion || questionSource !== 'official' || isPrimary}
-                    title={isPrimary ? (questionId ? 'Saved Question Primary cannot be changed.' : 'Use Make Primary on a Related Concept to change Primary.') : undefined}
-                    onChange={event => associateQuestionConcept(conceptOption.id, event.target.checked)} />
-                  <button type="button" className={styles.topicActivationButton}
-                    aria-label={`Browse Questions for ${conceptOption.name}`}
-                    aria-pressed={questionConceptId === conceptOption.id}
-                    disabled={isSavingQuestion}
-                    onClick={() => browseQuestionConcept(conceptOption.id, topic.id)}>
-                    {conceptOption.name} · {questionCountLabel(questionCountsByConceptId[conceptOption.id] || 0)}
-                  </button>
-                  {isSelected && <span>{isPrimary ? 'Primary' : 'Related'}</span>}
-                  {isSelected && !isPrimary && !questionId && (
-                    <button type="button" className={styles.secondaryButton}
-                      aria-label={`Make ${conceptOption.name} Primary`} disabled={isSavingQuestion}
-                      onClick={() => makeQuestionConceptPrimary(conceptOption.id)}>Make Primary</button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-        {personalOverlayConcepts.length > 0 && (!hasChildren || isExpanded) && (
-          <div style={{ display: 'grid', gap: 3 }}>
-            {personalOverlayConcepts.map((item) => {
-              const selected =
-                questionSource === 'personal' && personalQuestionConceptId === item.id;
-              const count = personalCardsByConceptId.get(item.id)?.length || 0;
-              return (
-                <label
-                  key={createCreatorEntityKey('personal', 'concept', item.id)}
-                  style={questionConceptChoiceStyle(selected, isSavingQuestion, depth)}
-                >
-                  <input
-                    className={styles.topicCheckbox}
-                    type="checkbox"
-                    checked={selected}
-                    onChange={() => selectPersonalQuestionConcept(item.id, item.topic_id)}
-                  />
-                  <span>{item.name} · {count} {count === 1 ? 'question' : 'questions'}</span>
-
-                </label>
-              );
-            })}
-          </div>
-        )}
+        {renderQuestionConceptDisclosure(topic, depth)}
         {hasChildren && isExpanded && (
           <div className={depth > 0 ? styles.nestedTopics : undefined}>
             {topic.children.map((child) =>
@@ -6429,7 +6604,9 @@ export function CreatorStudioV2Client({
             <span className={styles.topicName} title={topic.name}>{topic.name}</span>
 
           </button>
+          {!isLearnerReadOnly && renderConceptCountControl(topic, 'content')}
         </TopicDropRow>
+        {!isLearnerReadOnly && renderContentConceptDisclosure(topic, depth)}
         {hasChildren && isExpanded && (
           <div className={depth > 0 ? styles.nestedTopics : undefined}>
             {topic.children.map((child) => renderPersonalTopic(child, depth + 1))}
@@ -6495,7 +6672,6 @@ export function CreatorStudioV2Client({
 
   function renderPersonalQuestionTopic(topic: UnifiedCreatorTopicNode, depth = 0) {
     if (normalizedSearch && !personalTopicMatches(topic)) return null;
-    const directConcepts = personalConceptsByTopicId.get(topic.id) || [];
     const hasChildren = topic.children.length > 0;
     const conceptCountInBranch = flattenUnifiedCreatorTopics([topic]).reduce(
       (count, node) => count + (personalConceptsByTopicId.get(node.id)?.length || 0), 0
@@ -6517,7 +6693,7 @@ export function CreatorStudioV2Client({
           <button
             className={styles.expandButton}
             type="button"
-            disabled={!hasChildren && !directConcepts.length}
+            disabled={!hasChildren}
             aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${topic.name}`}
             onClick={() => {
               setExpandedPersonalTopicIds((current) => {
@@ -6528,43 +6704,15 @@ export function CreatorStudioV2Client({
               });
             }}
           >
-            {hasChildren || directConcepts.length ? (isExpanded ? <ChevronDown size={17} /> : <ChevronRight size={17} />) : <span className={styles.arrowSpacer} />}
+            {hasChildren ? (isExpanded ? <ChevronDown size={17} /> : <ChevronRight size={17} />) : <span className={styles.arrowSpacer} />}
           </button>
           {hasChildren ? <Folder className={styles.folderIcon} size={21} strokeWidth={1.7} /> : <span className={styles.leafSpacer} />}
           <span className={styles.topicName} title={topic.name}>{topic.name}</span>
-          <span style={{
-            color: hasConceptsInBranch ? '#52647a' : '#94a3b8',
-            fontSize: 12,
-            marginLeft: 'auto',
-            paddingRight: 10,
-            whiteSpace: 'nowrap',
-          }}>
-            {hasConceptsInBranch
-              ? `${conceptCountInBranch} ${conceptCountInBranch === 1 ? 'concept' : 'concepts'}`
-              : 'No concepts'}
-          </span>
-
+          {renderConceptCountControl(topic, 'questions')}
         </TopicDropRow>
-        {isExpanded && (
+        {renderQuestionConceptDisclosure(topic, depth)}
+        {hasChildren && isExpanded && (
           <div>
-            {directConcepts.map((item) => {
-              const selected = personalQuestionConceptId === item.id && questionSource === 'personal';
-              const count = personalCardsByConceptId.get(item.id)?.length || 0;
-              return (
-                <label
-                  key={createCreatorEntityKey('personal', 'concept', item.id)}
-                  style={questionConceptChoiceStyle(selected, isSavingQuestion, depth)}
-                >
-                  <input
-                    className={styles.topicCheckbox}
-                    type="checkbox"
-                    checked={selected}
-                    onChange={() => selectPersonalQuestionConcept(item.id, topic.id)}
-                  />
-                  <span>{item.name} · {count} {count === 1 ? 'question' : 'questions'}</span>
-                </label>
-              );
-            })}
             {topic.children.map((child) => renderPersonalQuestionTopic(child, depth + 1))}
           </div>
         )}
@@ -6641,7 +6789,9 @@ export function CreatorStudioV2Client({
               {topic.name}
             </span>
           </button>
+          {!isLearnerReadOnly && renderConceptCountControl(topic, 'content')}
         </TopicDropRow>
+        {!isLearnerReadOnly && renderContentConceptDisclosure(topic, depth)}
         {hasChildren && isExpanded && (
           <div className={depth > 0 ? styles.nestedTopics : undefined}>
             {topic.children.map((child) => renderUnifiedTopic(child, depth + 1))}
@@ -7029,6 +7179,13 @@ export function CreatorStudioV2Client({
                 overlays: personalOverlays,
               }}
               ownerId={initialPersonalContent.ownerId}
+              officialQuestionEditor={creatorAuthority.canSaveQuestion ? {
+                open: openFlaggedQuestion,
+                cancel: cancelFlaggedQuestionEdit,
+                pending: flaggedQuestionPending,
+                busy: flaggedQuestionEditIsBusy(),
+                error: flaggedQuestionError,
+              } : undefined}
             />
           )}
 

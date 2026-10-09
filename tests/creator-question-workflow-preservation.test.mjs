@@ -346,7 +346,7 @@ test('Questions personal Topic names remain non-activating; Concept choice selec
     assert.equal(name.type, 'span');
     assert.equal(name.props.onClick, undefined);
     assert.ok(nodes(tree).some(n => n.type?.name === 'TopicDragHandle'));
-    e.setExpandedPersonalTopicIds(new Set(['mine-topic']));
+    nodes(tree).find(n => n.props?.['data-concept-disclosure'] === 'questions').props.onClick({stopPropagation() {}});
     e = h.render();
     tree = e.renderPersonalQuestionTopic(personal);
     const checkbox = nodes(tree).find(n => n.type === 'input' && n.props.type === 'checkbox');
@@ -623,7 +623,11 @@ for (const role of ['admin', 'editor']) {
   const h=questions({role});h.render().setQuestionConceptsByTopicId({topic:[{id:'primary',name:'Primary'},{id:'related',name:'Related'}],other:[{id:'primary',name:'Primary'}]});
   h.render().setQuestionCountsByConceptId({primary:3,related:2});
   h.render().associateQuestionConcept('primary',true);h.render().associateQuestionConcept('related',true);
-  h.render().setNeedsQuestionsOnly(true);const e=h.render();
+  h.render().setNeedsQuestionsOnly(true);h.render().setConceptPlacementStatus('ready');
+  for (const id of ['topic','other']) {
+   h.render().renderConceptCountControl({id,key:`official:topic:${id}`,source:'official',name:id,children:[]}, 'questions').props.onClick({stopPropagation() {}});
+  }
+  const e=h.render();
   for(const id of ['topic','other']) {
    const tree=e.renderQuestionTopic({id,key:`official:topic:${id}`,source:'official',name:id,children:[]});
    const check=nodes(tree).find(n=>n.props?.['aria-label']==='Associate Primary with Question');

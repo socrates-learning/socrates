@@ -30,6 +30,9 @@ vm.runInNewContext(ts.transpileModule(readFileSync(new URL('../../lib/creator-st
     compilerOptions: { module: ts.ModuleKind.CommonJS },
 }).outputText, runtimeContext);
 const exposed = [
+    'activeTopicId', 'conceptPlacementStatus', 'setConceptPlacementStatus', 'contentConceptDisclosureKeys', 'questionConceptDisclosureKeys', 'expandedTopicIds', 'expandedPersonalTopicIds', 'conceptsForTopicDisclosure', 'renderConceptCountControl', 'toggleExpanded',
+    'questionCanonicalRecord', 'questionPromptFormat', 'questionAnswerFormat', 'questionMediaRecord',
+    'currentQuestionFingerprint', 'savedQuestionFingerprint', 'questionVisualMemory', 'answerVisualMemory',
   'tagPages', 'toggleTagBrowse', 'loadTagBrowsePage', 'changeTagQuery', 'loadTagCatalog', 'availableTags', 'conceptTags', 'setConceptTags', 'tagDraft', 'questionTagDraft', 'tagStatus', 'questionTagStatus', 'tagCatalogStatus', 'tagAssigning', 'addTagByName', 'assignTag', 'addTag', 'addQuestionTag', 'removeTag', 'removeQuestionTag', 'setNewCatalogTagName', 'createCatalogTag', 'renameCatalogTag', 'setCatalogTagStatus', 'deleteCatalogTag', 'isPrerequisiteBrowseOpen', 'setIsPrerequisiteBrowseOpen', 'prerequisites', 'setPrerequisites', 'setSelectedTopicIds', 'resetConceptEditor', 'resetQuestionEditor',
     'questionMarkdownState', 'setQuestionMarkdownState', 'answerMarkdownState', 'setAnswerMarkdownState',
     'browseQuestionConcept', 'associateQuestionConcept', 'makeQuestionConceptPrimary', 'draftQuestionPrimaryId', 'setNeedsQuestionsOnly',
@@ -37,7 +40,7 @@ const exposed = [
     'navigateFromCreator', 'goBackFromCreator', 'isDirty', 'confirmDiscardQuestionChanges',
     'learnerDeck', 'setLearnerDeck', 'learnerSelectionError', 'learnerSelectionBusy', 'saveLearnerTopicSelection', 'renderLearnerStudyCheckbox', 'learnerSelectionContext',
     'personalQuestionConceptId', 'closeTopicDialog', 'creatorAuthority', 'loadQuestionSearchPage', 'questionSearchResults', 'deleteSelectedStandaloneCard', 'activeCreatorTab', 'standaloneEditorRef', 'closeStandaloneEditor', 'standaloneRequest', 'filterPersonalCardsForSearch', 'setStandaloneCards',
-    'setContentConceptSearch', 'contentConceptSearchResults', 'setQuestionSearchResults',
+    'isConceptBrowseOpen', 'setContentConceptSearch', 'contentConceptSearchResults', 'setQuestionSearchResults',
     'renderUnifiedTopic', 'renderUnifiedConceptBrowseTopic', 'renderUnifiedQuestionTopic',
     'setQuestionCountsByConceptId', 'setExpandedPersonalTopicIds', 'setExpandedBrowseTopicIds', 'setQuestionConceptsByTopicId',
     'creationDestination', 'conceptEditorState', 'questionEditorState', 'conceptSource', 'questionSource',

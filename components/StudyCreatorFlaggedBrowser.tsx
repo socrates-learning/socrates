@@ -35,11 +35,20 @@ type OfficialConcept = {
   name: string;
 };
 
+export type FlaggedQuestionEditor = {
+  open: (questionId: string, conceptId: string) => Promise<void>;
+  cancel: () => void;
+  pending: boolean;
+  busy: boolean;
+  error: string;
+};
+
 type StudyCreatorFlaggedBrowserProps = {
   material: Pick<CreatorPersonalContent, 'topics' | 'concepts' | 'cards' | 'overlays' | 'standaloneCards'>;
   ownerId: string;
   neutralPresentation?: boolean;
   learnerPresentation?: boolean;
+  officialQuestionEditor?: FlaggedQuestionEditor;
 };
 
 function messageFor(error: unknown) {
@@ -55,6 +64,7 @@ export function StudyCreatorFlaggedBrowser({
   ownerId,
   neutralPresentation = false,
   learnerPresentation = false,
+  officialQuestionEditor,
 }: StudyCreatorFlaggedBrowserProps) {
   const [flags, setFlags] = useState<FlagRow[]>([]);
   const [officialQuestions, setOfficialQuestions] = useState<OfficialQuestion[]>([]);
@@ -188,6 +198,7 @@ export function StudyCreatorFlaggedBrowser({
     resolvedFlags.find((item) => item.flag.id === selectedFlagId) ?? null;
 
   async function unflag(flagId: string) {
+    officialQuestionEditor?.cancel();
     setRemovingId(flagId);
     setError('');
     const { error: removeError } = await supabase
@@ -232,7 +243,10 @@ export function StudyCreatorFlaggedBrowser({
               className={`${styles.flaggedRow} ${selectedFlagId === item.flag.id ? styles.selectedFlag : ''}`}
               style={neutralPresentation ? { gridTemplateColumns: 'minmax(0, 1fr) 18px' } : undefined}
               key={item.flag.id}
-              onClick={() => setSelectedFlagId(item.flag.id)}
+              onClick={() => {
+                officialQuestionEditor?.cancel();
+                setSelectedFlagId(item.flag.id);
+              }}
               type="button"
             >
               {!neutralPresentation && <i className={item.owner === 'official' ? styles.officialOwnerMark : styles.personalOwnerMark}>{item.owner === 'official' ? 'S' : 'M'}</i>}
@@ -265,6 +279,14 @@ export function StudyCreatorFlaggedBrowser({
               {selected.question && !learnerPresentation && <div className={styles.flagMetadata}><span>{selected.question.difficulty ?? 'Unspecified difficulty'}</span><span>{selected.question.testing_angle ?? 'General angle'}</span></div>}
               {selected.flag.note && <div><span>Your note</span><p>{selected.flag.note}</p></div>}
               <div><span>Flagged</span><p>{new Date(selected.flag.created_at).toLocaleString()}</p></div>
+              {!learnerPresentation && selected.question && officialQuestionEditor && <>
+                <button className={styles.secondary} disabled={officialQuestionEditor.pending || officialQuestionEditor.busy || removingId !== null}
+                  onClick={() => void officialQuestionEditor.open(selected.question!.id, selected.question!.concept_id)} type="button">
+                  {officialQuestionEditor.pending ? 'Opening Question…' : 'Edit Question'}
+                </button>
+                {officialQuestionEditor.pending && <p role="status">Loading the Question editor…</p>}
+                {officialQuestionEditor.error && <p className={styles.flagError} role="alert">{officialQuestionEditor.error}</p>}
+              </>}
               <button className={styles.dangerButton} disabled={removingId === selected.flag.id} onClick={() => void unflag(selected.flag.id)} type="button">{removingId === selected.flag.id ? 'Removing…' : 'Unflag'}</button>
             </div>
           ) : (

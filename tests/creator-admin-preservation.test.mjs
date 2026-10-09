@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
-import { editor, nodes, text, button, expandChrome, conceptVisualExpression, currentTabLabels, releasedStaffRenderHashes } from './fixtures/creator-role-workspaces.mjs';
+import { editor, nodes, text, button, expandChrome, conceptVisualExpression, currentTabLabels, releasedStaffRenderHashes, contentDisclosureExpressions } from './fixtures/creator-role-workspaces.mjs';
 
 // Freeze current staff presentation and callback wiring before the learner split.
 // These are render/handler tests; browser layout and database enforcement are separate gates.
@@ -139,8 +139,24 @@ const releasedBodies = {
   "tags": "8dfd59d8dabb4640d7f114ca6dcdb8c6f61cb81df5047401dfa5e4a97f5e7299",
   "flagged": "3bbae02c9c5dd613573a76830f4c8d9863c4290e0c8248d7ff277f20f6061104"
 };
-for (const role of ['admin','editor']) test(`${role}: Content, Tags and Flagged bodies/callback wiring retain original fingerprints after narrowly projecting approved Tag Browse`, () => {
- const h=editor({role,placed:true,projectOfficialTextEditor:true,projectTagBrowse:true});
+function withoutFlaggedEditExtension(tree) {
+  if (!tree || typeof tree !== 'object') return tree;
+  if (Array.isArray(tree)) return tree.map(withoutFlaggedEditExtension);
+  const props = { ...tree.props };
+  if (tree.type?.name === 'StudyCreatorFlaggedBrowser') {
+    assert.deepEqual(Object.keys(props.officialQuestionEditor), ['open', 'cancel', 'pending', 'busy', 'error']);
+    assert.equal(typeof props.officialQuestionEditor.open, 'function');
+    assert.equal(typeof props.officialQuestionEditor.cancel, 'function');
+    assert.equal(props.officialQuestionEditor.pending, false);
+    assert.equal(props.officialQuestionEditor.busy, false);
+    assert.equal(props.officialQuestionEditor.error, '');
+    delete props.officialQuestionEditor;
+  }
+  props.children = withoutFlaggedEditExtension(props.children);
+  return { ...tree, props };
+}
+for (const role of ['admin','editor']) test(`${role}: Content, Tags and Flagged retain original fingerprints after projecting only approved Tag Browse, Concept disclosures and official edit wiring`, () => {
+ const h=editor({role,placed:true,projectOfficialTextEditor:true,projectTagBrowse:true,projectConceptDisclosure:true});
  for(const tab of ['content','tags','flagged']) {
   h.render().setActiveCreatorTab(tab);
   const rendered=expandChrome(h.render().tree);
@@ -148,7 +164,7 @@ for (const role of ['admin','editor']) test(`${role}: Content, Tags and Flagged 
    assert.equal(nodes(rendered).filter(n=>n.props?.['data-concept-image-action']==='true').length,1);
    assert.equal(nodes(rendered).filter(n=>n.type?.name==='ConceptImageAuthoring').length,1);
   }
-  const tree=tab==='content'?withoutConceptImageExtension(rendered):rendered;
+  const tree=tab==='content'?withoutConceptImageExtension(rendered):tab==='flagged'?withoutFlaggedEditExtension(rendered):rendered;
   assert.equal(fingerprint(withoutNavigation(tree)),releasedBodies[tab],`${role}/${tab}`);
   const nav=nodes(tree).find(n=>n.props?.['aria-label']==='Creator Studio sections');
   assert.deepEqual(Array.from(nav.props.children, text),['Content','Questions','Tags','Flagged','Search']);
@@ -160,7 +176,10 @@ for (const role of ['admin','editor']) test(`${role}: Content, Tags and Flagged 
 });
 const releasedLearner = {"questions": "1a5045046af27c7ad945bc7e903e6557ccccf1840e6640859cf0760a3f64d09a", "flagged": "2e08e60d643eab957e0135b2a516fae85a54bf2b306f8f257f6a765f1aaddcd6"};
 test('learner full workspace fingerprints remain exact with only Questions and Flagged',()=>{
- const h=editor({role:'learner',placed:true});for(const tab of ['questions','flagged']){h.render().setActiveCreatorTab(tab);assert.equal(fingerprint(expandChrome(h.render().tree)),releasedLearner[tab]);}
+ const actual=editor({role:'learner',placed:true});
+ assert.equal(nodes(expandChrome(actual.render().tree)).filter(n=>n.props?.['data-concept-disclosure'] || n.props?.['data-concept-list']).length,0);
+ assert.deepEqual(contentDisclosureExpressions,["{!isLearnerReadOnly && renderConceptCountControl(topic, 'content')}","{!isLearnerReadOnly && renderContentConceptDisclosure(topic, depth)}"]);
+ const h=editor({role:'learner',placed:true,projectConceptDisclosure:true});for(const tab of ['questions','flagged']){h.render().setActiveCreatorTab(tab);assert.equal(fingerprint(expandChrome(h.render().tree)),releasedLearner[tab]);}
 });
 
 test('staff preservation projects only the approved Concept visual-field expression with real source, format and media ownership', () => {

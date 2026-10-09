@@ -33,6 +33,7 @@ test('saved Question and duplicate Concept associations survive actual placement
  await e.positionTopicFromTree(planTopicPosition(e.positioningContext,'official:topic:a','official:topic:b','after'));e=h.render();
  h.runEffect('async function loadQuestionConceptPlacements');await settle();e=h.render();h.runEffect('setQuestionConceptOptions(options)');e=h.render();
  assert.equal(JSON.stringify([e.questionId,e.questionEditorState,e.primaryQuestionConceptId,e.questionRelatedConceptIds,e.questionAnswer,e.questionConceptId,e.isQuestionDirty]),before);
+ for (const id of ['a','b']) e.renderConceptCountControl({id,key:`official:topic:${id}`,source:'official',name:id,children:[]}, 'questions').props.onClick({stopPropagation() {}});e=h.render();
  const controls=nodes(expandChrome(e.tree)).filter(n=>n.props?.['aria-label']==='Associate Primary with Question');assert.equal(controls.length,2);assert.ok(controls.every(n=>n.props.checked&&n.props.disabled));
  assert.equal(h.calls.filter(c=>c.name?.startsWith('save_')).length,0);
 });

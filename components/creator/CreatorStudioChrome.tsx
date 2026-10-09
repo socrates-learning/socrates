@@ -1,6 +1,6 @@
 'use client';
 
-import { StudyCreatorFlaggedBrowser } from '@/components/StudyCreatorFlaggedBrowser';
+import { StudyCreatorFlaggedBrowser, type FlaggedQuestionEditor } from '@/components/StudyCreatorFlaggedBrowser';
 import type { CreatorPersonalContent } from '@/lib/creator-personal-content';
 import styles from '../CreatorStudioV2Client.module.css';
 
@@ -10,13 +10,15 @@ export function CreatorStudioFlaggedTab({
   material,
   ownerId,
   learnerPresentation = false,
+  officialQuestionEditor,
 }: {
   material: Pick<CreatorPersonalContent, 'topics' | 'concepts' | 'cards' | 'overlays' | 'standaloneCards'>;
   ownerId: string;
   learnerPresentation?: boolean;
+  officialQuestionEditor?: FlaggedQuestionEditor;
 }) {
   if (learnerPresentation) return <StudyCreatorFlaggedBrowser material={material} ownerId={ownerId} neutralPresentation learnerPresentation />;
-  return <StudyCreatorFlaggedBrowser material={material} ownerId={ownerId} neutralPresentation />;
+  return <StudyCreatorFlaggedBrowser material={material} ownerId={ownerId} neutralPresentation officialQuestionEditor={officialQuestionEditor} />;
 }
 
 export function CreatorStudioLocalHeader({

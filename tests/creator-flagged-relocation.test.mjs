@@ -30,9 +30,10 @@ test('canonical Creator Studio exposes exactly Content, Questions, Tags, Flagged
 test('Creator Studio reuses Flagged with the current owner-scoped personal state', () => {
   assert.match(
     chrome,
-    /import \{ StudyCreatorFlaggedBrowser \} from '@\/components\/StudyCreatorFlaggedBrowser'/
+    /import \{ StudyCreatorFlaggedBrowser, type FlaggedQuestionEditor \} from '@\/components\/StudyCreatorFlaggedBrowser'/
   );
-  assert.match(chrome, /<StudyCreatorFlaggedBrowser material=\{material\} ownerId=\{ownerId\} neutralPresentation \/>/);
+  assert.match(chrome, /<StudyCreatorFlaggedBrowser material=\{material\} ownerId=\{ownerId\} neutralPresentation officialQuestionEditor=\{officialQuestionEditor\} \/>/);
+  assert.match(chrome, /if \(learnerPresentation\) return <StudyCreatorFlaggedBrowser material=\{material\} ownerId=\{ownerId\} neutralPresentation learnerPresentation \/>/);
   assert.match(creator, /activeCreatorTab === 'flagged'/);
   assert.match(creator, /<CreatorStudioFlaggedTab/);
   assert.match(creator, /topics: personalTopics/);
