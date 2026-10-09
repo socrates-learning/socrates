@@ -208,6 +208,7 @@ export function editor({ projectOfficialTextEditor = false, projectTagBrowse = f
     './creator/QuestionMarkdownField': questionField,
     './creator/OfficialVisualField': visualFieldBoundary,
     '@/components/ConceptMediaContent': conceptContentBoundary,
+    '@/components/creator/CreatorConceptPreview': { __esModule: true, default: function CreatorConceptPreview() {} },
     '@/components/creator/ConceptImageAuthoring': conceptImageBoundary,
     '@/components/creator/QuestionImageAuthoring': questionImageBoundary,
     '@/lib/concept-media': conceptMedia,

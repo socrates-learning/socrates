@@ -91,6 +91,7 @@ function editor({ editing = false, response, references = [] } = {}) {
     './creator/QuestionMarkdownField': { QuestionMarkdownField() {} },
     './creator/OfficialVisualField': { __esModule: true, default: function OfficialVisualField() {} },
     '@/components/ConceptMediaContent': conceptContentBoundary,
+    '@/components/creator/CreatorConceptPreview': { __esModule: true, default: function CreatorConceptPreview() {} },
     '@/components/creator/QuestionImageAuthoring': questionImageBoundary,
     '@/components/creator/ConceptImageAuthoring': conceptImageBoundary,
     '@/lib/concept-media': conceptMedia,

@@ -30,6 +30,7 @@ vm.runInNewContext(ts.transpileModule(readFileSync(new URL('../../lib/creator-st
     compilerOptions: { module: ts.ModuleKind.CommonJS },
 }).outputText, runtimeContext);
 const exposed = [
+    'questionConceptPreview', 'questionConceptPreviewContext', 'closeQuestionConceptPreview', 'renderQuestionConceptPreviewAction',
     'activeTopicId', 'conceptPlacementStatus', 'setConceptPlacementStatus', 'contentConceptDisclosureKeys', 'questionConceptDisclosureKeys', 'expandedTopicIds', 'expandedPersonalTopicIds', 'conceptsForTopicDisclosure', 'renderConceptCountControl', 'toggleExpanded',
     'questionCanonicalRecord', 'questionPromptFormat', 'questionAnswerFormat', 'questionMediaRecord',
     'currentQuestionFingerprint', 'savedQuestionFingerprint', 'questionVisualMemory', 'answerVisualMemory',
@@ -153,6 +154,7 @@ export function editor({ role = 'admin', editing = false, response, references =
     './creator/QuestionMarkdownField': questionField,
     './creator/OfficialVisualField': visualFieldBoundary,
     '@/components/ConceptMediaContent': conceptContentBoundary,
+    '@/components/creator/CreatorConceptPreview': { __esModule: true, default: function CreatorConceptPreview() {} },
     '@/components/creator/ConceptImageAuthoring': conceptImageBoundary,
     '@/components/creator/QuestionImageAuthoring': questionImages ? { ...questionImageBoundary, useQuestionImageAuthoring: () => questionImages } : questionImageBoundary,
     '@/lib/concept-media': conceptMedia,

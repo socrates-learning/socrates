@@ -88,6 +88,7 @@ function editor({ editing = false, response, references = [], media } = {}) {
     './creator/QuestionMarkdownField': { QuestionMarkdownField() {} },
     './creator/OfficialVisualField': { __esModule: true, default: function OfficialVisualField() {} },
     '@/components/ConceptMediaContent': conceptContentBoundary,
+    '@/components/creator/CreatorConceptPreview': { __esModule: true, default: function CreatorConceptPreview() {} },
     '@/components/creator/QuestionImageAuthoring': questionImageBoundary,
     '@/components/creator/ConceptImageAuthoring': media ? { ...conceptImageBoundary, useConceptImageAuthoring: () => media } : conceptImageBoundary,
     '@/lib/concept-media': conceptMedia,

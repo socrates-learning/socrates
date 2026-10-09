@@ -122,6 +122,7 @@ function editor({ role = 'admin', editing = false, response, references = [], ca
     './creator/QuestionMarkdownField': { QuestionMarkdownField() {} },
     './creator/OfficialVisualField': visualFieldBoundary,
     '@/components/ConceptMediaContent': conceptContentBoundary,
+    '@/components/creator/CreatorConceptPreview': { __esModule: true, default: function CreatorConceptPreview() {} },
     '@/components/creator/QuestionImageAuthoring': questionImageBoundary,
     '@/components/creator/ConceptImageAuthoring': conceptImageBoundary,
     '@/lib/concept-media': conceptMedia,

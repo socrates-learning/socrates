@@ -42,6 +42,7 @@ import {
 } from '@/lib/concept-topic-tree';
 import { MarkdownContent, cardMarkdownSummary, questionMarkdownSummary } from '@/components/MarkdownContent';
 import ConceptMediaContent from '@/components/ConceptMediaContent';
+import CreatorConceptPreview, { type ConceptPreviewTarget } from '@/components/creator/CreatorConceptPreview';
 import QuestionImageAuthoring, { useQuestionImageAuthoring } from '@/components/creator/QuestionImageAuthoring';
 import type { QuestionMediaHint } from '@/lib/question-media';
 import ConceptImageAuthoring, { ConceptImageEntry, useConceptImageAuthoring, type ConceptImageEditorHandle } from '@/components/creator/ConceptImageAuthoring';
@@ -1214,6 +1215,19 @@ export function CreatorStudioV2Client({
     hint: questionMediaRecord.hint, basePrompt: questionMediaRecord.prompt, baseAnswer: questionMediaRecord.answer,
     basePromptFormat: questionCanonicalRecord?.promptFormat || 'legacy', baseAnswerFormat: questionCanonicalRecord?.answerFormat || 'legacy',
   });
+  const [questionConceptPreview, setQuestionConceptPreview] = useState<{
+    target: ConceptPreviewTarget;
+    context: string;
+  } | null>(null);
+  const questionConceptPreviewContext = JSON.stringify([
+    activeLibraryId, creatorCapabilities.subject.userId, creatorAuthority.role,
+    creatorAuthority.canSaveQuestion, questionEditorIdentityKey(questionEditorState),
+    questionVisualGeneration, activeCreatorTab,
+  ]);
+  const closeQuestionConceptPreview = useCallback(() => setQuestionConceptPreview(null), []);
+  // Invalidate even a closed/hidden preview across author, Library, workspace or
+  // Question changes. Preview state never participates in either draft.
+  useEffect(() => () => closeQuestionConceptPreview(), [questionConceptPreviewContext, closeQuestionConceptPreview]);
   const [questionDifficulty, setQuestionDifficulty] =
     useState<QuestionDifficulty>('medium');
   const [questionTestingAngle, setQuestionTestingAngle] = useState(
@@ -6149,6 +6163,32 @@ export function CreatorStudioV2Client({
     );
   }
 
+  function renderQuestionConceptPreviewAction(source: ContentSource, id: string, name: string) {
+    if (isLearnerReadOnly || !creatorAuthority.canSaveQuestion || questionSource !== source) return null;
+    const personal = source === 'personal' ? personalConceptById.get(id) : null;
+    if (source === 'official' ? !isQuestionConceptAssociated(id) :
+      personalQuestionConceptId !== id || !personal || personal.owner_id !== creatorCapabilities.subject.userId ||
+      !(unifiedOfficialTopicRows.some(topic => topic.source === 'personal' && topic.id === personal.topic_id) ||
+        personalOverlays.some(overlay => overlay.owner_id === creatorCapabilities.subject.userId &&
+          overlay.personal_concept_id === id && findTopic(topics, overlay.library_node_id)))) return null;
+    const target: ConceptPreviewTarget = {
+      id, name, relationship: source === 'personal' || id === primaryQuestionConceptId ? 'Primary' : 'Related',
+      ...(personal ? { source: 'personal' as const, topicId: personal.topic_id } : { source: 'official' as const }),
+    };
+    return (
+      <button type="button" className={styles.secondaryButton}
+        aria-label={`View Concept: ${name}`} aria-haspopup="dialog"
+        style={{ justifySelf: 'start', flexShrink: 0 }}
+        disabled={isSavingQuestion || questionImages.pending || standaloneEditorRef.current.busy}
+        onClick={event => {
+          event.stopPropagation();
+          setQuestionConceptPreview({ target, context: questionConceptPreviewContext });
+        }}>
+        View Concept
+      </button>
+    );
+  }
+
   function renderQuestionConceptDisclosure(topic: UnifiedCreatorTopicNode, depth: number) {
     if (!questionConceptDisclosureKeys.has(topic.key) ||
       (topic.source === 'official' && conceptPlacementStatus !== 'ready')) return null;
@@ -6161,12 +6201,14 @@ export function CreatorStudioV2Client({
             const selected = questionSource === 'personal' && personalQuestionConceptId === item.id;
             const count = personalCardsByConceptId.get(item.id)?.length || 0;
             return (
-              <label key={createCreatorEntityKey('personal', 'concept', item.id)}
-                style={questionConceptChoiceStyle(selected, isSavingQuestion, depth)}>
-                <input className={styles.topicCheckbox} type="checkbox" checked={selected}
-                  onChange={() => selectPersonalQuestionConcept(item.id, item.topicId)} />
-                <span>{item.name} · {count} {count === 1 ? 'question' : 'questions'}</span>
-              </label>
+              <div key={createCreatorEntityKey('personal', 'concept', item.id)} style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap' }}>
+                <label style={questionConceptChoiceStyle(selected, isSavingQuestion, depth)}>
+                  <input className={styles.topicCheckbox} type="checkbox" checked={selected}
+                    onChange={() => selectPersonalQuestionConcept(item.id, item.topicId)} />
+                  <span>{item.name} · {count} {count === 1 ? 'question' : 'questions'}</span>
+                </label>
+                {selected && renderQuestionConceptPreviewAction('personal', item.id, item.name)}
+              </div>
             );
           }
           const isSelected = isQuestionConceptAssociated(item.id);
@@ -6190,6 +6232,7 @@ export function CreatorStudioV2Client({
                   aria-label={`Make ${item.name} Primary`} disabled={isSavingQuestion}
                   onClick={() => makeQuestionConceptPrimary(item.id)}>Make Primary</button>
               )}
+              {isSelected && renderQuestionConceptPreviewAction('official', item.id, item.name)}
             </div>
           );
         })}
@@ -8307,6 +8350,10 @@ export function CreatorStudioV2Client({
             />
           ) : activeCreatorTab === 'questions' ? (
             <>
+              {questionConceptPreview?.context === questionConceptPreviewContext && !isLearnerReadOnly && creatorAuthority.canSaveQuestion && (
+                <CreatorConceptPreview target={questionConceptPreview.target} capabilities={creatorCapabilities}
+                  libraryId={activeLibraryId} onClose={closeQuestionConceptPreview} />
+              )}
 
               <div className={styles.mainGrid}>
                 <section className={`${styles.panel} ${styles.conceptPanel}`}>
@@ -8321,6 +8368,7 @@ export function CreatorStudioV2Client({
                       aria-label="Primary Concept"
                     >
                       <strong>Primary Concept: {editingQuestionPrimary?.name || linkedQuestionConcept.name}</strong>
+                      {primaryQuestionConceptId && renderQuestionConceptPreviewAction('official', primaryQuestionConceptId, editingQuestionPrimary?.name || linkedQuestionConcept.name)}
                       {!editingQuestionPrimary && linkedQuestionConcept.path && (
                         <span>{linkedQuestionConcept.path}</span>
                       )}
@@ -8332,7 +8380,7 @@ export function CreatorStudioV2Client({
                         Primary Concept:{' '}
                         {personalConceptById.get(personalQuestionConceptId)?.name || 'Selected Concept'}
                       </strong>
-
+                      {renderQuestionConceptPreviewAction('personal', personalQuestionConceptId, personalConceptById.get(personalQuestionConceptId)?.name || 'Selected Concept')}
                     </div>
                   )}
 
