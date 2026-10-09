@@ -3,6 +3,8 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import vm from 'node:vm';
 import ts from 'typescript';
+import React from 'react';
+import * as jsxRuntime from 'react/jsx-runtime';
 
 const studyStyles = readFileSync(new URL('../components/study-planner/StudyModeStyles.tsx', import.meta.url), 'utf8');
 const planner = readFileSync(
@@ -29,6 +31,98 @@ const backHandler = planner.slice(
   planner.indexOf('  function returnToStudyQuestion()'),
   planner.indexOf('  async function loadStudyConceptReview')
 );
+
+function loadPresentationModule(path, imports) {
+  const context = { exports: {}, URL, require(id) {
+    assert.ok(Object.hasOwn(imports, id), `Unexpected presentation import: ${id}`);
+    return imports[id];
+  } };
+  vm.runInNewContext(ts.transpileModule(readFileSync(new URL(`../${path}`, import.meta.url), 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true, target: ts.ScriptTarget.ES2022 },
+  }).outputText, context);
+  return context.exports;
+}
+const contentFormat = loadPresentationModule('lib/official-content-format.ts', {});
+const markdown = loadPresentationModule('components/MarkdownContent.tsx', {
+  react: React,
+  'react/jsx-runtime': jsxRuntime,
+  '@/lib/official-content-format': contentFormat,
+  './MarkdownContent.module.css': { __esModule: true, default: { card: 'card', question: 'question' } },
+});
+const plannerAst = ts.createSourceFile('StudyPlanner.tsx', planner, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+const sizingFunction = plannerAst.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === 'getStudyFrontSize');
+assert.ok(sizingFunction, 'The Front sizing helper exists');
+const sizingContext = { questionMarkdownSummary: markdown.questionMarkdownSummary, cardMarkdownSummary: markdown.cardMarkdownSummary };
+vm.createContext(sizingContext);
+vm.runInContext(ts.transpileModule(sizingFunction.getText(plannerAst), { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText, sizingContext);
+const frontSize = sizingContext.getStudyFrontSize;
+const official = (prompt, promptFormat = 'legacy') => ({ kind: 'official', prompt, promptFormat });
+
+test('Front sizing has exact 160/161 and 480/481 visible-character boundaries for each content contract', () => {
+  assert.equal(frontSize(null), 'short');
+  for (const [length, expected] of [[0, 'short'], [160, 'short'], [161, 'medium'], [480, 'medium'], [481, 'long']]) {
+    const prompt = 'a'.repeat(length);
+    for (const candidate of [official(prompt), official(prompt, 'visual_markdown_v1'),
+      { kind: 'personal', prompt, personalConceptId: null },
+      { kind: 'personal', prompt, personalConceptId: 'existing-concept' }]) {
+      assert.equal(frontSize(Object.freeze(candidate)), expected);
+    }
+  }
+});
+
+test('Front sizing normalizes whitespace and counts Unicode code points without changing source', () => {
+  for (const [prompt, expected] of [
+    ['🩺'.repeat(160), 'short'], ['🩺'.repeat(161), 'medium'], ['漢'.repeat(480), 'medium'], ['漢'.repeat(481), 'long'],
+    [` \n\t${'a'.repeat(160)}\u00a0 `, 'short'],
+    [`${'a'.repeat(80)}\n\n\t${'b'.repeat(80)}`, 'medium'],
+    [' \n\t\u00a0 ', 'short'],
+  ]) {
+    const candidate = Object.freeze(official(prompt));
+    assert.equal(frontSize(candidate), expected);
+    assert.equal(candidate.prompt, prompt);
+  }
+});
+
+test('Front sizing follows actual legacy, visual and personal Markdown interpretation', () => {
+  const marked = `**${'a'.repeat(160)}**`;
+  assert.equal(frontSize(official(marked)), 'medium', 'Legacy punctuation remains displayed literal text');
+  assert.equal(frontSize(official(marked, 'visual_markdown_v1')), 'short');
+  assert.equal(frontSize({ kind: 'personal', personalConceptId: null, prompt: marked }), 'short');
+  assert.equal(frontSize({ kind: 'personal', personalConceptId: 'existing-concept', prompt: marked }), 'medium');
+  const link = `[${'a'.repeat(160)}](https://example.invalid/${'hidden'.repeat(100)})`;
+  assert.equal(frontSize(official(link, 'visual_markdown_v1')), 'short', 'Hidden destinations do not consume visible length');
+  assert.equal(frontSize(official(link)), 'long');
+  const list = `1. ${'a'.repeat(160)}`;
+  assert.equal(frontSize(official(list, 'visual_markdown_v1')), 'short');
+  assert.equal(frontSize(official(list)), 'medium');
+});
+
+test('unsupported visual source is counted literally and sizing is stable across media and Answer changes', () => {
+  const source = `[${'a'.repeat(160)}](javascript:alert(1))`;
+  assert.equal(markdown.questionMarkdownKind(source, 'visual_markdown_v1'), 'plain');
+  assert.equal(frontSize(official(source, 'visual_markdown_v1')), 'medium');
+  const prompt = 'a'.repeat(481);
+  for (const mediaHint of [null, { front: true, answer: true }, { unavailable: true }]) {
+    const candidate = Object.freeze({ ...official(prompt), mediaHint, answer: 'b'.repeat(10000) });
+    const before = JSON.stringify(candidate);
+    assert.equal(frontSize(candidate), 'long');
+    assert.equal(frontSize(candidate), 'long');
+    assert.equal(JSON.stringify(candidate), before);
+  }
+});
+
+test('adaptive sizing is confined to the existing Front and owns no measurement, state or persistence', () => {
+  const attributes = [];
+  function visit(node) {
+    if (ts.isJsxAttribute(node) && node.name.getText(plannerAst) === 'data-front-size') attributes.push(node);
+    ts.forEachChild(node, visit);
+  }
+  visit(plannerAst);
+  assert.equal(attributes.length, 1);
+  assert.equal(attributes[0].initializer.expression.getText(plannerAst), 'getStudyFrontSize(studyCandidate)');
+  assert.ok(questionFront.includes('data-front-size={getStudyFrontSize(studyCandidate)}'));
+  assert.doesNotMatch(sizingFunction.getText(plannerAst), /window|document|ResizeObserver|requestAnimationFrame|useEffect|useState|supabase|fetch|async|scroll/);
+});
 
 test('front controls contain Flag and one clean Exit but no Study Add to this entry point', () => {
   assert.match(controls, /isCandidateFlagLoading \? 'Loading…' : 'Flag'/);
@@ -148,6 +242,16 @@ test('narrow layouts retain horizontal feedback controls and usable targets', ()
     /\.study-v2-question-content \{[\s\S]*?min-height: 0;[\s\S]*?overflow-y: auto;/
   );
   assert.match(studyStyles, /\.study-v2-answer-body \{[\s\S]*?overflow-y: auto;/);
+});
+
+test('Front keeps safe short-content centering and vertical scrolling without overriding rich-block or media alignment', () => {
+  const frontRules = [...studyStyles.matchAll(/^ {8}\.study-v2-question-content \{([^}]*)\}/gm)];
+  assert.equal(frontRules.length, 1);
+  assert.match(frontRules[0][1], /justify-content: safe center;/);
+  assert.match(frontRules[0][1], /min-height: 0;/);
+  assert.match(frontRules[0][1], /overflow-y: auto;/);
+  assert.match(frontRules[0][1], /overscroll-behavior: contain;/);
+  assert.ok(questionFront.includes("style={studyCandidate?.kind === 'official' && (studyCandidate.mediaHint?.front || questionMarkdownKind(studyCandidate.prompt, studyCandidate.promptFormat) === 'block') ? { justifyContent: 'flex-start' } : undefined}"));
 });
 
 test('six-response persistence and Review Concept remain on their existing paths', () => {

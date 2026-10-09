@@ -17,13 +17,71 @@ function find(root, predicate) {
   return found;
 }
 
-test('Study CSS is byte-identical to the approved branding checkpoint literal', () => {
+// Exact approved Front-only typography; every other style byte remains frozen.
+const approvedTypography = `        .study-v2-question-content[data-front-size="short"] > h1:not(.study-v2-sr-only) {
+          font-size: 2.6875rem;
+        }
+
+        .study-v2-question-content[data-front-size="medium"] > h1:not(.study-v2-sr-only) {
+          font-size: 2rem;
+        }
+
+        .study-v2-question-content[data-front-size="long"] {
+          justify-content: flex-start;
+        }
+
+        .study-v2-question-content[data-front-size="long"] > h1:not(.study-v2-sr-only) {
+          font-size: 1.5rem;
+          margin-top: 0;
+          margin-bottom: 0;
+        }
+
+        @media (max-width: 900px) {
+          .study-v2-question-content[data-front-size="short"] > h1:not(.study-v2-sr-only) {
+            font-size: 2.0625rem;
+          }
+
+          .study-v2-question-content[data-front-size="medium"] > h1:not(.study-v2-sr-only) {
+            font-size: 1.75rem;
+          }
+
+          .study-v2-question-content[data-front-size="long"] > h1:not(.study-v2-sr-only) {
+            font-size: 1.375rem;
+          }
+        }
+
+        @media (max-width: 520px) {
+          .study-v2-question-content[data-front-size="short"] > h1:not(.study-v2-sr-only) {
+            font-size: 1.75rem;
+          }
+
+          .study-v2-question-content[data-front-size="medium"] > h1:not(.study-v2-sr-only) {
+            font-size: 1.5rem;
+          }
+
+          .study-v2-question-content[data-front-size="long"] > h1:not(.study-v2-sr-only) {
+            font-size: 1.25rem;
+          }
+        }
+
+`;
+
+test('Study CSS matches the original branding fingerprint after projecting only approved Front centering and typography', () => {
   const file = parse('StudyModeStyles.tsx', styles);
   const literals = find(file, ts.isNoSubstitutionTemplateLiteral);
   assert.equal(literals.length, 1);
   const css = styles.slice(literals[0].getStart(file) + 1, literals[0].end - 1);
+  const approvedFront = `        .study-v2-question-content {
+          animation: study-v2-content-in 200ms ease-out;
+          display: flex;
+          flex: 1;
+          flex-direction: column;
+          justify-content: safe center;`;
+  assert.equal(css.split(approvedFront).length - 1, 1, 'Only the exact Front declaration is projected');
+  assert.equal(css.split(approvedTypography).length - 1, 1, 'Only the exact approved typography block is projected');
+  const releasedCss = css.replace(approvedTypography, '').replace(approvedFront, approvedFront.replace('justify-content: safe center;', 'justify-content: center;'));
   // Frozen from d6ddef76d62d1fa1d50f649ee1c85a28d974ec6b, not generated from the candidate.
-  assert.equal(createHash('sha256').update(css).digest('hex'),
+  assert.equal(createHash('sha256').update(releasedCss).digest('hex'),
     '9054a53e9df11fff9410d1d88da74d8863c24229b2f3658f30151ee5ae5489ae');
   assert.equal(find(file, ts.isTemplateExpression).length, 0);
 });

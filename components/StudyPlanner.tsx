@@ -14,7 +14,7 @@ import dynamic from 'next/dynamic';
 import { SocratesShell } from '@/components/application-shell/SocratesShell';
 import { usePathname, useRouter } from 'next/navigation';
 import { Header, HeaderSessionProvider } from '@/components/Header';
-import { MarkdownContent, questionMarkdownKind } from '@/components/MarkdownContent';
+import { MarkdownContent, cardMarkdownSummary, questionMarkdownKind, questionMarkdownSummary } from '@/components/MarkdownContent';
 import ConceptMediaContent from '@/components/ConceptMediaContent';
 import { LearnerHeader, LibrarySubjectSwitcher, PlannerFallback, type LearnerHeaderPrefix, type LearnerNavIcon, type HeaderItem } from '@/components/study-planner/LearnerShell';
 import { PlannerStats } from '@/components/study-planner/PlannerStats';
@@ -240,6 +240,17 @@ function getStatsTabFromHash(hash: string): StatsTab | null {
   if (hash === statsTabHashes.history) return 'history';
   if (hash === statsTabHashes.algorithm) return 'algorithm';
   return null;
+}
+
+function getStudyFrontSize(candidate: StudyCandidate | null) {
+  if (!candidate) return 'short';
+  const visibleText = candidate.kind === 'official'
+    ? questionMarkdownSummary(candidate.prompt, candidate.promptFormat)
+    : candidate.personalConceptId === null
+      ? cardMarkdownSummary(candidate.prompt)
+      : candidate.prompt;
+  const length = Array.from(visibleText.replace(/\s+/gu, ' ').trim()).length;
+  return length > 480 ? 'long' : length > 160 ? 'medium' : 'short';
 }
 
 function StudyFeedbackIcon({ type }: { type: 'up' | 'more' | 'down' }) {
@@ -2507,7 +2518,7 @@ export function StudyPlanner({
                   </div>
                 </div>
               ) : !isAnswerVisible ? (
-                <div className="study-v2-question-content" style={studyCandidate?.kind === 'official' && (studyCandidate.mediaHint?.front || questionMarkdownKind(studyCandidate.prompt, studyCandidate.promptFormat) === 'block') ? { justifyContent: 'flex-start' } : undefined}>
+                <div className="study-v2-question-content" data-front-size={getStudyFrontSize(studyCandidate)} style={studyCandidate?.kind === 'official' && (studyCandidate.mediaHint?.front || questionMarkdownKind(studyCandidate.prompt, studyCandidate.promptFormat) === 'block') ? { justifyContent: 'flex-start' } : undefined}>
                   {studyCandidate?.kind === 'personal' && studyCandidate.personalConceptId === null
                     ? <MarkdownContent markdown={studyCandidate.prompt} mode="card" interactiveLinks={false} />
                     : studyCandidate?.kind === 'official' && questionMarkdownKind(studyCandidate.prompt, studyCandidate.promptFormat) === 'block'

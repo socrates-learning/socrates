@@ -207,7 +207,7 @@ export function StudyModeStyles() {
           display: flex;
           flex: 1;
           flex-direction: column;
-          justify-content: center;
+          justify-content: safe center;
           min-height: 0;
           overflow-y: auto;
           overscroll-behavior: contain;
@@ -226,6 +226,52 @@ export function StudyModeStyles() {
           max-width: 620px;
           overflow-wrap: anywhere;
           text-align: center;
+        }
+
+        .study-v2-question-content[data-front-size="short"] > h1:not(.study-v2-sr-only) {
+          font-size: 2.6875rem;
+        }
+
+        .study-v2-question-content[data-front-size="medium"] > h1:not(.study-v2-sr-only) {
+          font-size: 2rem;
+        }
+
+        .study-v2-question-content[data-front-size="long"] {
+          justify-content: flex-start;
+        }
+
+        .study-v2-question-content[data-front-size="long"] > h1:not(.study-v2-sr-only) {
+          font-size: 1.5rem;
+          margin-top: 0;
+          margin-bottom: 0;
+        }
+
+        @media (max-width: 900px) {
+          .study-v2-question-content[data-front-size="short"] > h1:not(.study-v2-sr-only) {
+            font-size: 2.0625rem;
+          }
+
+          .study-v2-question-content[data-front-size="medium"] > h1:not(.study-v2-sr-only) {
+            font-size: 1.75rem;
+          }
+
+          .study-v2-question-content[data-front-size="long"] > h1:not(.study-v2-sr-only) {
+            font-size: 1.375rem;
+          }
+        }
+
+        @media (max-width: 520px) {
+          .study-v2-question-content[data-front-size="short"] > h1:not(.study-v2-sr-only) {
+            font-size: 1.75rem;
+          }
+
+          .study-v2-question-content[data-front-size="medium"] > h1:not(.study-v2-sr-only) {
+            font-size: 1.5rem;
+          }
+
+          .study-v2-question-content[data-front-size="long"] > h1:not(.study-v2-sr-only) {
+            font-size: 1.25rem;
+          }
         }
 
         .study-v2-sr-only {

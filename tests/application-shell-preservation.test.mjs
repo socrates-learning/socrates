@@ -5,9 +5,73 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 const read = path => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 const hash = value => createHash('sha256').update(value).digest('hex');
+// Exact approved Front-only typography; every other style byte remains frozen.
+const approvedTypography = `        .study-v2-question-content[data-front-size="short"] > h1:not(.study-v2-sr-only) {
+          font-size: 2.6875rem;
+        }
+
+        .study-v2-question-content[data-front-size="medium"] > h1:not(.study-v2-sr-only) {
+          font-size: 2rem;
+        }
+
+        .study-v2-question-content[data-front-size="long"] {
+          justify-content: flex-start;
+        }
+
+        .study-v2-question-content[data-front-size="long"] > h1:not(.study-v2-sr-only) {
+          font-size: 1.5rem;
+          margin-top: 0;
+          margin-bottom: 0;
+        }
+
+        @media (max-width: 900px) {
+          .study-v2-question-content[data-front-size="short"] > h1:not(.study-v2-sr-only) {
+            font-size: 2.0625rem;
+          }
+
+          .study-v2-question-content[data-front-size="medium"] > h1:not(.study-v2-sr-only) {
+            font-size: 1.75rem;
+          }
+
+          .study-v2-question-content[data-front-size="long"] > h1:not(.study-v2-sr-only) {
+            font-size: 1.375rem;
+          }
+        }
+
+        @media (max-width: 520px) {
+          .study-v2-question-content[data-front-size="short"] > h1:not(.study-v2-sr-only) {
+            font-size: 1.75rem;
+          }
+
+          .study-v2-question-content[data-front-size="medium"] > h1:not(.study-v2-sr-only) {
+            font-size: 1.5rem;
+          }
+
+          .study-v2-question-content[data-front-size="long"] > h1:not(.study-v2-sr-only) {
+            font-size: 1.25rem;
+          }
+        }
+
+`;
+
 // Frozen from f901e28 before shell implementation, never generated at test runtime.
 const released = {'app/home.css': '08156337bbef31e0e99d08e415f5ec9265f26ed728f9499ad38aa16f49810c1b', 'components/CreatorStudioV2Client.module.css': '7d8215e58235d411ed70e2276b9e66edd66024949993a8026a9b614a56c86a89', 'components/ResetStudyProgress.tsx': 'e13f916e07046f419ab65b2f11834959b0fc657fad253eb6a025123d92ea30b5', 'components/LibrarySwitcher.tsx': 'dd407828cf4a1aa321b49f65ad13ea6dfd5ba6c5e54d5800564cefd9a41122dc', 'app/library/switch/route.ts': '166e238406ce3ec1a4e4c11bb25adc87b1f9504262aa2aef8a5650f77bffe2c6', 'app/library/clear/route.ts': '6ddcb5dc67979a07e39597b34bdc93b7cdff87e63af7fcbda60cc6c4b7be8075', 'components/study-planner/StudyModeStyles.tsx': '90c8b25a21f5ae637217e0e1c5e17c0b2b60fb319c99906d46ea28a57aa5e281'};
-for (const [path, expected] of Object.entries(released)) test(`excluded workspace behavior/styles remain byte-identical: ${path}`, () => assert.equal(hash(read(path)), expected));
+for (const [path, expected] of Object.entries(released)) test(`excluded workspace behavior/styles preserve original fingerprints: ${path}`, () => {
+  let source = read(path);
+  if (path === 'components/study-planner/StudyModeStyles.tsx') {
+    assert.equal(source.split(approvedTypography).length - 1, 1, 'Only the exact approved Front typography block is projected');
+    source = source.replace(approvedTypography, '');
+    const approvedFront = `        .study-v2-question-content {
+          animation: study-v2-content-in 200ms ease-out;
+          display: flex;
+          flex: 1;
+          flex-direction: column;
+          justify-content: safe center;`;
+    assert.equal(source.split(approvedFront).length - 1, 1, 'Only the exact approved Front alignment declaration is projected');
+    source = source.replace(approvedFront, approvedFront.replace('justify-content: safe center;', 'justify-content: center;'));
+  }
+  assert.equal(hash(source), expected);
+});
 
 test('Account retains its existing content, native Library switch and destructive-reset boundary', () => {
   const account = read('app/account/page.tsx'), reset = read('components/ResetStudyProgress.tsx');
@@ -38,6 +102,9 @@ test('active Study/Cram matches the released branch after projecting only approv
   const mediaReview = '<ConceptMediaContent markdown={conceptReview.bodyMarkdown} format={conceptReview.bodyFormat} conceptId={conceptReview.conceptId} libraryId={activeLibrary?.id} />';
   assert.equal(study.split(mediaReview).length - 1, 1, 'Exactly the approved Concept Review body receives actual Concept and Library context');
   let releasedStudy = study.replace(mediaReview, '<MarkdownContent markdown={conceptReview.bodyMarkdown} />');
+  const adaptiveFront = '<div className="study-v2-question-content" data-front-size={getStudyFrontSize(studyCandidate)}';
+  assert.equal(study.split(adaptiveFront).length - 1, 1, 'Only the existing Front receives the current candidate sizing band');
+  releasedStudy = releasedStudy.replace(adaptiveFront, '<div className="study-v2-question-content"');
   // Project only the three explicit official text alternatives; Card and legacy branches stay frozen.
   const officialText = [
   [
