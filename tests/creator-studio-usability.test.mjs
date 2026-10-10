@@ -160,3 +160,16 @@ test('Home uses canonical Creator navigation without duplicating the admin heade
   assert.match(sidebarSource, /href="\/creator"[\s\S]*?Creator Studio/);
   assert.doesNotMatch(sidebarSource, /href="\/study-creator"/);
 });
+
+test('navy Content chrome retains all tabs and dispatches save once with its leading controls', () => {
+  const chrome = compileCreatorChrome(), selected = [], leading = { type: 'controls' };
+  const tabs = chrome.CreatorStudioTabs({ presentation: 'navy', activeTab: 'content', onSelect: tab => selected.push(tab) });
+  assert.equal(tabs.props.children.length, 5);
+  tabs.props.children[1].props.onClick(); assert.deepEqual(selected, ['questions']);
+  let saves = 0;
+  const toolbar = chrome.CreatorStudioSaveToolbar({ presentation: 'navy', leading, buttonLabel: 'Save Concept', disabled: true, message: 'Unsaved changes', onSave: () => saves++ });
+  assert.equal(toolbar.props.children[0], leading);
+  assert.equal(toolbar.props.children[1].props['aria-live'], 'polite');
+  assert.equal(toolbar.props.children[2].props.disabled, true);
+  toolbar.props.children[2].props.onClick(); assert.equal(saves, 1);
+});

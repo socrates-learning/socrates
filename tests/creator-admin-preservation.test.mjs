@@ -155,7 +155,7 @@ function withoutFlaggedEditExtension(tree) {
   props.children = withoutFlaggedEditExtension(props.children);
   return { ...tree, props };
 }
-for (const role of ['admin','editor']) test(`${role}: Content, Tags and Flagged retain original fingerprints after projecting only approved Tag Browse, Concept disclosures and official edit wiring`, () => {
+for (const role of ['admin','editor']) test(`${role}: Content, Tags and Flagged retain original fingerprints after projecting only approved Content presentation, Tag Browse, Concept disclosures and official edit wiring`, () => {
  const h=editor({role,placed:true,projectOfficialTextEditor:true,projectTagBrowse:true,projectConceptDisclosure:true});
  for(const tab of ['content','tags','flagged']) {
   h.render().setActiveCreatorTab(tab);

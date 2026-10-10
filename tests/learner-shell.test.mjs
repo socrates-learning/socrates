@@ -52,7 +52,10 @@ const railItems = compile('export '+block(planner, 'function createHomeRailItems
 const libraries = [{id:'one',slug:'nursing',name:'Nursing'},{id:'two',slug:'science',name:'Science'}];
 function header(role, mode, overrides = {}) {
   const descriptors = block(planner, '  const classPrefix: LearnerHeaderPrefix =', '  function descendantNodeIds(');
-  return compile('export function renderHeader(){'+descriptors+'return <LearnerHeader classPrefix={classPrefix} brandHref="/" onHomeClick={handleHomeClick} items={items} />;}', {
+  const prefix = mode === 'study' ? 'study-v2' : 'home-v2';
+  const expressions = planner.split('\n').filter(line => line.trim().startsWith(`<LearnerHeader classPrefix="${prefix}"`));
+  assert.equal(expressions.length, 1, 'Exercise the actual mounted header expression');
+  return compile('export function renderHeader(){'+descriptors+'return '+expressions[0].trim()+';}', {
     ...components, role, mode, learnerNavItems:nav, email:'fixture@example.invalid', isSaving:false,
     handleHomeClick:noop, handleCreatorClick:noop, openStudyMode:noop, handleLogout:noop, ...overrides,
   }).renderHeader();
@@ -104,15 +107,25 @@ const baseline = {
 
 for (const role of [null,'learner','editor','admin']) for (const mode of ['dashboard','stats','study']) {
   test(`released header DOM and authority matrix: ${role}/${mode}`,()=>{
-    const tree=expand(header(role,mode));
-    assert.equal(digest(tree),baseline[`header:${role}:${mode}`]);
+    const rendered=header(role,mode), tree=expand(rendered);
+    let original=rendered;
+    if(mode==='dashboard') {
+      assert.equal(rendered.props.items.some(item=>item.label==='Home'),false);
+      // Project back only the removed Home action; retain every frozen DOM hash.
+      original={...rendered,props:{...rendered.props,items:[{
+        label:'Home',icon:'home',className:'home-v2-nav-item',accountChevron:false,
+        kind:'link',href:'/',onClick:noop,prefetch:false,
+      },...rendered.props.items]}};
+    }
+    assert.equal(digest(original),baseline[`header:${role}:${mode}`]);
     const links=all(tree,n=>n.type==='Link');
-    const expected=['/','/'];
+    const expected=mode==='dashboard'?['/']:['/','/'];
     if ((role==='editor'||role==='admin') && mode!=='dashboard') expected.push('/creator/concepts/new');
     if(role==='admin') expected.push('/admin/users');
     assert.deepEqual(links.map(n=>n.props.href),expected);
     assert.equal(all(tree,n=>n.type==='nav')[0].props['aria-label'],'Socrates learner navigation');
-    assert.equal(links[0].props.prefetch,false);assert.equal(links[1].props.prefetch,false);
+    assert.equal(links[0].props.prefetch,false);
+    if(mode!=='dashboard')assert.equal(links[1].props.prefetch,false);
   });
 }
 test('header and rail callbacks dispatch once; Menu remains an enabled button without an action',()=>{
@@ -173,4 +186,7 @@ test('ref-owning Study callback remains deferred through the declarative header 
   button.props.onClick();assert.equal(opened,1);
   assert.doesNotMatch(planner,/function renderLearnerHeader|items\.push\(/);
   assert.equal((planner.match(/<LearnerHeader classPrefix=/g)||[]).length,2);
+  assert.ok(planner.includes(`<LearnerHeader classPrefix="home-v2" brandHref="/" onHomeClick={handleHomeClick} items={mode === 'dashboard' ? items.filter(item => item.label !== 'Home') : items} />`));
+  assert.doesNotMatch(planner, /<SocratesShell variant="header"/);
+  assert.match(planner, /<LearnerHeader classPrefix="study-v2"/);
 });

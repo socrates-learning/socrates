@@ -7056,35 +7056,71 @@ export function CreatorStudioV2Client({
       </> : <p>Select a Topic to create a Card.</p>}
     />;
 
-  return (
-    <>
-      <Header />
-      {isLearnerReadOnly ? <main className={styles.workspace}>
-        <fieldset className={styles.studioShell} disabled={isSaving || isSavingQuestion} aria-label="Creator Studio editor">
-          <CreatorStudioLocalHeader learnerPresentation onBack={goBackFromCreator} onClearConcept={clearDraft} onOpenLibraryOrganizer={() => {}} showClearConcept={false} />
-          <CreatorStudioTabs learnerPresentation activeTab={activeCreatorTab} onSelect={tab => {
-            if (tab !== 'questions' && tab !== 'flagged') return;
-            if (tab !== activeCreatorTab && !confirmDiscardQuestionChanges()) return;
-            setActiveCreatorTab(tab);
-          }} />
-          {activeCreatorTab === 'flagged' ? <CreatorStudioFlaggedTab learnerPresentation
-            ownerId={initialPersonalContent.ownerId} material={{ topics: personalTopics, concepts: personalConcepts, cards: personalCards, standaloneCards, overlays: personalOverlays }}
-          /> : learnerQuestions}
-          {status && <p role="status">{status.message}</p>}
-        </fieldset>
-      </main> : <main className={styles.workspace}>
-        <fieldset className={styles.studioShell} disabled={isSaving || isSavingQuestion} aria-label="Creator Studio editor">
-          <CreatorStudioLocalHeader
-            onBack={goBackFromCreator}
-            onClearConcept={clearDraft}
-            onOpenLibraryOrganizer={() => navigateFromCreator('/creator/libraries')}
-            showClearConcept={activeCreatorTab === 'content' && !standaloneRequest}
-            canManageLibrary={creatorAuthority.canManageTopicTree}
-            canClearConcept={!isCurrentContentReadOnly}
-          />
-
-          {!standaloneRequest && (activeCreatorTab === 'content' || activeCreatorTab === 'questions') && (
+  const contentActions = (
+    <div
+                  style={{
+                    alignItems: 'center',
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: 10,
+                  }}
+                >
+                  <label
+                    className={styles.searchBox}
+                    style={{ flex: '1 1 260px' }}
+                  >
+                    <span className={styles.srOnly}>Search concepts</span>
+                    <input
+                      value={contentConceptSearch}
+                      onChange={(event) =>
+                        setContentConceptSearch(event.target.value)
+                      }
+                      placeholder="Search concepts"
+                    />
+                    <Search size={20} />
+                  </label>
+                  <button
+                    className={styles.secondaryButton}
+                    type="button"
+                    aria-expanded={isConceptBrowseOpen}
+                    aria-controls="concept-browse-panel"
+                    onClick={() => setIsConceptBrowseOpen((current) => !current)}
+                  >
+                    <Folder size={17} /> Browse Concepts
+                  </button>
+                  <button
+                    className={styles.secondaryButton}
+                    type="button"
+                    onClick={startNewConcept}
+                  >
+                    <Plus size={17} /> New Concept
+                  </button>
+                  {conceptId && (
+                    <button
+                      className={styles.dangerButton}
+                      type="button"
+                      disabled={isLearnerReadOnly || isSaving}
+                      onClick={() => void deleteCurrentConcept()}
+                    >
+                      <Trash2 size={17} /> Delete Concept
+                    </button>
+                  )}
+                  {personalConceptEditorId && (
+                    <button
+                      className={styles.dangerButton}
+                      type="button"
+                      disabled={isSaving}
+                      onClick={() => void deleteCurrentPersonalConcept()}
+                    >
+                      <Trash2 size={17} /> Delete Concept
+                    </button>
+                  )}
+                </div>
+  );
+  const saveToolbar = !standaloneRequest && (activeCreatorTab === 'content' || activeCreatorTab === 'questions') && (
             <CreatorStudioSaveToolbar
+              presentation={activeCreatorTab === 'content' ? 'navy' : undefined}
+              leading={activeCreatorTab === 'content' ? contentActions : undefined}
               buttonLabel={
                 isSaving || isSavingQuestion
                   ? 'Saving…'
@@ -7121,9 +7157,40 @@ export function CreatorStudioV2Client({
                   : saveCurrentQuestion
               }
             />
-          )}
+          );
+
+  return (
+    <>
+      <Header />
+      {isLearnerReadOnly ? <main className={styles.workspace}>
+        <fieldset className={styles.studioShell} disabled={isSaving || isSavingQuestion} aria-label="Creator Studio editor">
+          <CreatorStudioLocalHeader learnerPresentation onBack={goBackFromCreator} onClearConcept={clearDraft} onOpenLibraryOrganizer={() => {}} showClearConcept={false} />
+          <CreatorStudioTabs learnerPresentation activeTab={activeCreatorTab} onSelect={tab => {
+            if (tab !== 'questions' && tab !== 'flagged') return;
+            if (tab !== activeCreatorTab && !confirmDiscardQuestionChanges()) return;
+            setActiveCreatorTab(tab);
+          }} />
+          {activeCreatorTab === 'flagged' ? <CreatorStudioFlaggedTab learnerPresentation
+            ownerId={initialPersonalContent.ownerId} material={{ topics: personalTopics, concepts: personalConcepts, cards: personalCards, standaloneCards, overlays: personalOverlays }}
+          /> : learnerQuestions}
+          {status && <p role="status">{status.message}</p>}
+        </fieldset>
+      </main> : <main className={`${styles.workspace} ${styles.staffWorkspace}`}>
+        <fieldset className={`${styles.studioShell} ${styles.staffShell}`} disabled={isSaving || isSavingQuestion} aria-label="Creator Studio editor">
+          <CreatorStudioLocalHeader
+            presentation="navy"
+            onBack={goBackFromCreator}
+            onClearConcept={clearDraft}
+            onOpenLibraryOrganizer={() => navigateFromCreator('/creator/libraries')}
+            showClearConcept={activeCreatorTab === 'content' && !standaloneRequest}
+            canManageLibrary={creatorAuthority.canManageTopicTree}
+            canClearConcept={!isCurrentContentReadOnly}
+          />
+
+          {activeCreatorTab !== 'content' && saveToolbar}
 
           <CreatorStudioTabs
+            presentation="navy"
             activeTab={activeCreatorTab}
             onSelect={(tab) => {
               const isQuestionSearchTransition =
@@ -7137,6 +7204,8 @@ export function CreatorStudioV2Client({
               }
             }}
           />
+
+          {activeCreatorTab === 'content' && saveToolbar}
 
           {activeCreatorTab === 'tags' && (
             <section
@@ -7233,72 +7302,12 @@ export function CreatorStudioV2Client({
           )}
 
           {activeCreatorTab === 'content' ? (
-            <>
+            <div className={!standaloneRequest ? styles.contentDesign : undefined}>
               {!standaloneRequest && (
               <section
                 className={styles.panel}
                 style={{ marginBottom: 18 }}
               >
-                <div
-                  style={{
-                    alignItems: 'center',
-                    display: 'flex',
-                    flexWrap: 'wrap',
-                    gap: 10,
-                  }}
-                >
-                  <label
-                    className={styles.searchBox}
-                    style={{ flex: '1 1 260px' }}
-                  >
-                    <span className={styles.srOnly}>Search concepts</span>
-                    <input
-                      value={contentConceptSearch}
-                      onChange={(event) =>
-                        setContentConceptSearch(event.target.value)
-                      }
-                      placeholder="Search concepts"
-                    />
-                    <Search size={20} />
-                  </label>
-                  <button
-                    className={styles.secondaryButton}
-                    type="button"
-                    aria-expanded={isConceptBrowseOpen}
-                    aria-controls="concept-browse-panel"
-                    onClick={() => setIsConceptBrowseOpen((current) => !current)}
-                  >
-                    <Folder size={17} /> Browse Concepts
-                  </button>
-                  <button
-                    className={styles.secondaryButton}
-                    type="button"
-                    onClick={startNewConcept}
-                  >
-                    <Plus size={17} /> New Concept
-                  </button>
-                  {conceptId && (
-                    <button
-                      className={styles.dangerButton}
-                      type="button"
-                      disabled={isLearnerReadOnly || isSaving}
-                      onClick={() => void deleteCurrentConcept()}
-                    >
-                      <Trash2 size={17} /> Delete Concept
-                    </button>
-                  )}
-                  {personalConceptEditorId && (
-                    <button
-                      className={styles.dangerButton}
-                      type="button"
-                      disabled={isSaving}
-                      onClick={() => void deleteCurrentPersonalConcept()}
-                    >
-                      <Trash2 size={17} /> Delete Concept
-                    </button>
-                  )}
-                </div>
-
                 <div
                   style={{
                     alignItems: 'center',
@@ -7504,7 +7513,7 @@ export function CreatorStudioV2Client({
                 </label>
               )}
               {conceptSource === 'official' ? <OfficialVisualField
-                label="Concept" ariaLabel="Concept or explanation" placeholder="Write your concept or explanation here..." hideLabel
+                label="Concept" ariaLabel="Concept or explanation" placeholder="Write your concept or explanation here..." hideLabel presentation="compact"
                 value={concept} format={conceptFormat} flavor="concept"
                 documentKey={`${activeLibraryId}:concept:${conceptId || 'new'}:${conceptVisualGeneration}`}
                 memory={conceptVisualMemory} handle={conceptVisualHandle} mode={editorMode} onMode={setEditorMode}
@@ -8322,7 +8331,7 @@ export function CreatorStudioV2Client({
                 </div>
               )}
               </>)}
-            </>
+            </div>
           ) : activeCreatorTab === 'search' && !isLearnerReadOnly ? (
             <CreatorQuestionSearchPanel
               questionSearchResults={questionSearchResults}

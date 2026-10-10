@@ -3010,8 +3010,8 @@ export function StudyPlanner({
 
   return (
     <>
-      <LearnerHeader classPrefix="home-v2" brandHref="/" onHomeClick={handleHomeClick} items={items} />
-      <main className={`home-v2-shell${mode === 'stats' ? ' home-v2-shell-stats' : ''}`}>
+      <LearnerHeader classPrefix="home-v2" brandHref="/" onHomeClick={handleHomeClick} items={mode === 'dashboard' ? items.filter(item => item.label !== 'Home') : items} />
+      <main className={`home-v2-shell${mode === 'stats' ? ' home-v2-shell-stats' : ''}`} data-home-dashboard={mode === 'dashboard' ? '' : undefined}>
         {mode !== 'stats' && (
           <SocratesShell variant="home" active="home" onHome={handleHomeClick} onStats={() => openStatsTab('progress')} onLogout={handleLogout} onCreator={handleCreatorClick} />
         )}
@@ -3108,6 +3108,8 @@ export function StudyPlanner({
                 <div
                   className="home-v2-setup-tree"
                   aria-label="Home deck settings Topic Tree"
+                  role="region"
+                  tabIndex={0}
                 >
                   {homeGroups.map((node) => renderNode(node))}
                 </div>

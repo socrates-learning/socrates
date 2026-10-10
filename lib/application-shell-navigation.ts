@@ -1,6 +1,6 @@
-export type WorkspaceId = 'home' | 'creator' | 'stats' | 'account';
+export type WorkspaceId = 'home' | 'creator' | 'stats' | 'account' | 'admin';
 export type ApplicationNavigationEntry =
-  | { kind: 'link'; id: WorkspaceId; label: string; href: string; icon: string }
+  | { kind: 'link'; id: WorkspaceId; label: string; href: string; icon: string; adminOnly?: true }
   | { kind: 'button'; id: 'menu'; label: string; icon: string };
 
 export const applicationNavigation: readonly ApplicationNavigationEntry[] = [
@@ -8,6 +8,7 @@ export const applicationNavigation: readonly ApplicationNavigationEntry[] = [
   { kind: 'link', id: 'creator', label: 'Creator Studio', href: '/creator', icon: '✎' },
   { kind: 'link', id: 'stats', label: 'Stats', href: '/#stats', icon: '▥' },
   { kind: 'link', id: 'account', label: 'Account Settings', href: '/account', icon: '⚙' },
+  { kind: 'link', id: 'admin', label: 'Admin', href: '/admin/users', icon: '◇', adminOnly: true },
   { kind: 'button', id: 'menu', label: 'Menu', icon: '☰' },
 ];
 

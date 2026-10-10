@@ -62,3 +62,22 @@ for (const state of ['clean', 'dirty', 'busy']) test(`global shell delegates sta
   assert.equal(h.confirmations.length, state === 'dirty' ? 1 : 0);
   assert.deepEqual(h.routes, []); assert.deepEqual(h.calls, []);
 });
+
+test('shared header suppresses only the nested legacy header and keeps draft ownership in Creator', () => {
+  const header = readFileSync(new URL('../components/Header.tsx', import.meta.url), 'utf8');
+  const shell = readFileSync(new URL('../components/application-shell/SocratesShell.tsx', import.meta.url), 'utf8');
+  assert.match(header, /const hasSocratesHeader = useHasSocratesHeader\(\)/);
+  assert.match(header, /if \(hasSocratesHeader\) return null/);
+  assert.match(shell, /<BrandedHeaderContext.Provider value=\{true\}>/);
+  assert.match(shell, /if \(!\(context\?\.allowNavigation\(\) \?\? true\)\) return;/);
+  assert.doesNotMatch(shell, /confirm\(|saveConcept|saveQuestion/);
+  const h = editor({ confirm: () => false });
+  button(h.render().tree, 'Questions').props.onClick();
+  h.render().selectQuestionConcept('concept');
+  h.render().setQuestionPrompt('Hidden Question draft');
+  button(h.render().tree, 'Search').props.onClick();
+  assert.equal(h.render().activeCreatorTab, 'search');
+  assert.equal(h.runShellGuard(), false);
+  assert.equal(h.render().questionPrompt, 'Hidden Question draft');
+  assert.deepEqual(h.calls, []);
+});

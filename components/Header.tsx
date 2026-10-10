@@ -10,6 +10,7 @@ import {
 import Image from 'next/image';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import { useHasSocratesHeader } from '@/components/application-shell/SocratesShell';
 
 type HeaderSession = {
   email: string | null;
@@ -31,6 +32,7 @@ export function HeaderSessionProvider({
 }
 
 export function Header() {
+  const hasSocratesHeader = useHasSocratesHeader();
   const serverSession = useContext(HeaderSessionContext);
   const [email, setEmail] = useState<string | null>(serverSession?.email ?? null);
   const [role, setRole] = useState<string | null>(serverSession?.role ?? null);
@@ -108,6 +110,8 @@ export function Header() {
     borderColor: '#2b71ff',
     boxShadow: '0 12px 26px rgba(21, 94, 232, 0.25)',
   };
+
+  if (hasSocratesHeader) return null;
 
   return (
     <header

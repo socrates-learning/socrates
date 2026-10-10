@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import vm from 'node:vm';
 import ts from 'typescript';
 import { canAccessCreatorRoute } from '../lib/creator-route-access.ts';
@@ -129,13 +130,14 @@ test('native Library switch retains server membership checks and safe Account re
 });
 
 // Execute the shared navigation with inert framework boundaries; no workspace is reconstructed.
-function shellFixture(allowed = true, active = 'creator') {
+function shellFixture(allowed = true, active = 'creator', role = 'learner', branded = false) {
   const calls = [], exports = {};
   const jsx = (type, props) => ({ type, props });
   const definitions = compile(read('lib/application-shell-navigation.ts'), {});
   const modules = {
     react: { createContext: () => ({}), useContext: () => ({ allowNavigation: () => { calls.push('guard'); return allowed; } }), useState: () => [false, () => {}], useRef: () => ({ current: false }) },
     'react/jsx-runtime': { jsx, jsxs: jsx }, 'next/link': { default: 'a', __esModule: true },
+    'next/image': { default: 'Image', __esModule: true },
     'next/navigation': { useRouter: () => ({ push: path => calls.push(path) }) },
     '@/lib/supabase': { supabase: {} }, '@/lib/application-shell-navigation': definitions,
     './SocratesShell.module.css': { default: {}, __esModule: true },
@@ -143,7 +145,7 @@ function shellFixture(allowed = true, active = 'creator') {
   vm.runInNewContext(ts.transpileModule(read('components/application-shell/SocratesShell.tsx'), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText, {
     exports, require: name => { assert.ok(name in modules, name); return modules[name]; },
   });
-  const tree = exports.ApplicationNavigation({ active, onLogout: () => calls.push('logout') });
+  const tree = exports.ApplicationNavigation({ active, role, branded, onLogout: () => calls.push('logout') });
   const elements = []; function walk(n) { if (Array.isArray(n)) n.forEach(walk); else if (n?.props) { elements.push(n); walk(n.props.children); } } walk(tree);
   return { calls, definitions, elements };
 }
@@ -236,4 +238,92 @@ test('temporary framework patch pins package and installed versions and errors o
   }
   assert.match(pkg.socratesFrameworkCompatibility.next16_3_4, /remove this patch/);
   assert.match(pkg.socratesFrameworkCompatibility.next16_3_4, /96714.*96737/);
+});
+
+test('branded navigation preserves role-qualified destinations and the same guard', () => {
+  for (const role of ['admin', 'editor', 'learner', null]) {
+    const h = shellFixture(false, 'creator', role, true);
+    const links = h.elements.filter(n => n.type === 'a');
+    assert.deepEqual(links.map(n => n.props.href), ['/', '/creator', '/#stats', '/account', ...(role === 'admin' ? ['/admin/users'] : [])]);
+    links.find(n => n.props.href === '/account').props.onClick({ button: 0, preventDefault() {} });
+    assert.deepEqual(h.calls, ['guard']);
+  }
+  const shell = read('components/application-shell/SocratesShell.tsx');
+  assert.match(shell, /src="\/brand\/socrates-logo-dark\.png"/);
+  assert.match(shell, /onClose=\{\(\) => trigger\.current\?\.focus\(\)\}/);
+  assert.match(shell, /variant === 'header'/);
+  assert.match(read('app/creator/layout.tsx'), /variant=\{role === 'admin' \|\| role === 'editor' \? 'header' : 'compact'\}/);
+});
+
+
+test('Creator header opt-in is staff-only; learners keep the released compact navigation', async () => {
+  for (const role of ['admin', 'editor', 'learner']) {
+    const exports = {}, jsx = (type, props) => ({ type, props });
+    const modules = {
+      'react/jsx-runtime': { jsx, jsxs: jsx },
+      '@/components/application-shell/SocratesShell': { SocratesShell: 'shell' },
+      '@/components/Header': { Header: 'header', HeaderSessionProvider: 'session' },
+      '@/lib/server-creator-route-access': {
+        canActorAccessSharedCreator: () => true,
+        getServerCreatorRouteActor: async () => ({ role, email: 'synthetic@example.invalid' }),
+      },
+      'next/navigation': { redirect: () => assert.fail('Unexpected redirect') },
+    };
+    vm.runInNewContext(ts.transpileModule(read('app/creator/layout.tsx'), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText,
+      { exports, require: name => { assert.ok(name in modules, name); return modules[name]; } });
+    const tree = await exports.default({ children: 'existing-workspace' });
+    assert.equal(tree.type, 'session');
+    assert.equal(tree.props.children.type, 'shell');
+    assert.equal(tree.props.children.props.variant, role === 'learner' ? 'compact' : 'header');
+    assert.equal(tree.props.children.props.children, 'existing-workspace');
+  }
+});
+
+test('Home dashboard keeps the released sidebar, complete white column and independent Logout with no profile menu', () => {
+  assert.match(planner, /<LearnerHeader classPrefix="home-v2"/);
+  assert.match(planner, /<SocratesShell variant="home" active="home"/);
+  assert.match(planner, /<SocratesShell active="stats"/);
+  assert.doesNotMatch(planner, /variant="header"|home-v2-shell-top-nav/);
+  const styles = read('components/application-shell/SocratesShell.module.css');
+  const boundedHome = `@media (min-width: 1101px) {
+  .home { background: white; border-right: 1px solid #dbe3ef; }
+  .home .rail { position: sticky; top: 0; height: var(--home-dashboard-height, calc(100dvh - 140px)); min-height: 0; background: transparent; border-right: 0; }
+  .home .desktop, .home .navigation { min-height: 0; }
+  .home .entries { min-height: 0; overflow-y: auto; }
+  .home .logout { flex-shrink: 0; }
+}`;
+  assert.equal(styles.split(boundedHome).length, 2);
+  assert.match(styles, /@media \(max-width: 1100px\)[\s\S]*\.home \.desktop \{ display: none; \}/);
+  assert.doesNotMatch(read('components/application-shell/SocratesShell.tsx'), /accountDialog|accountTrigger|Account menu|section="account"/);
+});
+
+test('Home hover is full-entry, excludes active/disabled actions and Logout, and respects reduced motion without layout changes', () => {
+  const styles = read('components/application-shell/SocratesShell.module.css');
+  const addition = `
+/* Home navigation feedback only; active entries, Logout and layout stay unchanged. */
+.home .entries > a, .home .entries > button { transition: background-color 140ms ease; }
+@media (hover: hover) and (pointer: fine) {
+  .home .entries > a:not([aria-current='page']):not([aria-disabled='true']):hover,
+  .home .entries > button:not(:disabled):not([aria-current='page']):not([aria-disabled='true']):hover { background-color: #eaf1fa; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .home .entries > a, .home .entries > button { transition: none; }
+}
+`;
+  assert.equal(styles.split(addition).length, 2);
+  assert.ok(styles.endsWith(addition));
+  assert.equal(createHash('sha256').update(styles.slice(0, -addition.length)).digest('hex'), '8e48a05c749fc69e8bb148be072c5d66d4f0da355c70dcc977f25ce6d2266266', 'All visually accepted Home/Creator/Stats styles remain byte-identical');
+  assert.match(styles, /\.navigation \[aria-current='page'\] \{ background: #eef5ff; \}/);
+  assert.match(styles, /\.navigation a:focus-visible, \.navigation button:focus-visible, \.trigger:focus-visible \{ outline: 2px solid #155ee8; outline-offset: 2px; \}/);
+});
+
+test('Home sidebar retains its active Home destination and original actions after header Home is omitted', () => {
+  const h = shellFixture(true, 'home', 'admin');
+  const home = h.elements.find(n => n.type === 'a' && n.props.href === '/');
+  assert.equal(home.props['aria-current'], 'page');
+  assert.deepEqual(h.elements.filter(n => n.type === 'a').map(n => n.props.href), ['/', '/creator', '/#stats', '/account', '/admin/users']);
+  const event = { button: 0, preventDefault() {} };
+  home.props.onClick(event); assert.deepEqual(h.calls, []);
+  h.elements.find(n => n.type === 'a' && n.props.href === '/creator').props.onClick(event);
+  assert.deepEqual(h.calls, ['guard', '/creator']);
 });

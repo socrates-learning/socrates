@@ -54,10 +54,36 @@ const approvedTypography = `        .study-v2-question-content[data-front-size="
 
 `;
 
+// The original complete style fingerprints remain authoritative. Only these
+// explicitly pinned append-only presentation blocks are excluded from them.
+const contentPresentationStyles = {
+  "app/home.css": {
+    "marker": "\n\n/* Home dashboard:",
+    "sha256": "7e2a967b9eb575ca71837eed4b30082691d3b57a1ef5b809e45029b0998e97c3"
+  },
+  "components/CreatorStudioV2Client.module.css": {
+    "marker": "\n/* Approved Content-first navy presentation.",
+    "sha256": "67aa07003435e5f27ed0652857abf86ec0362034ed97adc5cc3135ac1ebc53e0"
+  }
+};
+
 // Frozen from f901e28 before shell implementation, never generated at test runtime.
 const released = {'app/home.css': '08156337bbef31e0e99d08e415f5ec9265f26ed728f9499ad38aa16f49810c1b', 'components/CreatorStudioV2Client.module.css': '7d8215e58235d411ed70e2276b9e66edd66024949993a8026a9b614a56c86a89', 'components/ResetStudyProgress.tsx': 'e13f916e07046f419ab65b2f11834959b0fc657fad253eb6a025123d92ea30b5', 'components/LibrarySwitcher.tsx': 'dd407828cf4a1aa321b49f65ad13ea6dfd5ba6c5e54d5800564cefd9a41122dc', 'app/library/switch/route.ts': '166e238406ce3ec1a4e4c11bb25adc87b1f9504262aa2aef8a5650f77bffe2c6', 'app/library/clear/route.ts': '6ddcb5dc67979a07e39597b34bdc93b7cdff87e63af7fcbda60cc6c4b7be8075', 'components/study-planner/StudyModeStyles.tsx': '90c8b25a21f5ae637217e0e1c5e17c0b2b60fb319c99906d46ea28a57aa5e281'};
 for (const [path, expected] of Object.entries(released)) test(`excluded workspace behavior/styles preserve original fingerprints: ${path}`, () => {
   let source = read(path);
+  if (path === 'components/CreatorStudioV2Client.module.css') {
+    const marker = '\n/* Interaction states are scoped';
+    assert.equal(source.split(marker).length, 2);
+    assert.equal(hash(source.slice(source.indexOf(marker))), '3344d02e22aff599d212bcc01508eee1ef197e1016933c51dc656074029cd018', 'Exact approved hover, selected, focus, disabled and sticky-header offset additions');
+    source = source.slice(0, source.indexOf(marker));
+  }
+  if (path in contentPresentationStyles) {
+    const { marker, sha256 } = contentPresentationStyles[path];
+    assert.equal(source.split(marker).length, 2);
+    const start = source.indexOf(marker);
+    assert.equal(hash(source.slice(start)), sha256, 'Only the exact reviewed presentation block');
+    source = source.slice(0, start);
+  }
   if (path === 'components/study-planner/StudyModeStyles.tsx') {
     assert.equal(source.split(approvedTypography).length - 1, 1, 'Only the exact approved Front typography block is projected');
     source = source.replace(approvedTypography, '');
@@ -85,7 +111,7 @@ test('Account retains its existing content, native Library switch and destructiv
   assert.match(library, /action="\/library\/switch"/); assert.match(library, /method="post"/);
   assert.match(library, /defaultValue=\{context\.library\?\.slug \|\| ''\}/);
 });
-test('Home photo, header, desktop rail, natural scroll and Creator grid boundaries remain frozen', () => {
+test('Original Home styles remain exact beneath the approved dashboard block and Creator overrides remain scoped', () => {
   const home = read('app/home.css'), creator = read('components/CreatorStudioV2Client.module.css');
   assert.match(home, /grid-template-columns: 376px minmax\(0, 1fr\)/);
   assert.match(home, /min-height: calc\(100vh - 140px\)/);
@@ -190,4 +216,22 @@ test('reset requires explicit confirmation; failed RPC retains dialog and does n
     await exports.confirmReset();assert.deepEqual(calls.find(c=>c[0]==='rpc'),['rpc','reset_study_progress',{p_library_id:'library',p_request_id:'request',p_scope:'concept',p_target_id:'concept'}]);
     assert.equal(calls.filter(c=>c[0]==='refresh').length,failure?0:1);assert.equal(calls.filter(c=>c[0]==='close').length,failure?0:1);
   }
+});
+
+
+test('Home-only layout and redundant header action preserve every released planner byte after exact projection', () => {
+  let source = read('components/StudyPlanner.tsx');
+  const homeHeader = `<LearnerHeader classPrefix="home-v2" brandHref="/" onHomeClick={handleHomeClick} items={mode === 'dashboard' ? items.filter(item => item.label !== 'Home') : items} />`;
+  assert.equal(source.split(homeHeader).length, 2, 'Only dashboard mode omits the redundant header Home action');
+  source = source.replace(homeHeader, '<LearnerHeader classPrefix="home-v2" brandHref="/" onHomeClick={handleHomeClick} items={items} />');
+  const marker = ` data-home-dashboard={mode === 'dashboard' ? '' : undefined}`;
+  const accessibleTree = `                  className="home-v2-setup-tree"
+                  aria-label="Home deck settings Topic Tree"
+                  role="region"
+                  tabIndex={0}`;
+  assert.equal(source.split(marker).length, 2, 'Only dashboard mode opts into height allocation; Stats does not');
+  assert.equal(source.split(accessibleTree).length, 2, 'The existing tree wrapper is a labelled keyboard-focusable region');
+  source = source.replace(marker, '').replace(accessibleTree, `                  className="home-v2-setup-tree"
+                  aria-label="Home deck settings Topic Tree"`);
+  assert.equal(hash(source), '2a604d4926d98db0edb7f86d5ac8dbacf95fffde2e6cb4b1b00a3536783704ae', 'All existing Topic rows, selections, sliders, Library, Stats and Study behavior remains byte-identical');
 });

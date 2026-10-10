@@ -2,6 +2,7 @@
 
 import { StudyCreatorFlaggedBrowser, type FlaggedQuestionEditor } from '@/components/StudyCreatorFlaggedBrowser';
 import type { CreatorPersonalContent } from '@/lib/creator-personal-content';
+import type { ReactNode } from 'react';
 import styles from '../CreatorStudioV2Client.module.css';
 
 export type CreatorStudioTab = 'content' | 'questions' | 'tags' | 'flagged' | 'search';
@@ -29,6 +30,7 @@ export function CreatorStudioLocalHeader({
   canManageLibrary = true,
   canClearConcept = true,
   learnerPresentation = false,
+  presentation,
 }: {
   onBack: () => void;
   onClearConcept: () => void;
@@ -37,11 +39,12 @@ export function CreatorStudioLocalHeader({
   canManageLibrary?: boolean;
   canClearConcept?: boolean;
   learnerPresentation?: boolean;
+  presentation?: 'navy';
 }) {
   if (learnerPresentation) return <header className={styles.localHeader}><h1>Creator Studio</h1><div className={styles.headerActions}><button className={styles.secondaryButton} type="button" onClick={onBack}>← Back</button></div></header>;
   return (
-    <header className={styles.localHeader}>
-      <h1>Creator Studio</h1>
+    <header className={`${styles.localHeader}${presentation === 'navy' ? ` ${styles.navyHeader}` : ''}`}>
+      {presentation === 'navy' ? <div><h1>Creator Studio</h1><p>Create and manage your Concepts, Questions, Tags, and content.</p></div> : <h1>Creator Studio</h1>}
       <div className={styles.headerActions}>
         <button
           className={styles.secondaryButton}
@@ -80,12 +83,21 @@ export function CreatorStudioSaveToolbar({
   disabled,
   message,
   onSave,
+  leading,
+  presentation,
 }: {
   buttonLabel: string;
   disabled: boolean;
   message: string;
   onSave: () => void;
+  leading?: ReactNode;
+  presentation?: 'navy';
 }) {
+  if (presentation === 'navy') return <div className={`${styles.saveToolbar} ${styles.navySaveToolbar}`}>
+    {leading}
+    <span role="status" aria-live="polite">{message}</span>
+    <button className={styles.primaryButton} type="button" onClick={onSave} disabled={disabled}>{buttonLabel}</button>
+  </div>;
   return (
     <div className={styles.saveToolbar}>
       <span role="status" aria-live="polite">
@@ -118,16 +130,19 @@ export function CreatorStudioTabs({
   activeTab,
   onSelect,
   learnerPresentation = false,
+  presentation,
 }: {
   activeTab: CreatorStudioTab;
   learnerPresentation?: boolean;
+  presentation?: 'navy';
   onSelect: (tab: CreatorStudioTab) => void;
 }) {
   return (
     <nav
       aria-label="Creator Studio sections"
       role="tablist"
-      style={{
+      className={presentation === 'navy' ? styles.navyTabs : undefined}
+      style={presentation === 'navy' ? undefined : {
         display: 'flex',
         alignItems: 'flex-end',
         gap: 0,
@@ -147,7 +162,7 @@ export function CreatorStudioTabs({
             role="tab"
             aria-selected={isActive}
             onClick={() => onSelect(tab.id)}
-            style={{
+            style={presentation === 'navy' ? undefined : {
               position: 'relative',
               zIndex: isActive ? 1 : 0,
               minHeight: '48px',

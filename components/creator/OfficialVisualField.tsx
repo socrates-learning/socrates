@@ -24,6 +24,7 @@ export type OfficialVisualFieldProps = {
   onMode: (mode: OfficialAuthoringMode) => void;
   onChange: (source: string, format: OfficialContentFormat) => void;
   disabled: boolean; readOnly: boolean; hideLabel?: boolean;
+  presentation?: 'compact';
   onImage?: (selection: number) => void; between?: ReactNode; preview?: ReactNode;
   renderMedia?: (placementId: string) => ReactNode;
 };
@@ -161,7 +162,7 @@ export default function OfficialVisualField(props: OfficialVisualFieldProps) {
   }
   return <div className={styles.field}>
     {!props.hideLabel ? <label htmlFor={id}><strong>{label}</strong></label> : null}
-    <OfficialAuthoringToolbar label={label} mode={mode} disabled={disabled || !ready} readOnly={readOnly} visualAvailable={visualAvailable}
+    <OfficialAuthoringToolbar presentation={props.presentation} label={label} mode={mode} disabled={disabled || !ready} readOnly={readOnly} visualAvailable={visualAvailable}
       onFormat={apply} onMode={changeMode} onImage={props.onImage ? () => props.onImage?.(handle?.current?.selection() ?? value.length) : undefined} />
     {props.between}
     {link ? <div className={styles.link} role="group" aria-label={`${label} link`}>

@@ -55,3 +55,25 @@ test('format readback mismatch never clears a Concept draft or declares success'
   h.render().setConcept('Draft'); await h.render().saveCurrentConcept();
   assert.equal(h.render().concept, 'Draft'); assert.equal(h.render().isContentDirty, true); assert.equal(h.render().status.tone, 'error');
 });
+
+test('compact Concept controls preserve selection, combined marks, modes, image position and undo history', async () => {
+  const images = [], h = await mountVisualField({ presentation: 'compact', flavor: 'concept', label: 'Concept', ariaLabel: 'Concept or explanation', value: 'Selected text', format: 'legacy', onImage: position => images.push(position) });
+  try {
+    const doc = h.dom.window.document;
+    for (const label of ['Bold', 'Italic', 'Heading', 'Bulleted List', 'Numbered List', 'Link', 'Quote', 'Image']) {
+      assert.equal(h.button(label).getAttribute('aria-label'), label);
+      assert.equal(h.button(label).getAttribute('title'), label);
+    }
+    await h.select(1, 9); await h.click('Bold'); await h.click('Italic');
+    assert.equal(h.props.format, 'visual_markdown_v1');
+    assert.ok(h.view.dom.querySelector('strong em, em strong'));
+    const edited = h.props.value;
+    await h.click('Preview'); await h.click('Source');
+    assert.equal(doc.querySelector('textarea').value, edited);
+    await h.click('Write'); await h.click('Image'); assert.equal(images.length, 1);
+    await h.act(() => { h.session.undo(); h.view.updateState(h.session.state); h.session.undo(); h.view.updateState(h.session.state); });
+    assert.deepEqual(plain(h.handle.current.capture()), { source: 'Selected text', format: 'legacy' });
+    await h.act(() => { h.session.redo(); h.view.updateState(h.session.state); });
+    assert.ok(h.view.dom.querySelector('strong'));
+  } finally { await h.close(); }
+});

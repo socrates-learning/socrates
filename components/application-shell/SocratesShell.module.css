@@ -29,3 +29,64 @@
   .home .trigger { display: flex; }
   .home .rail { padding: 8px 20px; border-right: 0; }
 }
+
+.branded { min-width: 0; }
+.header { display: flex; align-items: center; justify-content: space-between; gap: 24px; min-height: 140px; padding: 8px clamp(20px, 3.2vw, 48px); color: #fff; background: linear-gradient(90deg, rgba(4,18,56,.94), rgba(6,24,70,.78) 50%, rgba(4,18,56,.92)), url('/images/socrates-header-mountains.jpg') center 18% / cover; }
+.brand { display: inline-flex; flex-shrink: 0; border-radius: 6px; }
+.brand img { height: 120px; width: auto; object-fit: contain; }
+.brand:focus-visible { outline: 2px solid #fff; outline-offset: 4px; }
+.headerNavigation { min-width: 0; }
+.headerNavigation .navigation, .headerNavigation .entries { display: flex; flex-direction: row; align-items: center; gap: 6px; }
+.headerNavigation .navigation a, .headerNavigation .navigation button { color: #fff; gap: 9px; font-size: .9375rem; font-weight: 600; padding: 10px 12px; white-space: nowrap; }
+.headerNavigation .navigation [aria-current='page'] { background: rgba(255,255,255,.1); border-color: #91a8ca; }
+.headerNavigation .navigation a:hover, .headerNavigation .navigation button:hover { background: rgba(255,255,255,.12); }
+.headerNavigation .navigation a:focus-visible, .headerNavigation .navigation button:focus-visible { outline-color: #fff; }
+.headerNavigation .logout { margin: 0 0 0 6px; }
+.branded .icon svg, .headerTrigger svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linejoin: round; stroke-linecap: round; }
+.headerTrigger { display: none; align-items: center; gap: 8px; min-height: 44px; padding: 10px 12px; border: 1px solid #91a8ca; border-radius: 7px; color: #fff; background: transparent; font: inherit; }
+.headerTrigger:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+@media (max-width: 1199px) {
+  .headerNavigation { display: none; }
+  .headerTrigger { display: inline-flex; }
+}
+@media (max-width: 520px) {
+  .header { min-height: 116px; gap: 12px; padding: 8px 16px; }
+  .brand img { height: 96px; }
+  .headerTrigger { font-size: .875rem; }
+}
+
+/* Home owns the dashboard height; the sidebar also remains reachable in short-window flow. */
+@media (min-width: 1101px) {
+  .home { background: white; border-right: 1px solid #dbe3ef; }
+  .home .rail { position: sticky; top: 0; height: var(--home-dashboard-height, calc(100dvh - 140px)); min-height: 0; background: transparent; border-right: 0; }
+  .home .desktop, .home .navigation { min-height: 0; }
+  .home .entries { min-height: 0; overflow-y: auto; }
+  .home .logout { flex-shrink: 0; }
+}
+
+/* Staff Creator header interactions do not restyle the released Home/Stats rails. */
+.branded { --socrates-header-height: 140px; }
+.header { position: sticky; top: 0; z-index: 40; height: var(--socrates-header-height); }
+.headerNavigation .navigation [aria-current='page'], .branded .drawer .navigation [aria-current='page'] { color: #fff; background: #183b60; border-color: #b4c9e3; }
+.branded .navigation button:disabled { background: transparent; opacity: .5; cursor: not-allowed; }
+@media (hover: hover) {
+  .headerNavigation .navigation a:not([aria-current='page']):hover, .headerNavigation .navigation button:not(:disabled):hover, .headerTrigger:hover { background: #294564; }
+  .headerNavigation .navigation a[aria-current='page']:hover { background: #183b60; }
+  .branded .drawer .navigation a:not([aria-current='page']):hover, .branded .drawer .navigation button:not(:disabled):hover { background: #eaf1fa; }
+}
+@media (max-width: 520px) {
+  .branded { --socrates-header-height: 116px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .branded a, .branded button { transition: none; }
+}
+
+/* Home navigation feedback only; active entries, Logout and layout stay unchanged. */
+.home .entries > a, .home .entries > button { transition: background-color 140ms ease; }
+@media (hover: hover) and (pointer: fine) {
+  .home .entries > a:not([aria-current='page']):not([aria-disabled='true']):hover,
+  .home .entries > button:not(:disabled):not([aria-current='page']):not([aria-disabled='true']):hover { background-color: #eaf1fa; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .home .entries > a, .home .entries > button { transition: none; }
+}
