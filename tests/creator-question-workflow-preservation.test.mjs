@@ -28,7 +28,7 @@ for (const role of ['admin', 'editor']) {
         h.runEffect('setQuestionConceptOptions(options)');
         assert.equal(h.render().questionConceptId, 'b');
     });
-    test(`${role}: related result edits true Primary, new retains browse Concept`, () => {
+    test(`${role}: related result edits true Primary, explicit New retains browse without assigning Primary`, () => {
         const h = questions({ role });
         h.render().selectQuestionConcept('related', 'topic');
         h.render().selectExistingQuestion(question());
@@ -42,7 +42,7 @@ for (const role of ['admin', 'editor']) {
         e = h.render();
         assert.equal(e.questionId, null);
         assert.equal(e.questionConceptId, 'related');
-        assert.equal(e.primaryQuestionConceptId, 'related');
+        assert.equal(e.primaryQuestionConceptId, null);
         assert.deepEqual(plain(e.questionRelatedConceptIds), []);
     });
     test(`${role}: successful new save carries visible metadata and resets hidden defaults`, async () => {
@@ -598,7 +598,7 @@ test('Search cannot hide a retained Question draft from the existing shell guard
 });
 
 for (const role of ['admin', 'editor']) {
- test(`${role}: tree associations and browsing are independent; promotion is draft-only`, async () => {
+ test(`${role}: new draft name selection sets Primary; promotion removes old Primary and existing ownership stays fixed`, async () => {
   const h = questions({role});
   h.render().setQuestionConceptsByTopicId({topic:[{id:'primary',name:'Primary'},{id:'related',name:'Related'},{id:'other',name:'Other'}]});
   h.render().associateQuestionConcept('primary',true);
@@ -606,15 +606,17 @@ for (const role of ['admin', 'editor']) {
   let e=h.render();e.setQuestionPrompt('Draft question');e.setQuestionAnswer('Draft answer');
   const dirtyBefore=h.render().isQuestionDirty;
   h.render().browseQuestionConcept('other','topic');
-  e=h.render();assert.equal(e.primaryQuestionConceptId,'primary');assert.equal(e.questionConceptId,'other');
+  e=h.render();assert.equal(e.primaryQuestionConceptId,'other');assert.equal(e.questionConceptId,'other');
+  assert.deepEqual(plain(e.questionRelatedConceptIds),['related']);
   assert.equal(e.questionAnswer,'Draft answer');assert.equal(e.isQuestionDirty,dirtyBefore);assert.equal(h.confirmations.length,0);
   e.makeQuestionConceptPrimary('related');e=h.render();
-  assert.equal(e.primaryQuestionConceptId,'related');assert.deepEqual(plain(e.questionRelatedConceptIds),['primary']);
-  e.associateQuestionConcept('related',false);assert.equal(h.render().primaryQuestionConceptId,'related');
+  assert.equal(e.primaryQuestionConceptId,'related');assert.deepEqual(plain(e.questionRelatedConceptIds),[]);
+  e.associateQuestionConcept('related',false);assert.equal(h.render().primaryQuestionConceptId,null);
+  h.render().associateQuestionConcept('related',true);
   await h.render().saveCurrentQuestion();e=h.render();
   assert.equal(e.primaryQuestionConceptId,'related','successful save carries actual Primary, not browse');
   assert.equal(e.questionConceptId,'other');assert.equal(e.questionAnswer,'');assert.equal(e.isQuestionDirty,false);
-  e.startNewQuestion();e=h.render();assert.equal(e.primaryQuestionConceptId,'other');assert.deepEqual(plain(e.questionRelatedConceptIds),[]);
+  e.startNewQuestion();e=h.render();assert.equal(e.primaryQuestionConceptId,null);assert.deepEqual(plain(e.questionRelatedConceptIds),[]);
   e.selectExistingQuestion(question());e=h.render();e.makeQuestionConceptPrimary('related');
   assert.equal(h.render().primaryQuestionConceptId,'primary');assert.equal(h.render().questionId,'q1');
   e.associateQuestionConcept('related',false);assert.deepEqual(plain(h.render().questionRelatedConceptIds),[]);
@@ -631,7 +633,7 @@ for (const role of ['admin', 'editor']) {
   for(const id of ['topic','other']) {
    const tree=e.renderQuestionTopic({id,key:`official:topic:${id}`,source:'official',name:id,children:[]});
    const check=nodes(tree).find(n=>n.props?.['aria-label']==='Associate Primary with Question');
-   assert.equal(check.props.checked,true);assert.equal(check.props.disabled,true);
+   assert.equal(check.props.checked,true);assert.equal(check.props.disabled,false);
   }
   const tree=e.renderQuestionTopic({id:'topic',key:'official:topic:topic',source:'official',name:'Topic',children:[]});
   assert.ok(text(tree).includes('Related'));

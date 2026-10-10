@@ -32,7 +32,7 @@ const exposed = [
   'questionDifficulty', 'questionTestingAngle', 'questionRecordStatus',
   'isContentDirty', 'isQuestionDirty', 'isSaving', 'isSavingQuestion',
   'questionConceptsByTopicId', 'status', 'setQuestionRelatedConceptIds', 'questionRelatedConceptIds',
-  'primaryQuestionConceptId', 'startNewQuestion', 'selectQuestionConcept', 'fetchExistingQuestions', 'refreshExistingQuestionList', 'questionCountsByConceptId',
+  'primaryQuestionConceptId', 'startNewQuestion', 'selectQuestionConcept', 'associateQuestionConcept', 'setQuestionConceptsByTopicId', 'fetchExistingQuestions', 'refreshExistingQuestionList', 'questionCountsByConceptId',
 ].join(', ');
 const compiled = ts.transpileModule(source.replace(
   '  return (\n    <>\n      <Header />',
@@ -122,7 +122,7 @@ function editor({ editing = false, response, references = [] } = {}) {
     '@/lib/creator-studio-runtime': {
       createOfficialConceptEditorState: (id, libraryId) => id ? { mode: 'official-concept', identity: { id }, libraryId } : { mode: 'new-official-concept', libraryId },
       createOfficialQuestionEditorState: (id, libraryId) => id ? { mode: 'official-question', identity: { id }, libraryId } : { mode: 'new-official-question', libraryId },
-      createOfficialCreatorPresentationAuthority: () => ({}),
+      createOfficialCreatorPresentationAuthority: capabilities => ({ canSaveQuestion: capabilities.official.saveQuestion }),
       createOfficialConceptIdentity: id => ({ id }),
       createOfficialQuestionIdentity: id => ({ id }),
       createOfficialTopicIdentity: id => ({ id }),
@@ -181,6 +181,8 @@ function editor({ editing = false, response, references = [] } = {}) {
 
 test('related selections participate in dirty state and persist across rapid saves', async () => {
   const h = editor({ editing: true });
+  h.render().setQuestionConceptsByTopicId({ topic: [{ id: 'existing-concept', name: 'Primary' }] });
+  h.render().associateQuestionConcept('existing-concept', true);
   let e = h.render(); e.setQuestionRelatedConceptIds(['related-b', 'related-a']);
   assert.equal(h.render().isQuestionDirty, true);
   e.setQuestionPrompt('Batch 1'); e.setQuestionAnswer('Answer');
@@ -210,16 +212,19 @@ test('related browse edits retain true Primary; empty selection clears explicitl
   assert.equal(h.calls[0].payload.p_payload.p_related_concept_ids.length, 0);
   assert.equal(h.render().isQuestionDirty, false);
   h.render().startNewQuestion();
-  assert.equal(h.render().primaryQuestionConceptId, 'existing-concept');
+  assert.equal(h.render().primaryQuestionConceptId, null);
   assert.equal(h.render().questionRelatedConceptIds.length, 0);
 });
 
 test('failed relationship save retains draft, true primary, and secondary choices', async () => {
   const h = editor({ editing: true, response: () => ({ error: { message: 'Rejected association' } }) });
+  h.render().setQuestionConceptsByTopicId({ topic: [{ id: 'existing-concept', name: 'Primary' }] });
+  h.render().associateQuestionConcept('existing-concept', true);
   let e = h.render(); e.setQuestionPrompt('Keep'); e.setQuestionAnswer('Keep answer'); e.setQuestionRelatedConceptIds(['related']);
   await h.render().saveQuestion(); e = h.render();
   assert.equal(e.questionPrompt, 'Keep'); assert.equal(e.questionAnswer, 'Keep answer');
   assert.deepEqual([...e.questionRelatedConceptIds], ['related']);
+  assert.equal(h.calls.length, 1, 'the selected Primary allows the intended failing save to reach the contract');
   assert.equal(e.isQuestionDirty, true); assert.equal(e.isSavingQuestion, false);
 });
 

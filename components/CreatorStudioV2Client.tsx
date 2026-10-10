@@ -1198,8 +1198,8 @@ export function CreatorStudioV2Client({
     return testingAngleCatalog.find(entry => entry.storage_key.trim().toLowerCase() === normalized
       || entry.reserved_names.includes(normalized))?.storage_key || value;
   }, [testingAngleCatalog]);
-  // Association ownership is independent of the Concept being browsed.
-  const [draftQuestionPrimaryId, setDraftQuestionPrimaryId] = useState<string | null>(resolvedConcept.id);
+  // Browsing may start with a Concept; a new Question needs an explicit association.
+  const [draftQuestionPrimaryId, setDraftQuestionPrimaryId] = useState<string | null>(null);
   const primaryQuestionConceptId = editingQuestionPrimary?.id || draftQuestionPrimaryId;
   const [questionPrompt, setQuestionPrompt] = useState('');
   const [questionAnswer, setQuestionAnswer] = useState('');
@@ -2919,10 +2919,12 @@ export function CreatorStudioV2Client({
 
   function browseQuestionConcept(conceptId: string, topicId?: string) {
     if (isSavingQuestion || questionSaveLockRef.current) return;
+    if (!Object.values(questionConceptsByTopicId).some(options => options.some(option => option.id === conceptId))) return;
     if (questionSource === 'personal') {
       if (!selectQuestionConcept(conceptId, topicId)) return;
     } else {
       setQuestionConceptId(conceptId);
+      if (!questionId) changeDraftQuestionPrimary(conceptId);
       if (topicId) {
         setActivePersonalTopicId(null);
         setActiveTopicId(topicId);
@@ -2939,9 +2941,12 @@ export function CreatorStudioV2Client({
   function associateQuestionConcept(id: string, checked: boolean) {
     if (questionSource !== 'official' || isSavingQuestion || questionSaveLockRef.current) return;
     if (!Object.values(questionConceptsByTopicId).some(options => options.some(option => option.id === id))) return;
-    if (id === primaryQuestionConceptId) return;
+    if (id === primaryQuestionConceptId) {
+      if (!checked) changeDraftQuestionPrimary(null);
+      return;
+    }
     if (checked && !primaryQuestionConceptId) {
-      setDraftQuestionPrimaryId(id);
+      changeDraftQuestionPrimary(id);
       setQuestionConceptId(current => current || id);
     } else {
       setQuestionRelatedConceptIds(current => checked
@@ -2952,12 +2957,24 @@ export function CreatorStudioV2Client({
   }
 
   function makeQuestionConceptPrimary(id: string) {
-    if (questionSource !== 'official' || questionId || isSavingQuestion || questionSaveLockRef.current ||
-      !questionRelatedConceptIds.includes(id) || !primaryQuestionConceptId) return;
-    setQuestionRelatedConceptIds(current => [...new Set([
-      ...current.filter(value => value !== id), primaryQuestionConceptId,
-    ])]);
+    if (!questionRelatedConceptIds.includes(id)) return;
+    changeDraftQuestionPrimary(id);
+  }
+
+  function changeDraftQuestionPrimary(id: string | null) {
+    if (questionSource !== 'official' || questionId || !creatorAuthority.canSaveQuestion ||
+      isSavingQuestion || questionSaveLockRef.current) return;
+    if (id && !Object.values(questionConceptsByTopicId).some(options => options.some(option => option.id === id))) return;
+    setQuestionRelatedConceptIds(current => current.filter(value => value !== id));
     setDraftQuestionPrimaryId(id);
+    setQuestionStatus(null);
+  }
+
+  function clearQuestionConceptAssociations() {
+    if (questionSource !== 'official' || questionId || !creatorAuthority.canSaveQuestion ||
+      isSavingQuestion || questionSaveLockRef.current) return;
+    setDraftQuestionPrimaryId(null);
+    setQuestionRelatedConceptIds([]);
     setQuestionStatus(null);
   }
 
@@ -3295,13 +3312,9 @@ export function CreatorStudioV2Client({
       setQuestionStatus({ tone: 'info', message: 'New Question' });
       return;
     }
-    if (!questionConceptId) {
-      setQuestionStatus({ tone: 'error', message: 'Choose an eligible Concept first.' });
-      return;
-    }
     setActivePersonalTopicId(null);
-    resetQuestionEditor(questionConceptId);
-    void refreshExistingQuestionList(questionConceptId);
+    resetQuestionEditor(null);
+    if (questionConceptId) void refreshExistingQuestionList(questionConceptId);
     setQuestionStatus(null);
   }
 
@@ -6218,8 +6231,8 @@ export function CreatorStudioV2Client({
               style={questionConceptChoiceStyle(isSelected, isSavingQuestion, depth)}>
               <input className={styles.topicCheckbox} type="checkbox"
                 aria-label={`Associate ${item.name} with Question`} checked={isSelected}
-                disabled={isSavingQuestion || questionSource !== 'official' || isPrimary}
-                title={isPrimary ? (questionId ? 'Saved Question Primary cannot be changed.' : 'Use Make Primary on a Related Concept to change Primary.') : undefined}
+                disabled={isSavingQuestion || questionSource !== 'official' || (isPrimary && Boolean(questionId))}
+                title={isPrimary ? (questionId ? 'Saved Question Primary cannot be changed.' : 'Uncheck to clear the Primary Concept without clearing your draft.') : undefined}
                 onChange={event => associateQuestionConcept(item.id, event.target.checked)} />
               <button type="button" className={styles.topicActivationButton}
                 aria-label={`Browse Questions for ${item.name}`} aria-pressed={questionConceptId === item.id}
@@ -6230,6 +6243,7 @@ export function CreatorStudioV2Client({
               {isSelected && !isPrimary && !questionId && (
                 <button type="button" className={styles.secondaryButton}
                   aria-label={`Make ${item.name} Primary`} disabled={isSavingQuestion}
+                  title="Use this as Primary and remove the previous Primary association."
                   onClick={() => makeQuestionConceptPrimary(item.id)}>Make Primary</button>
               )}
               {isSelected && renderQuestionConceptPreviewAction('official', item.id, item.name)}
@@ -8383,6 +8397,14 @@ export function CreatorStudioV2Client({
                       )}
                     </div>
                   )}
+                  {questionSource === 'official' && !questionId && (
+                    <div className={styles.linkedConceptContext} aria-label="Concept associations">
+                      {!primaryQuestionConceptId && <span>No Primary Concept selected. Choose one before saving.</span>}
+                      <button type="button" className={styles.secondaryButton}
+                        disabled={isSavingQuestion || !creatorAuthority.canSaveQuestion || (!primaryQuestionConceptId && questionRelatedConceptIds.length === 0)}
+                        onClick={clearQuestionConceptAssociations}>Clear Concept associations</button>
+                    </div>
+                  )}
                   {questionSource === 'personal' && personalQuestionConceptId && (
                     <div className={styles.linkedConceptContext} aria-label="Primary Concept">
                       <strong>
@@ -8400,7 +8422,7 @@ export function CreatorStudioV2Client({
                           disabled={
                             isSavingQuestion ||
                             (creationDestination === 'official'
-                              ? !creatorCapabilities.official.saveQuestion || !questionConceptId
+                              ? !creatorCapabilities.official.saveQuestion
                               : !personalQuestionConceptId)
                           }
                           onClick={startNewQuestion}
@@ -8520,7 +8542,7 @@ export function CreatorStudioV2Client({
                 <section className={`${styles.panel} ${styles.topicPanel}`}>
                   <div>
                     <h2>2. Topic Tree</h2>
-                    <p>Browse Questions by Concept. New Questions use the selected Concept as Primary; existing Questions keep their Primary.</p>
+                    <p>{questionId ? 'Browse Questions by Concept. This saved Question keeps its Primary; check other Concepts to add Related associations.' : 'Click a Concept name to set Primary and browse its Questions. Check other Concepts to add Related associations. Changing Primary removes the previous Primary association.'}</p>
                   </div>
 
                   <div style={{ display: 'grid', gap: 8, marginBottom: 12 }}>

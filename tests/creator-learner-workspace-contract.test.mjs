@@ -93,6 +93,10 @@ test('learner cannot bypass official save guards by supplying an official editor
   e.setConcept('Forged official draft');
   await assert.rejects(h.render().saveCurrentConcept(), /not permitted/);
   e = h.render(); e.setQuestionEditorState({ mode: 'new-official-question', source: 'official', kind: 'question', libraryId: 'library' });
+  // Complete the deliberately forged draft so missing-Primary validation cannot mask the authority check.
+  h.render().resetQuestionEditor('existing-concept'); e = h.render();
+  assert.equal(e.draftQuestionPrimaryId, 'existing-concept');
+  assert.equal(e.creatorAuthority.canSaveQuestion, false);
   e.setQuestionPrompt('Forged question'); e.setQuestionAnswer('Answer');
   await assert.rejects(h.render().saveCurrentQuestion(), /not permitted/);
   assert.equal(h.calls.length, 0);

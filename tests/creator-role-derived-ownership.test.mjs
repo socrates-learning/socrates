@@ -36,7 +36,7 @@ const exposed = [
   'setContentConceptSearch', 'contentConceptSearchResults', 'setQuestionSearchResults',
   'renderUnifiedTopic', 'renderUnifiedConceptBrowseTopic', 'renderUnifiedQuestionTopic',
   'setQuestionCountsByConceptId', 'setExpandedPersonalTopicIds', 'setExpandedBrowseTopicIds', 'setQuestionConceptsByTopicId',
-  'creationDestination', 'conceptEditorState', 'questionEditorState', 'conceptSource', 'questionSource',
+  'creationDestination', 'conceptEditorState', 'questionEditorState', 'conceptSource', 'questionSource', 'primaryQuestionConceptId', 'associateQuestionConcept',
   'openAddDialog', 'openPersonalTopicDialog', 'saveNameDialog', 'setNameDraft', 'dialogMode',
   'startNewQuestion', 'openPersonalConcept', 'selectPersonalQuestionConcept', 'selectQuestionConcept',
   'saveCurrentConcept', 'saveCurrentQuestion', 'clearDraft', 'setConceptName', 'setActivePersonalTopicId',
@@ -248,6 +248,12 @@ for (const role of ['learner', 'admin', 'editor']) {
     e = h.render(); assert.equal(e.questionEditorState.identity.key, 'personal:card:mine-card');
     e.startNewQuestion(); e = h.render();
     assert.equal(e.questionSource, destination);
+    if (destination === 'official') {
+      assert.equal(e.primaryQuestionConceptId, null);
+      e.setQuestionConceptsByTopicId({ topic: [{ id: 'existing-concept', name: 'Primary' }] });
+      h.render().associateQuestionConcept('existing-concept', true);
+      e = h.render();
+    }
     e.setQuestionPrompt('New question'); e.setQuestionAnswer('New answer');
     await h.render().saveCurrentQuestion();
     assert.equal(h.calls[0].name || h.calls[0].table,
@@ -309,6 +315,9 @@ test('learner cannot force official creation by supplying official editor state'
   await assert.rejects(h.render().saveCurrentConcept(), /not permitted/);
   e = h.render();
   e.setQuestionEditorState(runtimeContext.exports.createOfficialQuestionEditorState(null, 'library'));
+  h.render().selectQuestionConcept('forced-primary', 'topic');
+  e = h.render();
+  assert.equal(e.primaryQuestionConceptId, 'forced-primary', 'forced payload reaches the authority check, not empty-Primary validation');
   e.setQuestionPrompt('Forced official question'); e.setQuestionAnswer('Answer');
   await assert.rejects(h.render().saveCurrentQuestion(), /not permitted/);
   assert.equal(h.calls.length, 0);

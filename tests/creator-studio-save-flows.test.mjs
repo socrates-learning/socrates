@@ -24,6 +24,7 @@ import {
 // regression tests, not browser or database integration tests.
 const source = readFileSync(new URL('../components/CreatorStudioV2Client.tsx', import.meta.url), 'utf8');
 const exposed = [
+  'associateQuestionConcept', 'setQuestionConceptsByTopicId', 'primaryQuestionConceptId',
   'saveConcept', 'saveQuestion', 'startNewQuestion', 'startNewConcept', 'selectExistingQuestion',
   'setConcept', 'setConceptRecordStatus', 'setQuestionPrompt', 'setQuestionAnswer',
   'setQuestionDifficulty', 'setQuestionTestingAngle', 'setQuestionRecordStatus',
@@ -120,7 +121,7 @@ function editor({ editing = false, response, references = [], media } = {}) {
     '@/lib/creator-studio-runtime': {
       createOfficialConceptEditorState: (id, libraryId) => id ? { mode: 'official-concept', identity: { id }, libraryId } : { mode: 'new-official-concept', libraryId },
       createOfficialQuestionEditorState: (id, libraryId) => id ? { mode: 'official-question', identity: { id }, libraryId } : { mode: 'new-official-question', libraryId },
-      createOfficialCreatorPresentationAuthority: () => ({}),
+      createOfficialCreatorPresentationAuthority: capabilities => ({ canSaveQuestion: capabilities.official.saveQuestion }),
       createOfficialConceptIdentity: id => ({ id }),
       createOfficialQuestionIdentity: id => ({ id }),
       createOfficialTopicIdentity: id => ({ id }),
@@ -226,7 +227,10 @@ for (const lifecycle of ['published', 'draft']) {
 
   test(`new Question ignores stale ${lifecycle} status and resets hidden compatibility defaults`, async () => {
     const h = editor({ editing: true });
+    h.render().setQuestionConceptsByTopicId({ topic: [{ id: 'existing-concept', name: 'Primary' }] });
+    h.render().associateQuestionConcept('existing-concept', true);
     let e = h.render();
+    assert.equal(e.primaryQuestionConceptId, 'existing-concept');
     assert.equal(e.questionRecordStatus, 'published');
     e.setQuestionPrompt('First prompt'); e.setQuestionAnswer('First answer');
     e.setQuestionDifficulty('hard'); e.setQuestionTestingAngle('Clinical Application');
@@ -268,8 +272,11 @@ test('edit-mode Concept and Question saves retain identity and content', async (
 
 test('failed saves preserve new drafts and dirty state', async () => {
   const h = editor({ editing: true, response: () => ({ error: { message: 'Fixture failure' } }) });
+  h.render().setQuestionConceptsByTopicId({ topic: [{ id: 'existing-concept', name: 'Primary' }] });
+  h.render().associateQuestionConcept('existing-concept', true);
   let e = h.render(); e.setConcept('Keep concept'); e.setQuestionPrompt('Keep prompt'); e.setQuestionAnswer('Keep answer');
   await h.render().saveConcept(); await h.render().saveQuestion();
+  assert.deepEqual(h.calls.map(call => call.name), ['save_concept_with_format', 'save_question_with_format'], 'both intended failing writes reach their contracts');
   e = h.render(); assert.equal(e.concept, 'Keep concept'); assert.equal(e.questionPrompt, 'Keep prompt');
   assert.equal(e.questionAnswer, 'Keep answer'); assert.equal(e.isContentDirty, true); assert.equal(e.isQuestionDirty, true);
   assert.equal(e.isSaving, false); assert.equal(e.isSavingQuestion, false);

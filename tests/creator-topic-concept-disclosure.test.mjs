@@ -129,12 +129,15 @@ for (const role of ['admin', 'editor']) {
     const before = draftSnapshot(h.render());
     nodes(list(h, t.root, 'questions')).find(n => n.props?.['aria-label'] === 'Browse Questions for Unique Concept').props.onClick();
     assert.equal(h.render().questionConceptId, 'unique'); assert.equal(h.render().questionTopicId, 'b');
-    assert.equal(h.render().primaryQuestionConceptId, before.primary); assert.equal(h.render().currentQuestionFingerprint, before.fingerprint);
-    nodes(list(h, t.root, 'questions')).find(n => n.props?.['aria-label'] === 'Make Unique Concept Primary').props.onClick();
-    assert.equal(h.render().primaryQuestionConceptId, 'unique'); assert.deepEqual(plain(h.render().questionRelatedConceptIds), ['shared']);
+    assert.equal(h.render().primaryQuestionConceptId, 'unique'); assert.notEqual(h.render().currentQuestionFingerprint, before.fingerprint);
+    assert.deepEqual(plain(h.render().questionRelatedConceptIds), [], 'previous Primary is removed, never automatically Related');
+    const after = draftSnapshot(h.render());
+    assert.deepEqual(after, { ...before, primary: 'unique', related: [], browse: 'unique', topic: 'b', fingerprint: after.fingerprint });
     for (const topic of [t.root, t.b]) {
       const primary = nodes(list(h, topic, 'questions')).find(n => n.props?.['aria-label'] === 'Associate Unique Concept with Question');
-      assert.equal(primary.props.checked, true); assert.equal(primary.props.disabled, true);
+      assert.equal(primary.props.checked, true); assert.equal(primary.props.disabled, false);
+      const previous = nodes(list(h, topic, 'questions')).find(n => n.props?.['aria-label'] === 'Associate Shared Concept with Question');
+      assert.equal(previous.props.checked, false);
     }
     assert.equal(h.calls.length, 0); assert.equal(h.confirmations.length, 0);
   });

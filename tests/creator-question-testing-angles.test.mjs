@@ -24,6 +24,7 @@ import {
 // regression tests, not browser or database integration tests.
 const source = readFileSync(new URL('../components/CreatorStudioV2Client.tsx', import.meta.url), 'utf8');
 const exposed = [
+  'associateQuestionConcept', 'setQuestionConceptsByTopicId',
   'setTestingAngleCatalog',
   'setActiveCreatorTab', 'setQuestionAdditionalTestingAngles', 'questionAdditionalTestingAngles', 'saveConcept', 'saveQuestion', 'startNewConcept', 'selectExistingQuestion',
   'setConcept', 'setConceptRecordStatus', 'setQuestionPrompt', 'setQuestionAnswer',
@@ -123,7 +124,7 @@ function editor({ editing = false, response, references = [] } = {}) {
     '@/lib/creator-studio-runtime': {
       createOfficialConceptEditorState: (id, libraryId) => id ? { mode: 'official-concept', identity: { id }, libraryId } : { mode: 'new-official-concept', libraryId },
       createOfficialQuestionEditorState: (id, libraryId) => id ? { mode: 'official-question', identity: { id }, libraryId } : { mode: 'new-official-question', libraryId },
-      createOfficialCreatorPresentationAuthority: () => ({}),
+      createOfficialCreatorPresentationAuthority: capabilities => ({ canSaveQuestion: capabilities.official.saveQuestion }),
       createOfficialConceptIdentity: id => ({ id }),
       createOfficialQuestionIdentity: id => ({ id }),
       createOfficialTopicIdentity: id => ({ id }),
@@ -186,7 +187,10 @@ function editor({ editing = false, response, references = [] } = {}) {
 }
 
 test('Additional angle cluster participates in dirty state and survives rapid entry', async () => {
- const h=editor({editing:true}); let e=h.render();
+ const h=editor({editing:true});
+ h.render().setQuestionConceptsByTopicId({topic:[{id:'existing-concept',name:'Primary'}]});
+ h.render().associateQuestionConcept('existing-concept',true);
+ let e=h.render();assert.equal(e.primaryQuestionConceptId,'existing-concept');
  e.setQuestionAdditionalTestingAngles(['Recall','Application']); e.setQuestionTestingAngle('Mechanism');
  assert.equal(h.render().isQuestionDirty,true);
  e.setQuestionPrompt('One'); e.setQuestionAnswer('Answer'); await h.render().saveQuestion(); e=h.render();
@@ -198,9 +202,13 @@ test('Additional angle cluster participates in dirty state and survives rapid en
  assert.equal(h.calls[1].payload.p_payload.p_question_id,null);assert.equal(h.calls[1].payload.p_payload.p_additional_testing_angles.length,2);
 });
 test('failed save preserves Additional angles and dirty form', async () => {
- const h=editor({editing:true,response:()=>({error:{message:'Rejected'}})});const e=h.render();
+ const h=editor({editing:true,response:()=>({error:{message:'Rejected'}})});
+ h.render().setQuestionConceptsByTopicId({topic:[{id:'existing-concept',name:'Primary'}]});
+ h.render().associateQuestionConcept('existing-concept',true);
+ const e=h.render();
  e.setQuestionPrompt('Keep');e.setQuestionAnswer('Answer');e.setQuestionAdditionalTestingAngles(['Recall']);
  await h.render().saveQuestion();assert.deepEqual([...h.render().questionAdditionalTestingAngles],['Recall']);assert.equal(h.render().questionPrompt,'Keep');assert.equal(h.render().isQuestionDirty,true);
+ assert.equal(h.calls.length,1);assert.equal(h.calls[0].name,'save_question_with_format','exercise the backend failure, not missing-Primary validation');
 });
 test('reload restores Additional and edits can clear them', async () => {
  const h=editor({editing:true,response:(name,payload)=>name==='save_question_with_format'?formatSaveResponse(name,payload):({data:name==='get_creator_questions'?[{id:'q',concept_id:'existing-concept',prompt:'Question',testing_angle:'Mechanism',additional_testing_angles:['Recall','Application'],question_accepted_answers:[{answer_text:'Answer'}]}]:{id:'q'},error:null})});
@@ -272,7 +280,10 @@ test('hydrated unified selections preserve Primary and Additional; explicit New 
 });
 
 test('Additional-only change is dirty, including clearing a retained batch cluster',async()=>{
- const h=editor({editing:true});h.render().setQuestionAdditionalTestingAngles(['Recall']);assert.equal(h.render().isQuestionDirty,true);
+ const h=editor({editing:true});
+ h.render().setQuestionConceptsByTopicId({topic:[{id:'existing-concept',name:'Primary'}]});
+ h.render().associateQuestionConcept('existing-concept',true);
+ h.render().setQuestionAdditionalTestingAngles(['Recall']);assert.equal(h.render().isQuestionDirty,true);
  h.render().setQuestionPrompt('Prompt');h.render().setQuestionAnswer('Answer');await h.render().saveQuestion();
  assert.equal(h.render().isQuestionDirty,false);h.render().setQuestionAdditionalTestingAngles([]);assert.equal(h.render().isQuestionDirty,true);
 });
