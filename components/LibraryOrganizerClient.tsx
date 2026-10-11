@@ -2,9 +2,10 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import { Archive, Folder, Library as LibraryIcon } from 'lucide-react';
+import { Archive, ArrowLeft, Folder, Info, Library as LibraryIcon, Plus } from 'lucide-react';
 import { Header } from '@/components/Header';
 import { supabase } from '@/lib/supabase';
+import creatorStyles from './CreatorStudioV2Client.module.css';
 import styles from './LibraryOrganizerClient.module.css';
 
 type LibraryGroup = {
@@ -41,20 +42,6 @@ type StatusMessage = {
   tone: 'error' | 'success' | 'info';
   text: string;
 } | null;
-
-const fieldStyle = {
-  border: '1px solid #cfd5dd',
-  borderRadius: 6,
-  font: 'inherit',
-  minHeight: 42,
-  padding: '9px 11px',
-  width: '100%',
-};
-
-const labelStyle = {
-  display: 'grid',
-  gap: 7,
-};
 
 function statusColor(tone: NonNullable<StatusMessage>['tone']) {
   if (tone === 'error') return '#a12a2a';
@@ -478,30 +465,20 @@ export function LibraryOrganizerClient() {
     return (
       <div key={group.id}>
         <button
-          className={styles.hierarchyRow}
+          className={`${styles.hierarchyRow} ${styles.groupRow}`}
+          aria-pressed={isSelected}
+          data-status={group.status}
           type="button"
           onClick={() => {
             setSelectedGroupId(group.id);
             setSelectedLibraryId(null);
             setPendingArchiveGroupId(null);
           }}
-          style={{
-            alignItems: 'center',
-            background: isSelected ? '#eaf2ff' : 'transparent',
-            border: isSelected ? '1px solid #a9c5ed' : '1px solid transparent',
-            borderRadius: 6,
-            color: group.status === 'archived' ? '#7c8797' : '#172234',
-            cursor: 'pointer',
-            display: 'flex',
-            gap: 8,
-            padding: `8px 10px 8px ${10 + Math.min(depth, 6) * 16}px`,
-            textAlign: 'left',
-            width: '100%',
-          }}
+          style={{ paddingLeft: 10 + Math.min(depth, 6) * 16 }}
         >
           <Folder size={17} aria-hidden="true" />
           <strong className={styles.hierarchyName}>{group.name}</strong>
-          <span className={`${styles.hierarchyMeta} muted`}>
+          <span className={styles.hierarchyMeta}>
             Group{group.status !== 'active' ? ` · ${group.status}` : ''}
           </span>
         </button>
@@ -511,6 +488,8 @@ export function LibraryOrganizerClient() {
           return (
             <button
               className={styles.hierarchyRow}
+              aria-pressed={librarySelected}
+              data-status={library.status}
               key={library.id}
               type="button"
               onClick={() => {
@@ -518,25 +497,11 @@ export function LibraryOrganizerClient() {
                 setSelectedLibraryId(library.id);
                 setPendingArchiveGroupId(null);
               }}
-              style={{
-                alignItems: 'center',
-                background: librarySelected ? '#f0f7ee' : 'transparent',
-                border: librarySelected
-                  ? '1px solid #b8d4b1'
-                  : '1px solid transparent',
-                borderRadius: 6,
-                color: library.status === 'active' ? '#263244' : '#7c8797',
-                cursor: 'pointer',
-                display: 'flex',
-                gap: 8,
-                padding: `8px 10px 8px ${10 + Math.min(depth + 1, 6) * 16}px`,
-                textAlign: 'left',
-                width: '100%',
-              }}
+              style={{ paddingLeft: 10 + Math.min(depth + 1, 6) * 16 }}
             >
               <LibraryIcon size={16} aria-hidden="true" />
               <span className={styles.hierarchyName}>{library.name}</span>
-              <span className={`${styles.hierarchyMeta} muted`}>
+              <span className={styles.hierarchyMeta}>
                 Library{library.status !== 'active' ? ` · ${library.status}` : ''}
               </span>
             </button>
@@ -558,87 +523,72 @@ export function LibraryOrganizerClient() {
   return (
     <>
       <Header />
-      <main className={`${styles.page} layout`}>
-        <section
-          className={`${styles.shell} stack`}
-        >
-          <div
-            className="panel"
-            style={{
-              alignItems: 'center',
-              display: 'flex',
-              flexWrap: 'wrap',
-              gap: 16,
-              justifyContent: 'space-between',
-            }}
-          >
+      <main className={`${creatorStyles.staffWorkspace} ${styles.page}`}>
+        <section className={styles.shell}>
+          <div className={styles.localHeader}>
             <div>
-              <p className="muted" style={{ margin: '0 0 5px' }}>
+              <p className={styles.eyebrow}>
                 Creator Studio · Global organization
               </p>
-              <h2 style={{ margin: 0 }}>Library Organizer</h2>
-              <p className="muted" style={{ margin: '7px 0 0' }}>
+              <h1>Library Organizer</h1>
+              <p className={styles.description}>
                 Groups organize Libraries. Each Library keeps its own independent Topic Tree.
               </p>
             </div>
-            <Link className="btn ghost" href="/creator/concepts/new">
+            <Link className={styles.secondaryButton} href="/creator/concepts/new">
+              <ArrowLeft size={16} aria-hidden="true" />
               Back to Creator Studio
             </Link>
           </div>
 
+          <div className={styles.information}>
+            <Info size={24} aria-hidden="true" />
+            <div>
+              <strong>Use Library Organizer to manage your Library Groups and Libraries.</strong>
+              <p>Create Groups to organize related Libraries. Each Library maintains its own independent Topic Tree.</p>
+            </div>
+          </div>
+
           {status && (
             <div
-              className="panel"
+              className={styles.status}
               role="status"
-              style={{ color: statusColor(status.tone), paddingBlock: 13 }}
+              style={{ color: statusColor(status.tone) }}
             >
               {status.text}
             </div>
           )}
 
           <div className={styles.workspace}>
-            <section className={`${styles.treePanel} panel`}>
-              <div style={{ marginBottom: 16 }}>
-                <h3 style={{ margin: 0 }}>Global Library hierarchy</h3>
-                <p className="muted" style={{ margin: '6px 0 0' }}>
+            <section className={`${styles.treePanel} ${styles.panel}`}>
+              <div className={styles.panelHeading}>
+                <h2>Global Library hierarchy</h2>
+                <p>
                   Folder Groups and actual Libraries are deliberately separate.
                 </p>
               </div>
 
               {isLoading ? (
-                <p className="muted">Loading Library organization…</p>
+                <p className={styles.muted}>Loading Library organization…</p>
               ) : (
                 <div aria-label="Global Library hierarchy">
                   {groupChildren(null).map((group) => renderGroup(group))}
                   {ungroupedLibraries.length > 0 && (
-                    <div style={{ marginTop: 14 }}>
-                      <strong className="muted">Unorganized Libraries</strong>
+                    <div className={styles.unorganized}>
+                      <strong className={styles.muted}>Unorganized Libraries</strong>
                       {ungroupedLibraries.map((library) => (
                         <button
+                          className={styles.hierarchyRow}
+                          aria-pressed={selectedLibraryId === library.id}
                           key={library.id}
                           type="button"
                           onClick={() => {
                             setSelectedGroupId(null);
                             setSelectedLibraryId(library.id);
                           }}
-                          style={{
-                            alignItems: 'center',
-                            background:
-                              selectedLibraryId === library.id
-                                ? '#f0f7ee'
-                                : 'transparent',
-                            border: '1px solid transparent',
-                            borderRadius: 6,
-                            cursor: 'pointer',
-                            display: 'flex',
-                            gap: 8,
-                            marginTop: 6,
-                            padding: '8px 10px',
-                            width: '100%',
-                          }}
                         >
                           <LibraryIcon size={16} aria-hidden="true" />
-                          {library.name}
+                          <span className={styles.hierarchyName}>{library.name}</span>
                         </button>
                       ))}
                     </div>
@@ -647,23 +597,24 @@ export function LibraryOrganizerClient() {
               )}
             </section>
 
-            <div className={`${styles.operations} stack`}>
-              <section className="panel">
-                <h3 style={{ marginTop: 0 }}>Group operations</h3>
-                <label style={labelStyle}>
+            <div className={styles.operations}>
+              <section className={styles.panel}>
+                <div className={styles.panelHeading}>
+                  <h2>Group operations</h2>
+                  <p>Create and manage Library Groups.</p>
+                </div>
+                <label className={styles.fieldLabel}>
                   <strong>Group name</strong>
                   <input
                     aria-label="Group name"
-                    style={fieldStyle}
+                    className={styles.field}
                     value={groupNameDraft}
                     onChange={(event) => setGroupNameDraft(event.target.value)}
                   />
                 </label>
-                <div
-                  style={{ display: 'flex', flexWrap: 'wrap', gap: 9, marginTop: 12 }}
-                >
+                <div className={styles.groupActions}>
                   <button
-                    className="btn ghost"
+                    className={styles.primaryButton}
                     type="button"
                     disabled={isMutating}
                     onClick={() => void createGroup(null)}
@@ -671,7 +622,7 @@ export function LibraryOrganizerClient() {
                     Create top-level Group
                   </button>
                   <button
-                    className="btn ghost"
+                    className={styles.secondaryButton}
                     type="button"
                     disabled={!selectedGroup || isMutating}
                     onClick={() => void createGroup(selectedGroup?.id || null)}
@@ -679,7 +630,7 @@ export function LibraryOrganizerClient() {
                     Create child Group
                   </button>
                   <button
-                    className="btn ghost"
+                    className={styles.secondaryButton}
                     type="button"
                     disabled={!selectedGroup || isMutating}
                     onClick={() => void createGroup(selectedGroup?.parent_id || null)}
@@ -687,7 +638,7 @@ export function LibraryOrganizerClient() {
                     Create sibling Group
                   </button>
                   <button
-                    className="btn ghost"
+                    className={styles.secondaryButton}
                     type="button"
                     disabled={!selectedGroup || isMutating}
                     onClick={() => void renameSelectedGroup()}
@@ -697,20 +648,12 @@ export function LibraryOrganizerClient() {
                 </div>
 
                 {selectedGroup && (
-                  <div
-                    style={{
-                      borderTop: '1px solid #e0e5ec',
-                      display: 'grid',
-                      gap: 11,
-                      marginTop: 16,
-                      paddingTop: 16,
-                    }}
-                  >
-                    <label style={labelStyle}>
+                  <div className={styles.selectedGroup}>
+                    <label className={styles.fieldLabel}>
                       <strong>Move beneath</strong>
                       <select
                         aria-label="Group parent"
-                        style={fieldStyle}
+                        className={styles.field}
                         value={groupParentDraft}
                         onChange={(event) => setGroupParentDraft(event.target.value)}
                       >
@@ -728,9 +671,9 @@ export function LibraryOrganizerClient() {
                           ))}
                       </select>
                     </label>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 9 }}>
+                    <div className={styles.actionRow}>
                       <button
-                        className="btn ghost"
+                        className={styles.secondaryButton}
                         type="button"
                         disabled={isMutating}
                         onClick={() => void moveSelectedGroup()}
@@ -738,7 +681,7 @@ export function LibraryOrganizerClient() {
                         Move Group
                       </button>
                       <button
-                        className="btn ghost"
+                        className={styles.secondaryButton}
                         type="button"
                         disabled={isMutating}
                         onClick={() => void reorderSelectedGroup('up')}
@@ -746,7 +689,7 @@ export function LibraryOrganizerClient() {
                         Move up
                       </button>
                       <button
-                        className="btn ghost"
+                        className={styles.secondaryButton}
                         type="button"
                         disabled={isMutating}
                         onClick={() => void reorderSelectedGroup('down')}
@@ -754,7 +697,7 @@ export function LibraryOrganizerClient() {
                         Move down
                       </button>
                       <button
-                        className="btn ghost"
+                        className={styles.secondaryButton}
                         type="button"
                         disabled={isMutating || selectedGroup.status === 'archived'}
                         onClick={() => void archiveSelectedGroup()}
@@ -765,7 +708,7 @@ export function LibraryOrganizerClient() {
                           : 'Archive Group'}
                       </button>
                       <button
-                        className="btn ghost"
+                        className={styles.dangerButton}
                         type="button"
                         disabled={isMutating}
                         title="Permanently delete this Group and its development content"
@@ -778,34 +721,37 @@ export function LibraryOrganizerClient() {
                 )}
               </section>
 
-              <section className="panel">
-                <h3 style={{ marginTop: 0 }}>Create Library</h3>
-                <div style={{ display: 'grid', gap: 11 }}>
-                  <label style={labelStyle}>
+              <section className={styles.panel}>
+                <div className={styles.panelHeading}>
+                  <h2>Create Library</h2>
+                  <p>Add a new Library to an organizational Group.</p>
+                </div>
+                <div className={styles.form}>
+                  <label className={styles.fieldLabel}>
                     <strong>Library name</strong>
                     <input
                       aria-label="New Library name"
-                      style={fieldStyle}
+                      className={styles.field}
                       value={newLibraryName}
                       onChange={(event) => setNewLibraryName(event.target.value)}
                     />
                   </label>
-                  <label style={labelStyle}>
+                  <label className={styles.fieldLabel}>
                     <strong>Description</strong>
                     <input
                       aria-label="New Library description"
-                      style={fieldStyle}
+                      className={styles.field}
                       value={newLibraryDescription}
                       onChange={(event) =>
                         setNewLibraryDescription(event.target.value)
                       }
                     />
                   </label>
-                  <label style={labelStyle}>
+                  <label className={styles.fieldLabel}>
                     <strong>Organizational Group</strong>
                     <select
                       aria-label="New Library Group"
-                      style={fieldStyle}
+                      className={styles.field}
                       value={newLibraryGroupId}
                       onChange={(event) => setNewLibraryGroupId(event.target.value)}
                     >
@@ -818,23 +764,26 @@ export function LibraryOrganizerClient() {
                     </select>
                   </label>
                   <button
-                    className="btn primary"
+                    className={styles.primaryButton}
                     type="button"
                     disabled={isMutating}
                     onClick={() => void createLibrary()}
                   >
+                    <Plus size={17} aria-hidden="true" />
                     Create Library with root Topic Tree
                   </button>
                 </div>
               </section>
 
               {selectedLibrary && (
-                <section className={`${styles.selectedLibraryPanel} panel`}>
-                  <h3 style={{ marginTop: 0 }}>Selected Library</h3>
-                  <p className="muted">
+                <section className={`${styles.selectedLibraryPanel} ${styles.panel}`}>
+                  <div className={styles.panelHeading}>
+                    <h2>Selected Library</h2>
+                  </div>
+                  <p className={styles.muted}>
                     Stable Library UUID: <code>{selectedLibrary.id}</code>
                   </p>
-                  <p className="muted">
+                  <p className={styles.muted}>
                     Root Topic Tree node:{' '}
                     {selectedLibraryRoots.length === 1 ? (
                       <>
@@ -845,33 +794,33 @@ export function LibraryOrganizerClient() {
                       <strong>{selectedLibraryRoots.length} roots found</strong>
                     )}
                   </p>
-                  <p className="muted">
+                  <p className={styles.muted}>
                     Internal Topic Tree nodes:{' '}
                     {nodeCountByLibraryId.get(selectedLibrary.id) || 0}
                   </p>
-                  <div style={{ display: 'grid', gap: 11 }}>
-                    <label style={labelStyle}>
+                  <div className={styles.form}>
+                    <label className={styles.fieldLabel}>
                       <strong>Library name</strong>
                       <input
                         aria-label="Selected Library name"
-                        style={fieldStyle}
+                        className={styles.field}
                         value={libraryNameDraft}
                         onChange={(event) => setLibraryNameDraft(event.target.value)}
                       />
                     </label>
                     <button
-                      className="btn ghost"
+                      className={styles.secondaryButton}
                       type="button"
                       disabled={isMutating}
                       onClick={() => void renameSelectedLibrary()}
                     >
                       Rename Library and root
                     </button>
-                    <label style={labelStyle}>
+                    <label className={styles.fieldLabel}>
                       <strong>Canonical Group</strong>
                       <select
                         aria-label="Selected Library Group"
-                        style={fieldStyle}
+                        className={styles.field}
                         value={libraryGroupDraft}
                         onChange={(event) => setLibraryGroupDraft(event.target.value)}
                       >
@@ -884,18 +833,18 @@ export function LibraryOrganizerClient() {
                       </select>
                     </label>
                     <button
-                      className="btn ghost"
+                      className={styles.secondaryButton}
                       type="button"
                       disabled={isMutating || !libraryGroupDraft}
                       onClick={() => void moveSelectedLibrary()}
                     >
                       Move Library
                     </button>
-                    <label style={labelStyle}>
+                    <label className={styles.fieldLabel}>
                       <strong>Library status</strong>
                       <select
                         aria-label="Selected Library status"
-                        style={fieldStyle}
+                        className={styles.field}
                         value={libraryStatusDraft}
                         onChange={(event) =>
                           setLibraryStatusDraft(
@@ -909,7 +858,7 @@ export function LibraryOrganizerClient() {
                       </select>
                     </label>
                     <button
-                      className="btn ghost"
+                      className={styles.secondaryButton}
                       type="button"
                       disabled={isMutating}
                       onClick={() => void saveSelectedLibraryStatus()}
@@ -917,7 +866,7 @@ export function LibraryOrganizerClient() {
                       Save Library status
                     </button>
                     <button
-                      className="btn ghost"
+                      className={styles.dangerButton}
                       type="button"
                       disabled={isMutating}
                       title="Permanently delete this Library and its development content"
