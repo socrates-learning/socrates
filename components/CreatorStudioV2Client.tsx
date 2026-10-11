@@ -817,10 +817,10 @@ function mapLearnerPublishedQuestionRow(
 function questionConceptChoiceStyle(selected: boolean, saving: boolean, depth: number) {
   return {
     alignItems: 'center',
-    background: selected ? '#e8f0ff' : '#f7f9fc',
-    border: selected ? '1px solid #8eb2f3' : '1px solid transparent',
+    background: selected ? 'var(--question-associated-surface, #e8f0ff)' : 'var(--question-choice-surface, #f7f9fc)',
+    border: selected ? '1px solid var(--question-associated-border, #8eb2f3)' : '1px solid transparent',
     borderRadius: 8,
-    color: selected ? '#0f4eb8' : '#475569',
+    color: selected ? 'var(--question-choice-color, #0f4eb8)' : 'var(--question-choice-color, #475569)',
     cursor: saving ? 'not-allowed' : 'pointer',
     display: 'flex',
     fontSize: 14,
@@ -1130,7 +1130,7 @@ export function CreatorStudioV2Client({
   const [newCatalogTagName, setNewCatalogTagName] = useState('');
   const [tagCatalogStatus, setTagCatalogStatus] = useState<Status>(null);
   const [isMutatingTagCatalog, setIsMutatingTagCatalog] = useState(false);
-  const [tagPages, setTagPages] = useState<Record<TagSurface, TagPage>>(() => ({ concept: emptyTagPage(), question: emptyTagPage(), manager: emptyTagPage() }));
+  const [tagPages, setTagPages] = useState<Record<TagSurface, TagPage>>(() => ({ concept: emptyTagPage(), question: emptyTagPage(), manager: { ...emptyTagPage(), open: true } }));
   const [tagCatalogEpoch, setTagCatalogEpoch] = useState(0);
   const [tagAssigning, setTagAssigning] = useState({ concept: false, question: false });
   const tagPageGeneration = useRef({ concept: 0, question: 0, manager: 0 });
@@ -3634,9 +3634,10 @@ export function CreatorStudioV2Client({
     if (!state.open && !query.trim()) return null;
     const selected = surface === 'concept' ? conceptTags : questionTags;
     const busy = surface === 'concept' ? isSaving : surface === 'question' ? isSavingQuestion : isMutatingTagCatalog;
-    return <div id={`${surface}-tag-browser`} className={styles.conceptBrowsePanel} aria-label={surface === 'manager' ? 'Tag catalog browse' : `${surface === 'concept' ? 'Concept' : 'Question'} Tag browse`}>
-      <div className={styles.conceptBrowseHeading}>
-        <strong>{query.trim() ? 'Matching Tags' : 'Browse Tags'}</strong>
+    return <div id={`${surface}-tag-browser`} className={surface === 'manager' ? styles.tagCatalog : styles.conceptBrowsePanel} aria-label={surface === 'manager' ? 'Tag catalog browse' : `${surface === 'concept' ? 'Concept' : 'Question'} Tag browse`}>
+      <div className={surface === 'manager' ? styles.tagCatalogHeading : styles.conceptBrowseHeading}>
+        {surface === 'manager' ? <div><h3>{query.trim() ? 'Matching Tags' : 'All Tags'}</h3><p>Manage the shared Tag vocabulary and its current assignments.</p></div>
+          : <strong>{query.trim() ? 'Matching Tags' : 'Browse Tags'}</strong>}
         {state.open && <button type="button" className={styles.secondaryButton} onClick={() => {
           toggleTagBrowse(surface);
           tagBrowseButtons.current[surface]?.focus();
@@ -3645,14 +3646,20 @@ export function CreatorStudioV2Client({
       {state.loading ? <p role="status">Loading Tags…</p> : state.error ? <div role="alert">
         <p>{state.error}</p><button type="button" className={styles.secondaryButton} onClick={() => void loadTagBrowsePage(surface, query, state.page)}>Retry</button>
       </div> : <>
-        <div className={styles.conceptBrowseTree} aria-label="Tag results">
-          {state.tags.length ? state.tags.map(tag => surface === 'manager' ? renderCatalogTag(tag) : (
+        {surface === 'manager' ? <div className={styles.tagCatalogScroll} aria-label="Tag results" role="region" tabIndex={0}>
+          {state.tags.length ? <table className={styles.tagCatalogTable}>
+            <caption className={styles.srOnly}>Tag catalog and current assignments</caption>
+            <thead><tr><th scope="col">Tag Name</th><th scope="col">Status</th><th scope="col">Used In</th><th scope="col">Actions</th></tr></thead>
+            <tbody>{state.tags.map(renderCatalogTag)}</tbody>
+          </table> : <p className={styles.emptySelection}>No tags found.</p>}
+        </div> : <div className={styles.conceptBrowseTree} aria-label="Tag results">
+          {state.tags.length ? state.tags.map(tag => (
             <div className={styles.conceptBrowseConceptRow} key={tag.id}>
               <button type="button" className={styles.secondaryButton} disabled={isLearnerReadOnly || busy || selected.some(value => value.id === tag.id)}
                 onClick={() => assignTag(surface, tag)}>{tag.name}{selected.some(value => value.id === tag.id) ? ' (Added)' : ''}</button>
             </div>
           )) : <p className={styles.emptySelection}>No tags found.</p>}
-        </div>
+        </div>}
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginTop: 8 }} aria-label="Tag pages">
           <button type="button" className={styles.secondaryButton} disabled={state.page === 0} onClick={() => {
             ++tagPageGeneration.current[surface];
@@ -3669,61 +3676,27 @@ export function CreatorStudioV2Client({
   }
 
   function renderCatalogTag(tag: CatalogTag) {
-    return (
-                    <div
-                      key={tag.id}
-                      style={{
-                        alignItems: 'center',
-                        border: '1px solid #d8e1ef',
-                        borderRadius: 8,
-                        display: 'flex',
-                        flexWrap: 'wrap',
-                        gap: 8,
-                        justifyContent: 'space-between',
-                        padding: '8px 10px',
-                      }}
-                    >
-                      <span>
-                        <strong>{tag.name}</strong>{' '}
-                        <small style={{ color: '#687386' }}>
-                          {tag.status} · {tag.conceptUsage} concepts ·{' '}
-                          {tag.questionUsage} questions
-                          {!isLearnerReadOnly && ` · ${tag.articleUsage} articles`}
-                        </small>
-                      </span>
-                      <span style={{ display: 'flex', gap: 6 }}>
-                        <button
-                          className={styles.secondaryButton}
-                          type="button"
-                          disabled={isLearnerReadOnly || isMutatingTagCatalog}
-                          onClick={() => void renameCatalogTag(tag)}
-                        >
-                          Rename
-                        </button>
-                        <button
-                          className={styles.secondaryButton}
-                          type="button"
-                          disabled={isLearnerReadOnly || isMutatingTagCatalog}
-                          onClick={() =>
-                            void setCatalogTagStatus(
-                              tag,
-                              tag.status === 'active' ? 'archived' : 'active'
-                            )
-                          }
-                        >
-                          {tag.status === 'active' ? 'Archive' : 'Reactivate'}
-                        </button>
-                        <button
-                          className={styles.secondaryButton}
-                          type="button"
-                          disabled={isLearnerReadOnly || isMutatingTagCatalog}
-                          onClick={() => void deleteCatalogTag(tag)}
-                        >
-                          Delete Tag
-                        </button>
-                      </span>
-                    </div>
-    );
+    return <tr key={tag.id}>
+      <th scope="row">{tag.name}</th>
+      <td data-label="Status"><span className={styles.tagStatus} data-status={tag.status}>{tag.status}</span></td>
+      <td data-label="Used In" className={styles.tagUsage}>
+        {tag.conceptUsage} concepts · {tag.questionUsage} questions
+        {!isLearnerReadOnly && ` · ${tag.articleUsage} articles`}
+      </td>
+      <td data-label="Actions"><div className={styles.tagRowActions}>
+        <button className={styles.secondaryButton} type="button"
+          disabled={isLearnerReadOnly || isMutatingTagCatalog}
+          onClick={() => void renameCatalogTag(tag)}><Pencil size={15} aria-hidden="true" />Rename</button>
+        <button className={styles.secondaryButton} type="button"
+          disabled={isLearnerReadOnly || isMutatingTagCatalog}
+          onClick={() => void setCatalogTagStatus(tag, tag.status === 'active' ? 'archived' : 'active')}>
+          {tag.status === 'active' ? 'Archive' : 'Reactivate'}
+        </button>
+        <button className={styles.dangerButton} type="button"
+          disabled={isLearnerReadOnly || isMutatingTagCatalog}
+          onClick={() => void deleteCatalogTag(tag)}><Trash2 size={15} aria-hidden="true" />Delete Tag</button>
+      </div></td>
+    </tr>;
   }
 
   function toggleExpanded(topicId: string) {
@@ -6227,7 +6200,7 @@ export function CreatorStudioV2Client({
           const isSelected = isQuestionConceptAssociated(item.id);
           const isPrimary = questionSource === 'official' && primaryQuestionConceptId === item.id;
           return (
-            <div key={createCreatorEntityKey('official', 'concept', item.id)}
+            <div key={createCreatorEntityKey('official', 'concept', item.id)} className={styles.questionAssociationRow}
               style={questionConceptChoiceStyle(isSelected, isSavingQuestion, depth)}>
               <input className={styles.topicCheckbox} type="checkbox"
                 aria-label={`Associate ${item.name} with Question`} checked={isSelected}
@@ -6239,7 +6212,7 @@ export function CreatorStudioV2Client({
                 disabled={isSavingQuestion} onClick={() => browseQuestionConcept(item.id, item.topicId)}>
                 {item.name} · {questionCountLabel(questionCountsByConceptId[item.id] || 0)}
               </button>
-              {isSelected && <span>{isPrimary ? 'Primary' : 'Related'}</span>}
+              {isSelected && <span className={styles.questionAssociationLabel}>{isPrimary ? 'Primary' : 'Related'}</span>}
               {isSelected && !isPrimary && !questionId && (
                 <button type="button" className={styles.secondaryButton}
                   aria-label={`Make ${item.name} Primary`} disabled={isSavingQuestion}
@@ -7133,7 +7106,7 @@ export function CreatorStudioV2Client({
   );
   const saveToolbar = !standaloneRequest && (activeCreatorTab === 'content' || activeCreatorTab === 'questions') && (
             <CreatorStudioSaveToolbar
-              presentation={activeCreatorTab === 'content' ? 'navy' : undefined}
+              presentation="navy"
               leading={activeCreatorTab === 'content' ? contentActions : undefined}
               buttonLabel={
                 isSaving || isSavingQuestion
@@ -7201,8 +7174,6 @@ export function CreatorStudioV2Client({
             canClearConcept={!isCurrentContentReadOnly}
           />
 
-          {activeCreatorTab !== 'content' && saveToolbar}
-
           <CreatorStudioTabs
             presentation="navy"
             activeTab={activeCreatorTab}
@@ -7219,76 +7190,64 @@ export function CreatorStudioV2Client({
             }}
           />
 
-          {activeCreatorTab === 'content' && saveToolbar}
+          {saveToolbar}
 
           {activeCreatorTab === 'tags' && (
-            <section
-              className={`${styles.panel} ${styles.selectedPanel}`}
-              aria-label="Tag Manager"
-              style={{ margin: '18px 28px 0' }}
-            >
-              <div>
-                <h2>Tag Manager</h2>
-                <p>Create and maintain the shared tag vocabulary.</p>
-                <p style={{ color: '#687386', marginTop: 6 }}>
+            <section className={`${styles.panel} ${styles.tagManagerDesign}`} aria-label="Tag Manager">
+              <div className={styles.tagManagerHeading}>
+                <div><h2>Tag Manager</h2><p>Create and maintain the shared tag vocabulary.</p></div>
+                <p className={styles.tagArchiveNotice}><Info size={20} aria-hidden="true" /><span>
                   Archived tags remain on existing content and in history, but are
                   unavailable for new assignments.
-                </p>
+                </span></p>
               </div>
-              <div
-                style={{
-                  alignItems: 'center',
-                  display: 'flex',
-                  flexWrap: 'wrap',
-                  gap: 8,
-                  marginTop: 12,
-                }}
-              >
-                <label className={styles.searchBox} style={{ flex: '1 1 220px' }}>
-                  <span className={styles.srOnly}>Search tag catalog</span>
-                  <input
-                    value={tagCatalogSearch}
-                    onChange={(event) => changeTagQuery('manager', event.target.value)}
-                    placeholder="Search tags"
-                  />
-                  <Search size={20} />
-                </label>
-                <label className={styles.searchBox} style={{ flex: '1 1 220px' }}>
-                  <span className={styles.srOnly}>New tag name</span>
-                  <input
-                    value={newCatalogTagName}
-                    disabled={isLearnerReadOnly || isMutatingTagCatalog}
-                    onChange={(event) => {
-                      setNewCatalogTagName(event.target.value);
-                      setTagCatalogStatus(null);
-                    }}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter') {
-                        event.preventDefault();
-                        void createCatalogTag();
-                      }
-                    }}
-                    placeholder="New tag name"
-                  />
-                </label>
-                <button
-                  className={styles.toolButton}
-                  type="button"
-                  disabled={isLearnerReadOnly || isMutatingTagCatalog || !newCatalogTagName.trim()}
-                  onClick={() => void createCatalogTag()}
-                >
-                  <Plus size={18} /> Create Tag
-                </button>
-                {renderTagBrowseToggle('manager')}
+              <div className={styles.tagManagerControls}>
+                <section className={styles.tagControlPanel} aria-labelledby="tag-find-heading">
+                  <div className={styles.tagControlHeading}><Search size={26} aria-hidden="true" /><div>
+                    <h3 id="tag-find-heading">Find a Tag</h3><p>Search existing tags by name or slug.</p>
+                  </div></div>
+                  <div className={styles.tagControlInputs}>
+                    <label className={styles.searchBox}>
+                      <span className={styles.srOnly}>Search tag catalog</span>
+                      <input value={tagCatalogSearch}
+                        onChange={(event) => changeTagQuery('manager', event.target.value)}
+                        placeholder="Search tags" />
+                      <Search size={18} aria-hidden="true" />
+                    </label>
+                    {renderTagBrowseToggle('manager')}
+                  </div>
+                </section>
+                <section className={styles.tagControlPanel} aria-labelledby="tag-create-heading">
+                  <div className={styles.tagControlHeading}><Plus size={28} aria-hidden="true" /><div>
+                    <h3 id="tag-create-heading">Create a New Tag</h3><p>Add a new tag to the shared vocabulary.</p>
+                  </div></div>
+                  <div className={styles.tagControlInputs}>
+                    <label className={styles.searchBox}>
+                      <span className={styles.srOnly}>New tag name</span>
+                      <input value={newCatalogTagName}
+                        disabled={isLearnerReadOnly || isMutatingTagCatalog}
+                        onChange={(event) => {
+                          setNewCatalogTagName(event.target.value);
+                          setTagCatalogStatus(null);
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') {
+                            event.preventDefault();
+                            void createCatalogTag();
+                          }
+                        }}
+                        placeholder="New tag name" />
+                    </label>
+                    <button className={styles.primaryButton} type="button"
+                      disabled={isLearnerReadOnly || isMutatingTagCatalog || !newCatalogTagName.trim()}
+                      onClick={() => void createCatalogTag()}><Plus size={18} aria-hidden="true" />Create Tag</button>
+                  </div>
+                </section>
               </div>
               {renderTagBrowser('manager')}
               {tagCatalogStatus && (
-                <div
-                  className={`${styles.referenceStatus} ${styles[tagCatalogStatus.tone]}`}
-                  role="status"
-                  aria-live="polite"
-                  style={{ marginTop: 10 }}
-                >
+                <div className={`${styles.referenceStatus} ${styles[tagCatalogStatus.tone]}`}
+                  role="status" aria-live="polite" style={{ marginTop: 10 }}>
                   {tagCatalogStatus.message}
                 </div>
               )}
@@ -8378,6 +8337,7 @@ export function CreatorStudioV2Client({
                   libraryId={activeLibraryId} onClose={closeQuestionConceptPreview} />
               )}
 
+              <div className={styles.questionDesign}>
               <div className={styles.mainGrid}>
                 <section className={`${styles.panel} ${styles.conceptPanel}`}>
                   <div>
@@ -8453,8 +8413,8 @@ export function CreatorStudioV2Client({
 
 
 
-                  {questionSource === 'official' ? <div>
-                    <QuestionMarkdownField label="Question" ariaLabel="Question front of card" placeholder="Front of card"
+                  {questionSource === 'official' ? <div className={styles.questionField}>
+                    <QuestionMarkdownField label="Question" ariaLabel="Question front of card" placeholder="Front of card" presentation="compact"
                       value={questionPrompt} format={questionPromptFormat}
                       documentKey={`${activeLibraryId}:question:${questionId || 'new'}:${questionVisualGeneration}`}
                       memory={questionVisualMemory} handle={questionVisualHandle} state={questionMarkdownState} onStateChange={setQuestionMarkdownState}
@@ -8481,8 +8441,8 @@ export function CreatorStudioV2Client({
 
                   {questionSource === 'official' && creatorAuthority.canSaveQuestion && <QuestionImageAuthoring controller={questionImages} surface="front" disabled={isSavingQuestion} />}
 
-                  {questionSource === 'official' ? <div style={{ marginTop: 18 }}>
-                    <QuestionMarkdownField label="Answer" ariaLabel="Answer back of card" placeholder="Back of card"
+                  {questionSource === 'official' ? <div className={styles.questionField}>
+                    <QuestionMarkdownField label="Answer" ariaLabel="Answer back of card" placeholder="Back of card" presentation="compact"
                       value={questionAnswer} format={questionAnswerFormat}
                       documentKey={`${activeLibraryId}:answer:${questionId || 'new'}:${questionVisualGeneration}`}
                       memory={answerVisualMemory} handle={answerVisualHandle} state={answerMarkdownState} onStateChange={setAnswerMarkdownState}
@@ -8878,7 +8838,7 @@ export function CreatorStudioV2Client({
                     marginTop: 16,
                   }}
                 >
-                  <fieldset disabled={isLearnerReadOnly || isSavingQuestion} style={{ minWidth: 0, margin: 0, padding: 12, border: '1px solid #e2e8f0', borderRadius: 8 }}>
+                  <fieldset className={styles.questionAngles} disabled={isLearnerReadOnly || isSavingQuestion} style={{ minWidth: 0, margin: 0, padding: 12, border: '1px solid #e2e8f0', borderRadius: 8 }}>
                     <legend style={{ fontWeight: 700 }}>Testing Angles</legend>
                     <p style={{ margin: '0 0 10px' }}>Choose one Primary angle and any additional angles. Primary guides learner evidence; Additional angles classify the Question.</p>
                     <input type="search" aria-label="Search Testing Angles" value={additionalAngleSearch} onChange={(event) => setAdditionalAngleSearch(event.target.value)} style={{ width: '100%', boxSizing: 'border-box', marginBottom: 8 }} />
@@ -8890,7 +8850,7 @@ export function CreatorStudioV2Client({
                         const isPrimary = normalizedAngle === questionTestingAngle.trim().toLowerCase();
                         const isAdditional = questionAdditionalTestingAngles.some((value) => value.trim().toLowerCase() === normalizedAngle);
                         return (
-                          <div key={normalizedAngle} style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', padding: '6px 8px', borderRadius: 6, background: isPrimary || isAdditional ? '#f1f5f9' : 'transparent' }}>
+                          <div key={normalizedAngle} className={styles.questionAngleRow} data-selected={isPrimary || isAdditional} style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', padding: '6px 8px', borderRadius: 6 }}>
                             <label style={{ display: 'flex', gap: 8, alignItems: 'center', flex: '1 1 180px', minWidth: 0, textAlign: 'left' }}>
                               <input type="checkbox" style={{ width: 16, height: 16, margin: 0, flex: '0 0 16px' }} aria-label={`Select Testing Angle ${displayName}`} checked={isPrimary || isAdditional} disabled={isPrimary} onChange={(event) => {
                                 if (isPrimary) return;
@@ -8938,7 +8898,7 @@ export function CreatorStudioV2Client({
                           </> : <>
                             <span style={{ flex: '1 1 180px', overflowWrap: 'anywhere' }}>{entry.display_name}{entry.status === 'retired' ? ' (Retired)' : ''}</span>
                             <button type="button" disabled={testingAngleCatalogBusy} aria-label={`Rename ${entry.display_name}`} onClick={() => setTestingAngleRename({ entry, name: entry.display_name })}>Rename</button>
-                            <button type="button" disabled={testingAngleCatalogBusy || entry.storage_key.trim().toLowerCase() === 'general understanding'}
+                            <button type="button" className={entry.status === 'active' ? styles.dangerButton : styles.secondaryButton} disabled={testingAngleCatalogBusy || entry.storage_key.trim().toLowerCase() === 'general understanding'}
                               title={entry.storage_key.trim().toLowerCase() === 'general understanding' ? 'Protected New Question default' : undefined}
                               aria-label={`${entry.status === 'active' ? 'Remove' : 'Restore'} ${entry.display_name}${entry.status === 'active' ? ' from future availability' : ''}`}
                               onClick={() => { void mutateTestingAngleCatalog('set-testing-angle-retired', entry); }}>{entry.status === 'active' ? 'Remove' : 'Restore'}</button>
@@ -9094,22 +9054,7 @@ export function CreatorStudioV2Client({
                               disabled={isSavingQuestion}
                               aria-pressed={isSelected}
                               onClick={() => selectExistingQuestion(question)}
-                              style={{
-                                alignItems: 'stretch',
-                                background: isSelected ? '#e8f0ff' : '#f7f9fc',
-                                border: isSelected
-                                  ? '1px solid #8eb2f3'
-                                  : '1px solid #d8e1ef',
-                                borderRadius: 8,
-                                color: isSelected ? '#0f4eb8' : '#334155',
-                                cursor: isSavingQuestion
-                                  ? 'not-allowed'
-                                  : 'pointer',
-                                display: 'grid',
-                                gap: 3,
-                                padding: '8px 10px',
-                                textAlign: 'left',
-                              }}
+                              className={styles.questionListItem}
                             >
                               <span
                                 title={question.prompt}
@@ -9122,7 +9067,7 @@ export function CreatorStudioV2Client({
                               >
                                 {(question.source === 'official' ? questionMarkdownSummary(question.prompt, question.promptFormat) : question.prompt) || 'Untitled question'}
                               </span>
-                              <small style={{ color: '#687386' }}>
+                              <small className={styles.questionListMetadata}>
                                 {question.source === 'official'
                                   ? `${question.difficulty} · ${testingAngleLabel(question.testingAngle || '')} · ${question.status} · ${question.conceptId === questionConceptId ? 'Primary Question' : 'Related Question'}`
                                   : 'Difficulty · N/A · Testing Angle · N/A'}
@@ -9157,6 +9102,7 @@ export function CreatorStudioV2Client({
                   {questionStatus.message}
                 </div>
               )}
+              </div>
             </>
           ) : null}
         </fieldset>

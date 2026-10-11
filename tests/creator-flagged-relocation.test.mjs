@@ -32,7 +32,7 @@ test('Creator Studio reuses Flagged with the current owner-scoped personal state
     chrome,
     /import \{ StudyCreatorFlaggedBrowser, type FlaggedQuestionEditor \} from '@\/components\/StudyCreatorFlaggedBrowser'/
   );
-  assert.match(chrome, /<StudyCreatorFlaggedBrowser material=\{material\} ownerId=\{ownerId\} neutralPresentation officialQuestionEditor=\{officialQuestionEditor\} \/>/);
+  assert.match(chrome, /<StudyCreatorFlaggedBrowser material=\{material\} ownerId=\{ownerId\} neutralPresentation officialQuestionEditor=\{officialQuestionEditor\} navyPresentationClassName=\{styles\.flaggedDesign\} \/>/);
   assert.match(chrome, /if \(learnerPresentation\) return <StudyCreatorFlaggedBrowser material=\{material\} ownerId=\{ownerId\} neutralPresentation learnerPresentation \/>/);
   assert.match(creator, /activeCreatorTab === 'flagged'/);
   assert.match(creator, /<CreatorStudioFlaggedTab/);

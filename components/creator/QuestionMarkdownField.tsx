@@ -12,15 +12,15 @@ export type QuestionMarkdownState = {
 
 // Source, format, presentation and session history remain parent-owned across Search.
 // This field has no persistence, navigation or image ownership.
-export function QuestionMarkdownField({ label, ariaLabel, placeholder, value, format, onChange, state, onStateChange, disabled, readOnly, memory, handle, documentKey }: {
+export function QuestionMarkdownField({ label, ariaLabel, placeholder, value, format, onChange, state, onStateChange, disabled, readOnly, memory, handle, documentKey, presentation }: {
   label: string; ariaLabel: string; placeholder: string; value: string; format: OfficialContentFormat;
   onChange: (source: string, format: OfficialContentFormat) => void; state: QuestionMarkdownState;
   onStateChange: (state: QuestionMarkdownState) => void;
   disabled: boolean; readOnly: boolean; memory?: RefObject<OfficialVisualMemory | null>;
-  handle?: RefObject<OfficialVisualHandle | null>; documentKey: string;
+  handle?: RefObject<OfficialVisualHandle | null>; documentKey: string; presentation?: 'compact';
 }) {
   const local = useRef<OfficialVisualMemory | null>(null);
-  return <OfficialVisualField label={label} ariaLabel={ariaLabel} placeholder={placeholder}
+  return <OfficialVisualField presentation={presentation} label={label} ariaLabel={ariaLabel} placeholder={placeholder}
     value={value} format={format} flavor="question" documentKey={documentKey} memory={memory || local} handle={handle}
     mode={state.mode} onMode={mode => onStateChange({ ...state, mode })}
     disabled={disabled} readOnly={readOnly} onChange={onChange} />;

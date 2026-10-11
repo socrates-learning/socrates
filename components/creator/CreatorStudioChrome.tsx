@@ -19,7 +19,7 @@ export function CreatorStudioFlaggedTab({
   officialQuestionEditor?: FlaggedQuestionEditor;
 }) {
   if (learnerPresentation) return <StudyCreatorFlaggedBrowser material={material} ownerId={ownerId} neutralPresentation learnerPresentation />;
-  return <StudyCreatorFlaggedBrowser material={material} ownerId={ownerId} neutralPresentation officialQuestionEditor={officialQuestionEditor} />;
+  return <StudyCreatorFlaggedBrowser material={material} ownerId={ownerId} neutralPresentation officialQuestionEditor={officialQuestionEditor} navyPresentationClassName={styles.flaggedDesign} />;
 }
 
 export function CreatorStudioLocalHeader({

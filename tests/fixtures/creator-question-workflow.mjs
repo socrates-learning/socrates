@@ -288,7 +288,7 @@ export function row(overrides = {}) {
 // Exercise the real Search presentation while keeping its parent-owned callbacks observable.
 const searchPanelContext = { exports: {}, require(name) {
   if (name === 'react/jsx-runtime') return { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }) };
-  if (name === 'lucide-react') return { Search: 'icon:Search' };
+  if (name === 'lucide-react') return { Search: 'icon:Search', FileText: 'icon:FileText', ArrowRight: 'icon:ArrowRight' };
   if (name === '@/components/MarkdownContent') return { questionMarkdownSummary: questionMarkdown.questionMarkdownSummary };
   if (name === '@/lib/creator-entity-contracts') return { createCreatorEntityKey: (source, kind, id) => `${source}:${kind}:${id}` };
   if (name === '../CreatorStudioV2Client.module.css') return { __esModule: true, default: new Proxy({}, {get: (_, key) => String(key)}) };

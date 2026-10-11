@@ -102,7 +102,7 @@ test('Manager count failures remain errors; complete counts and active/archived 
     const result = readCatalog(table, read);
     if (incomplete) result.data = result.data.map(row => ({ ...row, question_tags: undefined }));
     return result;
-  } }); let e = h.render(); e.setActiveCreatorTab('tags'); e.toggleTagBrowse('manager');
+  } }); let e = h.render(); e.setActiveCreatorTab('tags'); assert.equal(h.render().tagPages.manager.open, true);
   await h.render().loadTagBrowsePage('manager', '', 0); e = h.render();
   assert.match(text(panel(e.tree, 'manager')), /usage counts could not be confirmed/);
   assert.doesNotMatch(text(panel(e.tree, 'manager')), /0 questions|No tags found/);

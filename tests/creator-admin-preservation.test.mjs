@@ -144,6 +144,8 @@ function withoutFlaggedEditExtension(tree) {
   if (Array.isArray(tree)) return tree.map(withoutFlaggedEditExtension);
   const props = { ...tree.props };
   if (tree.type?.name === 'StudyCreatorFlaggedBrowser') {
+    assert.equal(props.navyPresentationClassName, 'flaggedDesign');
+    delete props.navyPresentationClassName;
     assert.deepEqual(Object.keys(props.officialQuestionEditor), ['open', 'cancel', 'pending', 'busy', 'error']);
     assert.equal(typeof props.officialQuestionEditor.open, 'function');
     assert.equal(typeof props.officialQuestionEditor.cancel, 'function');

@@ -2,7 +2,7 @@
 
 import type { FormEvent } from 'react';
 import { questionMarkdownSummary } from '@/components/MarkdownContent';
-import { Search } from 'lucide-react';
+import { ArrowRight, FileText, Search } from 'lucide-react';
 import { createCreatorEntityKey } from '@/lib/creator-entity-contracts';
 import type { ExistingQuestion, QuestionSearchFilters, QuestionSearchCursor } from '../CreatorStudioV2Client';
 import styles from '../CreatorStudioV2Client.module.css';
@@ -62,10 +62,11 @@ export function CreatorQuestionSearchPanel({
 }: Props) {
   return (
     <section
-      className={`${styles.panel} ${styles.questionSearchPanel}`}
+      className={`${styles.panel} ${styles.questionSearchPanel} ${styles.searchDesign}`}
       aria-labelledby="library-question-search-heading"
     >
       <div className={styles.questionSearchHeading}>
+        <Search size={30} aria-hidden="true" />
         <div>
           <h2 id="library-question-search-heading">
             Library Question Search
@@ -75,16 +76,14 @@ export function CreatorQuestionSearchPanel({
             the Questions editor.
           </p>
         </div>
-        <span className={styles.questionSearchCount}>
-          {questionSearchResults.length}
-          {questionSearchHasMore ? '+' : ''} loaded · newest first
-        </span>
       </div>
 
       <form
         className={styles.questionSearchForm}
         onSubmit={submitQuestionSearch}
+        aria-labelledby="question-search-filters-heading"
       >
+        <h3 id="question-search-filters-heading">Search Filters</h3>
         <label className={styles.questionSearchText}>
           <span>Question text</span>
           <input
@@ -282,6 +281,14 @@ export function CreatorQuestionSearchPanel({
         </div>
       </form>
 
+      <section data-search-part="results-panel" aria-labelledby="question-search-results-heading">
+        <div data-search-part="results-heading">
+          <h3 id="question-search-results-heading">Search Results</h3>
+        <span className={styles.questionSearchCount}>
+          {questionSearchResults.length}
+          {questionSearchHasMore ? '+' : ''} loaded · newest first
+        </span>
+        </div>
       {questionSearchError ? (
         <div
           className={`${styles.status} ${styles.error} ${styles.questionSearchStatus}`}
@@ -337,6 +344,8 @@ export function CreatorQuestionSearchPanel({
                 disabled={isSavingQuestion}
                 onClick={() => selectQuestionSearchResult(question)}
               >
+                <span data-search-part="result-icon" aria-hidden="true"><FileText size={24} /></span>
+                <span data-search-part="result-content">
                 <span className={styles.questionSearchPrompt}>
                   {(question.source === 'official' ? questionMarkdownSummary(question.prompt, question.promptFormat) : question.prompt) || 'Untitled Question'}
                 </span>
@@ -398,6 +407,10 @@ export function CreatorQuestionSearchPanel({
                     )}
                   </span>
                 )}
+                </span>
+                <span data-search-part="open-label">
+                  Open in Editor <ArrowRight size={17} aria-hidden="true" />
+                </span>
               </button>
             );
           })}
@@ -426,6 +439,7 @@ export function CreatorQuestionSearchPanel({
           </button>
         </div>
       )}
+      </section>
     </section>
   );
 }

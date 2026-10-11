@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { editor, nodes, text, button, expandChrome, source, projectNavyPresentation } from './fixtures/creator-role-workspaces.mjs';
+import { editor, nodes, text, button, expandChrome, source, projectNavyPresentation, projectQuestionPresentation, projectTagManagerPresentation } from './fixtures/creator-role-workspaces.mjs';
 const read = path => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 const hash = value => createHash('sha256').update(value).digest('hex');
 
@@ -58,8 +58,8 @@ function projectQuestionSelection(value) {
 }
 
 // Before-state hashes are from released 9585d78, never computed at test runtime.
-test('only approved Content presentation and Question selection differ from the released complete Creator source', () => {
-  assert.equal(hash(projectNavyPresentation(projectQuestionSelection(source))), "3f918a1d04a8ae237a95fbe350a201f6ce7a77a45091d79f826a80d69a78ae04");
+test('only approved Content/Question presentation and Question selection differ from the released complete Creator source', () => {
+  assert.equal(hash(projectNavyPresentation(projectQuestionSelection(projectQuestionPresentation(projectTagManagerPresentation(source))))), "3f918a1d04a8ae237a95fbe350a201f6ce7a77a45091d79f826a80d69a78ae04");
 });
 test('Home, Stats and Study/Cram match released 9585d78 after only the approved dashboard presentation projection', () => {
   let planner = read('components/StudyPlanner.tsx');
@@ -97,9 +97,11 @@ for (const role of ['admin', 'editor']) test(`${role}: entire Content workspace 
   button(h.render().tree, 'Content').props.onClick();
   assert.equal(h.render().concept, 'Navy draft'); assert.equal(h.calls.length, 0);
 });
-test('compact toolbar is opted into by only the official Concept field', () => {
+test('compact toolbars are explicitly opted into by official Concept, Question and Answer fields', () => {
   assert.equal(source.split('hideLabel presentation="compact"').length, 2);
-  assert.doesNotMatch(read('components/creator/QuestionMarkdownField.tsx'), /presentation=/);
+  assert.equal(source.split('placeholder="Front of card" presentation="compact"').length, 2);
+  assert.equal(source.split('placeholder="Back of card" presentation="compact"').length, 2);
+  assert.match(read('components/creator/QuestionMarkdownField.tsx'), /<OfficialVisualField presentation=\{presentation\}/);
   const styles = read('components/CreatorStudioV2Client.module.css');
   assert.match(styles, /\.contentDesign \.mainGrid/);
   assert.match(styles, /\.contentDesign \.selectedPanel, \.contentDesign \.sourcesPanel/);

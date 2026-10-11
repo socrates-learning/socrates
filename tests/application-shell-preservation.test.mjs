@@ -72,6 +72,22 @@ const released = {'app/home.css': '08156337bbef31e0e99d08e415f5ec9265f26ed728f94
 for (const [path, expected] of Object.entries(released)) test(`excluded workspace behavior/styles preserve original fingerprints: ${path}`, () => {
   let source = read(path);
   if (path === 'components/CreatorStudioV2Client.module.css') {
+    const searchMarker = '\n/* Approved Search-only presentation;';
+    assert.equal(source.split(searchMarker).length, 2);
+    assert.equal(hash(source.slice(source.indexOf(searchMarker))), 'a1a8a23ceff0fc375148b2ab762377992dbf703860e144eba014eafc2c63cee7', 'Only the exact approved Search presentation block');
+    source = source.slice(0, source.indexOf(searchMarker));
+    const flaggedMarker = '\n/* Approved staff Flagged-only presentation;';
+    assert.equal(source.split(flaggedMarker).length, 2);
+    assert.equal(hash(source.slice(source.indexOf(flaggedMarker))), '6f0d0ad968d58bc6c13c582fb61938858c0f490de201f566c26853331a63ada2', 'Only the exact approved staff Flagged presentation block');
+    source = source.slice(0, source.indexOf(flaggedMarker));
+    const tagMarker = '\n/* Approved Tag Manager-only presentation;';
+    assert.equal(source.split(tagMarker).length, 2);
+    assert.equal(hash(source.slice(source.indexOf(tagMarker))), '0eb831bc321ee36c79fd275fef6130c7450a11d2324398eebb5a21091faee1de', 'Only the exact approved Tag Manager presentation block');
+    source = source.slice(0, source.indexOf(tagMarker));
+    const questionMarker = '\n/* Approved Question-only presentation;';
+    assert.equal(source.split(questionMarker).length, 2);
+    assert.equal(hash(source.slice(source.indexOf(questionMarker))), '82099fae48f2a3ee895ae511588ecb508e26d80491e502673e70c58a73304415', 'Only the exact approved Question presentation block');
+    source = source.slice(0, source.indexOf(questionMarker));
     const marker = '\n/* Interaction states are scoped';
     assert.equal(source.split(marker).length, 2);
     assert.equal(hash(source.slice(source.indexOf(marker))), '3344d02e22aff599d212bcc01508eee1ef197e1016933c51dc656074029cd018', 'Exact approved hover, selected, focus, disabled and sticky-header offset additions');

@@ -78,6 +78,118 @@ const compiled = ts.transpileModule(source.replace(
   `  capture({ ${exposed} });\n  return (\n    <>\n      <Header />`,
 ), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText;
 
+// Exact Question-only presentation reversals against released 21e8185.
+// Never used by the actual behavior harness; unknown changes fail the old hashes.
+// Exact approved Tag Manager presentation and initial Browse visibility only.
+// Actual behavior tests use the unprojected source; historic hashes remain unchanged.
+const tagManagerPresentationHunks = [
+  [
+    "concept: emptyTagPage(), question: emptyTagPage(), manager: { ...emptyTagPage(), open: true }",
+    "concept: emptyTagPage(), question: emptyTagPage(), manager: emptyTagPage()"
+  ],
+  [
+    "className={surface === 'manager' ? styles.tagCatalog : styles.conceptBrowsePanel} aria-label={surface",
+    "className={styles.conceptBrowsePanel} aria-label={surface"
+  ],
+  [
+    "      <div className={surface === 'manager' ? styles.tagCatalogHeading : styles.conceptBrowseHeading}>\n        {surface === 'manager' ? <div><h3>{query.trim() ? 'Matching Tags' : 'All Tags'}</h3><p>Manage the shared Tag vocabulary and its current assignments.</p></div>\n          : <strong>{query.trim() ? 'Matching Tags' : 'Browse Tags'}</strong>}",
+    "      <div className={styles.conceptBrowseHeading}>\n        <strong>{query.trim() ? 'Matching Tags' : 'Browse Tags'}</strong>"
+  ],
+  [
+    "        {surface === 'manager' ? <div className={styles.tagCatalogScroll} aria-label=\"Tag results\" role=\"region\" tabIndex={0}>\n          {state.tags.length ? <table className={styles.tagCatalogTable}>\n            <caption className={styles.srOnly}>Tag catalog and current assignments</caption>\n            <thead><tr><th scope=\"col\">Tag Name</th><th scope=\"col\">Status</th><th scope=\"col\">Used In</th><th scope=\"col\">Actions</th></tr></thead>\n            <tbody>{state.tags.map(renderCatalogTag)}</tbody>\n          </table> : <p className={styles.emptySelection}>No tags found.</p>}\n        </div> : <div className={styles.conceptBrowseTree} aria-label=\"Tag results\">\n          {state.tags.length ? state.tags.map(tag => (\n            <div className={styles.conceptBrowseConceptRow} key={tag.id}>\n              <button type=\"button\" className={styles.secondaryButton} disabled={isLearnerReadOnly || busy || selected.some(value => value.id === tag.id)}\n                onClick={() => assignTag(surface, tag)}>{tag.name}{selected.some(value => value.id === tag.id) ? ' (Added)' : ''}</button>\n            </div>\n          )) : <p className={styles.emptySelection}>No tags found.</p>}\n        </div>}",
+    "        <div className={styles.conceptBrowseTree} aria-label=\"Tag results\">\n          {state.tags.length ? state.tags.map(tag => surface === 'manager' ? renderCatalogTag(tag) : (\n            <div className={styles.conceptBrowseConceptRow} key={tag.id}>\n              <button type=\"button\" className={styles.secondaryButton} disabled={isLearnerReadOnly || busy || selected.some(value => value.id === tag.id)}\n                onClick={() => assignTag(surface, tag)}>{tag.name}{selected.some(value => value.id === tag.id) ? ' (Added)' : ''}</button>\n            </div>\n          )) : <p className={styles.emptySelection}>No tags found.</p>}\n        </div>"
+  ],
+  [
+    "  function renderCatalogTag(tag: CatalogTag) {\n    return <tr key={tag.id}>\n      <th scope=\"row\">{tag.name}</th>\n      <td data-label=\"Status\"><span className={styles.tagStatus} data-status={tag.status}>{tag.status}</span></td>\n      <td data-label=\"Used In\" className={styles.tagUsage}>\n        {tag.conceptUsage} concepts \u00b7 {tag.questionUsage} questions\n        {!isLearnerReadOnly && ` \u00b7 ${tag.articleUsage} articles`}\n      </td>\n      <td data-label=\"Actions\"><div className={styles.tagRowActions}>\n        <button className={styles.secondaryButton} type=\"button\"\n          disabled={isLearnerReadOnly || isMutatingTagCatalog}\n          onClick={() => void renameCatalogTag(tag)}><Pencil size={15} aria-hidden=\"true\" />Rename</button>\n        <button className={styles.secondaryButton} type=\"button\"\n          disabled={isLearnerReadOnly || isMutatingTagCatalog}\n          onClick={() => void setCatalogTagStatus(tag, tag.status === 'active' ? 'archived' : 'active')}>\n          {tag.status === 'active' ? 'Archive' : 'Reactivate'}\n        </button>\n        <button className={styles.dangerButton} type=\"button\"\n          disabled={isLearnerReadOnly || isMutatingTagCatalog}\n          onClick={() => void deleteCatalogTag(tag)}><Trash2 size={15} aria-hidden=\"true\" />Delete Tag</button>\n      </div></td>\n    </tr>;\n  }\n",
+    "  function renderCatalogTag(tag: CatalogTag) {\n    return (\n                    <div\n                      key={tag.id}\n                      style={{\n                        alignItems: 'center',\n                        border: '1px solid #d8e1ef',\n                        borderRadius: 8,\n                        display: 'flex',\n                        flexWrap: 'wrap',\n                        gap: 8,\n                        justifyContent: 'space-between',\n                        padding: '8px 10px',\n                      }}\n                    >\n                      <span>\n                        <strong>{tag.name}</strong>{' '}\n                        <small style={{ color: '#687386' }}>\n                          {tag.status} \u00b7 {tag.conceptUsage} concepts \u00b7{' '}\n                          {tag.questionUsage} questions\n                          {!isLearnerReadOnly && ` \u00b7 ${tag.articleUsage} articles`}\n                        </small>\n                      </span>\n                      <span style={{ display: 'flex', gap: 6 }}>\n                        <button\n                          className={styles.secondaryButton}\n                          type=\"button\"\n                          disabled={isLearnerReadOnly || isMutatingTagCatalog}\n                          onClick={() => void renameCatalogTag(tag)}\n                        >\n                          Rename\n                        </button>\n                        <button\n                          className={styles.secondaryButton}\n                          type=\"button\"\n                          disabled={isLearnerReadOnly || isMutatingTagCatalog}\n                          onClick={() =>\n                            void setCatalogTagStatus(\n                              tag,\n                              tag.status === 'active' ? 'archived' : 'active'\n                            )\n                          }\n                        >\n                          {tag.status === 'active' ? 'Archive' : 'Reactivate'}\n                        </button>\n                        <button\n                          className={styles.secondaryButton}\n                          type=\"button\"\n                          disabled={isLearnerReadOnly || isMutatingTagCatalog}\n                          onClick={() => void deleteCatalogTag(tag)}\n                        >\n                          Delete Tag\n                        </button>\n                      </span>\n                    </div>\n    );\n  }\n"
+  ],
+  [
+    "          {activeCreatorTab === 'tags' && (\n            <section className={`${styles.panel} ${styles.tagManagerDesign}`} aria-label=\"Tag Manager\">\n              <div className={styles.tagManagerHeading}>\n                <div><h2>Tag Manager</h2><p>Create and maintain the shared tag vocabulary.</p></div>\n                <p className={styles.tagArchiveNotice}><Info size={20} aria-hidden=\"true\" /><span>\n                  Archived tags remain on existing content and in history, but are\n                  unavailable for new assignments.\n                </span></p>\n              </div>\n              <div className={styles.tagManagerControls}>\n                <section className={styles.tagControlPanel} aria-labelledby=\"tag-find-heading\">\n                  <div className={styles.tagControlHeading}><Search size={26} aria-hidden=\"true\" /><div>\n                    <h3 id=\"tag-find-heading\">Find a Tag</h3><p>Search existing tags by name or slug.</p>\n                  </div></div>\n                  <div className={styles.tagControlInputs}>\n                    <label className={styles.searchBox}>\n                      <span className={styles.srOnly}>Search tag catalog</span>\n                      <input value={tagCatalogSearch}\n                        onChange={(event) => changeTagQuery('manager', event.target.value)}\n                        placeholder=\"Search tags\" />\n                      <Search size={18} aria-hidden=\"true\" />\n                    </label>\n                    {renderTagBrowseToggle('manager')}\n                  </div>\n                </section>\n                <section className={styles.tagControlPanel} aria-labelledby=\"tag-create-heading\">\n                  <div className={styles.tagControlHeading}><Plus size={28} aria-hidden=\"true\" /><div>\n                    <h3 id=\"tag-create-heading\">Create a New Tag</h3><p>Add a new tag to the shared vocabulary.</p>\n                  </div></div>\n                  <div className={styles.tagControlInputs}>\n                    <label className={styles.searchBox}>\n                      <span className={styles.srOnly}>New tag name</span>\n                      <input value={newCatalogTagName}\n                        disabled={isLearnerReadOnly || isMutatingTagCatalog}\n                        onChange={(event) => {\n                          setNewCatalogTagName(event.target.value);\n                          setTagCatalogStatus(null);\n                        }}\n                        onKeyDown={(event) => {\n                          if (event.key === 'Enter') {\n                            event.preventDefault();\n                            void createCatalogTag();\n                          }\n                        }}\n                        placeholder=\"New tag name\" />\n                    </label>\n                    <button className={styles.primaryButton} type=\"button\"\n                      disabled={isLearnerReadOnly || isMutatingTagCatalog || !newCatalogTagName.trim()}\n                      onClick={() => void createCatalogTag()}><Plus size={18} aria-hidden=\"true\" />Create Tag</button>\n                  </div>\n                </section>\n              </div>\n              {renderTagBrowser('manager')}\n              {tagCatalogStatus && (\n                <div className={`${styles.referenceStatus} ${styles[tagCatalogStatus.tone]}`}\n                  role=\"status\" aria-live=\"polite\" style={{ marginTop: 10 }}>\n                  {tagCatalogStatus.message}\n                </div>\n              )}\n            </section>\n          )}\n",
+    "          {activeCreatorTab === 'tags' && (\n            <section\n              className={`${styles.panel} ${styles.selectedPanel}`}\n              aria-label=\"Tag Manager\"\n              style={{ margin: '18px 28px 0' }}\n            >\n              <div>\n                <h2>Tag Manager</h2>\n                <p>Create and maintain the shared tag vocabulary.</p>\n                <p style={{ color: '#687386', marginTop: 6 }}>\n                  Archived tags remain on existing content and in history, but are\n                  unavailable for new assignments.\n                </p>\n              </div>\n              <div\n                style={{\n                  alignItems: 'center',\n                  display: 'flex',\n                  flexWrap: 'wrap',\n                  gap: 8,\n                  marginTop: 12,\n                }}\n              >\n                <label className={styles.searchBox} style={{ flex: '1 1 220px' }}>\n                  <span className={styles.srOnly}>Search tag catalog</span>\n                  <input\n                    value={tagCatalogSearch}\n                    onChange={(event) => changeTagQuery('manager', event.target.value)}\n                    placeholder=\"Search tags\"\n                  />\n                  <Search size={20} />\n                </label>\n                <label className={styles.searchBox} style={{ flex: '1 1 220px' }}>\n                  <span className={styles.srOnly}>New tag name</span>\n                  <input\n                    value={newCatalogTagName}\n                    disabled={isLearnerReadOnly || isMutatingTagCatalog}\n                    onChange={(event) => {\n                      setNewCatalogTagName(event.target.value);\n                      setTagCatalogStatus(null);\n                    }}\n                    onKeyDown={(event) => {\n                      if (event.key === 'Enter') {\n                        event.preventDefault();\n                        void createCatalogTag();\n                      }\n                    }}\n                    placeholder=\"New tag name\"\n                  />\n                </label>\n                <button\n                  className={styles.toolButton}\n                  type=\"button\"\n                  disabled={isLearnerReadOnly || isMutatingTagCatalog || !newCatalogTagName.trim()}\n                  onClick={() => void createCatalogTag()}\n                >\n                  <Plus size={18} /> Create Tag\n                </button>\n                {renderTagBrowseToggle('manager')}\n              </div>\n              {renderTagBrowser('manager')}\n              {tagCatalogStatus && (\n                <div\n                  className={`${styles.referenceStatus} ${styles[tagCatalogStatus.tone]}`}\n                  role=\"status\"\n                  aria-live=\"polite\"\n                  style={{ marginTop: 10 }}\n                >\n                  {tagCatalogStatus.message}\n                </div>\n              )}\n            </section>\n          )}\n"
+  ]
+];
+export function projectTagManagerPresentation(value) {
+  for (const [approved, before] of tagManagerPresentationHunks) {
+    assert.equal(value.split(approved).length, 2, 'Exact Tag Manager presentation exception');
+    value = value.replace(approved, before);
+  }
+  return value;
+}
+
+const questionPresentationHunks = [
+  [
+    "<CreatorStudioSaveToolbar\n              presentation=\"navy\"",
+    "<CreatorStudioSaveToolbar\n              presentation={activeCreatorTab === 'content' ? 'navy' : undefined}"
+  ],
+  [
+    "          <CreatorStudioTabs\n            presentation=\"navy\"",
+    "          {activeCreatorTab !== 'content' && saveToolbar}\n\n          <CreatorStudioTabs\n            presentation=\"navy\""
+  ],
+  [
+    "          {saveToolbar}",
+    "          {activeCreatorTab === 'content' && saveToolbar}"
+  ],
+  [
+    "                  libraryId={activeLibraryId} onClose={closeQuestionConceptPreview} />\n              )}\n\n              <div className={styles.questionDesign}>\n              <div className={styles.mainGrid}>",
+    "                  libraryId={activeLibraryId} onClose={closeQuestionConceptPreview} />\n              )}\n\n              <div className={styles.mainGrid}>"
+  ],
+  [
+    "                  {questionStatus.message}\n                </div>\n              )}\n              </div>\n            </>\n          ) : null}",
+    "                  {questionStatus.message}\n                </div>\n              )}\n            </>\n          ) : null}"
+  ],
+  [
+    "                  {questionSource === 'official' ? <div className={styles.questionField}>\n                    <QuestionMarkdownField label=\"Question\" ariaLabel=\"Question front of card\" placeholder=\"Front of card\" presentation=\"compact\"",
+    "                  {questionSource === 'official' ? <div>\n                    <QuestionMarkdownField label=\"Question\" ariaLabel=\"Question front of card\" placeholder=\"Front of card\""
+  ],
+  [
+    "                  {questionSource === 'official' ? <div className={styles.questionField}>\n                    <QuestionMarkdownField label=\"Answer\" ariaLabel=\"Answer back of card\" placeholder=\"Back of card\" presentation=\"compact\"",
+    "                  {questionSource === 'official' ? <div style={{ marginTop: 18 }}>\n                    <QuestionMarkdownField label=\"Answer\" ariaLabel=\"Answer back of card\" placeholder=\"Back of card\""
+  ],
+  [
+    "    background: selected ? 'var(--question-associated-surface, #e8f0ff)' : 'var(--question-choice-surface, #f7f9fc)',\n    border: selected ? '1px solid var(--question-associated-border, #8eb2f3)' : '1px solid transparent',",
+    "    background: selected ? '#e8f0ff' : '#f7f9fc',\n    border: selected ? '1px solid #8eb2f3' : '1px solid transparent',"
+  ],
+  [
+    "    color: selected ? 'var(--question-choice-color, #0f4eb8)' : 'var(--question-choice-color, #475569)',",
+    "    color: selected ? '#0f4eb8' : '#475569',"
+  ],
+  [
+    "            <div key={createCreatorEntityKey('official', 'concept', item.id)} className={styles.questionAssociationRow}\n              style={questionConceptChoiceStyle(isSelected, isSavingQuestion, depth)}>",
+    "            <div key={createCreatorEntityKey('official', 'concept', item.id)}\n              style={questionConceptChoiceStyle(isSelected, isSavingQuestion, depth)}>"
+  ],
+  [
+    "              {isSelected && <span className={styles.questionAssociationLabel}>{isPrimary ? 'Primary' : 'Related'}</span>}",
+    "              {isSelected && <span>{isPrimary ? 'Primary' : 'Related'}</span>}"
+  ],
+  [
+    "                  <fieldset className={styles.questionAngles} disabled={isLearnerReadOnly || isSavingQuestion} style={{ minWidth: 0, margin: 0, padding: 12, border: '1px solid #e2e8f0', borderRadius: 8 }}>",
+    "                  <fieldset disabled={isLearnerReadOnly || isSavingQuestion} style={{ minWidth: 0, margin: 0, padding: 12, border: '1px solid #e2e8f0', borderRadius: 8 }}>"
+  ],
+  [
+    "<div key={normalizedAngle} className={styles.questionAngleRow} data-selected={isPrimary || isAdditional} style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', padding: '6px 8px', borderRadius: 6 }}>",
+    "<div key={normalizedAngle} style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', padding: '6px 8px', borderRadius: 6, background: isPrimary || isAdditional ? '#f1f5f9' : 'transparent' }}>"
+  ],
+  [
+    "                            <button type=\"button\" className={entry.status === 'active' ? styles.dangerButton : styles.secondaryButton} disabled={testingAngleCatalogBusy || entry.storage_key.trim().toLowerCase() === 'general understanding'}",
+    "                            <button type=\"button\" disabled={testingAngleCatalogBusy || entry.storage_key.trim().toLowerCase() === 'general understanding'}"
+  ],
+  [
+    "                              className={styles.questionListItem}",
+    "                              style={{\n                                alignItems: 'stretch',\n                                background: isSelected ? '#e8f0ff' : '#f7f9fc',\n                                border: isSelected\n                                  ? '1px solid #8eb2f3'\n                                  : '1px solid #d8e1ef',\n                                borderRadius: 8,\n                                color: isSelected ? '#0f4eb8' : '#334155',\n                                cursor: isSavingQuestion\n                                  ? 'not-allowed'\n                                  : 'pointer',\n                                display: 'grid',\n                                gap: 3,\n                                padding: '8px 10px',\n                                textAlign: 'left',\n                              }}"
+  ],
+  [
+    "                              <small className={styles.questionListMetadata}>\n                                {question.source === 'official'\n                                  ? `${question.difficulty}",
+    "                              <small style={{ color: '#687386' }}>\n                                {question.source === 'official'\n                                  ? `${question.difficulty}"
+  ]
+];
+export function projectQuestionPresentation(value) {
+  for (const [approved, released] of questionPresentationHunks) {
+    assert.equal(value.split(approved).length, 2, 'Exact Question presentation exception');
+    value = value.replace(approved, released);
+  }
+  return value;
+}
+
 // Approved Content-only presentation hunks, captured against 9585d78. These
 // literal reversals retain the original workspace fingerprints. They never run
 // in the actual behavior harness, and reject any unreviewed change to a hunk.
@@ -114,7 +226,7 @@ export function projectNavyPresentation(value) {
   }
   return value;
 }
-const preservationSource = projectNavyPresentation(source);
+const preservationSource = projectNavyPresentation(projectQuestionPresentation(projectTagManagerPresentation(source)));
 
 // Released editor-only representation, used solely for original whole-workspace
 // hashes. Real visual editing is exercised separately; surrounding JSX is current.
@@ -425,7 +537,7 @@ export const questionField = fieldContext.exports;
 
 const searchPanelContext = { exports: {}, require(name) {
   if (name === 'react/jsx-runtime') return { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }) };
-  if (name === 'lucide-react') return { Search: 'icon:Search' };
+  if (name === 'lucide-react') return { Search: 'icon:Search', FileText: 'icon:FileText', ArrowRight: 'icon:ArrowRight' };
   if (name === '@/components/MarkdownContent') return { questionMarkdownSummary: questionMarkdown.questionMarkdownSummary };
   if (name === '@/lib/creator-entity-contracts') return { createCreatorEntityKey: (source, kind, id) => `${source}:${kind}:${id}` };
   if (name === '../CreatorStudioV2Client.module.css') return { __esModule: true, default: new Proxy({}, {get: (_, key) => String(key)}) };

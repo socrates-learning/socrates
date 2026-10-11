@@ -49,6 +49,7 @@ type StudyCreatorFlaggedBrowserProps = {
   neutralPresentation?: boolean;
   learnerPresentation?: boolean;
   officialQuestionEditor?: FlaggedQuestionEditor;
+  navyPresentationClassName?: string;
 };
 
 function messageFor(error: unknown) {
@@ -65,6 +66,7 @@ export function StudyCreatorFlaggedBrowser({
   neutralPresentation = false,
   learnerPresentation = false,
   officialQuestionEditor,
+  navyPresentationClassName,
 }: StudyCreatorFlaggedBrowserProps) {
   const [flags, setFlags] = useState<FlagRow[]>([]);
   const [officialQuestions, setOfficialQuestions] = useState<OfficialQuestion[]>([]);
@@ -215,17 +217,23 @@ export function StudyCreatorFlaggedBrowser({
     setRemovingId(null);
   }
 
+  const navyPresentation = Boolean(navyPresentationClassName) && !learnerPresentation;
+
   return (
-    <div className={styles.flaggedWorkspace}>
+    <div className={`${styles.flaggedWorkspace}${navyPresentation ? ` ${navyPresentationClassName}` : ''}`} data-flagged-workspace={navyPresentation ? '' : undefined}>
+      {navyPresentation && <aside data-flagged-part="notice" aria-label="About your flags">
+        <span aria-hidden="true"><Icon name="flag" /></span>
+        <div><strong>Flagged items help you review content you want to revisit.</strong><p>Select an item to view its details, open the Question editor when authorized, or remove your flag.</p></div>
+      </aside>}
       <section className={styles.flaggedListPane} aria-label="Flagged material">
-        <div className={styles.workspaceSectionIntro}>
+        <div className={styles.workspaceSectionIntro} data-flagged-part={navyPresentation ? 'intro' : undefined}>
           <div>
             <h2>1. Flagged Material</h2>
             <p>Review Questions and Cards you saved for later.</p>
           </div>
-          <span className={styles.flagCount}>{flags.length}</span>
+          <span className={styles.flagCount} data-flagged-part={navyPresentation ? 'count' : undefined}>{flags.length}</span>
         </div>
-        <label className={styles.searchField}>
+        <label className={styles.searchField} data-flagged-part={navyPresentation ? 'search' : undefined}>
           <span aria-hidden="true"><Icon name="search" /></span>
           <input
             aria-label="Search flagged material"
@@ -236,11 +244,13 @@ export function StudyCreatorFlaggedBrowser({
           />
         </label>
         {error && <p className={styles.flagError} role="alert">{error}</p>}
-        <div className={styles.flaggedList}>
+        <div className={styles.flaggedList} data-flagged-part={navyPresentation ? 'list' : undefined} tabIndex={navyPresentation ? 0 : undefined} role={navyPresentation ? 'region' : undefined} aria-label={navyPresentation ? 'Flagged items' : undefined}>
           {isLoading && <div className={styles.inlineEmpty}>Loading your flags…</div>}
           {!isLoading && visibleFlags.map((item) => (
             <button
               className={`${styles.flaggedRow} ${selectedFlagId === item.flag.id ? styles.selectedFlag : ''}`}
+              data-flagged-part={navyPresentation ? 'row' : undefined}
+              aria-pressed={navyPresentation ? selectedFlagId === item.flag.id : undefined}
               style={neutralPresentation ? { gridTemplateColumns: 'minmax(0, 1fr) 18px' } : undefined}
               key={item.flag.id}
               onClick={() => {
@@ -260,34 +270,34 @@ export function StudyCreatorFlaggedBrowser({
       </section>
 
       <section className={styles.flaggedDetailPane} aria-label="Flagged item review">
-        <div className={styles.workspaceSectionIntro}>
+        <div className={styles.workspaceSectionIntro} data-flagged-part={navyPresentation ? 'intro' : undefined}>
           <div>
             <h2>2. Details</h2>
             <p>{neutralPresentation ? 'Review the selected Question.' : 'Review the selected Question or Card.'}</p>
           </div>
         </div>
-        <div className={`${styles.selectionHeading} ${styles.sectionSelection}`}>
+        <div className={`${styles.selectionHeading} ${styles.sectionSelection}`} data-flagged-part={navyPresentation ? 'selection' : undefined}>
           <span className={`${styles.headingIcon} ${!neutralPresentation && selected?.owner === 'personal' ? styles.personalHeadingIcon : styles.purpleIcon}`}><Icon name="flag" /></span>
           <div><p>{selected ? (neutralPresentation ? 'Flagged' : `${selected.owner === 'official' ? 'Socrates' : 'Mine'} · Flagged`) : 'Selected Material'}</p><h2>{selected?.context ?? 'Choose flagged material'}</h2></div>
         </div>
-        <div className={styles.inspectorBody}>
+        <div className={styles.inspectorBody} data-flagged-part={navyPresentation ? 'details' : undefined}>
           {selected ? (
-            <div className={styles.flagReviewCard}>
+            <div className={styles.flagReviewCard} data-flagged-part={navyPresentation ? 'review' : undefined}>
               <div><span>{neutralPresentation || selected.owner === 'official' ? 'Question' : 'Card'}</span>{selected.card?.concept_id === null ? <MarkdownContent markdown={selected.title} mode="card" /> : selected.question && questionMarkdownKind(selected.title, selected.question.prompt_format) === 'block' ? <MarkdownContent markdown={selected.title} mode="question" format={selected.question.prompt_format} /> : <p>{selected.question ? <MarkdownContent markdown={selected.title} mode="question" format={selected.question.prompt_format} /> : selected.title}</p>}</div>
               {selected.question && <QuestionMediaContent questionId={selected.question.id} hint={selected.question.question_media_hint} surface="front" prompt={selected.question.prompt} />}
               {selected.card && <div><span>Answer</span>{selected.card.concept_id === null ? <MarkdownContent markdown={selected.card.answer} mode="card" /> : <p>{selected.card.answer}</p>}</div>}
-              {selected.question && !learnerPresentation && <div className={styles.flagMetadata}><span>{selected.question.difficulty ?? 'Unspecified difficulty'}</span><span>{selected.question.testing_angle ?? 'General angle'}</span></div>}
+              {selected.question && !learnerPresentation && <div className={styles.flagMetadata} data-flagged-part={navyPresentation ? 'metadata' : undefined}><span>{selected.question.difficulty ?? 'Unspecified difficulty'}</span><span>{selected.question.testing_angle ?? 'General angle'}</span></div>}
               {selected.flag.note && <div><span>Your note</span><p>{selected.flag.note}</p></div>}
               <div><span>Flagged</span><p>{new Date(selected.flag.created_at).toLocaleString()}</p></div>
               {!learnerPresentation && selected.question && officialQuestionEditor && <>
-                <button className={styles.secondary} disabled={officialQuestionEditor.pending || officialQuestionEditor.busy || removingId !== null}
+                <button className={styles.secondary} data-flagged-action={navyPresentation ? 'edit' : undefined} disabled={officialQuestionEditor.pending || officialQuestionEditor.busy || removingId !== null}
                   onClick={() => void officialQuestionEditor.open(selected.question!.id, selected.question!.concept_id)} type="button">
                   {officialQuestionEditor.pending ? 'Opening Question…' : 'Edit Question'}
                 </button>
-                {officialQuestionEditor.pending && <p role="status">Loading the Question editor…</p>}
-                {officialQuestionEditor.error && <p className={styles.flagError} role="alert">{officialQuestionEditor.error}</p>}
+                {officialQuestionEditor.pending && <p role="status" data-flagged-part={navyPresentation ? 'feedback' : undefined}>Loading the Question editor…</p>}
+                {officialQuestionEditor.error && <p className={styles.flagError} role="alert" data-flagged-part={navyPresentation ? 'feedback' : undefined}>{officialQuestionEditor.error}</p>}
               </>}
-              <button className={styles.dangerButton} disabled={removingId === selected.flag.id} onClick={() => void unflag(selected.flag.id)} type="button">{removingId === selected.flag.id ? 'Removing…' : 'Unflag'}</button>
+              <button className={styles.dangerButton} data-flagged-action={navyPresentation ? 'unflag' : undefined} disabled={removingId === selected.flag.id} onClick={() => void unflag(selected.flag.id)} type="button">{removingId === selected.flag.id ? 'Removing…' : 'Unflag'}</button>
             </div>
           ) : (
             <div className={styles.inlineEmpty}>{neutralPresentation ? 'Select a flagged Question to review it.' : 'Select a flagged Question or personal Card to review it.'}</div>
