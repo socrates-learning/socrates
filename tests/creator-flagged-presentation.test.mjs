@@ -1,3 +1,4 @@
+import { projectStudyFlaggedCorrections } from './fixtures/study-flagged-corrections.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createHash } from 'node:crypto';
@@ -41,6 +42,7 @@ function mount({ learner = false, neutral = true, navy = true, initialFlags = fl
     const query = {
       select(columns) { call.columns = columns; return query; },
       eq(key, value) { call.filters.push([key, value]); return query; },
+      is(key, value) { call.filters.push([key, value]); return query; },
       in(key, value) { call.filters.push([key, plain(value)]); return query; },
       order(key, options) { call.order = [key, plain(options)]; return query; },
       delete() { deletion = true; return query; },
@@ -227,6 +229,7 @@ const presentationHunks = [
   ]
 ];
 function projectPresentation(value) {
+  value = projectStudyFlaggedCorrections('components/StudyCreatorFlaggedBrowser.tsx', value);
   for (const [approved, original] of presentationHunks) {
     assert.equal(value.split(approved).length, 2, 'Exact staff Flagged presentation exception');
     value = value.replace(approved, original);
@@ -243,4 +246,32 @@ test('only the approved presentation projects back to the complete released Flag
   assert.equal(chrome.split(exact).length, 2); chrome = chrome.replace(exact, '');
   assert.equal(hash(chrome), '217338049cca7437df8b153bdaf6dc18c80c796fc544f1b1d2f0cf5dc8eedb99');
   assert.equal(hash(css.slice(0, css.indexOf(marker))), '348b416bfc7d1e27d130d5c1663df2d3a78110f1e67cbad67e1ed584478b7618', 'Complete frozen Question and Tag CSS prefix');
+});
+
+// The mocked Data API deliberately returns both kinds even for the personal-only
+// query, proving the UI cannot fall back to official records for learners.
+test('learner Creator excludes official flags and never fetches their Questions or media', async () => {
+  const h = mount({ learner: true }); await h.load(); const tree = h.render();
+  assert.equal(h.reads.length, 1);
+  assert.deepEqual(plain(h.reads[0].filters), [['user_id', 'actor'], ['question_id', null]]);
+  assert.match(text(tree), /Official Questions are in Stats → Flagged Review/);
+  assert.doesNotMatch(text(tree), /Rich Question|Legacy \*\*literal\*\* Question|Preserved note with Unicode/);
+  assert.match(text(tree), /Concept-backed Front.*Concept-backed Back/s);
+  assert.equal(nodes(tree).filter(n => n.props?.surface).length, 0);
+  assert.equal(buttons(tree).filter(n => n.props?.className?.includes('flaggedRow')).length, 2);
+  assert.equal(buttons(tree).some(n => text(n) === 'Edit Question'), false);
+  const standalone = buttons(tree).find(n => text(n).includes('Standalone Front')); standalone.props.onClick();
+  assert.deepEqual(plain(nodes(h.render()).filter(n => n.type === 'markdown').map(n => n.props)), [
+    { markdown: '**Standalone Front**', mode: 'card' }, { markdown: '*Standalone Back*', mode: 'card' },
+  ]);
+  button(h.render(), 'Unflag').props.onClick(); await settle();
+  assert.deepEqual(plain(h.writes[0].filters), [['id', 'f4'], ['user_id', 'actor']]);
+  assert.equal(buttons(h.render()).filter(n => n.props?.className?.includes('flaggedRow')).length, 1);
+  assert.equal(h.reads.every(r => r.table === 'study_candidate_flags'), true);
+});
+test('learner with only official flags sees a personal-only empty state and cannot remove official flags', async () => {
+  const h = mount({ learner: true, initialFlags: flags.slice(0, 2) }); await h.load();
+  assert.match(text(h.render()), /No personal Cards are flagged/);
+  assert.equal(buttons(h.render()).length, 0); assert.equal(h.writes.length, 0);
+  assert.equal(h.reads.length, 1);
 });

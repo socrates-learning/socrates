@@ -27,6 +27,13 @@ test('Flagged browser reads and removes only owner-scoped flags', () => {
   assert.doesNotMatch(flagged, /\.insert\(|\.update\(|\.upsert\(/);
 });
 
+test('the older learner Creator route also uses personal-only flags and preserves staff routing', async () => {
+  assert.match(client, /<StudyCreatorFlaggedBrowser\s+material=\{\{ topics, concepts, cards, overlays \}\}\s+ownerId=\{ownerId\}\s+learnerPresentation\s*\/>/);
+  const route = await readFile(new URL('../app/study-creator/page.tsx', import.meta.url), 'utf8');
+  assert.match(route, /if \(role === 'admin' \|\| role === 'editor'\) redirect\('\/creator'\)/);
+  assert.match(flagged, /learnerPresentation \? flagQuery\.is\('question_id', null\) : flagQuery/);
+});
+
 test('Flagged browser resolves official Questions and personal Cards without editing official content', () => {
   assert.match(flagged, /\.from\('questions'\)/);
   assert.match(flagged, /\.from\('concepts'\)/);

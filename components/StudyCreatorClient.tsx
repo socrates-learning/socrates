@@ -1259,6 +1259,7 @@ export function StudyCreatorClient({
           <StudyCreatorFlaggedBrowser
             material={{ topics, concepts, cards, overlays }}
             ownerId={ownerId}
+            learnerPresentation
           />
         ) : (
           <PersonalDecksBrowser

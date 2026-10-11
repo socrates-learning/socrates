@@ -1,3 +1,4 @@
+import { projectStudyFlaggedCorrections } from './fixtures/study-flagged-corrections.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -19,5 +20,5 @@ test('Study entry is limited to revealed official Questions, scoped to actor/Lib
 test('only exact additive entry points change the accepted Study and Flagged Review sources',()=>{const fingerprints={
  'components/StudyPlanner.tsx':'25f333c5d977380cc39be4eb215ef986d1cb8f0b80de1e97076a423b9d419738',
  'components/study-planner/StatsFlaggedReview.tsx':'9cb7bca1a105255eee31a57f685ff79dbe580c7f51e879aef53e7642e23d6da5',
- };for(const [path,expected] of Object.entries(fingerprints)){const source=projectQuestionPersonalNotes(path,readFileSync(path,'utf8'));assert.equal(createHash('sha256').update(source).digest('hex'),expected,path);}});
+ };for(const [path,expected] of Object.entries(fingerprints)){const source=projectQuestionPersonalNotes(path,projectStudyFlaggedCorrections(path,readFileSync(path,'utf8')));assert.equal(createHash('sha256').update(source).digest('hex'),expected,path);}});
 test('migration is additive and exposes no actor parameter or direct browser write',()=>{const sql=readFileSync('supabase/125_personal_question_notes.sql','utf8');assert.match(sql,/primary key \(user_id, question_id\)/);assert.match(sql,/revision uuid/);assert.match(sql,/grant select on public.personal_question_notes to authenticated/);assert.doesNotMatch(sql,/grant (?:insert|update|delete)|create or replace|alter table public\.(?!personal_question_notes)/i);assert.match(sql,/n\.revision = p_expected_revision/);assert.match(sql,/errcode = '40001'/);assert.match(sql,/q\.status = 'published'/);assert.match(sql,/m\.user_id = u and m\.library_id = l\.id/);});

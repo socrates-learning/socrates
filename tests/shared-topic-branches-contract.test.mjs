@@ -1,3 +1,4 @@
+import { projectStudyFlaggedCorrections } from './fixtures/study-flagged-corrections.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -13,7 +14,7 @@ const released = {
 };
 for (const [path, fingerprint] of Object.entries(released)) test(`only exact shared-placement additions are projected from ${path}`,()=>{
  const current=readFileSync(new URL(`../${path}`,import.meta.url),'utf8');
- const source=path==='components/StudyPlanner.tsx'?projectStudyGoals(current):current;
+ const source=path==='components/StudyPlanner.tsx'?projectStudyGoals(projectStudyFlaggedCorrections(path,current)):current;
  assert.equal(hash(projectSharedTopicSource(path,source)),fingerprint);
  assert.notEqual(hash(projectSharedTopicSource(path,source+'\n// unrelated edit\n')),fingerprint);
  assert.throws(()=>projectSharedTopicSource(path,source.replace('occurrenceKey','unapprovedKey')));

@@ -275,6 +275,7 @@ function flaggedBrowser({ personal = false, learner = false, officialQuestionEdi
     const filters = []; reads.push({ table, filters }); let deleting = false;
     const query = {
       select() { return query; }, eq(key, value) { filters.push([key, value]); return query; }, in(key, value) { filters.push([key, value]); return query; },
+      is(key, value) { filters.push([key, value]); return query; },
       order(key, value) { filters.push(['order', key, value]); return query; }, delete() { deleting = true; return query; },
       then(resolve) {
         if (deleting) { writes.push({ table, filters }); flags = []; }
@@ -298,7 +299,7 @@ function flaggedBrowser({ personal = false, learner = false, officialQuestionEdi
 test('real Flagged Details exposes native Edit Question only for a resolved official Question with staff callback; listing and Unflag remain independent', async () => {
   const opened = []; let cancelled = 0;
   const capability = { open: async (...ids) => { opened.push(ids); }, cancel: () => cancelled++, pending: false, busy: false, error: '' };
-  for (const options of [{}, { personal: true }, { learner: true }]) {
+  for (const options of [{}, { personal: true }, { learner: true, personal: true }]) {
     const h = flaggedBrowser({ ...options, officialQuestionEditor: capability }); h.render(); await h.load();
     const buttons = nodes(h.render()).filter(n => n.type === 'button'); const edit = buttons.find(n => text(n) === 'Edit Question');
     assert.equal(Boolean(edit), !options.personal && !options.learner);
@@ -314,6 +315,12 @@ test('real Flagged Details exposes native Edit Question only for a resolved offi
   }
   const legacy = flaggedBrowser(); legacy.render(); await legacy.load();
   assert.equal(nodes(legacy.render()).some(n => text(n) === 'Edit Question'), false);
+  const learnerOfficial = flaggedBrowser({ learner: true, officialQuestionEditor: capability });
+  learnerOfficial.render(); await learnerOfficial.load();
+  assert.doesNotMatch(text(learnerOfficial.render()), /Flagged Front|Retained flag note/);
+  assert.equal(nodes(learnerOfficial.render()).some(n => n.type === 'button'), false);
+  assert.equal(learnerOfficial.reads.length, 1);
+  assert.equal(learnerOfficial.writes.length, 0);
 });
 
 test('loading, busy and error states remain in Details without hiding existing notes or Unflag', async () => {

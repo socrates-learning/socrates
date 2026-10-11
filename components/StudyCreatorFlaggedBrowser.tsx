@@ -80,11 +80,14 @@ export function StudyCreatorFlaggedBrowser({
   const loadFlags = useCallback(async () => {
     setIsLoading(true);
     setError('');
-    const flagResult = await supabase
+    const flagQuery = supabase
       .from('study_candidate_flags')
       .select('id, question_id, personal_card_id, note, created_at')
       .eq('user_id', ownerId)
       .order('created_at', { ascending: false });
+    // Official Question review belongs in Stats for learners. Staff retain
+    // their existing owner-scoped official Question editing workflow here.
+    const flagResult = await (learnerPresentation ? flagQuery.is('question_id', null) : flagQuery);
 
     if (flagResult.error) {
       setError(messageFor(flagResult.error));
@@ -92,7 +95,8 @@ export function StudyCreatorFlaggedBrowser({
       return;
     }
 
-    const nextFlags = (flagResult.data ?? []) as FlagRow[];
+    const nextFlags = ((flagResult.data ?? []) as FlagRow[])
+      .filter(flag => !learnerPresentation || (!flag.question_id && Boolean(flag.personal_card_id)));
     const questionIds = nextFlags
       .map((flag) => flag.question_id)
       .filter((id): id is string => Boolean(id));
@@ -136,7 +140,7 @@ export function StudyCreatorFlaggedBrowser({
         : nextFlags[0]?.id ?? null
     );
     setIsLoading(false);
-  }, [ownerId]);
+  }, [ownerId, learnerPresentation]);
 
   useEffect(() => {
     void loadFlags();
@@ -229,7 +233,7 @@ export function StudyCreatorFlaggedBrowser({
         <div className={styles.workspaceSectionIntro} data-flagged-part={navyPresentation ? 'intro' : undefined}>
           <div>
             <h2>1. Flagged Material</h2>
-            <p>Review Questions and Cards you saved for later.</p>
+            <p>{learnerPresentation ? 'Review your personal Cards here. Official Questions are in Stats → Flagged Review.' : 'Review Questions and Cards you saved for later.'}</p>
           </div>
           <span className={styles.flagCount} data-flagged-part={navyPresentation ? 'count' : undefined}>{flags.length}</span>
         </div>
@@ -264,7 +268,7 @@ export function StudyCreatorFlaggedBrowser({
               <Icon name="chevron-right" />
             </button>
           ))}
-          {!isLoading && !flags.length && <div className={styles.inlineEmpty}>Nothing is flagged yet. Use the flag action during Study to save material for later review.</div>}
+          {!isLoading && !flags.length && <div className={styles.inlineEmpty}>{learnerPresentation ? 'No personal Cards are flagged.' : 'Nothing is flagged yet. Use the flag action during Study to save material for later review.'}</div>}
           {!isLoading && flags.length > 0 && !visibleFlags.length && <div className={styles.inlineEmpty}>No flagged material matches your search.</div>}
         </div>
       </section>
@@ -273,7 +277,7 @@ export function StudyCreatorFlaggedBrowser({
         <div className={styles.workspaceSectionIntro} data-flagged-part={navyPresentation ? 'intro' : undefined}>
           <div>
             <h2>2. Details</h2>
-            <p>{neutralPresentation ? 'Review the selected Question.' : 'Review the selected Question or Card.'}</p>
+            <p>{learnerPresentation ? 'Review the selected personal Card.' : neutralPresentation ? 'Review the selected Question.' : 'Review the selected Question or Card.'}</p>
           </div>
         </div>
         <div className={`${styles.selectionHeading} ${styles.sectionSelection}`} data-flagged-part={navyPresentation ? 'selection' : undefined}>
@@ -300,7 +304,7 @@ export function StudyCreatorFlaggedBrowser({
               <button className={styles.dangerButton} data-flagged-action={navyPresentation ? 'unflag' : undefined} disabled={removingId === selected.flag.id} onClick={() => void unflag(selected.flag.id)} type="button">{removingId === selected.flag.id ? 'Removing…' : 'Unflag'}</button>
             </div>
           ) : (
-            <div className={styles.inlineEmpty}>{neutralPresentation ? 'Select a flagged Question to review it.' : 'Select a flagged Question or personal Card to review it.'}</div>
+            <div className={styles.inlineEmpty}>{learnerPresentation ? 'Select a flagged personal Card to review it.' : neutralPresentation ? 'Select a flagged Question to review it.' : 'Select a flagged Question or personal Card to review it.'}</div>
           )}
         </div>
       </section>

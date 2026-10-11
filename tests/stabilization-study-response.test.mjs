@@ -73,3 +73,35 @@ test('a next-card request that finishes after Exit cannot replace the Home state
   finish({ candidateId: 'stale' }); await pending;
   assert.deepEqual(h.cards, []);
 });
+
+for (const kind of ['official', 'personal']) {
+  test(`${kind}: next selection waits for persistence and the current card stays until next delivery`, async () => {
+    let finishSave, finishNext;
+    const h = harness({ kind, save: () => new Promise(resolve => { finishSave = resolve; }), next: () => new Promise(resolve => { finishNext = resolve; }) });
+    const pending = h.persistFinalStudyResponse('easy');
+    assert.equal(h.statuses.at(-1), 'saving');
+    assert.equal(h.context.studyResponseRecordedForCard.current, false);
+    assert.equal(h.calls.length, 1); assert.deepEqual(h.cards, []);
+    await h.persistFinalStudyResponse('forgot');
+    assert.equal(h.calls.length, 1, 'Pending rating cannot submit again');
+    finishSave({ error: null }); await new Promise(resolve => setImmediate(resolve));
+    assert.equal(h.context.studyResponseRecordedForCard.current, true);
+    assert.equal(h.statuses.at(-1), 'loading-next');
+    assert.equal(h.calls.length, 2); assert.deepEqual(h.cards, []);
+    await h.persistFinalStudyResponse('forgot'); await h.retryNextStudyCard();
+    assert.equal(h.calls.length, 2, 'In-flight delivery cannot resubmit or select twice');
+    finishNext({ candidateId: 'confirmed-next' }); await pending;
+    assert.deepEqual(h.cards, [{ candidateId: 'confirmed-next' }]);
+    assert.equal(h.statuses.at(-1), 'idle');
+  });
+}
+
+test('acknowledgement after Exit cannot fetch another card or replace a new session', async () => {
+  let finishSave;
+  const h = harness({ save: () => new Promise(resolve => { finishSave = resolve; }) });
+  const pending = h.persistFinalStudyResponse('easy');
+  h.context.studySessionIdRef.current = 'different-session';
+  finishSave({ error: null }); await pending;
+  assert.equal(h.calls.length, 1); assert.deepEqual(h.cards, []);
+  assert.equal(h.context.studyResponseRecordedForCard.current, false);
+});

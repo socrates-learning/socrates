@@ -2533,11 +2533,9 @@ export function StudyPlanner({
                 </div>
               ) : (
                 <>
-                  {studySubmissionStatus !== 'idle' && (
+                  {(studySubmissionStatus === 'save-error' || studySubmissionStatus === 'next-error') && (
                     <div className="study-v2-submission-status" role="status" aria-live="polite">
-                      <p>{studySubmissionStatus === 'saving' ? 'Saving answer…'
-                        : studySubmissionStatus === 'loading-next' ? 'Answer saved. Loading next card…'
-                          : studySubmissionStatus === 'next-error' ? 'Answer saved. Unable to load next card.'
+                      <p>{studySubmissionStatus === 'next-error' ? 'Answer saved. Unable to load next card.'
                             : 'Unable to confirm your answer was saved. Retry the same answer safely.'}</p>
                       {studySubmissionStatus === 'save-error' && (
                         <button className="btn primary" type="button" onClick={() => {
@@ -2733,12 +2731,17 @@ export function StudyPlanner({
                         </form>
                       )}
                     </div>
-                  ) : studySubmissionStatus !== 'idle' ? null : (
-                    <div className="study-v2-response-stage">
+                  ) : (
+                    <div className="study-v2-response-stage" aria-busy={studySubmissionStatus === 'saving' || studySubmissionStatus === 'loading-next'}>
+                      <span className="study-v2-sr-only" role="status" aria-live="polite">
+                        {studySubmissionStatus === 'saving' ? 'Submitting response.'
+                          : studySubmissionStatus === 'loading-next' ? 'Response saved. Loading next Question.' : ''}
+                      </span>
                       <div className="study-v2-response-toolbar">
                         <button
                           className="study-v2-response-back"
                           type="button"
+                          disabled={studySubmissionStatus !== 'idle'}
                           onClick={() => {
                             setStudyFeedback(null);
                             setStudyResponse(null);
@@ -2772,6 +2775,7 @@ export function StudyPlanner({
                               }`}
                             key={value}
                             type="button"
+                            disabled={studySubmissionStatus !== 'idle'}
                             onClick={() =>
                               void persistFinalStudyResponse(
                                 value as Exclude<StudyResponse, null>
