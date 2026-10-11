@@ -1,3 +1,5 @@
+import { graphFromTree } from './shared-topic-branches.mjs';
+import * as topicGraphModule from '../../lib/topic-placement-graph.ts';
 import { formatSaveResponse, questionField, questionMarkdown, visualFieldBoundary, OfficialVisualFieldBoundary } from './creator-role-workspaces.mjs';
 import { questionImageBoundary } from './question-media-authoring.mjs';
 import { conceptMedia, conceptImageBoundary, conceptContentBoundary } from './concept-media-authoring.mjs';
@@ -25,11 +27,12 @@ import { composeUnifiedCreatorTopicTree, flattenUnifiedCreatorTopics, shouldShow
 // responses. Named effects and cleanup callbacks are exercised explicitly; these
 // are render/handler characterizations, not mounted browser or database integration tests.
 export const source = readFileSync(new URL('../../components/CreatorStudioV2Client.tsx', import.meta.url), 'utf8');
-const runtimeContext = { exports: {}, require: () => entityContracts };
+const runtimeContext = { exports: {}, require: name => { if (name === '@/lib/creator-entity-contracts') return entityContracts; if (name === './topic-placement-graph') return topicGraphModule; throw new Error(`Unexpected runtime import: ${name}`); } };
 vm.runInNewContext(ts.transpileModule(readFileSync(new URL('../../lib/creator-studio-runtime.ts', import.meta.url), 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS },
 }).outputText, runtimeContext);
 const exposed = [
+    'topicGraph', 'setTopicGraph', 'setActiveTopicId', 'activeTopicEdge', 'setActiveTopicEdge', 'setActiveTopicOccurrence', 'renderPlacementControls', 'renderPlacementDialog', 'placementDialog', 'setPlacementChoice', 'submitPlacementChange', 'reloadRealTopicTree', 'moveActiveTopic', 'deleteActiveTopic', 'setMoveDestinationId',
     'questionConceptPreview', 'questionConceptPreviewContext', 'closeQuestionConceptPreview', 'renderQuestionConceptPreviewAction',
     'activeTopicId', 'conceptPlacementStatus', 'setConceptPlacementStatus', 'contentConceptDisclosureKeys', 'questionConceptDisclosureKeys', 'expandedTopicIds', 'expandedPersonalTopicIds', 'conceptsForTopicDisclosure', 'renderConceptCountControl', 'toggleExpanded',
     'questionCanonicalRecord', 'questionPromptFormat', 'questionAnswerFormat', 'questionMediaRecord',
@@ -125,6 +128,7 @@ export function editor({ role = 'admin', editing = false, response, references =
         },
     };
     function rpcResult(name, payload) {
+      if (name === 'get_official_topic_graph') return response?.(name, payload) || { data: props.initialTopicGraph || graphFromTree(payload.p_library_id, props.initialTopics), error: null };
         if (name === 'get_creator_questions_with_media')
             return response?.(name, payload) || { data: [], error: null };
         calls.push({ name, payload });
@@ -168,7 +172,8 @@ export function editor({ role = 'admin', editing = false, response, references =
         '@/components/creator/CreatorStudioChrome': {
             ...chrome,
         },
-        '@/lib/concept-topic-tree': { buildConceptTopicTree },
+        '@/lib/topic-placement-graph': topicGraphModule,
+    '@/lib/concept-topic-tree': { buildConceptTopicTree },
         '@/lib/supabase': { supabase: database },
         '@/lib/creator-personal-structure': personalStructure,
         '@/lib/safe-navigation': { navigateBackOrFallback: () => routes.push('back-or-fallback') },

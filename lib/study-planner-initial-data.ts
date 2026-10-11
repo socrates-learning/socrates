@@ -1,3 +1,4 @@
+import { requireTopicGraph } from './topic-placement-graph';
 import 'server-only';
 import type { HomeSettings, TopicPlacement } from '@/lib/home-deck-settings';
 
@@ -304,6 +305,10 @@ export async function loadStudyPlannerInitialData({
     } else {
       homeTopicPlacements = bootstrap.personal_topic_placements;
       homeSettings = bootstrap as HomeSettings;
+      if (bootstrap.official_topic_graph) {
+        try { requireTopicGraph(bootstrap.official_topic_graph, activeLibrary.id); }
+        catch (error) { settingsLoadError = error instanceof Error ? error.message : 'Unable to confirm Topic placements.'; homeSettings = undefined; }
+      }
     }
   }
   const availableLibraries = bootstrap.available_libraries?.length

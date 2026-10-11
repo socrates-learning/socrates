@@ -1,3 +1,4 @@
+import * as topicGraphModule from '../lib/topic-placement-graph.ts';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
@@ -13,6 +14,7 @@ const runtimeSource = readFileSync(
 const runtimeContext = {
   exports: {},
   require(name) {
+    if (name === './topic-placement-graph') return topicGraphModule;
     if (name === '@/lib/creator-entity-contracts') return entityContracts;
     if (name === '@/lib/creator-capabilities') return {};
     throw new Error(`Unexpected runtime import: ${name}`);

@@ -1,5 +1,6 @@
 'use client';
 
+import { occurrenceExpanded, topicGraphOccurrences, type OfficialTopicGraph, type TopicOccurrence } from '@/lib/topic-placement-graph';
 import type { ReactNode } from 'react';
 import type { StudyPlannerInitialData } from '@/lib/study-planner-initial-data';
 
@@ -7,6 +8,7 @@ type Progress = StudyPlannerInitialData['learnerProgress'];
 type Metric = Progress['nodes'][number];
 type Node = StudyPlannerInitialData['nodes'][number];
 type Props = {
+  graph?: OfficialTopicGraph;
   activeTab: 'progress' | 'history' | 'algorithm';
   onTabChange: (tab: Props['activeTab']) => void;
   libraryName: string;
@@ -44,23 +46,23 @@ function HomeProgressBar({ value }: { value: number }) {
 
 
 // Presentation only: loading, authority, navigation and expansion state stay in StudyPlanner.
-export function PlannerStats({ activeTab, onTabChange, libraryName, progress, progressError, nodes, rootNodes, progressByNodeId, fallbackProgressMetric, expandedNodeIds, onToggleNode, showAlgorithmTab, algorithmPanel }: Props) {
+export function PlannerStats({ graph, activeTab, onTabChange, libraryName, progress, progressError, nodes, rootNodes, progressByNodeId, fallbackProgressMetric, expandedNodeIds, onToggleNode, showAlgorithmTab, algorithmPanel }: Props) {
   // Stats expansion is independent of Deck Settings selection and expansion.
   function renderHomeTreeRow(
-    node: Node,
+    node: Node | TopicOccurrence,
     depth: number
   ): ReactNode {
-    const childNodes = nodes
+    const childNodes = 'occurrenceKey' in node ? node.children : nodes
       .filter((candidate) => candidate.parent_id === node.id)
       .sort((left, right) => left.name.localeCompare(right.name));
     const hasChildren = childNodes.length > 0;
-    const isExpanded = expandedNodeIds.has(node.id);
+    const isExpanded = occurrenceExpanded(node, expandedNodeIds);
     const metric =
       progressByNodeId.get(node.id) || fallbackProgressMetric;
     const progress = Math.round(metric.coverage_adjusted_progress_percent);
 
     return (
-      <div key={node.id}>
+      <div key={'occurrenceKey' in node ? node.occurrenceKey : node.id}>
         <div className="home-v2-tree-row" style={{ paddingLeft: 10 + depth * 34 }}>
           <button
             aria-label={
@@ -71,7 +73,7 @@ export function PlannerStats({ activeTab, onTabChange, libraryName, progress, pr
             className="home-v2-chevron"
             disabled={!hasChildren}
             type="button"
-            onClick={() => onToggleNode(node.id)}
+            onClick={() => onToggleNode('occurrenceKey' in node ? node.occurrenceKey : node.id)}
           >
             {hasChildren ? (isExpanded ? '⌄' : '›') : ''}
           </button>
@@ -138,7 +140,7 @@ export function PlannerStats({ activeTab, onTabChange, libraryName, progress, pr
                     <p className="home-v2-progress-overview">{progressError}</p>
                   )}
                   <div className="home-v2-tree">
-                    {rootNodes.map((node) => renderHomeTreeRow(node, 0))}
+                    {(graph ? topicGraphOccurrences(graph) : rootNodes).map((node) => renderHomeTreeRow(node, 0))}
                   </div>
                 </section>
               )}

@@ -130,7 +130,7 @@ test('commit restores the replaced handle after reparent without stealing editor
  const file=ts.createSourceFile('interaction.tsx',source,ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX);
  let handler;function visit(node){if(ts.isFunctionDeclaration(node)&&node.name?.text==='commit')handler=node.getText(file);ts.forEachChild(node,visit)}visit(file);assert.ok(handler);
  for(const editingElsewhere of [false,true]){
-  let focused=0;const body={},editor={};const scope={disabled:false,pending:{current:false},setSubmitting:()=>{},cancel:()=>{},onMove:async()=>{},requestAnimationFrame:fn=>fn(),document:{body,activeElement:editingElsewhere?editor:body},origin:{current:{}},CSS:{escape:s=>s},root:{current:{querySelector:selector=>{assert.match(selector,/official:topic:a/);return{focus:()=>focused++}}}}};
+  let focused=0;const body={},editor={};const scope={session:null,disabled:false,pending:{current:false},setSubmitting:()=>{},cancel:()=>{},onMove:async()=>{},requestAnimationFrame:fn=>fn(),document:{body,activeElement:editingElsewhere?editor:body},origin:{current:{}},CSS:{escape:s=>s},root:{current:{querySelector:selector=>{assert.match(selector,/official:topic:a/);return{focus:()=>focused++}}}}};
   runInNewContext(ts.transpileModule(handler+';this.invoke=commit;', {compilerOptions:{target:ts.ScriptTarget.ES2020}}).outputText,scope);
   await scope.invoke(plan());assert.equal(focused,editingElsewhere?0:1);assert.equal(scope.pending.current,false);
  }

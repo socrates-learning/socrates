@@ -1,3 +1,4 @@
+import { topicDescendantIds, type OfficialTopicGraph } from './topic-placement-graph';
 import { compareCreatorTopics } from './creator-topic-order.js';
 export type StructuralTopic = {
     key: string;
@@ -15,10 +16,11 @@ export type PositionContext = {
     ownerId: string;
     canManageOfficial: boolean;
     nodes: readonly StructuralTopic[];
+    graph?: OfficialTopicGraph | null;
 };
 export type PositionPlan = {
     key: string;
-    rpc: 'position_library_node_in_library' | 'position_personal_topic';
+    rpc: 'position_library_node_in_library' | 'position_personal_topic' | 'position_official_topic_placement';
     args: Record<string, string | null | string[]>;
     noop: boolean;
     destinationKey: string | null;
@@ -32,6 +34,29 @@ export function planTopicPosition(context: PositionContext, key: string, targetK
     const moving = context.nodes.find(n => n.key === key), target = context.nodes.find(n => n.key === targetKey);
     if (!moving || !canPosition(context, moving) || !target)
         return null;
+    if (moving.source === 'official' && context.graph) {
+        const graph = context.graph;
+        if (target.source !== 'official') return null;
+        const edge = graph.edges.find(e => e.edge_key === key || (key === `official:topic:${e.topic_id}` && e.kind === 'primary'));
+        const targetEdge = graph.edges.find(e => e.edge_key === targetKey || (targetKey === `official:topic:${e.topic_id}` && e.kind === 'primary'));
+        const parentId = intent === 'inside' ? target.id : targetEdge?.parent_id;
+        if (!edge || !parentId || topicDescendantIds(graph, moving.id).has(parentId)) return null;
+        if (graph.edges.some(e => e.edge_key !== edge.edge_key && e.parent_id === parentId && e.topic_id === moving.id)) return null;
+        const siblings = (parent: string) => graph.edges.filter(e => e.parent_id === parent).sort((a,b) => a.sort_order-b.sort_order || a.edge_key.localeCompare(b.edge_key)).map(e => e.edge_key);
+        const source = siblings(edge.parent_id), destination = siblings(parentId), remaining = destination.filter(k => k !== edge.edge_key);
+        let before: string | null = null;
+        if (intent !== 'inside') {
+            if (!targetEdge) return null;
+            if (targetEdge.edge_key === edge.edge_key) before = source[source.indexOf(edge.edge_key)+1] ?? null;
+            else { const i = remaining.indexOf(targetEdge.edge_key); if (i < 0) return null; before = intent === 'before' ? targetEdge.edge_key : remaining[i+1] ?? null; }
+        }
+        const next = [...remaining]; next.splice(before === null ? next.length : next.indexOf(before), 0, edge.edge_key);
+        return { key, rpc: 'position_official_topic_placement', destinationKey: `official:topic:${parentId}`,
+          noop: parentId === edge.parent_id && JSON.stringify(next) === JSON.stringify(source),
+          args: { p_library_id: context.libraryId, p_edge_key: edge.edge_key, p_expected_parent_id: edge.parent_id,
+            p_destination_parent_id: parentId, p_before_edge_key: before, p_expected_source_edge_keys: source,
+            p_expected_destination_edge_keys: destination, p_expected_graph_revision: graph.revision } };
+    }
     let parent: string | null = null, placement: string | null = null;
     if (moving.source === 'official') {
         if (target!.source !== 'official')

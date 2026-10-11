@@ -1,5 +1,7 @@
 'use client';
 
+import { loadOfficialTopicGraph } from '@/lib/topic-placement-graph';
+import { originalTopicOccurrenceKey, topicDescendantIds, topicGraphOccurrences, type OfficialTopicGraph, type TopicOccurrence } from '@/lib/topic-placement-graph';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
@@ -7,7 +9,7 @@ import { supabase } from '@/lib/supabase';
 type LibraryNode = {
   id: string;
   name: string;
-  node_type: string | null;
+  node_type?: string | null;
   parent_id: string | null;
 };
 
@@ -23,6 +25,8 @@ export function Sidebar({
   activeId?: string;
   activeLibrary?: { id: string; name: string } | null;
 }) {
+  const [graph, setGraph] = useState<OfficialTopicGraph | null>(null);
+  const [loadError, setLoadError] = useState('');
   const [nodes, setNodes] = useState<LibraryNode[]>([]);
   const [expandedNodeIds, setExpandedNodeIds] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
@@ -34,6 +38,7 @@ export function Sidebar({
     async function loadSidebar() {
       if (!activeLibrary?.id) {
         setNodes([]);
+        setGraph(null);
         setExpandedNodeIds(new Set());
         setIsLoading(false);
         return;
@@ -41,16 +46,12 @@ export function Sidebar({
 
       setIsLoading(true);
 
-      const { data: nodeData } = await supabase
-        .from('library_nodes')
-        .select('id, name, node_type, parent_id')
-        .eq('library_id', activeLibrary.id)
-        .order('name');
-      const loadedNodes = nodeData || [];
+      const loadedGraph = await loadOfficialTopicGraph(supabase, activeLibrary.id);
+      const loadedNodes = loadedGraph.nodes;
       const rootNode = loadedNodes.find((node) => node.parent_id === null);
       const initiallyExpanded = new Set<string>();
 
-      if (rootNode) initiallyExpanded.add(rootNode.id);
+      if (rootNode) initiallyExpanded.add(originalTopicOccurrenceKey(loadedGraph, rootNode.id));
 
       if (activeId) {
         const nodeIds = loadedNodes.map((node) => node.id);
@@ -71,7 +72,7 @@ export function Sidebar({
           );
 
           while (currentNode) {
-            initiallyExpanded.add(currentNode.id);
+            initiallyExpanded.add(originalTopicOccurrenceKey(loadedGraph, currentNode.id));
             currentNode = currentNode.parent_id
               ? nodesById.get(currentNode.parent_id)
               : undefined;
@@ -81,12 +82,14 @@ export function Sidebar({
 
       if (isMounted) {
         setNodes(loadedNodes);
+        setGraph(loadedGraph);
+        setLoadError('');
         setExpandedNodeIds(initiallyExpanded);
         setIsLoading(false);
       }
     }
 
-    loadSidebar();
+    void loadSidebar().catch(error => { if (isMounted) { setGraph(null); setNodes([]); setIsLoading(false); setLoadError(error instanceof Error ? error.message : 'Unable to load Topic placements.'); } });
 
     return () => {
       isMounted = false;
@@ -113,13 +116,14 @@ export function Sidebar({
       parentId = nodesById.get(parentId)?.parent_id || null;
     }
 
-    setExpandedNodeIds(new Set(expandedPath));
-  }, [searchQuery, nodes]);
+    setExpandedNodeIds(new Set(expandedPath.map(id => graph ? originalTopicOccurrenceKey(graph, id) : id)));
+  }, [searchQuery, nodes, graph]);
 
-  function nodeMatchesSearch(node: LibraryNode, visited = new Set<string>()): boolean {
+  function nodeMatchesSearch(node: LibraryNode | TopicOccurrence, visited = new Set<string>()): boolean {
     const query = searchQuery.trim().toLowerCase();
 
     if (!query) return true;
+    if (graph) return [...topicDescendantIds(graph, node.id)].some(id => nodes.find(n => n.id === id)?.name.toLowerCase().includes(query));
     if (visited.has(node.id)) return false;
 
     const nextVisited = new Set(visited).add(node.id);
@@ -145,7 +149,7 @@ export function Sidebar({
     });
   }
 
-  function renderNode(node: LibraryNode, ancestorMatchesSearch = false) {
+  function renderNode(node: LibraryNode | TopicOccurrence, ancestorMatchesSearch = false) {
     const query = searchQuery.trim().toLowerCase();
     const nodeNameMatches = Boolean(
       query && node.name.toLowerCase().includes(query)
@@ -154,20 +158,20 @@ export function Sidebar({
 
     if (query && !showEntireBranch && !nodeMatchesSearch(node)) return null;
 
-    const childNodes = nodes.filter((child) => child.parent_id === node.id);
+    const childNodes = 'occurrenceKey' in node ? node.children : nodes.filter((child) => child.parent_id === node.id);
     const visibleChildNodes =
       query && !showEntireBranch
         ? childNodes.filter((child) => nodeMatchesSearch(child))
         : childNodes;
-    const isExpanded = expandedNodeIds.has(node.id);
+    const isExpanded = expandedNodeIds.has('occurrenceKey' in node ? node.occurrenceKey : node.id);
 
     return (
-      <div className="library-node" key={node.id}>
+      <div className="library-node" key={'occurrenceKey' in node ? node.occurrenceKey : node.id}>
         <button
           className="library-node-toggle"
           type="button"
           aria-expanded={isExpanded}
-          onClick={() => toggleNode(node.id)}
+          onClick={() => toggleNode('occurrenceKey' in node ? node.occurrenceKey : node.id)}
         >
           <span aria-hidden="true">{isExpanded ? '-' : '+'}</span>
           {node.name}
@@ -182,7 +186,7 @@ export function Sidebar({
     );
   }
 
-  const rootNodes = nodes.filter((node) => node.parent_id === null);
+  const rootNodes = graph ? topicGraphOccurrences(graph) : nodes.filter((node) => node.parent_id === null);
   const visibleRootNodes = searchQuery.trim()
     ? rootNodes.filter((node) => nodeMatchesSearch(node))
     : rootNodes;
@@ -437,6 +441,7 @@ export function Sidebar({
         onChange={(event) => setSearchQuery(event.target.value)}
       />
 
+      {loadError && <p role="alert">{loadError}</p>}
       {isLoading ? (
         <p className="muted">Loading library...</p>
       ) : !activeLibrary?.id ? (

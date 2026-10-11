@@ -1,3 +1,5 @@
+import * as topicGraphModule from '../lib/topic-placement-graph.ts';
+import { graphFromNodes } from './fixtures/shared-topic-branches.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -10,7 +12,7 @@ for (const route of ['new','[id]']) {
  for (const library of ['nursing','medicine']) {
   test(`${route} Concept route uses shared ${library} context and scopes placements`,async () => {
    const calls=[];
-   const database={from(table){
+   const database={rpc(name,args){assert.equal(name,'get_official_topic_graph');assert.equal(args.p_library_id,library);return Promise.resolve({data:graphFromNodes(library,[{id:`${library}-topic`,name:library,parent_id:null,sort_order:0}]),error:null});},from(table){
     const query={select(){return query;},eq(column,value){calls.push([table,column,value]);return query;},in(column,value){calls.push([table,column,value]);return query;},is(){return query;},order(){return query;},maybeSingle(){return query;},then(resolve){
      const data=table==='libraries'?{id:library,library_nodes:[{id:`${library}-topic`,name:library,parent_id:null,sort_order:0}]}:table==='concepts'?{id:'concept',name:'Example',body_markdown:'Body'}:[];
      return Promise.resolve({data,error:null}).then(resolve);
@@ -20,6 +22,7 @@ for (const route of ['new','[id]']) {
    const modules={
     'next/navigation':{notFound(){throw Error('404');},redirect(){throw Error('redirect');}},
     '@/components/CreatorStudioV2Client':{CreatorStudioV2Client:'editor'},
+    '@/lib/topic-placement-graph': topicGraphModule,
     '@/lib/concept-topic-tree':{buildConceptTopicTree},
     '@/lib/creator-data-access':{readCreatorQueryData},
     '@/lib/library-context':{resolveActiveLibraryContext:async()=>({library:{id:library}})},

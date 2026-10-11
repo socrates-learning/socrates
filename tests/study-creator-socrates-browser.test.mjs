@@ -64,8 +64,10 @@ test('Browse is the default and personal CRUD stays on personal tables', () => {
 
 test('Socrates data loading is active-Library scoped and published-only', () => {
   assert.match(pageSource, /resolveActiveLibraryContext\(\)/);
-  assert.match(pageSource, /\.from\('library_nodes'\)/);
-  assert.match(pageSource, /\.eq\('library_id', activeLibrary\.id\)/);
+  assert.match(pageSource, /loadOfficialTopicGraph\(supabase, activeLibrary.id\)/);
+  assert.doesNotMatch(pageSource, /\.from\('library_nodes'\)/);
+  // The shared graph reader validates the active Library before exposing rows.
+  assert.match(pageSource, /const nodeRows = topicGraph\.nodes;/);
   assert.match(pageSource, /\.from\('concept_placements'\)/);
   assert.match(pageSource, /library_nodes!inner\(library_id\)/);
   assert.match(pageSource, /\.eq\('library_nodes\.library_id', activeLibrary\.id\)/);

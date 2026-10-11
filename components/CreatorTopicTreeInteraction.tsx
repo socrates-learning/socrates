@@ -6,18 +6,21 @@ import styles from './CreatorTopicTreeInteraction.module.css';
 type Pick = {
     key: string;
     intent: DropIntent;
+    occurrenceKey?: string;
 };
 type Session = {
     key: string;
     context: PositionContext;
+    occurrenceKey?: string;
 };
 type Interaction = {
     context: PositionContext;
     disabled: boolean;
     moving: string | null;
+    movingOccurrence?: string;
     pick: Pick | null;
-    start: (event: ReactPointerEvent<HTMLButtonElement>, key: string) => void;
-    keyboard: (key: string, button: HTMLButtonElement, fromPointer: boolean) => void;
+    start: (event: ReactPointerEvent<HTMLButtonElement>, key: string, occurrenceKey?: string) => void;
+    keyboard: (key: string, button: HTMLButtonElement, fromPointer: boolean, occurrenceKey?: string) => void;
 };
 const InteractionContext = createContext<Interaction | null>(null);
 export function CreatorTopicTreeInteraction({ context, disabled, onMove, children, viewportLabel = 'Topic Tree' }: {
@@ -57,9 +60,8 @@ export function CreatorTopicTreeInteraction({ context, disabled, onMove, childre
             // to its new instance, but do not steal focus from another control.
             requestAnimationFrame(() => {
                 if (document.activeElement === document.body || document.activeElement === origin.current) {
-                    root.current?.querySelector<HTMLButtonElement>(
-                        `[data-topic-drop-key="${CSS.escape(plan.key)}"] [data-topic-drag-handle]`
-                    )?.focus();
+                    const preferred = session?.occurrenceKey ? root.current?.querySelector<HTMLButtonElement>(`[data-topic-occurrence="${CSS.escape(session.occurrenceKey)}"] [data-topic-drag-handle]`) : null;
+                    (preferred || root.current?.querySelector<HTMLButtonElement>(`[data-topic-drop-key="${CSS.escape(plan.key)}"] [data-topic-drag-handle]`))?.focus();
                 }
             });
         }
@@ -76,12 +78,12 @@ export function CreatorTopicTreeInteraction({ context, disabled, onMove, childre
             let next: Pick | null = null;
             if (row && root.current?.contains(row)) {
                 const rect = row.getBoundingClientRect(), ratio = (p.y - rect.top) / rect.height;
-                const candidate = { key: row.dataset.topicDropKey!, intent: (row.dataset.topicDropKey === 'unplaced' ? 'inside' : ratio < .25 ? 'before' : ratio > .75 ? 'after' : 'inside') as DropIntent };
+                const candidate = { occurrenceKey: row.dataset.topicOccurrence, key: row.dataset.topicDropKey!, intent: (row.dataset.topicDropKey === 'unplaced' ? 'inside' : ratio < .25 ? 'before' : ratio > .75 ? 'after' : 'inside') as DropIntent };
                 if (planTopicPosition(session.context, session.key, candidate.key, candidate.intent))
                     next = candidate;
             }
             latestPick.current = next;
-            setPick(old => old?.key === next?.key && old?.intent === next?.intent ? old : next);
+            setPick(old => old?.key === next?.key && old?.occurrenceKey === next?.occurrenceKey && old?.intent === next?.intent ? old : next);
         };
         const move = (event: PointerEvent) => {
             const p = pointer.current;
@@ -136,17 +138,17 @@ export function CreatorTopicTreeInteraction({ context, disabled, onMove, childre
         // The gesture keeps its initial authoritative snapshot until commit/cancel.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [session, keyboard]);
-    const start = (event: ReactPointerEvent<HTMLButtonElement>, key: string) => {
+    const start = (event: ReactPointerEvent<HTMLButtonElement>, key: string, occurrenceKey?: string) => {
         if (disabled || pending.current || event.button !== 0 || !event.isPrimary)
             return;
         origin.current = event.currentTarget;
         suppressClick.current = false;
         event.currentTarget.setPointerCapture(event.pointerId);
         pointer.current = { id: event.pointerId, x: event.clientX, y: event.clientY, startX: event.clientX, startY: event.clientY, active: false };
-        setSession({ key, context });
+        setSession({ key, context, occurrenceKey });
         setKeyboard(false);
     };
-    const openKeyboard = (key: string, button: HTMLButtonElement, fromPointer: boolean) => {
+    const openKeyboard = (key: string, button: HTMLButtonElement, fromPointer: boolean, occurrenceKey?: string) => {
         if (fromPointer && suppressClick.current) {
             suppressClick.current = false;
             return;
@@ -155,7 +157,7 @@ export function CreatorTopicTreeInteraction({ context, disabled, onMove, childre
             return;
         suppressClick.current = false;
         origin.current = button;
-        setSession({ key, context });
+        setSession({ key, context, occurrenceKey });
         setKeyboard(true);
         setIntent('inside');
         setTarget('');
@@ -178,9 +180,9 @@ export function CreatorTopicTreeInteraction({ context, disabled, onMove, childre
         }),
     ].filter(node => planTopicPosition(session.context, session.key, node.key, intent)) : [];
     const chosen = options.some(o => o.key === target) ? target : options[0]?.key ?? '';
-    return <InteractionContext.Provider value={{ context, disabled, moving: session?.key ?? null, pick, start, keyboard: openKeyboard }}>
+    return <InteractionContext.Provider value={{ context, disabled, moving: session?.key ?? null, movingOccurrence: session?.occurrenceKey, pick, start, keyboard: openKeyboard }}>
     <div ref={root} className={styles.interaction} aria-busy={disabled}>
-      <p className={styles.instructions}>Drag the handle: a line places a sibling; a highlighted row makes it the parent. Select a handle for keyboard move options.{context.nodes.some(node => node.source === 'personal' && node.parentKey === null) && ' Grouping keeps the branch intact.'}</p>
+      <p className={styles.instructions}>Drag the handle: a line places a sibling; a highlighted row makes it the parent. Select a handle for keyboard move options.{context.graph?.edges.some(edge => edge.kind === 'placement') && ' Moving a child of a shared parent changes that child placement at every appearance of the parent.'}{context.nodes.some(node => node.source === 'personal' && node.parentKey === null) && ' Grouping keeps the branch intact.'}</p>
       {keyboard && session && <div role="dialog" aria-label="Move or reorder Topic" className={styles.keyboard} onKeyDown={e => { if (e.key === 'Escape') {
             e.stopPropagation();
             cancel();
@@ -195,21 +197,23 @@ export function CreatorTopicTreeInteraction({ context, disabled, onMove, childre
     </div>
   </InteractionContext.Provider>;
 }
-export function TopicDropRow({ topicKey, className, style, children }: {
+export function TopicDropRow({ topicKey, occurrenceKey, className, style, children }: {
     topicKey: string;
+    occurrenceKey?: string;
     className?: string;
     style?: CSSProperties;
     children: ReactNode;
 }) {
     const interaction = useContext(InteractionContext);
-    const active = interaction?.pick?.key === topicKey ? interaction.pick.intent : undefined;
-    return <div className={`${className ?? ''} ${styles.dropRow}`} style={{ ...style, '--topic-drop-indent': style?.paddingLeft ?? '12px' } as CSSProperties} data-topic-drop-key={topicKey} data-drop-intent={active} data-moving={interaction?.moving === topicKey || undefined}>{children}</div>;
+    const active = interaction?.pick?.key === topicKey && interaction.pick.occurrenceKey === occurrenceKey ? interaction.pick.intent : undefined;
+    return <div className={`${className ?? ''} ${styles.dropRow}`} style={{ ...style, '--topic-drop-indent': style?.paddingLeft ?? '12px' } as CSSProperties} data-topic-drop-key={topicKey} data-topic-occurrence={occurrenceKey} data-drop-intent={active} data-moving={(interaction?.moving === topicKey && interaction.movingOccurrence === occurrenceKey) || undefined}>{children}</div>;
 }
-export function TopicDragHandle({ topicKey }: {
+export function TopicDragHandle({ topicKey, occurrenceKey }: {
     topicKey: string;
+    occurrenceKey?: string;
 }) {
     const interaction = useContext(InteractionContext), node = interaction?.context.nodes.find(n => n.key === topicKey);
     if (!interaction || !node || !canPosition(interaction.context, node))
         return null;
-    return <button type="button" data-topic-drag-handle className={styles.handle} disabled={interaction.disabled} aria-label={`Move or reorder ${node.name}`} title="Drag to move, or select for keyboard options" onPointerDown={e => interaction.start(e, topicKey)} onClick={e => { e.stopPropagation(); interaction.keyboard(topicKey, e.currentTarget, e.detail > 0); }}><GripVertical size={16}/></button>;
+    return <button type="button" data-topic-drag-handle className={styles.handle} disabled={interaction.disabled} aria-label={`Move or reorder ${node.name}`} title="Drag to move, or select for keyboard options" onPointerDown={e => interaction.start(e, topicKey, occurrenceKey)} onClick={e => { e.stopPropagation(); interaction.keyboard(topicKey, e.currentTarget, e.detail > 0, occurrenceKey); }}><GripVertical size={16}/></button>;
 }

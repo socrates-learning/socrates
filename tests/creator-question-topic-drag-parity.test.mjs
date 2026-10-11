@@ -1,10 +1,11 @@
+import { graphFromNodes } from './fixtures/shared-topic-branches.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {editor, nodes, expandChrome, settle, question} from './fixtures/creator-question-workflow.mjs';
 import {readFileSync} from 'node:fs';
 import {planTopicPosition} from '../lib/creator-topic-positioning.ts';
 for(const outcome of ['success','denied','stale','readback-failure']) test(`Questions structural ${outcome} preserves dirty editor`, async () => {
- const h=editor({response:(name)=>name==='position_library_node_in_library'?{data:{},error:outcome==='denied'?{code:'42501'}:outcome==='stale'?{code:'PT409'}:null}:undefined,readResponse:table=>table==='library_nodes'?{data:[{id:'root',name:'Root',parent_id:null,sort_order:0},{id:'a',name:'A',parent_id:'root',sort_order:1},{id:'b',name:'B',parent_id:'root',sort_order:0}],error:outcome==='readback-failure'?{message:'offline'}:null}:undefined});
+ const h=editor({response:(name,args)=>name==='get_official_topic_graph'?{data:graphFromNodes(args.p_library_id,[{id:'root',name:'Root',parent_id:null,sort_order:0},{id:'a',name:'A',parent_id:'root',sort_order:1},{id:'b',name:'B',parent_id:'root',sort_order:0}]),error:outcome==='readback-failure'?{message:'offline'}:null}:name==='position_library_node_in_library'?{data:{},error:outcome==='denied'?{code:'42501'}:outcome==='stale'?{code:'PT409'}:null}:undefined,readResponse:table=>table==='library_nodes'?{data:[{id:'root',name:'Root',parent_id:null,sort_order:0},{id:'a',name:'A',parent_id:'root',sort_order:1},{id:'b',name:'B',parent_id:'root',sort_order:0}],error:outcome==='readback-failure'?{message:'offline'}:null}:undefined});
  h.props.initialTopics=[{id:'root',name:'Root',children:[{id:'a',name:'A',children:[]},{id:'b',name:'B',children:[]}]}];
  let e=h.render();e.setActiveCreatorTab('questions');e.setQuestionConceptsByTopicId({a:[{id:'primary',name:'Primary'}]});e.selectQuestionConcept('primary','a');e=h.render();e.setQuestionPrompt('DIRTY question');e.setQuestionAnswer('DIRTY answer');e.setQuestionRelatedConceptIds(['related']);e.setQuestionTestingAngle('Safety');e.setQuestionAdditionalTestingAngles(['Priority']);e.setQuestionTags([{id:'tag',name:'Tag'}]);e=h.render();
  const keys=['questionPrompt','questionAnswer','questionId','primaryQuestionConceptId','questionRelatedConceptIds','questionTestingAngle','questionAdditionalTestingAngles','questionTags','isQuestionDirty','questionConceptId','questionTopicId','questionEditorState'];

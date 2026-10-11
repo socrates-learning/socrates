@@ -1,3 +1,4 @@
+import * as topicGraphModule from '../lib/topic-placement-graph.ts';
 import { formatSaveResponse } from './fixtures/creator-role-workspaces.mjs';
 import { questionImageBoundary } from './fixtures/question-media-authoring.mjs';
 import { conceptMedia, conceptImageBoundary, conceptContentBoundary } from './fixtures/concept-media-authoring.mjs';
@@ -26,7 +27,7 @@ import {
 // responses. Effects are intentionally excluded: these are transaction/state
 // regression tests, not browser or database integration tests.
 const source = readFileSync(new URL('../components/CreatorStudioV2Client.tsx', import.meta.url), 'utf8');
-const runtimeContext = { exports: {}, require: () => entityContracts };
+const runtimeContext = { exports: {}, require: name => { if (name === '@/lib/creator-entity-contracts') return entityContracts; if (name === './topic-placement-graph') return topicGraphModule; throw new Error(`Unexpected runtime import: ${name}`); } };
 vm.runInNewContext(ts.transpileModule(readFileSync(new URL('../lib/creator-studio-runtime.ts', import.meta.url), 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS },
 }).outputText, runtimeContext);
@@ -135,6 +136,7 @@ function editor({ role = 'learner', editing = false, response, references = [], 
       CreatorStudioSaveToolbar() {},
       CreatorStudioTabs() {},
     },
+    '@/lib/topic-placement-graph': topicGraphModule,
     '@/lib/concept-topic-tree': { buildConceptTopicTree },
     '@/lib/supabase': { supabase: database },
     '@/lib/creator-personal-structure': personalStructure,

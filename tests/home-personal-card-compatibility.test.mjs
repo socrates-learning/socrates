@@ -1,3 +1,4 @@
+import * as topicGraphModule from '../lib/topic-placement-graph.ts';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
@@ -37,6 +38,7 @@ function counts(overrides = {}) {
   const a = planner.indexOf('  function descendantNodeIds(');
   const b = planner.indexOf('  async function refreshResolvedDeck(', a);
   const context = vm.createContext({
+    homeSettings: null, topicDescendantIds: topicGraphModule.topicDescendantIds,
     nodes, activeLibrary: { id: 'A' }, personalTopics: topics,
     personalConcepts: material.personal_concepts, personalCards: material.personal_cards,
     placements: [{ concept_id: 'one', library_node_id: 'leaf' }, { concept_id: 'two', library_node_id: 'leaf' }, { concept_id: 'one', library_node_id: 'second' }],
@@ -80,6 +82,7 @@ async function serverLoad(libraryId, data) {
   const exports = {}, calls = [];
   vm.runInNewContext(ts.transpileModule(initial, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText, {
     exports, require(name) {
+ if (name === './topic-placement-graph') return topicGraphModule;
       if (name === 'server-only') return {};
       if (name === '@/lib/supabase-server') return { createSupabaseServerClient: async () => ({
         rpc: async (name, args) => {

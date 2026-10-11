@@ -1,3 +1,5 @@
+import { graphFromTree, projectSharedTopicSource } from './shared-topic-branches.mjs';
+import * as topicGraphModule from '../../lib/topic-placement-graph.ts';
 import * as officialFormat from '../../lib/official-content-format.ts';
 import React from 'react';
 import * as reactJsx from 'react/jsx-runtime';
@@ -36,7 +38,7 @@ export const testingAngleVocabulary = [
   'Intervention / Management', 'Complications / Outcomes', 'Differentiation / Comparison',
 ].map((name, index) => ({ id: `angle-${index}`, storage_key: name, display_name: name, status: 'active',
   reserved_names: [name.toLowerCase()], sort_order: index, revision: 1 }));
-const runtimeContext = { exports: {}, require: () => entityContracts };
+const runtimeContext = { exports: {}, require: name => { if (name === '@/lib/creator-entity-contracts') return entityContracts; if (name === './topic-placement-graph') return topicGraphModule; throw new Error(`Unexpected runtime import: ${name}`); } };
 vm.runInNewContext(ts.transpileModule(readFileSync(new URL('../../lib/creator-studio-runtime.ts', import.meta.url), 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS },
 }).outputText, runtimeContext);
@@ -109,6 +111,7 @@ const tagManagerPresentationHunks = [
   ]
 ];
 export function projectTagManagerPresentation(value) {
+  value = projectSharedTopicSource('components/CreatorStudioV2Client.tsx', value);
   for (const [approved, before] of tagManagerPresentationHunks) {
     assert.equal(value.split(approved).length, 2, 'Exact Tag Manager presentation exception');
     value = value.replace(approved, before);
@@ -281,7 +284,7 @@ function projectContentDisclosures(value) {
 const disclosureProjectedCompiled = ts.transpileModule(projectContentDisclosures(projectTagPresentation(projectedSource)).replace(renderMarker, `  capture({ ${exposed} });\n  return (\n    <>\n      <Header />`), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
 }).outputText;
-const learnerDisclosureProjectedCompiled = ts.transpileModule(projectContentDisclosures(source).replace(renderMarker, `  capture({ ${exposed} });\n  return (\n    <>\n      <Header />`), {
+const learnerDisclosureProjectedCompiled = ts.transpileModule(projectContentDisclosures(projectSharedTopicSource('components/CreatorStudioV2Client.tsx', source)).replace(renderMarker, `  capture({ ${exposed} });\n  return (\n    <>\n      <Header />`), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
 }).outputText;
 
@@ -337,6 +340,7 @@ export function editor({ projectOfficialTextEditor = false, projectTagBrowse = f
     },
   };
   function rpcResult(name, payload) {
+      if (name === 'get_official_topic_graph') return { data: props.initialTopicGraph || graphFromTree(payload.p_library_id, props.initialTopics), error: null };
       if (name === 'get_creator_questions_with_media') return { data: [], error: null };
       if (name === 'get_testing_angle_vocabulary') return response?.(name, payload) ?? { data: structuredClone(vocabulary), error: null };
       calls.push({ name, payload });
@@ -372,6 +376,7 @@ export function editor({ projectOfficialTextEditor = false, projectTagBrowse = f
     '@/components/creator/CreatorStudioChrome': {
       ...chrome,
     },
+    '@/lib/topic-placement-graph': topicGraphModule,
     '@/lib/concept-topic-tree': { buildConceptTopicTree },
     '@/lib/supabase': { supabase: database },
     '@/lib/creator-personal-structure': personalStructure,

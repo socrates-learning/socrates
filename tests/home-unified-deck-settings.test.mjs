@@ -1,3 +1,4 @@
+import * as topicGraphModule from '../lib/topic-placement-graph.ts';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
@@ -142,7 +143,8 @@ test('server bootstrap includes Library-qualified settings and Creator placement
  const saved=snapshot([state('same')]);const calls=[];const exports={};
  const bootstrap={...saved,available_libraries:[{id:'library'}],nodes,personal_topics:topics,personal_topic_placements:placement};
  vm.runInNewContext(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{
-  exports,require(name){if(name==='server-only')return {};if(name==='@/lib/supabase-server')return {createSupabaseServerClient:async()=>({
+  exports,require(name){
+ if (name === './topic-placement-graph') return topicGraphModule;if(name==='server-only')return {};if(name==='@/lib/supabase-server')return {createSupabaseServerClient:async()=>({
    rpc:async(n)=>{calls.push(n);return {data:{deck:{id:'deck',user_id:'owner'},bootstrap},error:null};},
    from:(table)=>{throw new Error(`Unexpected unscoped read: ${table}`);},
   })};throw new Error(name);},

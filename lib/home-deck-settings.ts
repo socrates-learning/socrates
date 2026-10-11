@@ -1,3 +1,4 @@
+import { requireTopicGraph, topicGraphOccurrences, type OfficialTopicGraph, type TopicOccurrence } from './topic-placement-graph';
 /** Wire contract of Migration 109. Presentation placement never supplies selection. */
 export type TopicState = {
   group_key: string; topic_id: string; selected: boolean; direct: boolean;
@@ -10,10 +11,11 @@ export type SettingsSnapshot = {
   topic_preference_state?: TopicPreferenceState;
 };
 export type TopicPreferenceState = {
-  version: 117; deck_id: string; library_id: string; revision: string;
+  version: 117 | 122; deck_id: string; library_id: string; revision: string;
   values: Record<string, number>;
 };
 export type HomeSettings = {
+  official_topic_graph?: OfficialTopicGraph;
   unified_deck_settings: SettingsSnapshot;
   personal_topic_preferences: Record<string, number>;
   personal_collection_preferences: Record<string, number>;
@@ -22,12 +24,14 @@ export type TopicPlacement = { personal_topic_id: string; library_node_id: strin
 export type HomeGroup = {
   id: string; key: string; name: string; parent_id: string | null;
   source: 'official' | 'personal' | 'collection'; children: HomeGroup[];
+  occurrenceKey?: string; shared?: boolean; originalPath?: boolean;
 };
 export function composeHomeGroups(
   nodes: readonly { id: string; name: string; parent_id: string | null }[],
   topics: readonly { id: string; name: string; parent_id: string | null; sort_order: number }[],
   placements: readonly TopicPlacement[],
   collections: readonly { id: string; name: string }[],
+  graph?: OfficialTopicGraph | null,
 ): HomeGroup[] {
   const byKey = new Map<string, HomeGroup>();
   nodes.forEach(n => byKey.set(`official:topic:${n.id}`, { ...n, key: `official:topic:${n.id}`, source: 'official', children: [] }));
@@ -56,7 +60,15 @@ export function composeHomeGroups(
   roots.forEach(visit);
   if (seen.size !== byKey.size) throw new Error('Topic hierarchy contains an unreachable branch.');
   const orderedRoots = [...roots.filter(n => n.source === 'official').sort((a, b) => a.name.localeCompare(b.name)), ...roots.filter(n => n.source !== 'official')];
-  return [...orderedRoots, ...collections.map(c => ({ ...c, key: `personal:collection:${c.id}`, source: 'collection' as const, parent_id: null, children: [] }))];
+  function project(n: TopicOccurrence): HomeGroup {
+    const original = byKey.get(`official:topic:${n.id}`);
+    if (!original) throw new Error('Official Topic graph and Home material do not match. Reload Home.');
+    let children: HomeGroup[] | undefined;
+    return { ...original, occurrenceKey: n.occurrenceKey, shared: n.shared, originalPath: n.originalPath,
+      get children() { return children ??= [...n.children.map(project), ...(n.originalPath ? original.children.filter(c => c.source === 'personal') : [])]; } };
+  }
+  const officialRoots = graph ? topicGraphOccurrences(graph).map(project) : orderedRoots;
+  return [...officialRoots, ...collections.map(c => ({ ...c, key: `personal:collection:${c.id}`, source: 'collection' as const, parent_id: null, children: [] }))];
 }
 export function requireHomeSettings(data: unknown): HomeSettings {
   const value = data as HomeSettings | null;
@@ -65,6 +77,11 @@ export function requireHomeSettings(data: unknown): HomeSettings {
     || !Array.isArray(s.excluded_topic_ids) || !Array.isArray(s.selected_collection_ids)
     || !value?.personal_topic_preferences || !value?.personal_collection_preferences) {
     throw new Error('Deck settings could not be confirmed. Reload Home before changing settings.');
+  }
+  if (value.official_topic_graph) {
+    const libraryId = s.topic_preference_state?.library_id;
+    if (!libraryId) throw new Error('Topic graph has no confirmed Library settings.');
+    requireTopicGraph(value.official_topic_graph, libraryId);
   }
   return value;
 }
@@ -85,7 +102,7 @@ export type SettingsRpc = (name: string, args: Record<string, unknown>) => Promi
 
 function confirmedTopicPreferences(data: unknown, deckId: string, libraryId: string): TopicPreferenceState {
   const state = data as TopicPreferenceState | null;
-  if (state?.version !== 117 || state.deck_id !== deckId || state.library_id !== libraryId
+  if ((state?.version !== 117 && state?.version !== 122) || state.deck_id !== deckId || state.library_id !== libraryId
     || !/^[a-f0-9]{32}$/.test(state.revision) || !state.values || Array.isArray(state.values)
     || Object.entries(state.values).some(([key, value]) => !/^(official|personal):topic:/.test(key)
       || !Number.isInteger(value) || value < 0 || value > 100)) {

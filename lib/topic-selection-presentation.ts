@@ -1,3 +1,4 @@
+import { effectiveGraphTopicIds, indexTopicGraph, topicDescendantIds, type OfficialTopicGraph } from './topic-placement-graph';
 type Topic = { id: string; parent_id: string | null };
 type Placement = { concept_id: string; library_node_id: string };
 
@@ -5,7 +6,9 @@ export function getEffectiveTopicNodeIds(
   nodes: Topic[],
   selectedIds: ReadonlySet<string>,
   excludedIds: ReadonlySet<string>,
+  graph?: OfficialTopicGraph | null,
 ) {
+  if (graph) return effectiveGraphTopicIds(graph, selectedIds, excludedIds);
   const childrenByParent = new Map<string | null, Topic[]>();
   for (const node of nodes) {
     const children = childrenByParent.get(node.parent_id) || [];
@@ -52,6 +55,7 @@ export function getTopicSelectionPresentation(
   selectedIds: ReadonlySet<string>,
   excludedIds: ReadonlySet<string>,
   overrides: Record<string, 'included' | 'excluded'>,
+  graph?: OfficialTopicGraph | null,
 ) {
   const childrenByParent = new Map<string, Topic[]>();
   for (const node of nodes) {
@@ -61,7 +65,7 @@ export function getTopicSelectionPresentation(
     childrenByParent.set(node.parent_id, children);
   }
 
-  const branchIds = new Set<string>();
+  const branchIds = graph ? topicDescendantIds(graph, nodeId) : new Set<string>();
   const pending = [nodeId];
   while (pending.length) {
     const current = pending.pop();
@@ -74,6 +78,7 @@ export function getTopicSelectionPresentation(
     nodes,
     selectedIds,
     excludedIds,
+    graph,
   );
   const parents = new Map(nodes.map(node => [node.id, node.parent_id]));
   let nearestDirective: 'included' | 'excluded' | null = null;
@@ -92,8 +97,9 @@ export function getTopicSelectionPresentation(
     current = parents.get(current);
   }
   const explicit = selectedIds.has(nodeId);
-  const excluded = excludedIds.has(nodeId);
-  const excludedByAncestor = !excluded && nearestDirective === 'excluded';
+  const shared = graph ? indexTopicGraph(graph).shared.has(nodeId) : false;
+  const excluded = !shared && excludedIds.has(nodeId);
+  const excludedByAncestor = !shared && !excluded && nearestDirective === 'excluded';
   const effective = effectiveNodeIds.has(nodeId);
   const inherited = effective && !explicit;
   const branchNodes = nodes.filter(node => branchIds.has(node.id));
@@ -120,7 +126,7 @@ export function getTopicSelectionPresentation(
     excludedByAncestor,
     inherited,
     effective,
-    checked: any && !partial,
-    partial,
+    checked: any && !partial && !(shared && inherited),
+    partial: partial || (shared && inherited),
   };
 }

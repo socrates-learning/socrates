@@ -1,3 +1,4 @@
+import * as topicGraphModule from '../lib/topic-placement-graph.ts';
 import { formatSaveResponse, testingAngleVocabulary } from './fixtures/creator-role-workspaces.mjs';
 import { questionImageBoundary } from './fixtures/question-media-authoring.mjs';
 import { conceptMedia, conceptImageBoundary, conceptContentBoundary } from './fixtures/concept-media-authoring.mjs';
@@ -108,6 +109,7 @@ function editor({ editing = false, response, references = [] } = {}) {
       CreatorStudioSaveToolbar() {},
       CreatorStudioTabs() {},
     },
+    '@/lib/topic-placement-graph': topicGraphModule,
     '@/lib/concept-topic-tree': { buildConceptTopicTree },
     '@/lib/supabase': { supabase: database },
     '@/lib/creator-personal-structure': personalStructure,

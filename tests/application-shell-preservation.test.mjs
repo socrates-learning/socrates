@@ -1,3 +1,4 @@
+import { projectSharedTopicSource } from './fixtures/shared-topic-branches.mjs';
 import ts from 'typescript';
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -236,7 +237,7 @@ test('reset requires explicit confirmation; failed RPC retains dialog and does n
 
 
 test('Home-only layout and redundant header action preserve every released planner byte after exact projection', () => {
-  let source = read('components/StudyPlanner.tsx');
+  let source = projectSharedTopicSource('components/StudyPlanner.tsx', read('components/StudyPlanner.tsx'));
   const homeHeader = `<LearnerHeader classPrefix="home-v2" brandHref="/" onHomeClick={handleHomeClick} items={mode === 'dashboard' ? items.filter(item => item.label !== 'Home') : items} />`;
   assert.equal(source.split(homeHeader).length, 2, 'Only dashboard mode omits the redundant header Home action');
   source = source.replace(homeHeader, '<LearnerHeader classPrefix="home-v2" brandHref="/" onHomeClick={handleHomeClick} items={items} />');

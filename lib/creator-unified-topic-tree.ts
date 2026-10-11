@@ -17,6 +17,7 @@ export type CreatorOfficialTopicInput = Readonly<{
   id: string;
   name: string;
   children: readonly CreatorOfficialTopicInput[];
+  occurrenceKey?: string; edgeKey?: string | null; originalPath?: boolean; originalParentId?: string | null; shared?: boolean;
 }>;
 
 export type UnifiedCreatorTopicNode = Readonly<{
@@ -34,6 +35,7 @@ export type UnifiedCreatorTopicNode = Readonly<{
     | `personal:topic:${string}`
     | null;
   children: readonly UnifiedCreatorTopicNode[];
+  occurrenceKey?: string; edgeKey?: string | null; originalPath?: boolean; originalParentId?: string | null; shared?: boolean;
 }>;
 
 export type UnifiedCreatorTopicComposition = Readonly<{
@@ -162,6 +164,7 @@ export function composeUnifiedCreatorTopicTree({
   const officialIds = new Set<string>();
   function collectOfficialIds(items: readonly CreatorOfficialTopicInput[]) {
     items.forEach((topic) => {
+      if (officialIds.has(topic.id)) return;
       officialIds.add(topic.id);
       collectOfficialIds(topic.children);
     });
@@ -195,22 +198,25 @@ export function composeUnifiedCreatorTopicTree({
     sortOrder: number
   ): UnifiedCreatorTopicNode {
     const key = createTopicKey('official', topic.id);
-    const officialChildren = topic.children.map((child, index) =>
-      buildOfficialNode(child, key, index)
-    );
-    const personalChildren = placedRootsByOfficialId.get(topic.id) || [];
+    let children: readonly UnifiedCreatorTopicNode[] | undefined;
 
     return Object.freeze({
+      ...(topic.occurrenceKey ? { occurrenceKey: topic.occurrenceKey, edgeKey: topic.edgeKey, originalPath: topic.originalPath, shared: topic.shared } : {}),
       source: 'official' as const,
       id: topic.id,
       key,
       name: topic.name,
       sortOrder,
-      canonicalParentKey: parentKey,
+      canonicalParentKey: topic.originalParentId === undefined ? parentKey : topic.originalParentId ? createTopicKey('official', topic.originalParentId) : null,
       presentationParentKey: parentKey,
       // Preserve the authoritative official order. Personal roots are stable
       // and deterministic after the existing official children.
-      children: Object.freeze([...officialChildren, ...personalChildren]),
+      get children() {
+        return children ??= Object.freeze([
+          ...topic.children.map((child, index) => buildOfficialNode(child, key, index)),
+          ...(topic.originalPath === false ? [] : placedRootsByOfficialId.get(topic.id) || []),
+        ]);
+      },
     });
   }
 
@@ -226,8 +232,15 @@ export function composeUnifiedCreatorTopicTree({
 export function flattenUnifiedCreatorTopics(
   roots: readonly UnifiedCreatorTopicNode[]
 ): UnifiedCreatorTopicNode[] {
-  return roots.flatMap((topic) => [
-    topic,
-    ...flattenUnifiedCreatorTopics(topic.children),
-  ]);
+  const result: UnifiedCreatorTopicNode[] = [], seen = new Set<string>(), traversed = new Set<string>();
+  function visit(items: readonly UnifiedCreatorTopicNode[]) {
+    for (const topic of items) {
+      if (!seen.has(topic.key)) { seen.add(topic.key); result.push(topic); }
+      const traversal = `${topic.key}:${topic.originalPath !== false}`;
+      if (traversed.has(traversal)) continue;
+      traversed.add(traversal); visit(topic.children);
+    }
+  }
+  visit(roots);
+  return result;
 }

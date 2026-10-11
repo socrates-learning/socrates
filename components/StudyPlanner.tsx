@@ -1,5 +1,7 @@
 'use client';
 
+import { toggleOccurrenceKey, topicDescendantIds } from '@/lib/topic-placement-graph';
+
 import QuestionMediaContent from './QuestionMediaContent';
 
 import {
@@ -1633,17 +1635,7 @@ export function StudyPlanner({
   }
 
   function toggleHomeExpanded(id: string) {
-    setHomeExpandedIds((current) => {
-      const next = new Set(current);
-
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-
-      return next;
-    });
+    setHomeExpandedIds(current => toggleOccurrenceKey(current, id));
   }
 
   const classPrefix: LearnerHeaderPrefix = mode === 'study' ? 'study-v2' : 'home-v2';
@@ -1676,6 +1668,7 @@ export function StudyPlanner({
   }).filter((item): item is HeaderItem => item !== null);
 
   function descendantNodeIds(nodeId: string) {
+    if (homeSettings?.official_topic_graph) return topicDescendantIds(homeSettings.official_topic_graph, nodeId);
     const ids = new Set<string>([nodeId]);
     const queue = [nodeId];
 
@@ -1981,18 +1974,9 @@ export function StudyPlanner({
 
 
   function toggleExpandedNode(nodeId: string) {
-    setExpandedNodeIds((current) => {
-      const next = new Set(current);
-
-      if (next.has(nodeId)) {
-        next.delete(nodeId);
-      } else {
-        next.add(nodeId);
-      }
-
-      return next;
-    });
-    setFocusedNodeId(nodeId);
+    setExpandedNodeIds(current => toggleOccurrenceKey(current, nodeId));
+    const edgeKey = nodeId.split('/').at(-1) || nodeId;
+    setFocusedNodeId(homeSettings?.official_topic_graph?.edges.find(e => e.edge_key === edgeKey)?.topic_id || edgeKey.replace(/^primary:/, ''));
   }
 
   function toggleExpandedPersonalTopic(topicId: string) {
@@ -2013,7 +1997,7 @@ export function StudyPlanner({
     const children = node.children;
     const isLibraryTopic = node.source === 'official';
     const isCollection = node.source === 'collection';
-    const isExpanded = isLibraryTopic ? expandedNodeIds.has(node.id) : expandedPersonalTopicIds.has(node.key);
+    const isExpanded = isLibraryTopic ? (expandedNodeIds.has(node.occurrenceKey || node.id) || (node.originalPath !== false && expandedNodeIds.has(node.id))) : expandedPersonalTopicIds.has(node.key);
     const branchConceptCount = branchConceptIds(node.id).filter(
       (conceptId) => (libraryAvailabilityQuestionCounts[conceptId] || 0) > 0
     ).length;
@@ -2023,7 +2007,8 @@ export function StudyPlanner({
       placements,
       selectedNodeIds,
       excludedNodeIds,
-      conceptOverrides
+      conceptOverrides,
+      homeSettings?.official_topic_graph
     ) : groupSelection(node, homeSettings!);
     const preference = groupDrafts[node.key] ?? (isCollection ? homeSettings!.personal_collection_preferences[node.id]
       : homeSettings?.unified_deck_settings.topic_preference_state?.values[node.key])
@@ -2034,7 +2019,7 @@ export function StudyPlanner({
 
     return (
       <div
-        key={node.key}
+        key={node.occurrenceKey || node.key}
         style={{
           marginLeft: depth ? 22 : 0,
           position: 'relative',
@@ -2072,7 +2057,7 @@ export function StudyPlanner({
           >
             <button
               type="button"
-              onClick={() => isLibraryTopic ? toggleExpandedNode(node.id) : toggleExpandedPersonalTopic(node.key)}
+              onClick={() => isLibraryTopic ? toggleExpandedNode(node.occurrenceKey || node.id) : toggleExpandedPersonalTopic(node.key)}
               disabled={children.length === 0}
               aria-label={
                 isExpanded ? `Collapse ${node.name}` : `Expand ${node.name}`
@@ -2114,7 +2099,7 @@ export function StudyPlanner({
                 aria-checked={selection.partial ? 'mixed' : selection.checked}
                 disabled={isSaving || Boolean(settingsError)}
                 aria-describedby={isCollection ? `topic-selection-${node.key}` : undefined}
-                title={selection.inherited ? 'Included through a selected parent Topic. Uncheck to exclude this branch.' : undefined}
+                title={node.shared ? 'Shared Topic: a mixed checkbox is included through a parent. Check to select directly. Unchecking removes only its direct selection; another selected parent can still include it.' : selection.inherited ? 'Included through a selected parent Topic. Uncheck to exclude this branch.' : undefined}
                 onChange={(event) =>
                   void (isLibraryTopic ? toggleNodeSelection(node.id, event.currentTarget.checked) : saveGroupSetting(node, event.currentTarget.checked))
                 }
@@ -2263,9 +2248,10 @@ export function StudyPlanner({
   let homeTreeError = settingsError;
   if (homeSettings && !homeTreeError) {
     try {
-      homeGroups = composeHomeGroups(nodes, personalTopics, homeTopicPlacements, personalCollections);
+      homeGroups = composeHomeGroups(nodes, personalTopics, homeTopicPlacements, personalCollections, homeSettings.official_topic_graph);
       // Validate every authoritative state before rendering a partially assembled tree.
-      const inspect = (group: HomeGroup) => { if (group.source !== 'official') groupSelection(group, homeSettings); group.children.forEach(inspect); };
+      const inspected = new Set<string>();
+      const inspect = (group: HomeGroup) => { const key = `${group.key}:${group.originalPath !== false}`; if (inspected.has(key)) return; inspected.add(key); if (group.source !== 'official') groupSelection(group, homeSettings); group.children.forEach(inspect); };
       homeGroups.forEach(inspect);
     } catch (error) {
       homeTreeError = error instanceof Error ? error.message : 'Unable to display Deck settings.';
@@ -3022,7 +3008,7 @@ export function StudyPlanner({
             <PlannerStats
               activeTab={statsTab} onTabChange={openStatsTab}
               libraryName={activeLibrary.name} progress={learnerProgress} progressError={learnerProgressError}
-              nodes={nodes} rootNodes={rootNodes} progressByNodeId={learnerProgressByNodeId}
+              graph={homeSettings?.official_topic_graph} nodes={nodes} rootNodes={rootNodes} progressByNodeId={learnerProgressByNodeId}
               fallbackProgressMetric={emptyLearnerProgress.summary}
               expandedNodeIds={homeExpandedIds} onToggleNode={toggleHomeExpanded}
               showAlgorithmTab={canViewAlgorithmDiagnostics}

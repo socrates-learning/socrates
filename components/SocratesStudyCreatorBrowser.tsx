@@ -1,5 +1,6 @@
 'use client';
 
+import { topicOccurrencePath, originalTopicOccurrenceKey, type OfficialTopicGraph } from '@/lib/topic-placement-graph';
 import type { OfficialContentFormat } from '@/lib/official-content-format';
 
 import { MarkdownContent, questionMarkdownKind, questionMarkdownSummary } from '@/components/MarkdownContent';
@@ -57,6 +58,7 @@ type OfficialQuestion = {
 };
 
 export type OfficialBrowserData = {
+  topicGraph?: OfficialTopicGraph;
   libraryId: string;
   libraryName: string;
   nodes: OfficialNode[];
@@ -99,7 +101,7 @@ type UnifiedStudyCreatorBrowserProps = {
 };
 
 type SelectedTopic =
-  | { source: 'official'; id: string }
+  | { source: 'official'; id: string; occurrenceKey?: string }
   | { source: 'personal'; id: string };
 
 type BrowseItem =
@@ -179,8 +181,8 @@ export function SocratesStudyCreatorBrowser({
   search,
 }: UnifiedStudyCreatorBrowserProps) {
   const officialTree = useMemo(
-    () => buildConceptTopicTree(data?.nodes ?? []),
-    [data?.nodes]
+    () => buildConceptTopicTree(data?.nodes ?? [], false, data?.topicGraph),
+    [data?.nodes, data?.topicGraph]
   );
   const [selectedTopic, setSelectedTopic] = useState<SelectedTopic | null>(
     () =>
@@ -190,7 +192,7 @@ export function SocratesStudyCreatorBrowser({
   );
   const [selectedItemKey, setSelectedItemKey] = useState<string | null>(null);
   const [expandedOfficialIds, setExpandedOfficialIds] = useState<Set<string>>(
-    () => new Set(officialTree.map((topic) => topic.id))
+    () => new Set(officialTree.map((topic) => topic.occurrenceKey || topic.id))
   );
   const [expandedPersonalIds, setExpandedPersonalIds] = useState<Set<string>>(
     () =>
@@ -425,7 +427,7 @@ export function SocratesStudyCreatorBrowser({
             }
           });
       }
-      if (allowsPersonal) {
+      if (allowsPersonal && !selectedTopic.occurrenceKey?.includes('/placement:')) {
         const topicOverlays = material.overlays.filter(
           (overlay) => overlay.library_node_id === selectedTopic.id
         );
@@ -537,10 +539,10 @@ export function SocratesStudyCreatorBrowser({
     else setInspectorTab('details');
   }
 
-  function selectOfficialTopic(topicId: string) {
-    setSelectedTopic({ source: 'official', id: topicId });
+  function selectOfficialTopic(topicId: string, occurrenceKey?: string) {
+    setSelectedTopic({ source: 'official', id: topicId, occurrenceKey });
     setSelectedItemKey(null);
-    setExpandedOfficialIds((current) => new Set(current).add(topicId));
+    setExpandedOfficialIds((current) => new Set(current).add(occurrenceKey || (data?.topicGraph ? originalTopicOccurrenceKey(data.topicGraph, topicId) : topicId)));
   }
 
   function selectPersonalTopic(topicId: string) {
@@ -567,11 +569,11 @@ export function SocratesStudyCreatorBrowser({
     ) {
       return null;
     }
-    const isExpanded = normalizedSearch
+    const isExpanded = normalizedSearch && topic.originalPath !== false
       ? true
-      : expandedOfficialIds.has(topic.id);
+      : expandedOfficialIds.has(topic.occurrenceKey || topic.id);
     const isSelected =
-      selectedTopic?.source === 'official' && selectedTopic.id === topic.id;
+      selectedTopic?.source === 'official' && selectedTopic.id === topic.id && (!selectedTopic.occurrenceKey ? topic.originalPath !== false : selectedTopic.occurrenceKey === topic.occurrenceKey);
     const conceptIds = new Set(
       (data?.concepts ?? [])
         .filter((concept) => concept.placementNodeIds.includes(topic.id))
@@ -586,7 +588,7 @@ export function SocratesStudyCreatorBrowser({
       <div
         aria-selected={isSelected}
         className={styles.topicBranch}
-        key={`official-${topic.id}`}
+        key={`official-${topic.occurrenceKey || topic.id}`}
         role="treeitem"
       >
         <div
@@ -600,7 +602,7 @@ export function SocratesStudyCreatorBrowser({
             aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${topic.name}`}
             className={styles.expandButton}
             disabled={!topic.children.length}
-            onClick={() => toggleExpanded('official', topic.id)}
+            onClick={() => toggleExpanded('official', topic.occurrenceKey || topic.id)}
             type="button"
           >
             {topic.children.length > 0 && (
@@ -611,7 +613,7 @@ export function SocratesStudyCreatorBrowser({
           </button>
           <button
             className={styles.topicSelect}
-            onClick={() => selectOfficialTopic(topic.id)}
+            onClick={() => selectOfficialTopic(topic.id, topic.occurrenceKey)}
             type="button"
           >
             <span className={styles.folderIcon}>
@@ -723,6 +725,12 @@ export function SocratesStudyCreatorBrowser({
     );
   }
 
+  function selectedOfficialPath(id: string) {
+    const path = data?.topicGraph && selectedTopic?.source === 'official' && selectedTopic.id === id && selectedTopic.occurrenceKey
+      ? topicOccurrencePath(data.topicGraph, selectedTopic.occurrenceKey) : null;
+    return path?.map(node => node.name).join(' › ') || officialPath(officialTree, id);
+  }
+
   const topicHeading = normalizedSearch
     ? 'Search Results'
     : selectedOfficialTopic?.name ??
@@ -731,7 +739,7 @@ export function SocratesStudyCreatorBrowser({
   const topicPath = normalizedSearch
     ? `Across ${data?.libraryName ?? 'Socrates'} and My Custom Topics`
     : selectedOfficialTopic
-      ? officialPath(officialTree, selectedOfficialTopic.id)
+      ? selectedOfficialPath(selectedOfficialTopic.id)
       : selectedPersonalTopic
         ? personalTopicPath(selectedPersonalTopic.id)
         : 'Select a Topic from the unified tree';
@@ -760,7 +768,7 @@ export function SocratesStudyCreatorBrowser({
           ? selectedOfficialTopic.id
           : concept.placementNodeIds[0]!;
       const conceptOfficialPath = contextNodeId
-        ? officialPath(officialTree, contextNodeId)
+        ? selectedOfficialPath(contextNodeId)
         : 'Unplaced';
       const questions = (data?.questions ?? []).filter(
         (question) => question.concept_id === concept.id

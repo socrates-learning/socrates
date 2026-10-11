@@ -1,3 +1,5 @@
+import * as topicGraphModule from '../lib/topic-placement-graph.ts';
+import { graphFromNodes } from './fixtures/shared-topic-branches.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
@@ -39,6 +41,7 @@ const successfulConcept = {
 
 function queryDatabase(results = {}) {
   return {
+    rpc(name,args){ assert.equal(name,'get_official_topic_graph'); return Promise.resolve(results.topic_graph || {data:graphFromNodes(args.p_library_id,successfulLibrary.library_nodes),error:null}); },
     from(table) {
       const query = {
         select() { return query; },
@@ -77,6 +80,7 @@ async function runCreatorPage({
       redirect(destination) { throw new RedirectSignal(destination); },
     },
     '@/components/CreatorStudioV2Client': { CreatorStudioV2Client: 'editor' },
+    '@/lib/topic-placement-graph': topicGraphModule,
     '@/lib/concept-topic-tree': { buildConceptTopicTree },
     '@/lib/creator-data-access': { readCreatorQueryData },
     '@/lib/library-context': {

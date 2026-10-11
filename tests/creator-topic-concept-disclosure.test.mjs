@@ -1,3 +1,4 @@
+import { graphFromNodes } from './fixtures/shared-topic-branches.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { deriveCreatorCapabilities } from '../lib/creator-capabilities.ts';
@@ -186,7 +187,7 @@ test('stale placement reads cannot become accepted counts; ready reads are reuse
 });
 
 test('authoritative structural readback updates subtree counts without changing placements, drafts or disclosure identity', async () => {
-  const h = fixture({ response: name => name === 'position_library_node_in_library' ? { data: {}, error: null } : undefined,
+  const h = fixture({ response: (name,args) => name === 'get_official_topic_graph' ? {data:graphFromNodes(args.p_library_id,[{id:'topic',name:'Root',parent_id:null,sort_order:0},{id:'a',name:'A',parent_id:'topic',sort_order:0},{id:'b',name:'B',parent_id:'a',sort_order:0},{id:'empty',name:'Empty',parent_id:'topic',sort_order:1}]),error:null} : name === 'position_library_node_in_library' ? { data: {}, error: null } : undefined,
     readResponse: table => ({ data: table === 'library_nodes' ? [
       { id: 'topic', parent_id: null, name: 'Root', sort_order: 0 },
       { id: 'a', parent_id: 'topic', name: 'A', sort_order: 0 },

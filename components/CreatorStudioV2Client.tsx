@@ -1,5 +1,8 @@
 'use client';
 
+import { descendantOccurrenceKey, occurrenceExpanded, toggleOccurrenceKey, indexTopicGraph, originalTopicOccurrenceKey, topicDescendantIds, type OfficialTopicGraph } from '@/lib/topic-placement-graph';
+import { loadOfficialTopicGraph } from '@/lib/topic-placement-graph';
+
 import type { OfficialContentFormat } from '@/lib/official-content-format';
 
 import { useSocratesNavigationGuard } from '@/components/application-shell/SocratesShell';
@@ -50,7 +53,7 @@ import { withoutConceptMediaTokens } from '@/lib/concept-media';
 import { supabase } from '@/lib/supabase';
 import { movePersonalStructure, refreshPersonalStructure } from '@/lib/creator-personal-structure';
 import { CreatorTopicTreeInteraction, TopicDropRow, TopicDragHandle } from './CreatorTopicTreeInteraction';
-import { executeTopicPosition, type PositionContext, type PositionPlan, type StructuralTopic } from '@/lib/creator-topic-positioning';
+import { planTopicPosition, executeTopicPosition, type PositionContext, type PositionPlan, type StructuralTopic } from '@/lib/creator-topic-positioning';
 import { navigateBackOrFallback } from '@/lib/safe-navigation';
 import {
   broadcastTagCatalogUsageInvalidation,
@@ -381,6 +384,7 @@ type CreatorStudioV2ClientProps = {
   activeLibraryId: string;
   creatorCapabilities: CreatorCapabilityManifest;
   initialTopics?: Topic[];
+  initialTopicGraph?: OfficialTopicGraph;
   initialConcept?: InitialConcept;
   initialReferences?: Reference[];
   initialPersonalContent: CreatorPersonalContent;
@@ -835,6 +839,7 @@ export function CreatorStudioV2Client({
   activeLibraryId,
   creatorCapabilities,
   initialTopics,
+  initialTopicGraph,
   initialConcept,
   initialReferences = [],
   initialPersonalContent,
@@ -958,6 +963,15 @@ export function CreatorStudioV2Client({
   );
   const [activePersonalTopicId, setActivePersonalTopicId] = useState<string | null>(null);
   const [topics, setTopics] = useState<Topic[]>(resolvedTopics);
+  const [topicGraph, setTopicGraph] = useState<OfficialTopicGraph | null>(initialTopicGraph ?? null);
+  const [activeTopicOccurrence, setActiveTopicOccurrence] = useState<string | null>(null);
+  const [activeTopicEdge, setActiveTopicEdge] = useState<string | null>(null);
+  const [placementDialog, setPlacementDialog] = useState<{ mode: 'add' | 'remove'; topicId: string; edgeKey: string | null; graph: OfficialTopicGraph } | null>(null);
+  const [placementChoice, setPlacementChoice] = useState('');
+  const placementReturnFocus = useRef<HTMLButtonElement | null>(null);
+  const presentationTopics = useMemo(() => topicGraph?.edges.some(e => e.kind === 'placement')
+    ? buildConceptTopicTree(topicGraph.nodes, true, topicGraph) : topics, [topicGraph, topics]);
+
   const [activeTopicId, setActiveTopicId] = useState(
     resolvedConcept.placementIds[0] || resolvedTopics[0]?.id || ''
   );
@@ -1101,9 +1115,10 @@ export function CreatorStudioV2Client({
     const available = !!snapshot && (topic.source === 'official' || personalState);
     const selection = !available ? { checked: false, partial: false }
       : topic.source === 'official' ? getTopicSelectionPresentation(topic.id, snapshot.nodes, snapshot.placements,
-        new Set(snapshot.selected_node_ids), new Set(snapshot.excluded_node_ids), snapshot.concept_overrides)
+        new Set(snapshot.selected_node_ids), new Set(snapshot.excluded_node_ids), snapshot.concept_overrides, snapshot.official_topic_graph)
       : groupSelection({ ...topic, parent_id: null, children: [] }, snapshot);
     return <input key="study-selection" className={styles.topicCheckbox} type="checkbox"
+      title={topic.shared ? 'Shared Topic: removing its direct selection does not exclude it while another selected parent includes it.' : undefined}
       aria-label={`Include ${topic.name} in Study`} checked={selection.checked}
       aria-checked={selection.partial ? 'mixed' : selection.checked}
       ref={input => { if (input) input.indeterminate = selection.partial; }}
@@ -1280,6 +1295,11 @@ export function CreatorStudioV2Client({
   const initialQuestionLoaded = useRef(false);
   const [saveFeedback, setSaveFeedback] = useState<SaveFeedback>(null);
   const [isMutatingTopic, setIsMutatingTopic] = useState(false);
+  useEffect(() => {
+    if (placementDialog || isMutatingTopic || !placementReturnFocus.current) return;
+    placementReturnFocus.current.focus();
+    placementReturnFocus.current = null;
+  }, [placementDialog, isMutatingTopic]);
   const questionSearchLibraryRef = useRef<string | null>(null);
   const learnerPublishedConceptIds = useMemo(
     () =>
@@ -2227,7 +2247,7 @@ export function CreatorStudioV2Client({
   const unifiedTopicComposition = useMemo(
     () =>
       composeUnifiedCreatorTopicTree({
-        officialTopics: topics,
+        officialTopics: presentationTopics,
         ownerId: initialPersonalContent.ownerId,
         personalTopics,
         topicPlacements: personalTopicPlacements,
@@ -2238,18 +2258,18 @@ export function CreatorStudioV2Client({
       initialPersonalContent.ownerId,
       personalTopicPlacements,
       personalTopics,
-      topics,
+      presentationTopics,
     ]
   );
   const officialOnlyTopicComposition = useMemo(
     () =>
       composeUnifiedCreatorTopicTree({
-        officialTopics: topics,
+        officialTopics: presentationTopics,
         ownerId: initialPersonalContent.ownerId,
         personalTopics: [],
         topicPlacements: [],
       }),
-    [initialPersonalContent.ownerId, topics]
+    [initialPersonalContent.ownerId, presentationTopics]
   );
   const showPersonalCreatorTopics = shouldShowPersonalCreatorTopics({
     editorSource:
@@ -2583,8 +2603,13 @@ export function CreatorStudioV2Client({
     }
 
     topics.forEach((topic) => collectConceptIds(topic));
+    if (topicGraph) topicGraph.nodes.forEach(node => {
+      const ids = new Set<string>();
+      topicDescendantIds(topicGraph, node.id).forEach(id => (questionConceptsByTopicId[id] || []).forEach(c => ids.add(c.id)));
+      counts.set(node.id, ids.size);
+    });
     return counts;
-  }, [questionConceptsByTopicId, topics]);
+  }, [questionConceptsByTopicId, topics, topicGraph]);
   const needsQuestionTopicIds = useMemo(() => {
     const visibleTopicIds = new Set<string>();
 
@@ -2624,10 +2649,10 @@ export function CreatorStudioV2Client({
   );
   const moveDestinations = useMemo(() => {
     if (!activeTopic) return [];
-    const blocked = descendantIds(activeTopic);
+    const blocked = topicGraph ? topicDescendantIds(topicGraph, activeTopic.id) : descendantIds(activeTopic);
     blocked.add(activeTopic.id);
     return flattenTopics(topics).filter((topic) => !blocked.has(topic.id));
-  }, [activeTopic, topics]);
+  }, [activeTopic, topics, topicGraph]);
   function showStatus(tone: StatusTone, message: string) {
     if (activeCreatorTab === 'questions' && !isLearnerReadOnly) {
       setQuestionStatus({ tone, message });
@@ -2917,7 +2942,7 @@ export function CreatorStudioV2Client({
     return !standaloneRequest || closeStandaloneEditor();
   }
 
-  function browseQuestionConcept(conceptId: string, topicId?: string) {
+  function browseQuestionConcept(conceptId: string, topicId?: string, occurrenceKey?: string) {
     if (isSavingQuestion || questionSaveLockRef.current) return;
     if (!Object.values(questionConceptsByTopicId).some(options => options.some(option => option.id === conceptId))) return;
     if (questionSource === 'personal') {
@@ -2929,6 +2954,8 @@ export function CreatorStudioV2Client({
         setActivePersonalTopicId(null);
         setActiveTopicId(topicId);
         setQuestionTopicId(topicId);
+        setActiveTopicOccurrence(occurrenceKey || null);
+        setActiveTopicEdge(occurrenceKey?.split('/').at(-1) || null);
       }
     }
   }
@@ -3176,6 +3203,7 @@ export function CreatorStudioV2Client({
     setQuestionConceptId(question.conceptId);
     // No known placement means unresolved context, not the previously browsed
     // Topic. Otherwise the placement effect can clear/substitute this Concept.
+    setActiveTopicOccurrence(null); setActiveTopicEdge(null);
     setQuestionTopicId(primaryConceptTopicId || '');
     setQuestionConceptOptions(primaryConceptTopicId ? questionConceptsByTopicId[primaryConceptTopicId] || [] : []);
     if (primaryConceptTopicId) {
@@ -3362,16 +3390,11 @@ export function CreatorStudioV2Client({
   async function reloadRealTopicTree(preferredActiveTopicId?: string) {
     if (!activeLibraryId) return;
 
-    const { data, error } = await supabase
-      .from('library_nodes')
-      .select('id, name, parent_id, sort_order')
-      .eq('library_id', activeLibraryId)
-      .order('sort_order')
-      .order('name');
-
-    if (error) throw error;
-
-    const nextTopics = buildConceptTopicTree(data || [], true);
+    const request = ++topicGraphRead.current, libraryId = activeLibraryId;
+    const graph = await loadOfficialTopicGraph(supabase, libraryId);
+    if (request !== topicGraphRead.current || topicGraphLibrary.current !== libraryId) return;
+    const nextTopics = buildConceptTopicTree(graph.nodes, true);
+    setTopicGraph(graph);
     const nextActiveId = preferredActiveTopicId || activeTopicId;
     const nextActivePath = nextActiveId
       ? findTopicPath(nextTopics, nextActiveId)
@@ -3382,7 +3405,7 @@ export function CreatorStudioV2Client({
       setActiveTopicId(nextActiveId);
       setExpandedTopicIds((current) => {
         const next = new Set(current);
-        nextActivePath.forEach((topic) => next.add(topic.id));
+        nextActivePath.forEach((topic) => { next.add(topic.id); next.add(originalTopicOccurrenceKey(graph, topic.id)); });
         return next;
       });
     } else {
@@ -3390,6 +3413,10 @@ export function CreatorStudioV2Client({
     }
   }
 
+  const topicGraphRead = useRef(0);
+  const topicGraphLibrary = useRef(activeLibraryId);
+  topicGraphLibrary.current = activeLibraryId;
+  useEffect(() => () => { topicGraphRead.current += 1; }, []);
   const structuralDropLock = useRef(false);
   const positioningContext = useMemo<PositionContext>(() => {
     const nodes: StructuralTopic[] = [];
@@ -3406,6 +3433,12 @@ export function CreatorStudioV2Client({
       });
     };
     addOfficial(topics, null);
+    if (topicGraph) {
+      const byId = new Map(topicGraph.nodes.map(n => [n.id, n]));
+      topicGraph.edges.forEach(edge => nodes.push({ key: edge.edge_key, id: edge.topic_id,
+        name: `${byId.get(edge.topic_id)!.name} — ${byId.get(edge.parent_id)!.name}`,
+        source: 'official', parentKey: `official:topic:${edge.parent_id}`, placementKey: null, sort_order: edge.sort_order }));
+    }
     personalTopics.forEach(topic => {
       const placement = personalTopicPlacements.find(p => p.personal_topic_id === topic.id);
       nodes.push({
@@ -3418,9 +3451,9 @@ export function CreatorStudioV2Client({
     });
     return {
       libraryId: activeLibraryId, ownerId: initialPersonalContent.ownerId,
-      canManageOfficial: creatorAuthority.canManageTopicTree, nodes,
+      canManageOfficial: creatorAuthority.canManageTopicTree, nodes, graph: topicGraph,
     };
-  }, [topics, personalTopics, personalTopicPlacements, activeLibraryId,
+  }, [topicGraph, topics, personalTopics, personalTopicPlacements, activeLibraryId,
     initialPersonalContent.ownerId, creatorAuthority.canManageTopicTree]);
 
   async function positionTopicFromTree(plan: PositionPlan) {
@@ -3700,12 +3733,7 @@ export function CreatorStudioV2Client({
   }
 
   function toggleExpanded(topicId: string) {
-    setExpandedTopicIds((current) => {
-      const next = new Set(current);
-      if (next.has(topicId)) next.delete(topicId);
-      else next.add(topicId);
-      return next;
-    });
+    setExpandedTopicIds(current => toggleOccurrenceKey(current, topicId));
   }
 
   function toggleSelected(topicId: string) {
@@ -4206,6 +4234,14 @@ export function CreatorStudioV2Client({
     }
 
     if (!activeTopic) return;
+    if (topicGraph) {
+      const key = topicGraph.edges.find(e => e.edge_key === activeTopicEdge && e.topic_id === activeTopic.id)?.edge_key || `primary:${activeTopic.id}`;
+      const plan = planTopicPosition(positioningContext, key, `official:topic:${moveDestinationId}`, 'inside');
+      if (!plan) { showStatus('error', 'The selected placement destination is unavailable.'); return; }
+      await positionTopicFromTree(plan);
+      closeTopicDialog();
+      return;
+    }
     const destination = findTopic(topics, moveDestinationId);
     if (!destination) {
       showStatus('error', 'The selected destination is unavailable.');
@@ -4269,6 +4305,64 @@ export function CreatorStudioV2Client({
     showStatus('success', `Moved “${activeTopic.name}” beneath ${destination.name}.`);
   }
 
+  function closePlacementDialog() {
+    setPlacementDialog(null);
+  }
+
+  async function submitPlacementChange() {
+    if (!placementDialog || isMutatingTopic || !creatorAuthority.canManageTopicTree || !placementChoice && placementDialog.mode === 'add') return;
+    const request = placementDialog;
+    setIsMutatingTopic(true);
+    try {
+      const result = await supabase.rpc(request.mode === 'add' ? 'add_official_topic_placement' : 'remove_official_topic_placement', request.mode === 'add'
+        ? { p_library_id: activeLibraryId, p_topic_id: placementChoice, p_parent_id: request.topicId, p_before_edge_key: null, p_expected_graph_revision: request.graph.revision }
+        : { p_library_id: activeLibraryId, p_edge_key: request.edgeKey, p_replacement_primary_edge_key: placementChoice || null, p_expected_graph_revision: request.graph.revision });
+      if (result.error) throw result.error;
+      await reloadRealTopicTree(request.topicId);
+      closePlacementDialog(); setActiveTopicOccurrence(null); setActiveTopicEdge(null);
+      showStatus('success', request.mode === 'add' ? 'Shared Topic placement added. Existing learner preferences were preserved.' : 'Placement removed. The Topic and its content were preserved.');
+    } catch (error) {
+      closePlacementDialog();
+      showStatus('error', topicMutationErrorMessage(error));
+      try { await reloadRealTopicTree(); } catch { /* The failed gesture is never replayed. */ }
+    } finally { setIsMutatingTopic(false); }
+  }
+
+  function renderPlacementControls() {
+    if (!topicGraph || !creatorAuthority.canManageTopicTree || activePersonalTopic || !activeTopic) return null;
+    const incoming = indexTopicGraph(topicGraph).incoming.get(activeTopic.id) || [];
+    const edge = incoming.find(e => e.edge_key === activeTopicEdge) || incoming.find(e => e.kind === 'primary');
+    return <>
+      <button type="button" className={styles.toolButton} disabled={isMutatingTopic || !!placementDialog} onClick={event => {
+        placementReturnFocus.current = event?.currentTarget || null;
+        setPlacementChoice(''); setPlacementDialog({ mode: 'add', topicId: activeTopic.id, edgeKey: null, graph: topicGraph });
+      }}>Add existing Topic here</button>
+      {incoming.length > 1 && <button type="button" className={styles.toolButton} disabled={isMutatingTopic || !!placementDialog} onClick={event => {
+        placementReturnFocus.current = event?.currentTarget || null;
+        setPlacementChoice(''); setPlacementDialog({ mode: 'remove', topicId: activeTopic.id, edgeKey: edge!.edge_key, graph: topicGraph });
+      }}>Remove this placement</button>}
+    </>;
+  }
+
+  function renderPlacementDialog() {
+    if (!placementDialog) return null;
+    const request = placementDialog, graph = request.graph;
+    const removing = graph.edges.find(e => e.edge_key === request.edgeKey);
+    const choices = request.mode === 'add' ? graph.nodes.filter(n => n.parent_id !== null && !topicDescendantIds(graph, n.id).has(request.topicId)
+      && !graph.edges.some(e => e.parent_id === request.topicId && e.topic_id === n.id)).map(n => ({ key: n.id, label: findTopicPath(topics, n.id)?.map(t => t.name).join(' › ') || n.name }))
+      : graph.edges.filter(e => e.topic_id === request.topicId && e.kind === 'placement' && e.edge_key !== request.edgeKey).map(e => ({ key: e.edge_key, label: graph.nodes.find(n => n.id === e.parent_id)!.name }));
+    const needsChoice = request.mode === 'add' || removing?.kind === 'primary';
+    return <div className={styles.inlineDialog} role="dialog" aria-label={request.mode === 'add' ? 'Add existing Topic here' : 'Remove this placement'} onKeyDown={event => { if (event.key === 'Escape' && !isMutatingTopic) { event.stopPropagation(); closePlacementDialog(); } }}>
+      <p>{request.mode === 'add' ? `Add one shared Topic beneath “${graph.nodes.find(n => n.id === request.topicId)?.name}”. Its content, descendants and learner preference remain the same.`
+        : `Remove this location beneath “${graph.nodes.find(n => n.id === removing?.parent_id)?.name}”. The Topic, descendants and content survive. If this removes the final shared path, ordinary single-location selection rules apply again.`}</p>
+      {needsChoice && <label>{request.mode === 'add' ? 'Existing Topic' : 'Surviving location to become the original'}<select autoFocus value={placementChoice} disabled={isMutatingTopic} onChange={event => setPlacementChoice(event.target.value)}>
+        <option value="">Select a location</option>{choices.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
+      </select></label>}
+      <div className={styles.dialogActions}><button type="button" className={styles.secondaryButton} disabled={isMutatingTopic} autoFocus={!needsChoice} onClick={closePlacementDialog}>Cancel</button>
+        <button type="button" className={request.mode === 'add' ? styles.primaryButton : styles.dangerButton} disabled={isMutatingTopic || (needsChoice && !placementChoice)} onClick={() => void submitPlacementChange()}>{request.mode === 'add' ? 'Add placement' : 'Remove placement'}</button></div>
+    </div>;
+  }
+
   async function deleteActiveTopic() {
     if (!activeTopic && !activePersonalTopic) {
       showStatus('error', 'Select a topic to delete.');
@@ -4319,6 +4413,35 @@ export function CreatorStudioV2Client({
     if (!activeTopic) return;
     if (activeTopic.id === rootTopicId) {
       showStatus('error', 'The Nursing root cannot be deleted.');
+      return;
+    }
+    if (activeLibraryId && topicGraph) {
+      if (!creatorAuthority.canManageTopicTree) { showStatus('error', 'You do not have permission to delete official Topics.'); return; }
+      setIsMutatingTopic(true);
+      try {
+        const inspected = await supabase.rpc('get_official_topic_delete_impact', { p_library_id: activeLibraryId, p_topic_id: activeTopic.id });
+        if (inspected.error) throw inspected.error;
+        const impact = inspected.data as { library_id: string; topic_id: string; revision: string; canonical_topic_ids: string[];
+          incoming_locations: Array<{ parent_id: string }>; removed_extra_locations: unknown[]; concept_placements: unknown[]; article_placements: unknown[];
+          affected_concept_ids: string[]; affected_question_ids: string[]; content_records_deleted: boolean; blockers: Record<string, unknown[]> };
+        if (impact?.library_id !== activeLibraryId || impact.topic_id !== activeTopic.id || !impact.revision || impact.content_records_deleted !== false) throw new Error('Deletion impact could not be confirmed. Reload Topics.');
+        const blockers = Object.entries(impact.blockers).filter(([, values]) => values.length).map(([kind, values]) => `${kind.replaceAll('_', ' ')}: ${values.length}`);
+        if (blockers.length) { showStatus('error', `Cannot delete this Topic: ${blockers.join('; ')}. Resolve these dependencies first.`); return; }
+        const locations = impact.incoming_locations.map(e => topicGraph.nodes.find(n => n.id === e.parent_id)?.name || e.parent_id).join(', ');
+        const warning = `Delete Topic “${activeTopic.name}” permanently from all locations (${locations})?\n${impact.canonical_topic_ids.length} canonical Topics (${impact.canonical_topic_ids.map(id => topicGraph.nodes.find(n => n.id === id)?.name || id).join(', ')}); ${impact.removed_extra_locations.length} additional placements; ${impact.concept_placements.length} Concept placements; ${impact.article_placements.length} Article placements.\n${impact.affected_concept_ids.length} Concepts and ${impact.affected_question_ids.length} Questions lose these locations. Their content records and learning history survive. Shared targets owned elsewhere survive. This is not Remove this placement.`;
+        if (!window.confirm(warning)) return;
+        const result = await supabase.rpc('delete_official_topic_with_impact', { p_library_id: activeLibraryId, p_topic_id: activeTopic.id, p_expected_impact_revision: impact.revision });
+        if (result.error) throw result.error;
+        const parentTopicId = topicGraph.nodes.find(n => n.id === activeTopic.id)?.parent_id || undefined;
+        await reloadRealTopicTree(parentTopicId);
+        if (activeCreatorTab === 'questions' && !questionId && !isSavingQuestion && impact.canonical_topic_ids.includes(questionTopicId)) setQuestionTopicId(parentTopicId || rootTopicId);
+        setSelectedTopicIds(current => new Set([...current].filter(id => !impact.canonical_topic_ids.includes(id))));
+        setActiveTopicOccurrence(null); setActiveTopicEdge(null); closeTopicDialog();
+        showStatus('success', 'Topic structure deleted. Content records were preserved.');
+      } catch (error) {
+        showStatus('error', topicMutationErrorMessage(error));
+        try { await reloadRealTopicTree(); } catch { /* Keep the error; never replay deletion. */ }
+      } finally { setIsMutatingTopic(false); }
       return;
     }
     if (activeLibraryId) {
@@ -6037,31 +6160,18 @@ export function CreatorStudioV2Client({
 
   function unifiedTopicMatchesSearch(topic: UnifiedCreatorTopicNode): boolean {
     if (!normalizedSearch) return true;
-    if (topic.source === 'official' && searchIds.has(topic.id)) return true;
-    if (
-      topic.source === 'personal' &&
-      (topic.name.toLocaleLowerCase().includes(normalizedSearch) ||
-        (personalConceptsByTopicId.get(topic.id) || []).some((item) =>
-          item.name.toLocaleLowerCase().includes(normalizedSearch)
-        ))
-    ) {
-      return true;
-    }
-    return topic.children.some(unifiedTopicMatchesSearch);
+    return flattenUnifiedCreatorTopics([topic]).some(node => node.source === 'official'
+      ? searchIds.has(node.id) || node.name.toLocaleLowerCase().includes(normalizedSearch)
+      : node.name.toLocaleLowerCase().includes(normalizedSearch) || (personalConceptsByTopicId.get(node.id) || []).some(item => item.name.toLocaleLowerCase().includes(normalizedSearch)));
   }
 
   function questionTopicHasAssociations(topic: UnifiedCreatorTopicNode): boolean {
-    return (topic.source === 'official' && (questionConceptsByTopicId[topic.id] || []).some(
-      concept => isQuestionConceptAssociated(concept.id)
-    )) || topic.children.some(questionTopicHasAssociations);
+    return flattenUnifiedCreatorTopics([topic]).some(node => node.source === 'official' &&
+      (questionConceptsByTopicId[node.id] || []).some(concept => isQuestionConceptAssociated(concept.id)));
   }
 
   function unifiedTopicHasNeedsQuestions(topic: UnifiedCreatorTopicNode): boolean {
-    if (topic.source === 'personal') return true;
-    return (
-      needsQuestionTopicIds.has(topic.id) ||
-      topic.children.some(unifiedTopicHasNeedsQuestions)
-    );
+    return flattenUnifiedCreatorTopics([topic]).some(node => node.source === 'personal' || needsQuestionTopicIds.has(node.id));
   }
 
   // Match the released Question-tree totals: official descendants plus direct
@@ -6080,8 +6190,10 @@ export function CreatorStudioV2Client({
         );
         node.children.forEach(collect);
       }
-      collect(findTopic(topics, topic.id) || { ...topic, children: [] });
-      personalOverlays.filter(overlay => overlay.library_node_id === topic.id).forEach(overlay => {
+      if (topicGraph) topicDescendantIds(topicGraph, topic.id).forEach(id =>
+        (questionConceptsByTopicId[id] || []).forEach(concept => add({ ...concept, source: 'official', topicId: id })));
+      else collect(findTopic(topics, topic.id) || { ...topic, children: [] });
+      personalOverlays.filter(overlay => topic.originalPath !== false && overlay.library_node_id === topic.id).forEach(overlay => {
         const concept = personalConceptById.get(overlay.personal_concept_id);
         if (concept) add({ ...concept, source: 'personal', topicId: concept.topic_id });
       });
@@ -6102,14 +6214,14 @@ export function CreatorStudioV2Client({
     const ready = topic.source === 'personal' || conceptPlacementStatus === 'ready';
     const openKeys = workspace === 'content' ? contentConceptDisclosureKeys : questionConceptDisclosureKeys;
     const setKeys = workspace === 'content' ? setContentConceptDisclosureKeys : setQuestionConceptDisclosureKeys;
-    const expanded = ready && count > 0 && openKeys.has(topic.key);
+    const expanded = ready && count > 0 && openKeys.has((topic.occurrenceKey || topic.key));
     const label = ready ? (count ? `${count} ${count === 1 ? 'concept' : 'concepts'}` : 'No concepts')
       : conceptPlacementStatus === 'error' ? 'Concepts unavailable' : 'Loading concepts…';
     return (
       <button type="button" className={styles.topicActivationButton}
         data-concept-disclosure={workspace}
         aria-label={`${expanded ? 'Hide' : 'Show'} concepts for ${topic.name}: ${label}`}
-        aria-expanded={expanded} aria-controls={`${workspace}-concepts-${topic.key}`}
+        aria-expanded={expanded} aria-controls={`${workspace}-concepts-${(topic.occurrenceKey || topic.key)}`}
         disabled={!ready || count === 0}
         style={{ flex: '0 0 auto', width: 'auto', minWidth: 0, color: ready && count ? '#52647a' : '#94a3b8',
           fontSize: 12, marginLeft: 'auto', paddingRight: 10, whiteSpace: 'nowrap' }}
@@ -6117,8 +6229,8 @@ export function CreatorStudioV2Client({
           event.stopPropagation();
           setKeys(current => {
             const next = new Set(current);
-            if (next.has(topic.key)) next.delete(topic.key);
-            else next.add(topic.key);
+            if (next.has((topic.occurrenceKey || topic.key))) next.delete((topic.occurrenceKey || topic.key));
+            else next.add((topic.occurrenceKey || topic.key));
             return next;
           });
         }}>
@@ -6128,10 +6240,10 @@ export function CreatorStudioV2Client({
   }
 
   function renderContentConceptDisclosure(topic: UnifiedCreatorTopicNode, depth: number) {
-    if (!contentConceptDisclosureKeys.has(topic.key) ||
+    if (!contentConceptDisclosureKeys.has((topic.occurrenceKey || topic.key)) ||
       (topic.source === 'official' && conceptPlacementStatus !== 'ready')) return null;
     return (
-      <div id={`content-concepts-${topic.key}`} data-concept-list="content" style={{ display: 'grid', gap: 3 }}>
+      <div id={`content-concepts-${(topic.occurrenceKey || topic.key)}`} data-concept-list="content" style={{ display: 'grid', gap: 3 }}>
         {conceptsForTopicDisclosure(topic).map(item => {
           const selected = item.source === 'official' ? conceptSource === 'official' && item.id === conceptId
             : conceptSource === 'personal' && item.id === personalConceptEditorId;
@@ -6176,12 +6288,12 @@ export function CreatorStudioV2Client({
   }
 
   function renderQuestionConceptDisclosure(topic: UnifiedCreatorTopicNode, depth: number) {
-    if (!questionConceptDisclosureKeys.has(topic.key) ||
+    if (!questionConceptDisclosureKeys.has((topic.occurrenceKey || topic.key)) ||
       (topic.source === 'official' && conceptPlacementStatus !== 'ready')) return null;
     const concepts = conceptsForTopicDisclosure(topic).filter(item => item.source === 'personal' ||
       !needsQuestionsOnly || isQuestionConceptAssociated(item.id) || (questionCountsByConceptId[item.id] || 0) === 0);
     return (
-      <div id={`questions-concepts-${topic.key}`} data-concept-list="questions" style={{ display: 'grid', gap: 3 }}>
+      <div id={`questions-concepts-${(topic.occurrenceKey || topic.key)}`} data-concept-list="questions" style={{ display: 'grid', gap: 3 }}>
         {concepts.map(item => {
           if (item.source === 'personal') {
             const selected = questionSource === 'personal' && personalQuestionConceptId === item.id;
@@ -6209,7 +6321,7 @@ export function CreatorStudioV2Client({
                 onChange={event => associateQuestionConcept(item.id, event.target.checked)} />
               <button type="button" className={styles.topicActivationButton}
                 aria-label={`Browse Questions for ${item.name}`} aria-pressed={questionConceptId === item.id}
-                disabled={isSavingQuestion} onClick={() => browseQuestionConcept(item.id, item.topicId)}>
+                disabled={isSavingQuestion} onClick={() => browseQuestionConcept(item.id, item.topicId, topicGraph && topic.occurrenceKey ? descendantOccurrenceKey(topicGraph, topic.occurrenceKey, item.topicId) || undefined : undefined)}>
                 {item.name} · {questionCountLabel(questionCountsByConceptId[item.id] || 0)}
               </button>
               {isSelected && <span className={styles.questionAssociationLabel}>{isPrimary ? 'Primary' : 'Related'}</span>}
@@ -6256,20 +6368,20 @@ export function CreatorStudioV2Client({
     const hasNeedsQuestionsVisibleChild = topic.children.some(
       unifiedTopicHasNeedsQuestions
     );
-    const isExpanded = questionTopicHasAssociations(topic) || (needsQuestionsOnly
+    const isExpanded = topic.originalPath === false ? occurrenceExpanded(topic, expandedTopicIds) : questionTopicHasAssociations(topic) || (needsQuestionsOnly
       ? directConcepts.length > 0 || hasNeedsQuestionsVisibleChild
       : searching
         ? hasSearchVisibleChild
-        : expandedTopicIds.has(topic.id));
-    const isActive = !activePersonalTopicId && activeTopicId === topic.id;
+        : occurrenceExpanded(topic, expandedTopicIds));
+    const isActive = !activePersonalTopicId && activeTopicId === topic.id && (!activeTopicOccurrence ? topic.originalPath !== false : activeTopicOccurrence === (topic.occurrenceKey || topic.id));
     const conceptCountInBranch =
       questionConceptCountByTopicId.get(topic.id) || 0;
     const hasConceptsInBranch =
       conceptCountInBranch > 0 || personalOverlayConcepts.length > 0;
 
     return (
-      <div className={styles.topicBranch} key={`question-${topic.key}`}>
-        <TopicDropRow topicKey={topic.key}
+      <div className={styles.topicBranch} key={`question-${topic.occurrenceKey || topic.key}`}>
+        <TopicDropRow topicKey={topic.edgeKey || topic.key} {...(topic.occurrenceKey ? { occurrenceKey: topic.occurrenceKey } : {})}
           className={`${styles.topicRow} ${isActive ? styles.activeTopicRow : ''}`}
           style={{
             background: hasConceptsInBranch ? undefined : '#f8fafc',
@@ -6277,7 +6389,7 @@ export function CreatorStudioV2Client({
             paddingLeft: `${12 + depth * 38}px`,
           }}
         >
-          <TopicDragHandle topicKey={topic.key} />
+          <TopicDragHandle topicKey={topic.edgeKey || topic.key} {...(topic.occurrenceKey ? { occurrenceKey: topic.occurrenceKey } : {})} />
           <button
             className={styles.expandButton}
             type="button"
@@ -6285,7 +6397,7 @@ export function CreatorStudioV2Client({
             aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${topic.name}`}
             onClick={(event) => {
               event.stopPropagation();
-              if (hasChildren) toggleExpanded(topic.id);
+              if (hasChildren) toggleExpanded(topic.occurrenceKey || topic.id);
             }}
           >
             {hasChildren ? (
@@ -6304,6 +6416,8 @@ export function CreatorStudioV2Client({
               if (standaloneRequest && !closeStandaloneEditor()) return;
               setActivePersonalTopicId(null);
               setActiveTopicId(topic.id);
+              setActiveTopicOccurrence(topic.occurrenceKey || topic.id);
+              setActiveTopicEdge(topic.edgeKey || null);
               if (!questionId && !isQuestionDirty && !isSavingQuestion) {
                 setQuestionTopicId(topic.id);
               }
@@ -6316,7 +6430,7 @@ export function CreatorStudioV2Client({
               <span className={styles.leafSpacer} />
             )}
             <span className={styles.topicName} title={topic.name}>
-              {topic.name}
+              {topic.shared ? <>{topic.name}<small title="One shared Topic: content and descendants are the same at every location."> · Shared</small></> : topic.name}
             </span>
           </button>
           {renderConceptCountControl(topic, 'questions')}
@@ -6336,7 +6450,7 @@ export function CreatorStudioV2Client({
   function renderPrerequisiteBrowseTopic(topic: Topic, depth = 0) {
     const directConcepts = questionConceptsByTopicId[topic.id] || [];
     const conceptCountInBranch = questionConceptCountByTopicId.get(topic.id) || 0;
-    const isExpanded = expandedPrerequisiteTopicIds.has(topic.id);
+    const isExpanded = occurrenceExpanded(topic, expandedPrerequisiteTopicIds);
     const canExpand = topic.children.length > 0 || directConcepts.length > 0;
     const topicPath =
       findTopicPath(topics, topic.id)?.map((item) => item.name).join(' › ') ||
@@ -6346,7 +6460,7 @@ export function CreatorStudioV2Client({
     );
 
     return (
-      <div className={styles.conceptBrowseBranch} key={`prerequisite-${topic.id}`}>
+      <div className={styles.conceptBrowseBranch} key={`prerequisite-${topic.occurrenceKey || topic.id}`}>
         <div
           className={`${styles.prerequisiteBrowseTopicRow} ${
             prerequisiteTargetType === 'topic' && selectedTopicPrerequisite
@@ -6364,10 +6478,7 @@ export function CreatorStudioV2Client({
             onClick={() => {
               if (!canExpand) return;
               setExpandedPrerequisiteTopicIds((current) => {
-                const next = new Set(current);
-                if (next.has(topic.id)) next.delete(topic.id);
-                else next.add(topic.id);
-                return next;
+                return toggleOccurrenceKey(current, topic.occurrenceKey || topic.id);
               });
             }}
           >
@@ -6476,7 +6587,7 @@ export function CreatorStudioV2Client({
   ) {
     const directConcepts = questionConceptsByTopicId[topic.id] || [];
     const personalOverlayConcepts = personalOverlays
-      .filter((overlay) => overlay.library_node_id === topic.id)
+      .filter((overlay) => topic.originalPath !== false && overlay.library_node_id === topic.id)
       .flatMap((overlay) => {
         const item = personalConceptById.get(overlay.personal_concept_id);
         return item ? [item] : [];
@@ -6487,10 +6598,10 @@ export function CreatorStudioV2Client({
       topic.children.length > 0 ||
       directConcepts.length > 0 ||
       personalOverlayConcepts.length > 0;
-    const isExpanded = expandedBrowseTopicIds.has(topic.id);
+    const isExpanded = occurrenceExpanded(topic, expandedBrowseTopicIds);
 
     return (
-      <div className={styles.conceptBrowseBranch} key={`browse-${topic.key}`}>
+      <div className={styles.conceptBrowseBranch} key={`browse-${topic.occurrenceKey || topic.key}`}>
         <button
           className={styles.conceptBrowseTopicRow}
           type="button"
@@ -6500,10 +6611,7 @@ export function CreatorStudioV2Client({
           onClick={() => {
             if (!canExpand) return;
             setExpandedBrowseTopicIds((current) => {
-              const next = new Set(current);
-              if (next.has(topic.id)) next.delete(topic.id);
-              else next.add(topic.id);
-              return next;
+              return toggleOccurrenceKey(current, topic.occurrenceKey || topic.id);
             });
           }}
         >
@@ -6600,10 +6708,7 @@ export function CreatorStudioV2Client({
             onClick={(event) => {
               event.stopPropagation();
               setExpandedPersonalTopicIds((current) => {
-                const next = new Set(current);
-                if (next.has(topic.id)) next.delete(topic.id);
-                else next.add(topic.id);
-                return next;
+                return toggleOccurrenceKey(current, topic.occurrenceKey || topic.id);
               });
             }}
           >
@@ -6761,17 +6866,17 @@ export function CreatorStudioV2Client({
     if (searching && !unifiedTopicMatchesSearch(topic)) return null;
     const hasChildren = topic.children.length > 0;
     const hasVisibleChild = topic.children.some(unifiedTopicMatchesSearch);
-    const isExpanded = searching ? hasVisibleChild : expandedTopicIds.has(topic.id);
-    const isActive = !activePersonalTopicId && activeTopicId === topic.id;
+    const isExpanded = searching && topic.originalPath !== false ? hasVisibleChild : occurrenceExpanded(topic, expandedTopicIds);
+    const isActive = !activePersonalTopicId && activeTopicId === topic.id && (!activeTopicOccurrence ? topic.originalPath !== false : activeTopicOccurrence === (topic.occurrenceKey || topic.id));
     const isChecked = selectedTopicIds.has(topic.id);
 
     return (
-      <div className={styles.topicBranch} key={topic.key}>
-        <TopicDropRow topicKey={topic.key}
+      <div className={styles.topicBranch} key={topic.occurrenceKey || topic.key}>
+        <TopicDropRow topicKey={topic.edgeKey || topic.key} {...(topic.occurrenceKey ? { occurrenceKey: topic.occurrenceKey } : {})}
           className={`${styles.topicRow} ${isActive ? styles.activeTopicRow : ''}`}
           style={{ paddingLeft: `${12 + depth * 38}px` }}
         >
-          <TopicDragHandle topicKey={topic.key} />
+          <TopicDragHandle topicKey={topic.edgeKey || topic.key} {...(topic.occurrenceKey ? { occurrenceKey: topic.occurrenceKey } : {})} />
           <button
             className={styles.expandButton}
             type="button"
@@ -6779,7 +6884,7 @@ export function CreatorStudioV2Client({
             aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${topic.name}`}
             onClick={(event) => {
               event.stopPropagation();
-              if (hasChildren) toggleExpanded(topic.id);
+              if (hasChildren) toggleExpanded(topic.occurrenceKey || topic.id);
             }}
           >
             {hasChildren ? (
@@ -6807,6 +6912,8 @@ export function CreatorStudioV2Client({
               if (standaloneRequest && !closeStandaloneEditor()) return;
               setActivePersonalTopicId(null);
               setActiveTopicId(topic.id);
+              setActiveTopicOccurrence(topic.occurrenceKey || topic.id);
+              setActiveTopicEdge(topic.edgeKey || null);
               setStatus(null);
             }}
           >
@@ -6816,7 +6923,7 @@ export function CreatorStudioV2Client({
               <span className={styles.leafSpacer} />
             )}
             <span className={styles.topicName} title={topic.name}>
-              {topic.name}
+              {topic.shared ? <>{topic.name}<small title="One shared Topic: content and descendants are the same at every location."> · Shared</small></> : topic.name}
             </span>
           </button>
           {!isLearnerReadOnly && renderConceptCountControl(topic, 'content')}
@@ -6890,8 +6997,10 @@ export function CreatorStudioV2Client({
                 {(!isLearnerReadOnly || !!activePersonalTopic) && <button className={styles.toolButton} type="button" onClick={openMoveDialog} disabled={(!activePersonalTopic && !creatorAuthority.canManageTopicTree) || isMutatingTopic}>
                   <ArrowUpDown size={17} /> Move
                 </button>}
+                {renderPlacementControls()}
               </div>
 
+              {renderPlacementDialog()}
               {dialogMode && (
                 <div className={styles.inlineDialog} role="dialog" aria-modal="false">
                   {dialogMode === 'move' ? (
@@ -6973,7 +7082,7 @@ export function CreatorStudioV2Client({
                 </div>
               )}
 
-              <CreatorTopicTreeInteraction context={positioningContext} disabled={isMutatingTopic || !!dialogMode} onMove={positionTopicFromTree}>
+              <CreatorTopicTreeInteraction context={positioningContext} disabled={isMutatingTopic || !!dialogMode || !!placementDialog} onMove={positionTopicFromTree}>
               <div className={styles.treeViewport} aria-label="Topic Tree">
                 {visibleTopicComposition.officialRoots.map((topic) =>
                   renderUnifiedTopic(topic)
@@ -7994,7 +8103,7 @@ export function CreatorStudioV2Client({
                     </button>
                   </div>
                   <div className={styles.conceptBrowseTree}>
-                    {topics.map((topic) => renderPrerequisiteBrowseTopic(topic))}
+                    {presentationTopics.map((topic) => renderPrerequisiteBrowseTopic(topic))}
                   </div>
                 </div>
               )}
@@ -8655,9 +8764,11 @@ export function CreatorStudioV2Client({
                     >
                       <ArrowUpDown size={17} /> Move
                     </button>
+                    {renderPlacementControls()}
                   </div>
 
-                  {dialogMode && (
+                  {renderPlacementDialog()}
+              {dialogMode && (
                     <div
                       className={styles.inlineDialog}
                       role="dialog"
@@ -8775,7 +8886,7 @@ export function CreatorStudioV2Client({
                     </div>
                   )}
 
-                  <CreatorTopicTreeInteraction context={positioningContext} disabled={isMutatingTopic || !!dialogMode} onMove={positionTopicFromTree} viewportLabel="Question Topic Tree">
+                  <CreatorTopicTreeInteraction context={positioningContext} disabled={isMutatingTopic || !!dialogMode || !!placementDialog} onMove={positionTopicFromTree} viewportLabel="Question Topic Tree">
                   <div
                     className={`${styles.treeViewport} ${styles.questionConceptBrowser}`}
                     tabIndex={0}

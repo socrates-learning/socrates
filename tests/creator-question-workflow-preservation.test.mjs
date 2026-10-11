@@ -250,7 +250,7 @@ test('Question tree activation never writes selection; dirty existing Question r
 });
 test('structural handlers retain parent ownership and separate state channels', () => {
     const questionTree = source.slice(source.indexOf('function renderQuestionTopic'), source.indexOf('function renderPrerequisiteBrowseTopic'));
-    assert.match(questionTree, /TopicDragHandle topicKey=\{topic.key\}/);
+    assert.match(questionTree, /TopicDragHandle topicKey=\{topic.edgeKey \|\| topic.key\}/);
     assert.match(source, /onMove=\{positionTopicFromTree\}/);
     assert.match(source, /outcome\.message/);
     assert.match(source, /\{questionStatus &&/);

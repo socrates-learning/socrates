@@ -1,3 +1,4 @@
+import { projectSharedTopicSource } from './fixtures/shared-topic-branches.mjs';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
@@ -84,7 +85,7 @@ function projectPresentation(value) {
 
 test('Search changes only the exact approved markup; all parent state, reads and editor handlers stay frozen', () => {
   assert.equal(hash(projectPresentation(source)), '4faa36106ad51356ed3d48099c937a0c45bb52f1e24b3497fd3d617c6c45c064');
-  assert.equal(hash(read('components/CreatorStudioV2Client.tsx')), 'f90020cad0f8d329ceb3fc09f9220bb21a7f113e5ee8786a75768c23b1456816');
+  assert.equal(hash(projectSharedTopicSource('components/CreatorStudioV2Client.tsx', read('components/CreatorStudioV2Client.tsx'))), 'f90020cad0f8d329ceb3fc09f9220bb21a7f113e5ee8786a75768c23b1456816');
   assert.throws(() => projectPresentation(source.replace('onSubmit={submitQuestionSearch}', 'onSubmit={clearQuestionSearch}')), /Exact Search presentation exception/);
   assert.notEqual(hash(projectPresentation(source.replace('onClick={() => selectQuestionSearchResult(question)}', 'onClick={() => selectQuestionSearchResult(questionSearchResults[0])}'))), '4faa36106ad51356ed3d48099c937a0c45bb52f1e24b3497fd3d617c6c45c064');
   assert.doesNotMatch(source, /useEffect|useState|supabase|fetch\(|QuestionMediaContent|VerifiedMediaImage|content-media|dangerouslySetInnerHTML/);

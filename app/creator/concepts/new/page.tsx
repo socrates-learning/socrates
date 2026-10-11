@@ -1,3 +1,4 @@
+import { loadOfficialTopicGraph } from '@/lib/topic-placement-graph';
 import { redirect, notFound } from 'next/navigation';
 import { CreatorStudioV2Client } from '@/components/CreatorStudioV2Client';
 import { buildConceptTopicTree } from '@/lib/concept-topic-tree';
@@ -15,7 +16,7 @@ export default async function NewConceptPage() {
   });
   if (!capabilities) redirect('/login?next=/creator/concepts/new');
   const supabase = await createSupabaseServerClient();
-  const [activeLibraryResult, personalContent] = await Promise.all([
+  const [activeLibraryResult, personalContent, topicGraph] = await Promise.all([
     supabase
       .from('libraries')
       .select('id, library_nodes(id, name, parent_id, sort_order)')
@@ -23,6 +24,7 @@ export default async function NewConceptPage() {
       .eq('status', 'active')
       .maybeSingle(),
     loadCreatorPersonalContent(supabase, capabilities.subject.userId),
+    loadOfficialTopicGraph(supabase, context.library.id),
   ]);
   const activeLibrary = readCreatorQueryData(
     activeLibraryResult,
@@ -47,6 +49,7 @@ export default async function NewConceptPage() {
       activeLibraryId={activeLibrary.id}
       creatorCapabilities={capabilities}
       initialPersonalContent={personalContent}
+      initialTopicGraph={topicGraph}
       initialTopics={buildConceptTopicTree(nodes || [], true)}
       initialConcept={{
         id: null,

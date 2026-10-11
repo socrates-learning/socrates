@@ -1,3 +1,4 @@
+import { loadOfficialTopicGraph } from '@/lib/topic-placement-graph';
 import type { OfficialContentFormat } from '@/lib/official-content-format';
 import { Header, HeaderSessionProvider } from '@/components/Header';
 import { StudyCreatorClient } from '@/components/StudyCreatorClient';
@@ -49,13 +50,8 @@ export default async function StudyCreatorPage() {
 
   if (activeLibrary) {
     const supabase = await createSupabaseServerClient();
-    const [nodeResult, placementResult] = await Promise.all([
-      supabase
-        .from('library_nodes')
-        .select('id, parent_id, name, sort_order')
-        .eq('library_id', activeLibrary.id)
-        .order('sort_order')
-        .order('name'),
+    const [topicGraph, placementResult] = await Promise.all([
+      loadOfficialTopicGraph(supabase, activeLibrary.id),
       supabase
         .from('concept_placements')
         .select(`
@@ -76,12 +72,7 @@ export default async function StudyCreatorPage() {
         .eq('concepts.status', 'published')
         .order('sort_order'),
     ]);
-    const { data: nodeRows, error: nodeError } = nodeResult;
-
-    if (nodeError && process.env.NODE_ENV !== 'production') {
-      console.error('Failed to load Study Creator Socrates Topics:', nodeError);
-    }
-
+    const nodeRows = topicGraph.nodes;
     if (placementResult.error && process.env.NODE_ENV !== 'production') {
       console.error(
         'Failed to load Study Creator Socrates Concepts:',
@@ -168,6 +159,7 @@ export default async function StudyCreatorPage() {
       libraryId: activeLibrary.id,
       libraryName: activeLibrary.name,
       nodes: nodeRows ?? [],
+      topicGraph,
       concepts: Array.from(conceptsById.values()),
       questions: questionResult.data ?? [],
     };

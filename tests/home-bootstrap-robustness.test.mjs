@@ -209,7 +209,7 @@ test('Deck Settings preserves saved collection loading and atomic selections', (
     assert.match(source, /selectedPersonalCollectionIds/);
   }
   assert.doesNotMatch(studyPlannerSource, /My Study Material|Personal Decks|Personal Deck study selections/);
-  assert.match(studyPlannerSource, /composeHomeGroups\(nodes, personalTopics, homeTopicPlacements, personalCollections\)/);
+  assert.match(studyPlannerSource, /composeHomeGroups\(nodes, personalTopics, homeTopicPlacements, personalCollections, homeSettings.official_topic_graph\)/);
   assert.match(studyPlannerSource, /mutateHomeSettings/);
   assert.match(studyPlannerSource, /setSelectedPersonalCollectionIds\(new Set\(next.unified_deck_settings.selected_collection_ids\)\)/);
 });

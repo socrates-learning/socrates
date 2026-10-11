@@ -1,3 +1,4 @@
+import * as topicGraphModule from '../lib/topic-placement-graph.ts';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
@@ -19,6 +20,7 @@ async function load(selectedCounts) {
   vm.runInNewContext(ts.transpileModule(initialSource, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText, {
     exports,
     require(name) {
+ if (name === './topic-placement-graph') return topicGraphModule;
       if (name === 'server-only') return {};
       if (name === '@/lib/supabase-server') return {
         createSupabaseServerClient: async () => ({ rpc: async name => {
@@ -69,6 +71,7 @@ test('browsing sums each Concept once even with multiple placements', () => {
   const functions = planner.slice(start, end);
   const compiled = ts.transpileModule(functions + '\nconst outcome = { ids: branchConceptIds("root"), count: branchAvailabilityQuestionCount("root") };', { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
   const context = vm.createContext({
+    homeSettings: null, topicDescendantIds: topicGraphModule.topicDescendantIds,
     nodes: [{ id: 'root', parent_id: null }, { id: 'a', parent_id: 'root' }, { id: 'b', parent_id: 'root' }],
     placements: [{ concept_id: 'first', library_node_id: 'a' }, { concept_id: 'first', library_node_id: 'b' }, { concept_id: 'second', library_node_id: 'b' }],
     libraryAvailabilityQuestionCounts: { first: 19, second: 25 },

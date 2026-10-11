@@ -1,8 +1,14 @@
+import { topicGraphOccurrences, type OfficialTopicGraph } from './topic-placement-graph';
 import { compareCreatorTopics } from './creator-topic-order.js';
 export type ConceptTopic = {
   id: string;
   name: string;
   children: ConceptTopic[];
+  occurrenceKey?: string;
+  edgeKey?: string | null;
+  originalPath?: boolean;
+  shared?: boolean;
+  originalParentId?: string | null;
 };
 
 export type ConceptTopicRow = {
@@ -12,7 +18,8 @@ export type ConceptTopicRow = {
   sort_order: number | null;
 };
 
-export function buildConceptTopicTree(rows: ConceptTopicRow[], canonical = false): ConceptTopic[] {
+export function buildConceptTopicTree(rows: ConceptTopicRow[], canonical = false, graph?: OfficialTopicGraph | null): ConceptTopic[] {
+  if (graph) return topicGraphOccurrences(graph);
   const topicsById = new Map<string, ConceptTopic>();
   const rowById = new Map(rows.map((row) => [row.id, row]));
 
@@ -50,12 +57,15 @@ export function buildConceptTopicTree(rows: ConceptTopicRow[], canonical = false
 export function findConceptTopicPath(
   topics: ConceptTopic[],
   topicId: string,
-  ancestors: ConceptTopic[] = []
+  ancestors: ConceptTopic[] = [],
+  visited: Set<string> = new Set()
 ): ConceptTopic[] | null {
   for (const topic of topics) {
+    if (topic.originalPath === false || visited.has(topic.id)) continue;
+    visited.add(topic.id);
     const path = [...ancestors, topic];
     if (topic.id === topicId) return path;
-    const nested = findConceptTopicPath(topic.children, topicId, path);
+    const nested = findConceptTopicPath(topic.children, topicId, path, visited);
     if (nested) return nested;
   }
   return null;
@@ -67,14 +77,30 @@ export function collectConceptTopicSearchIds(
   ancestors: string[] = []
 ): Set<string> {
   const visible = new Set<string>();
-  topics.forEach((topic) => {
-    const nextAncestors = [...ancestors, topic.id];
-    if (topic.name.toLocaleLowerCase().includes(query)) {
-      nextAncestors.forEach((id) => visible.add(id));
+  // Work on canonical adjacency, not the potentially exponential occurrence tree.
+  const seen = new Set<string>(), parents = new Map<string, Set<string>>(), matches: string[] = [];
+  function scan(items: ConceptTopic[], parent?: string) {
+    for (const topic of items) {
+      if (parent) parents.set(topic.id, new Set([...(parents.get(topic.id) ?? []), parent]));
+      if (seen.has(topic.id)) continue;
+      seen.add(topic.id);
+      if (topic.name.toLocaleLowerCase().includes(query)) matches.push(topic.id);
+      scan(topic.children, topic.id);
     }
-    collectConceptTopicSearchIds(topic.children, query, nextAncestors).forEach(
-      (id) => visible.add(id)
-    );
-  });
-  return visible;
+  }
+  scan(topics);
+  while (matches.length) {
+    const id = matches.pop()!;
+    if (visible.has(id)) continue;
+    visible.add(id); matches.push(...(parents.get(id) ?? []));
+  }
+  if (visible.size) ancestors.forEach(id => visible.add(id));
+  // Preserve ancestor-before-child iteration order used by existing browse/search callers.
+  const ordered = new Set<string>(), emitted = new Set<string>();
+  function emit(items: ConceptTopic[]) {
+    for (const topic of items) { if (emitted.has(topic.id)) continue; emitted.add(topic.id); if (visible.has(topic.id)) ordered.add(topic.id); emit(topic.children); }
+  }
+  if (visible.size) ancestors.forEach(id => ordered.add(id));
+  emit(topics);
+  return ordered;
 }

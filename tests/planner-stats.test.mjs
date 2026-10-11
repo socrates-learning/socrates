@@ -1,3 +1,4 @@
+import * as topicGraphModule from '../lib/topic-placement-graph.ts';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
@@ -8,6 +9,7 @@ const jsx=(type,props,key)=>({type,props:props||{},key});
 function compile(source,bindings={}) {
  const exports={};
  vm.runInNewContext(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText,{exports,...bindings,require(name){
+ if(name==='@/lib/topic-placement-graph') return topicGraphModule;
   if(name==='react/jsx-runtime')return {jsx,jsxs:jsx,Fragment:'fragment'};
   throw Error(`Unexpected presentation dependency: ${name}`);
  }});return exports;
