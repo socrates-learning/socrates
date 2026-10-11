@@ -1,0 +1,30 @@
+.trigger {
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: white;
+  color: #10284b;
+  min-height: 40px;
+  padding: 7px 12px;
+  font: inherit;
+  cursor: pointer;
+}
+.trigger:hover { background: #edf3fa; }
+.editor { padding: 20px; color: #172b48; }
+.editor p { margin: 0 0 12px; }
+.editor label { display: grid; gap: 8px; font-weight: 650; }
+.editor textarea {
+  width: 100%; box-sizing: border-box; min-height: 180px; max-height: 45vh;
+  resize: vertical; padding: 12px; font: inherit; line-height: 1.5;
+  color: #172b48; background: white; border: 1px solid #bccadd; border-radius: 8px;
+}
+.count { color: #54637a; font-size: .85rem; text-align: right; }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+.actions button, .editor > button {
+  min-height: 42px; padding: 8px 14px; border: 1px solid #bccadd;
+  border-radius: 8px; background: white; color: #172b48; font: inherit; cursor: pointer;
+}
+.actions .primary { background: #10284b; color: white; border-color: #10284b; }
+.actions .danger { color: #a52632; border-color: #e7b9be; }
+.trigger:focus-visible, .editor :focus-visible { outline: 3px solid #7ca4d2; outline-offset: 2px; }
+.actions button:disabled, .editor textarea:disabled { opacity: .55; cursor: not-allowed; }
+.error { color: #9d2531; }

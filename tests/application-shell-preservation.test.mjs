@@ -1,4 +1,6 @@
+import { projectQuestionPersonalNotes } from './fixtures/question-personal-notes.mjs';
 import { projectSharedTopicSource } from './fixtures/shared-topic-branches.mjs';
+import { projectStudyGoals } from './fixtures/study-goals.mjs';
 import ts from 'typescript';
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -137,7 +139,7 @@ test('Original Home styles remain exact beneath the approved dashboard block and
   assert.match(creator, /@media \(max-width: 1120px\)/);
 });
 test('active Study/Cram matches the released branch after projecting only approved media presentation and has no application rail', () => {
-  const planner = read('components/StudyPlanner.tsx');
+  const planner = projectQuestionPersonalNotes('components/StudyPlanner.tsx', read('components/StudyPlanner.tsx'));
   const a = planner.indexOf("  if (mode === 'study') {", planner.indexOf('if (!deck)'));
   const b = planner.indexOf('\n  return (\n    <>\n      <LearnerHeader classPrefix="home-v2"', a);
   assert.ok(a >= 0 && b > a);
@@ -237,7 +239,7 @@ test('reset requires explicit confirmation; failed RPC retains dialog and does n
 
 
 test('Home-only layout and redundant header action preserve every released planner byte after exact projection', () => {
-  let source = projectSharedTopicSource('components/StudyPlanner.tsx', read('components/StudyPlanner.tsx'));
+  let source = projectStudyGoals(projectSharedTopicSource('components/StudyPlanner.tsx', read('components/StudyPlanner.tsx')));
   const homeHeader = `<LearnerHeader classPrefix="home-v2" brandHref="/" onHomeClick={handleHomeClick} items={mode === 'dashboard' ? items.filter(item => item.label !== 'Home') : items} />`;
   assert.equal(source.split(homeHeader).length, 2, 'Only dashboard mode omits the redundant header Home action');
   source = source.replace(homeHeader, '<LearnerHeader classPrefix="home-v2" brandHref="/" onHomeClick={handleHomeClick} items={items} />');

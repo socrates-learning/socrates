@@ -1,0 +1,32 @@
+.goals { margin-top: 24px; padding: 24px; border: 1px solid #dbe3ee; border-radius: 16px; background: #fff; color: #0d2144; }
+.header { display: flex; align-items: start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.goals h3 { margin: 0 0 8px; font-size: 1.35rem; }
+.goals h4 { margin: 0 0 8px; font-size: 1.1rem; overflow-wrap: anywhere; }
+.goals p { line-height: 1.5; color: #445674; }
+.goals button, .goals input, .goals select { font: inherit; border: 1px solid #cbd8e9; border-radius: 8px; min-height: 40px; background: white; color: #10284b; padding: 8px 12px; }
+.goals input:not([type=checkbox]), .goals select { width: 100%; min-width: 0; box-sizing: border-box; }
+.goals button { cursor: pointer; }
+.goals button:hover:not(:disabled) { background: #edf3fb; }
+.goals button:focus-visible, .goals input:focus-visible, .goals select:focus-visible, .topics:focus-visible { outline: 3px solid #618cd0; outline-offset: 3px; }
+.goals button:disabled { opacity: .55; cursor: not-allowed; }
+.goals .primary { background: #102d51; color: white; border-color: #102d51; }
+.goals .primary:hover:not(:disabled) { background: #1c416c; }
+.goals .danger { color: #a51e2c; border-color: #e9b7be; }
+.goals .danger:hover:not(:disabled) { background: #fff0f2; }
+.form, .card { padding: 20px; border: 1px solid #dbe3ee; border-radius: 12px; margin-top: 20px; min-width: 0; }
+.form { background: #f7faff; }
+.fields { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.fields label:last-child { grid-column: 1 / -1; }
+.goals label { display: grid; gap: 8px; line-height: 1.45; }
+.topics { max-height: 19rem; overflow-y: auto; margin: 16px 0; border: 1px solid #cbd8e9; border-radius: 8px; padding: 12px; }
+.topics label { display: flex; align-items: center; gap: 10px; padding: 8px; overflow-wrap: anywhere; }
+.topics label:hover { background: #edf3fb; }
+.topics input { flex-shrink: 0; width: 18px; min-height: 18px; accent-color: #102d51; }
+.actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+.scope { overflow-wrap: anywhere; font-size: .9rem; }
+.metric { margin: 16px 0; }
+.metric progress { width: 100%; height: 14px; accent-color: #193e69; }
+.estimate { background: #f3f7fc; padding: 12px 16px; border-radius: 8px; }
+.estimate small { display: block; color: #52627a; line-height: 1.5; }
+.updated { font-size: .85rem; }
+@media (max-width: 600px) { .goals { padding: 16px; } .card, .form { padding: 14px; } .fields { grid-template-columns: minmax(0,1fr); } .actions button { flex: 1 1 auto; } }

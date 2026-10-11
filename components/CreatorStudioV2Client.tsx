@@ -3213,6 +3213,33 @@ export function CreatorStudioV2Client({
     setActiveCreatorTab('questions');
   }
 
+  // The route is keyed by Library. Capture this entry intent once and delegate
+  // to the existing owner-qualified, draft-protected Card selection handler.
+  const statsCardHandoff = useRef({ consumed: false, open: () => {
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get('personalCard');
+    if (!id) return;
+    const ownerId = initialPersonalContent.ownerId;
+    if (params.get('reviewLibrary') !== activeLibraryId ||
+      creatorCapabilities.subject.userId !== ownerId || !creatorCapabilities.library.canAccessActiveLibrary ||
+      !creatorCapabilities.personal.editOwnContent) return;
+    const standalone = standaloneCards.find(card => card.id === id && card.owner_id === ownerId);
+    const card = personalCards.find(card => card.id === id && card.owner_id === ownerId);
+    const concept = card && personalConceptById.get(card.concept_id);
+    const question = standalone ? mapStandaloneCard(standalone)
+      : card && concept?.owner_id === ownerId ? mapPersonalCard(card, concept) : null;
+    if (!question) {
+      setStatus({ tone: 'error', message: 'That personal Card is unavailable.' });
+      return;
+    }
+    selectQuestionSearchResult(question);
+  } });
+  useEffect(() => {
+    if (statsCardHandoff.current.consumed) return;
+    statsCardHandoff.current.consumed = true;
+    statsCardHandoff.current.open();
+  }, []);
+
   function flaggedQuestionEditIsBusy() {
     return isSaving || conceptSaveLockRef.current || isSavingQuestion || questionSaveLockRef.current ||
       standaloneEditorRef.current.busy || questionImages.pending || questionImages.uncertain || Boolean(questionImages.inspector);

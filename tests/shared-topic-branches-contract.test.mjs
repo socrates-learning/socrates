@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {projectSharedTopicSource} from './fixtures/shared-topic-branches.mjs';
+import {projectStudyGoals} from './fixtures/study-goals.mjs';
 import {loadOfficialTopicGraph} from '../lib/topic-placement-graph.ts';
 import {graphFixture} from './fixtures/shared-topic-branches.mjs';
 const hash = x => createHash('sha256').update(x).digest('hex');
@@ -11,7 +12,8 @@ const released = {
   "components/StudyPlanner.tsx": "221c413591d5bce38b1d957d7874aabd352452fb09deeef099a7523b98833378"
 };
 for (const [path, fingerprint] of Object.entries(released)) test(`only exact shared-placement additions are projected from ${path}`,()=>{
- const source=readFileSync(new URL(`../${path}`,import.meta.url),'utf8');
+ const current=readFileSync(new URL(`../${path}`,import.meta.url),'utf8');
+ const source=path==='components/StudyPlanner.tsx'?projectStudyGoals(current):current;
  assert.equal(hash(projectSharedTopicSource(path,source)),fingerprint);
  assert.notEqual(hash(projectSharedTopicSource(path,source+'\n// unrelated edit\n')),fingerprint);
  assert.throws(()=>projectSharedTopicSource(path,source.replace('occurrenceKey','unapprovedKey')));

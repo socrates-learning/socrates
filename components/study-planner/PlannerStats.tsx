@@ -9,7 +9,7 @@ type Metric = Progress['nodes'][number];
 type Node = StudyPlannerInitialData['nodes'][number];
 type Props = {
   graph?: OfficialTopicGraph;
-  activeTab: 'progress' | 'history' | 'algorithm';
+  activeTab: 'progress' | 'history' | 'algorithm' | 'flagged';
   onTabChange: (tab: Props['activeTab']) => void;
   libraryName: string;
   progress: Progress;
@@ -112,6 +112,9 @@ export function PlannerStats({ graph, activeTab, onTabChange, libraryName, progr
                     {tab === 'progress' ? 'Progress' : 'Study History'}
                   </button>
                 ))}
+                <button aria-selected={activeTab === 'flagged'} onClick={() => onTabChange('flagged')} role="tab" type="button">
+                  Flagged Review
+                </button>
                 {showAlgorithmTab && (
                   <button
                     aria-selected={activeTab === 'algorithm'}

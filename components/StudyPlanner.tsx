@@ -3,6 +3,7 @@
 import { toggleOccurrenceKey, topicDescendantIds } from '@/lib/topic-placement-graph';
 
 import QuestionMediaContent from './QuestionMediaContent';
+import QuestionPersonalNote from './QuestionPersonalNote';
 
 import {
   useEffect,
@@ -183,7 +184,7 @@ const emptyLearnerProgress: LearnerProgressResponse = {
 
 type ConceptOverride = 'included' | 'excluded';
 type PlannerMode = 'dashboard' | 'stats' | 'study';
-type StatsTab = 'progress' | 'history' | 'algorithm';
+type StatsTab = 'progress' | 'history' | 'algorithm' | 'flagged';
 type StudyFeedback = 'up' | 'more' | 'down' | null;
 type StudyCardFeedbackType = 'error' | 'suggestion';
 type StudyResponse =
@@ -231,16 +232,22 @@ const CreatorAlgorithmDiagnostics = dynamic(
   }
 );
 
+const StudyGoals = dynamic(() => import('./study-planner/StudyGoals').then(module => module.StudyGoals));
+
+const StatsFlaggedReview = dynamic(() => import('./study-planner/StatsFlaggedReview').then(module => module.StatsFlaggedReview));
+
 const statsTabHashes: Record<StatsTab, string> = {
   progress: '#stats',
   history: '#stats-history',
   algorithm: '#stats-algorithm',
+  flagged: '#stats-flagged',
 };
 
 function getStatsTabFromHash(hash: string): StatsTab | null {
   if (hash === statsTabHashes.progress) return 'progress';
   if (hash === statsTabHashes.history) return 'history';
   if (hash === statsTabHashes.algorithm) return 'algorithm';
+  if (hash === statsTabHashes.flagged) return 'flagged';
   return null;
 }
 
@@ -2406,6 +2413,9 @@ export function StudyPlanner({
             Back
           </button>
         )}
+        {hasStudyCandidate && isAnswerVisible && studyCandidate?.kind === 'official' && userId && activeLibrary && (
+          <QuestionPersonalNote key={`${userId}:${activeLibrary.id}:${studyCandidate.questionId}`} userId={userId} libraryId={activeLibrary.id} questionId={studyCandidate.questionId} buttonClassName="study-v2-context-action" />
+        )}
         {hasStudyCandidate && (
           <button
             aria-pressed={Boolean(candidateFlag)}
@@ -3022,6 +3032,8 @@ export function StudyPlanner({
                 </div>
               ) : null}
             />
+            {statsTab === 'flagged' && userId && <StatsFlaggedReview key={`${userId}:${activeLibrary.id}`} ownerId={userId} libraryId={activeLibrary.id} />}
+            {statsTab === 'progress' && userId && <StudyGoals key={`${userId}:${activeLibrary.id}`} libraryId={activeLibrary.id} requestScope={userId} />}
             </SocratesShell>
           ) : (
             <>
