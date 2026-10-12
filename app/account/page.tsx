@@ -1,6 +1,8 @@
-import { SocratesShell } from '@/components/application-shell/SocratesShell';
 import Link from 'next/link';
-import { Header, HeaderSessionProvider } from '@/components/Header';
+import Image from 'next/image';
+import { ArrowLeft, BookOpen, ExternalLink, LockKeyhole, Palette, RefreshCw, UserRound } from 'lucide-react';
+import { AppearanceSelector } from '@/components/AppearanceSelector';
+import styles from '@/components/AccountSettings.module.css';
 import { LibrarySwitcher } from '@/components/LibrarySwitcher';
 import {
   ResetStudyProgress,
@@ -110,137 +112,55 @@ export default async function AccountPage() {
   }
 
   return (
-    <HeaderSessionProvider email={context.user.email} role={context.role}>
-      <Header />
-      <SocratesShell>
-      <main className="layout" style={{ gridTemplateColumns: '1fr' }}>
-        <section
-          className="stack"
-          style={{ margin: '0 auto', maxWidth: 860, minWidth: 0, width: '100%' }}
-        >
-          <section className="panel">
-            <div
-              style={{
-                alignItems: 'center',
-                display: 'flex',
-                flexWrap: 'wrap',
-                gap: 14,
-                justifyContent: 'space-between',
-              }}
-            >
-              <div>
-                <p className="muted" style={{ margin: '0 0 5px' }}>
-                  Your Socrates account
-                </p>
-                <h2 style={{ margin: 0 }}>Account Settings</h2>
-              </div>
-              <Link className="btn ghost" href="/">
-                Back to Home
-              </Link>
-            </div>
-          </section>
-
-          <section className="panel stack" aria-labelledby="account-details-title">
-            <h3 id="account-details-title" style={{ margin: 0 }}>
-              Account details
-            </h3>
-            <dl
-              style={{
-                display: 'grid',
-                gap: 12,
-                gridTemplateColumns:
-                  'repeat(auto-fit, minmax(min(220px, 100%), 1fr))',
-                margin: 0,
-              }}
-            >
-              <div>
-                <dt className="muted">Signed in as</dt>
-                <dd style={{ margin: '4px 0 0', overflowWrap: 'anywhere' }}>
-                  <strong>{context.user.email || 'Account'}</strong>
-                </dd>
-              </div>
-              <div>
-                <dt className="muted">Role</dt>
-                <dd style={{ margin: '4px 0 0', textTransform: 'capitalize' }}>
-                  <strong>{context.role}</strong>
-                </dd>
-              </div>
-              <div>
-                <dt className="muted">Current Library</dt>
-                <dd style={{ margin: '4px 0 0' }}>
-                  <strong>{context.library?.name || 'No Library selected'}</strong>
-                </dd>
-              </div>
+    <div className={styles.page}>
+      <header className={styles.header}>
+        <Link href="/" className={styles.logo} prefetch={false}><Image src="/brand/socrates-logo-dark.png" alt="Socrates — Learn anything." width={270} height={152} priority /></Link>
+        <Link href="/" className={styles.back}><ArrowLeft size={18} aria-hidden="true" />Back to Home</Link>
+      </header>
+      <main className={styles.main}>
+        <div className={styles.title}>
+          <h1>Account Settings</h1>
+          <p>Manage your account, appearance, and learning experience.</p>
+        </div>
+        <div className={styles.sections}>
+          <section className={styles.panel} aria-labelledby="account-details-title">
+            <div className={styles.heading}><span className={styles.icon}><UserRound aria-hidden="true" /></span><div><h2 id="account-details-title">Account Details</h2><p>Your account information and current access.</p></div></div>
+            <dl className={styles.details}>
+              <div><dt>Email Address</dt><dd>{context.user.email || 'Account'}</dd></div>
+              <div><dt>Role</dt><dd className={styles.role}>{context.role}</dd></div>
+              <div><dt>Current Library</dt><dd>{context.library?.name || 'No Library selected'}</dd></div>
             </dl>
           </section>
-
-          <section
-            className="panel stack"
-            aria-labelledby="accessible-libraries-title"
-          >
-            <div>
-              <h3 id="accessible-libraries-title" style={{ margin: 0 }}>
-                Accessible Libraries
-              </h3>
-              <p className="muted" style={{ margin: '6px 0 0' }}>
-                Libraries currently available to this account.
-              </p>
-            </div>
-
-            {accessibleLibraries.length ? (
-              <ul
-                style={{
-                  display: 'grid',
-                  gap: 8,
-                  listStyle: 'none',
-                  margin: 0,
-                  padding: 0,
-                }}
-              >
-                {accessibleLibraries.map((library) => (
-                  <li
-                    key={library.id}
-                    style={{
-                      alignItems: 'center',
-                      background:
-                        context.library?.id === library.id ? '#eef5ff' : '#f8fafc',
-                      border: '1px solid #dbe3ef',
-                      borderRadius: 10,
-                      display: 'flex',
-                      flexWrap: 'wrap',
-                      gap: 8,
-                      justifyContent: 'space-between',
-                      padding: '11px 13px',
-                    }}
-                  >
-                    <strong>{library.name}</strong>
-                    <span className="muted" style={{ fontSize: 13 }}>
-                      {context.library?.id === library.id
-                        ? 'Current'
-                        : library.isPrimary
-                          ? 'Primary'
-                          : 'Available'}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="muted" style={{ margin: 0 }}>
-                No active Library is currently assigned to this account.
-              </p>
-            )}
-
-            <LibrarySwitcher context={context} returnTo="/account" />
+          <section className={styles.panel} aria-labelledby="appearance-title">
+            <div className={styles.heading}><span className={styles.icon}><Palette aria-hidden="true" /></span><div><h2 id="appearance-title">Appearance</h2><p>Choose how Socrates looks to you.</p></div></div>
+            <AppearanceSelector />
           </section>
-
-          <ResetStudyProgress
-            concepts={resetConcepts}
-            library={context.library ? { id: context.library.id, name: context.library.name } : null}
-            topics={resetTopics}
-          />
-        </section>
+          <section className={styles.panel} aria-labelledby="study-preferences-title">
+            <div className={styles.heading}><span className={styles.icon}><BookOpen aria-hidden="true" /></span><div><h2 id="study-preferences-title">Study Preferences</h2><p>Manage your learning environment.</p></div></div>
+            <div className={styles.libraries}>
+              <div><h3 id="accessible-libraries-title">Accessible Libraries</h3><p>Libraries currently available to this account.</p></div>
+              <div>
+                {accessibleLibraries.length ? <ul>{accessibleLibraries.map((library) => <li key={library.id}>
+                  <strong>{library.name}</strong><span>{context.library?.id === library.id ? 'Current' : library.isPrimary ? 'Primary' : 'Available'}</span>
+                </li>)}</ul> : <p>No active Library is currently assigned to this account.</p>}
+                <LibrarySwitcher context={context} returnTo="/account" />
+              </div>
+            </div>
+          </section>
+          <section className={`${styles.panel} ${styles.progress}`} aria-labelledby="progress-management-title">
+            <div className={styles.heading}><span className={styles.icon}><RefreshCw aria-hidden="true" /></span><div><h2 id="progress-management-title">Progress Management</h2></div></div>
+            <ResetStudyProgress
+              concepts={resetConcepts}
+              library={context.library ? { id: context.library.id, name: context.library.name } : null}
+              topics={resetTopics}
+            />
+          </section>
+          <section className={styles.panel} aria-labelledby="account-security-title">
+            <div className={styles.heading}><span className={styles.icon}><LockKeyhole aria-hidden="true" /></span><div><h2 id="account-security-title">Account Security</h2><p>Manage your account security.</p></div></div>
+            <div className={styles.security}><div><h3>Email &amp; Password</h3><p>Use your existing secure account controls in Profile.</p></div><Link href="/profile?section=security">Manage Security<ExternalLink size={15} aria-hidden="true" /></Link></div>
+          </section>
+        </div>
       </main>
-      </SocratesShell>
-    </HeaderSessionProvider>
+    </div>
   );
 }

@@ -185,16 +185,16 @@ export function ConceptTabs({
                   borderRadius: '999px',
                   background:
                     lifecycleStatus === 'published'
-                      ? '#dcfce7'
+                      ? 'var(--appearance-soft, #dcfce7)'
                       : lifecycleStatus === 'archived'
-                        ? '#fee2e2'
-                        : '#fef3c7',
+                        ? 'var(--appearance-soft, #fee2e2)'
+                        : 'var(--appearance-soft, #fef3c7)',
                   color:
                     lifecycleStatus === 'published'
-                      ? '#166534'
+                      ? 'var(--appearance-success, #166534)'
                       : lifecycleStatus === 'archived'
-                        ? '#991b1b'
-                        : '#92400e',
+                        ? 'var(--appearance-danger, #991b1b)'
+                        : 'var(--appearance-warning, #92400e)',
                   fontWeight: 800,
                 }}
               >

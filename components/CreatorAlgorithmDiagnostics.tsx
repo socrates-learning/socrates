@@ -242,7 +242,7 @@ export function CreatorAlgorithmDiagnostics({
                 <div className={styles.panelHeading}><h3>Testing Angle Evidence</h3><Target size={17} aria-hidden="true" /></div>
                 <p className={styles.selectedName} title={selected?.name}>{selected?.name || 'Select a Concept'}</p>
                 <div className={styles.evidenceChart}>
-                  <div className={styles.donut} role="img" aria-label={`${number(totalEvidence)} total persisted Primary Testing Angle evidence for ${selected?.name ?? 'the selected Concept'}. Distribution in the adjacent legend.`} style={{ background: totalEvidence > 0 ? `conic-gradient(${donutStops.join(', ')})` : '#e5e5e8' }}>
+                  <div className={styles.donut} role="img" aria-label={`${number(totalEvidence)} total persisted Primary Testing Angle evidence for ${selected?.name ?? 'the selected Concept'}. Distribution in the adjacent legend.`} style={{ background: totalEvidence > 0 ? `conic-gradient(${donutStops.join(', ')})` : 'var(--appearance-soft, #e5e5e8)' }}>
                     <div><strong>{number(totalEvidence)}</strong><span>Total evidence</span></div>
                   </div>
                   <ul className={styles.angleList} aria-label="Primary Testing Angle evidence distribution">

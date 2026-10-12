@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { readAppearanceSource as readFileSync } from './fixtures/appearance.mjs';
 import { editor, nodes, text, button, expandChrome, source } from './fixtures/creator-question-workflow.mjs';
 import { mountVisualField, projectQuestionPresentation, projectTagManagerPresentation } from './fixtures/creator-role-workspaces.mjs';
 

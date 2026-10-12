@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readAppearanceSource as readFileSync } from './fixtures/appearance.mjs';
 import { createHash } from 'node:crypto';
 import { loadConceptModule, hookHarness, jsx } from './fixtures/concept-media-authoring.mjs';
 import * as model from '../lib/stats-flagged-review.ts';

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { readAppearanceSource as readFileSync } from './fixtures/appearance.mjs';
 import { editor, nodes, text, button, expandChrome, source, projectTagManagerPresentation } from './fixtures/creator-role-workspaces.mjs';
 
 const hash = value => createHash('sha256').update(value).digest('hex');

@@ -2,7 +2,7 @@ import { projectStatsProgress } from './fixtures/stats-progress-presentation.mjs
 import {projectStudyFlaggedCorrections} from './fixtures/study-flagged-corrections.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import { readAppearanceSource as readFileSync } from './fixtures/appearance.mjs';
 import {createHash} from 'node:crypto';
 import {loadFlaggedReview,loadFlaggedConcept,reviewAnswers,personalCardEditorHref} from '../lib/stats-flagged-review.ts';
 import {projectStatsFlagged} from './fixtures/stats-flagged-review.mjs';

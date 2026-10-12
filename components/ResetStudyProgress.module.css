@@ -24,7 +24,7 @@
 .scopeGroup legend,
 .targetLabel,
 .libraryTarget span {
-  color: #334155;
+  color: var(--appearance-text, #334155);
   font-size: 14px;
   font-weight: 800;
   margin-bottom: 7px;
@@ -36,8 +36,8 @@
 
 .scopeGroup label {
   align-items: center;
-  background: #f8fafc;
-  border: 1px solid #dbe3ef;
+  background: var(--appearance-surface, #f8fafc);
+  border: 1px solid var(--appearance-line, #dbe3ef);
   border-radius: 10px;
   display: inline-flex;
   gap: 8px;
@@ -46,13 +46,13 @@
 }
 
 .scopeGroup label:has(input:checked) {
-  background: #eef5ff;
-  border-color: #60a5fa;
-  color: #1d4ed8;
+  background: var(--appearance-surface, #eef5ff);
+  border-color: var(--appearance-focus, #60a5fa);
+  color: var(--appearance-link, #1d4ed8);
 }
 
 .scopeGroup input {
-  accent-color: #2563eb;
+  accent-color: var(--appearance-strong, #2563eb);
   height: 18px;
   margin: 0;
   width: 18px;
@@ -66,14 +66,14 @@
 }
 
 .targetLabel select {
-  background: white;
-  color: #0f172a;
+  background: var(--appearance-surface, white);
+  color: var(--appearance-text, #0f172a);
   font-weight: 600;
 }
 
 .libraryTarget {
-  background: #f8fafc;
-  border: 1px solid #dbe3ef;
+  background: var(--appearance-surface, #f8fafc);
+  border: 1px solid var(--appearance-line, #dbe3ef);
   border-radius: 12px;
   display: grid;
   gap: 3px;
@@ -87,8 +87,8 @@
 
 .resetButton,
 .confirmButton {
-  background: #b91c1c;
-  border: 1px solid #991b1b;
+  background: var(--appearance-danger-fill, #b91c1c);
+  border: 1px solid var(--appearance-focus, #991b1b);
   border-radius: 10px;
   color: white;
   font: inherit;
@@ -111,22 +111,22 @@
 }
 
 .success {
-  background: #ecfdf5;
-  border: 1px solid #a7f3d0;
-  color: #065f46;
+  background: var(--appearance-soft, #ecfdf5);
+  border: 1px solid var(--appearance-line, #a7f3d0);
+  color: var(--appearance-success, #065f46);
 }
 
 .error {
-  background: #fff1f2;
-  border: 1px solid #fecdd3;
-  color: #9f1239;
+  background: var(--appearance-surface, #fff1f2);
+  border: 1px solid var(--appearance-line, #fecdd3);
+  color: var(--appearance-danger, #9f1239);
 }
 
 .dialog {
   border: 0;
   border-radius: 18px;
   box-shadow: 0 28px 80px rgb(15 23 42 / 30%);
-  color: #0f172a;
+  color: var(--appearance-text, #0f172a);
   max-height: calc(100dvh - 32px);
   max-width: min(620px, calc(100vw - 32px));
   padding: 0;
@@ -163,7 +163,7 @@
 }
 
 .eyebrow {
-  color: #64748b;
+  color: var(--appearance-muted, #64748b);
   font-size: 12px;
   font-weight: 900;
   letter-spacing: 0.08em;
@@ -172,7 +172,7 @@
 }
 
 .warning {
-  color: #991b1b;
+  color: var(--appearance-danger, #991b1b);
   font-weight: 800;
 }
 
@@ -184,7 +184,7 @@
 }
 
 .dialogActions button {
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--appearance-line, #cbd5e1);
   border-radius: 10px;
   font: inherit;
   font-weight: 800;
@@ -193,8 +193,8 @@
 }
 
 .dialogActions button:not(.confirmButton) {
-  background: white;
-  color: #0f172a;
+  background: var(--appearance-surface, white);
+  color: var(--appearance-text, #0f172a);
 }
 
 @media (max-width: 520px) {

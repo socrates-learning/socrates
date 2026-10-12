@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { readFileSync } from 'node:fs';
+import { readAppearanceSource as readFileSync } from './fixtures/appearance.mjs';
 import { createHash } from 'node:crypto';
 import vm from 'node:vm';
 import ts from 'typescript';
 import { canAccessCreatorRoute } from '../lib/creator-route-access.ts';
+import { projectHomeNavigation } from './fixtures/home-navigation.mjs';
 
 const read = path => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 const planner = read('components/StudyPlanner.tsx');
@@ -67,9 +68,8 @@ test('released route destinations and no-action Menu are frozen, not future shel
   assert.match(read('app/creator/page.tsx'), /export default NewConceptPage/);
   assert.match(read('app/account/page.tsx'), /redirect\('\/login\?next=\/account'\)/);
   assert.match(read('app/account/page.tsx'), /href="\/"[\s\S]*Back to Home/);
-  assert.doesNotMatch(planner, /href: '\/(?:menu|profile)'/);
-  // Future shell contract: a discriminated link/action item can replace Menu with
-  // Profile later. Neither destination nor Profile functionality exists today.
+  assert.doesNotMatch(planner, /href: '\/menu'/);
+  // Profile now has its own destination; the original Account Settings remains.
   assert.match(read('components/study-planner/LearnerShell.tsx'), /kind: 'link'; href: string/);
   assert.match(read('components/study-planner/LearnerShell.tsx'), /kind: 'button'; onClick\?:/);
 });
@@ -130,24 +130,24 @@ test('native Library switch retains server membership checks and safe Account re
 });
 
 // Execute the shared navigation with inert framework boundaries; no workspace is reconstructed.
-function shellFixture(allowed = true, active = 'creator', role = 'learner', branded = false) {
+function shellFixture(allowed = true, active = 'creator', role = 'learner', branded = false, home = false) {
   const calls = [], exports = {};
   const jsx = (type, props) => ({ type, props });
   const definitions = compile(read('lib/application-shell-navigation.ts'), {});
   const modules = {
-    react: { createContext: () => ({}), useContext: () => ({ allowNavigation: () => { calls.push('guard'); return allowed; } }), useState: () => [false, () => {}], useRef: () => ({ current: false }) },
+    react: { createContext: () => ({}), useContext: () => ({ allowNavigation: () => { calls.push('guard'); return allowed; } }), useEffect: () => {}, useState: () => [false, () => {}], useRef: () => ({ current: false }) },
     'react/jsx-runtime': { jsx, jsxs: jsx }, 'next/link': { default: 'a', __esModule: true },
     'next/image': { default: 'Image', __esModule: true },
-    'next/navigation': { useRouter: () => ({ push: path => calls.push(path) }) },
+    'next/navigation': { useRouter: () => ({ push: path => calls.push(path) }), usePathname: () => '/' },
     '@/lib/supabase': { supabase: {} }, '@/lib/application-shell-navigation': definitions,
     './SocratesShell.module.css': { default: {}, __esModule: true },
   };
   vm.runInNewContext(ts.transpileModule(read('components/application-shell/SocratesShell.tsx'), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText, {
     exports, require: name => { assert.ok(name in modules, name); return modules[name]; },
   });
-  const tree = exports.ApplicationNavigation({ active, role, branded, onLogout: () => calls.push('logout') });
+  const tree = exports.ApplicationNavigation({ active, role, branded, home, onLogout: () => calls.push('logout') });
   const elements = []; function walk(n) { if (Array.isArray(n)) n.forEach(walk); else if (n?.props) { elements.push(n); walk(n.props.children); } } walk(tree);
-  return { calls, definitions, elements };
+  return { calls, definitions, elements, renderShell: variant => exports.SocratesShell({ variant, role, active }) };
 }
 test('shared entries retain URLs, native semantics, current state and inert Menu', () => {
   const h = shellFixture(); assert.deepEqual(h.calls, []);
@@ -318,13 +318,78 @@ test('Home hover is full-entry, excludes active/disabled actions and Logout, and
   assert.match(styles, /\.navigation a:focus-visible, \.navigation button:focus-visible, \.trigger:focus-visible \{ outline: 2px solid #155ee8; outline-offset: 2px; \}/);
 });
 
-test('Home sidebar retains its active Home destination and original actions after header Home is omitted', () => {
-  const h = shellFixture(true, 'home', 'admin');
+test('Home sidebar retains its active Home destination and original actions with Admin below Stats', () => {
+  const h = shellFixture(true, 'home', 'admin', false, true);
   const home = h.elements.find(n => n.type === 'a' && n.props.href === '/');
   assert.equal(home.props['aria-current'], 'page');
-  assert.deepEqual(h.elements.filter(n => n.type === 'a').map(n => n.props.href), ['/', '/creator', '/#stats', '/account', '/admin/users']);
+  assert.deepEqual(h.elements.filter(n => n.type === 'a').map(n => n.props.href), ['/', '/creator', '/#stats', '/admin/users', '/account']);
   const event = { button: 0, preventDefault() {} };
   home.props.onClick(event); assert.deepEqual(h.calls, []);
   h.elements.find(n => n.type === 'a' && n.props.href === '/creator').props.onClick(event);
   assert.deepEqual(h.calls, ['guard', '/creator']);
+});
+
+for (const role of ['admin', 'editor', 'learner', null]) test(`Home desktop and mobile navigation preserve role restrictions: ${role}`, () => {
+  const h = shellFixture(true, 'home', role, false, true);
+  const actions = h.elements.filter(n => n.type === 'a' || n.type === 'button');
+  assert.deepEqual(actions.map(n => n.props['aria-label']), ['Home', 'Creator Studio', 'Stats', ...(role === 'admin' ? ['Admin'] : []), 'Account Settings', 'Log Out']);
+  assert.equal(actions.find(n => n.props['aria-label'] === 'Account Settings').props.href, '/account');
+  assert.equal(actions.find(n => n.props['aria-label'] === 'Admin')?.props.href, role === 'admin' ? '/admin/users' : undefined);
+  const navigationInstances = [];
+  function walk(node) {
+    if (Array.isArray(node)) node.forEach(walk);
+    else if (node?.props) {
+      if (node.type?.name === 'ApplicationNavigation') navigationInstances.push(node.props);
+      walk(node.props.children);
+    }
+  }
+  walk(h.renderShell('home'));
+  assert.equal(navigationInstances.length, 2, 'Desktop rail and mobile drawer use the same navigation');
+  for (const props of navigationInstances) { assert.equal(props.home, true); assert.equal(props.role, role); }
+  navigationInstances.length = 0; walk(h.renderShell('compact'));
+  for (const props of navigationInstances) assert.equal(props.home, false, 'Other compact workspaces keep their existing entries');
+  assert.match(planner, /<SocratesShell variant="home" active="home" role=\{role\}/);
+});
+
+for (const allowed of [false, true]) test(`relocated Admin keeps the destination and leave guard: allowed=${allowed}`, () => {
+  const h = shellFixture(allowed, 'home', 'admin', false, true);
+  const admin = h.elements.find(n => n.props['aria-label'] === 'Admin');
+  admin.props.onClick({ button: 0, preventDefault() {} });
+  assert.deepEqual(h.calls, allowed ? ['guard', '/admin/users'] : ['guard']);
+  h.calls.length = 0;
+  admin.props.onClick({ button: 0, metaKey: true, preventDefault: () => assert.fail('Preserve native new-tab navigation') });
+  assert.deepEqual(h.calls, []);
+});
+
+test('Profile appears only on Home and opens the dedicated page without a new menu', () => {
+  const ast = ts.createSourceFile('StudyPlanner.tsx', planner, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  let expression;
+  function visit(node) {
+    if (ts.isJsxSelfClosingElement(node) && node.tagName.getText(ast) === 'LearnerHeader'
+      && node.attributes.properties.some(prop => prop.name?.getText(ast) === 'classPrefix' && prop.initializer?.text === 'home-v2')) {
+      expression = node.attributes.properties.find(prop => prop.name?.getText(ast) === 'items').initializer.expression.getText(ast);
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(ast); assert.ok(expression);
+  const { headerItems } = compile(`export function headerItems(mode, items) { return ${expression}; }`, {});
+  const existing = [{ label: 'Home' }, { label: 'Creator Studio' }, { label: 'Admin' }];
+  const home = headerItems('dashboard', existing);
+  assert.equal(home.length, 1); assert.equal(home[0].label, 'Profile'); assert.equal(home[0].href, '/profile');
+  assert.equal(home[0].kind, 'link'); assert.equal(home[0].icon, 'account'); assert.equal(home[0].accountChevron, false);
+  assert.equal(home[0].className, 'home-v2-nav-item home-v2-profile');
+  assert.equal(headerItems('stats', existing), existing, 'Stats retains the same header items and callbacks');
+  assert.match(planner, /<LearnerHeader classPrefix="study-v2" brandHref="\/" onHomeClick=\{handleHomeClick\} items=\{items\}/);
+});
+
+// Released 8f67d7a identities; exact navigation hunks are the only exceptions.
+for (const [path, expected] of Object.entries({
+  'components/StudyPlanner.tsx': 'd3505b9c7fdb6a6ecb75ea06585e67377f0425ef6a4da8605e90384294c154c2',
+  'components/application-shell/SocratesShell.tsx': '57f1b8909e94cf88eebce567e103a732670e8238e3705d15aeb26012aea4e984',
+  'app/home.css': '144a2dce4fefc39c05a76a5dfbd438a085d13f9619003b39754d02115c16bab0',
+})) test(`Home navigation preserves every other released byte: ${path}`, () => {
+  const current = read(path);
+  const hash = source => createHash('sha256').update(source).digest('hex');
+  assert.equal(hash(projectHomeNavigation(path, current)), expected);
+  assert.notEqual(hash(projectHomeNavigation(path, `${current}\n// unrelated change\n`)), expected);
 });

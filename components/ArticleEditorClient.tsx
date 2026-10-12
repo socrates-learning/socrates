@@ -2462,9 +2462,9 @@ export function ArticleEditorClient({
           style={{
             minHeight: 320,
             padding: 16,
-            border: '1px solid #d1d5db',
+            border: '1px solid var(--appearance-line, #d1d5db)',
             borderRadius: 12,
-            background: '#fff',
+            background: 'var(--appearance-surface, #fff)',
           }}
         />
       </div>

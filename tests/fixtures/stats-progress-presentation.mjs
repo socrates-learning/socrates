@@ -1,3 +1,5 @@
+import { projectAppearance } from './appearance.mjs';
+import { projectHomeNavigation } from './home-navigation.mjs';
 import assert from 'node:assert/strict';
 
 // Exact presentation-only exceptions for the Stats Progress redesign.
@@ -82,6 +84,8 @@ const hunks = {
 };
 
 export function projectStatsProgress(path, source) {
+  source = projectAppearance(source);
+  source = projectHomeNavigation(path, source);
   for (const [current, released] of hunks[path] || []) {
     assert.equal(source.split(current).length, 2, `Exactly one approved Stats presentation hunk in ${path}`);
     source = source.replace(current, released);

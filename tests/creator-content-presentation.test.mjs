@@ -1,10 +1,11 @@
 import { projectStatsProgress } from './fixtures/stats-progress-presentation.mjs';
+import { projectHomeNavigation } from './fixtures/home-navigation.mjs';
 import { projectStudyFlaggedCorrections } from './fixtures/study-flagged-corrections.mjs';
 import { projectSharedTopicSource } from './fixtures/shared-topic-branches.mjs';
 import { projectStudyGoals } from './fixtures/study-goals.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { readFileSync } from 'node:fs';
+import { readAppearanceSource as readFileSync } from './fixtures/appearance.mjs';
 import { createHash } from 'node:crypto';
 import { editor, nodes, text, button, expandChrome, source, projectNavyPresentation, projectQuestionPresentation, projectTagManagerPresentation } from './fixtures/creator-role-workspaces.mjs';
 const read = path => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
@@ -80,7 +81,7 @@ test('Home, Stats and Study/Cram match released 9585d78 after only the approved 
   planner = planner.replace(marker, '').replace(tree, `                  className="home-v2-setup-tree"
                   aria-label="Home deck settings Topic Tree"`);
   assert.equal(hash(planner), "2a604d4926d98db0edb7f86d5ac8dbacf95fffde2e6cb4b1b00a3536783704ae");
-  const css = read('app/home.css'), boundary = '\n\n/* Home dashboard:';
+  const css = projectHomeNavigation('app/home.css', read('app/home.css')), boundary = '\n\n/* Home dashboard:';
   assert.equal(css.split(boundary).length, 2);
   const start = css.indexOf(boundary);
   assert.equal(hash(css.slice(start)), '7e2a967b9eb575ca71837eed4b30082691d3b57a1ef5b809e45029b0998e97c3', 'Only the exact approved Home layout block');

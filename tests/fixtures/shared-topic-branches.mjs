@@ -1,3 +1,4 @@
+import { projectAppearance } from './appearance.mjs';
 import { projectStatsFlagged } from './stats-flagged-review.mjs';
 import { registerHooks } from 'node:module';
 // Native Node tests resolve this one TypeScript implementation; Next resolves
@@ -230,6 +231,7 @@ const sharedIntegrationHunks = {
   ]
 };
 export function projectSharedTopicSource(path, source) {
+  source = projectAppearance(source);
  source = projectStatsFlagged(path, source);
  const hunks = sharedIntegrationHunks[path];
  if (!hunks) throw new Error(`No shared-placement preservation exception for ${path}`);

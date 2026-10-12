@@ -15,7 +15,7 @@ import * as standaloneCards from '../../lib/standalone-custom-cards.ts';
 import * as topicPositioning from '../../lib/creator-topic-positioning.ts';
 import * as personalStructure from '../../lib/creator-personal-structure.ts';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readAppearanceSource as readFileSync } from './appearance.mjs';
 import vm from 'node:vm';
 import ts from 'typescript';
 import { deriveCreatorCapabilities } from '../../lib/creator-capabilities.ts';

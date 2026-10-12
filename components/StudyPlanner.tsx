@@ -2075,7 +2075,7 @@ export function StudyPlanner({
                 background: 'transparent',
                 border: 'none',
                 borderRadius: 0,
-                color: '#08143b',
+                color: 'var(--appearance-text, #08143b)',
                 cursor: children.length === 0 ? 'default' : 'pointer',
                 display: 'flex',
                 flexShrink: 0,
@@ -2166,10 +2166,10 @@ export function StudyPlanner({
             <span
               title="Study-ready questions in this branch"
               style={{
-                background: '#f8fafc',
-                border: '1px solid #dbe3ee',
+                background: 'var(--appearance-surface, #f8fafc)',
+                border: '1px solid var(--appearance-line, #dbe3ee)',
                 borderRadius: 999,
-                color: '#475569',
+                color: 'var(--appearance-muted, #475569)',
                 flexShrink: 0,
                 fontSize: 12,
                 fontWeight: 700,
@@ -2198,7 +2198,7 @@ export function StudyPlanner({
                 gap: 12,
               }}
             >
-              <span style={{ color: '#08143b', fontSize: 12, fontWeight: 700 }}>
+              <span style={{ color: 'var(--appearance-text, #08143b)', fontSize: 12, fontWeight: 700 }}>
                 New
               </span>
               <input
@@ -2234,10 +2234,10 @@ export function StudyPlanner({
                   opacity: isSetupCramMode ? 0.5 : 1,
                 }}
               />
-              <span style={{ color: '#08143b', fontSize: 12, fontWeight: 700 }}>
+              <span style={{ color: 'var(--appearance-text, #08143b)', fontSize: 12, fontWeight: 700 }}>
                 Mastery
               </span>
-              <strong style={{ color: '#0f172a', minWidth: 30, textAlign: 'right' }}>
+              <strong style={{ color: 'var(--appearance-text, #0f172a)', minWidth: 30, textAlign: 'right' }}>
                 {preference}
               </strong>
             </div>
@@ -3011,10 +3011,10 @@ export function StudyPlanner({
 
   return (
     <>
-      <LearnerHeader classPrefix="home-v2" brandHref="/" onHomeClick={handleHomeClick} items={mode === 'dashboard' ? items.filter(item => item.label !== 'Home') : items} />
+      <LearnerHeader classPrefix="home-v2" brandHref="/" onHomeClick={handleHomeClick} items={mode === 'dashboard' ? [{ kind: 'link', label: 'Profile', icon: 'account', href: '/profile', className: 'home-v2-nav-item home-v2-profile', accountChevron: false }] : items} />
       <main className={`home-v2-shell${mode === 'stats' ? ` home-v2-shell-stats ${statsStyles.shell}` : ''}`} data-home-dashboard={mode === 'dashboard' ? '' : undefined}>
         {mode !== 'stats' && (
-          <SocratesShell variant="home" active="home" onHome={handleHomeClick} onStats={() => openStatsTab('progress')} onLogout={handleLogout} onCreator={handleCreatorClick} />
+          <SocratesShell variant="home" active="home" role={role} onHome={handleHomeClick} onStats={() => openStatsTab('progress')} onLogout={handleLogout} onCreator={handleCreatorClick} />
         )}
 
         <section className="home-v2-workspace">

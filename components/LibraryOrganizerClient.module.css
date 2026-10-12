@@ -11,13 +11,13 @@
 .localHeader h1 { margin: 0; font: 700 clamp(1.75rem, 2.6vw, 2.375rem)/1.15 Georgia, 'Times New Roman', serif; letter-spacing: -.025em; }
 .description { margin: 8px 0 0; color: var(--creator-muted); line-height: 1.5; }
 
-.information { display: flex; align-items: flex-start; gap: 16px; padding: 18px 20px; border: 1px solid #c7daf4; border-radius: 8px; background: var(--creator-soft); line-height: 1.5; }
+.information { display: flex; align-items: flex-start; gap: 16px; padding: 18px 20px; border: 1px solid var(--appearance-line, #c7daf4); border-radius: 8px; background: var(--creator-soft); line-height: 1.5; }
 .information > svg { flex: 0 0 auto; margin-top: 2px; }
 .information strong { font: 700 1.125rem/1.4 Georgia, 'Times New Roman', serif; }
 .information p { margin: 4px 0 0; color: var(--creator-muted); font-size: .9375rem; }
 
 .workspace { display: grid; align-items: start; gap: 20px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); min-width: 0; }
-.panel { min-width: 0; padding: 22px; border: 1px solid var(--creator-border); border-radius: 10px; background: #fff; }
+.panel { min-width: 0; padding: 22px; border: 1px solid var(--creator-border); border-radius: 10px; background: var(--appearance-surface, #fff); }
 .panelHeading { margin-bottom: 18px; }
 .panelHeading h2 { margin: 0; font: 700 1.5rem/1.25 Georgia, 'Times New Roman', serif; }
 .panelHeading p { margin: 7px 0 0; color: var(--creator-muted); font-size: .9375rem; line-height: 1.5; }
@@ -51,12 +51,12 @@
 .hierarchyName { flex: 1 1 0; min-width: 0; overflow-wrap: anywhere; }
 .hierarchyMeta { flex: 0 1 auto; min-width: 0; color: var(--creator-muted); font-size: .75rem; overflow-wrap: anywhere; text-align: right; }
 .hierarchyRow[data-status='archived'], .hierarchyRow[data-status='inactive'] { color: var(--creator-muted); }
-.hierarchyRow[aria-pressed='true'] { background: var(--creator-navy); border-color: var(--creator-navy); color: #fff; }
+.hierarchyRow[aria-pressed='true'] { background: var(--appearance-strong, var(--creator-navy)); border-color: var(--creator-navy); color: #fff; }
 .hierarchyRow[aria-pressed='true'] .hierarchyMeta { color: #e0eafb; }
 
 .fieldLabel { display: grid; min-width: 0; gap: 7px; font-size: .875rem; }
 .fieldLabel > strong { font-weight: 650; }
-.field { width: 100%; min-width: 0; min-height: 42px; padding: 9px 11px; border: 1px solid var(--creator-border); border-radius: 7px; background: #fff; color: var(--creator-navy); font: inherit; font-size: .9375rem; }
+.field { width: 100%; min-width: 0; min-height: 42px; padding: 9px 11px; border: 1px solid var(--creator-border); border-radius: 7px; background: var(--appearance-surface, #fff); color: var(--creator-navy); font: inherit; font-size: .9375rem; }
 .form { display: grid; gap: 14px; }
 .actionRow, .groupActions { display: flex; flex-wrap: wrap; gap: 8px; }
 .groupActions { margin-top: 12px; }
@@ -64,7 +64,7 @@
 .selectedLibraryPanel code { font-size: .8125rem; overflow-wrap: anywhere; word-break: break-word; }
 .selectedLibraryPanel > p { margin: 0 0 10px; font-size: .875rem; }
 .selectedLibraryPanel .form { margin-top: 18px; }
-.status { border: 1px solid var(--creator-border); border-radius: 8px; padding: 13px 18px; background: #fff; overflow-wrap: anywhere; line-height: 1.5; }
+.status { border: 1px solid var(--creator-border); border-radius: 8px; padding: 13px 18px; background: var(--appearance-surface, #fff); overflow-wrap: anywhere; line-height: 1.5; }
 
 .primaryButton, .secondaryButton, .dangerButton {
   display: inline-flex;
@@ -85,19 +85,19 @@
   cursor: pointer;
 }
 .primaryButton > svg, .secondaryButton > svg, .dangerButton > svg { flex: 0 0 auto; }
-.primaryButton { color: #fff; border-color: #14375c; background: linear-gradient(180deg, #1c436b, #071d40); box-shadow: 0 2px 5px rgb(8 28 64 / 10%); }
-.secondaryButton { color: var(--creator-navy); background: #f5f9ff; }
-.dangerButton { color: #991b1b; border-color: #fecaca; background: #fff5f5; }
+.primaryButton { color: #fff; border-color: var(--appearance-focus, #14375c); background: linear-gradient(180deg, var(--appearance-strong, #1c436b), var(--appearance-strong, #071d40)); box-shadow: 0 2px 5px rgb(8 28 64 / 10%); }
+.secondaryButton { color: var(--creator-navy); background: var(--appearance-surface, #f5f9ff); }
+.dangerButton { color: var(--appearance-danger, #991b1b); border-color: var(--appearance-line, #fecaca); background: var(--appearance-surface, #fff5f5); }
 .localHeader > .secondaryButton { flex: 0 0 auto; }
 .primaryButton:disabled, .secondaryButton:disabled, .dangerButton:disabled { opacity: .5; cursor: not-allowed; }
-.page :is(button, a, input, select):focus-visible { outline: 2px solid #356da8; outline-offset: 2px; }
-.secondaryButton:not(:disabled):active { color: #fff; background: var(--creator-navy); }
+.page :is(button, a, input, select):focus-visible { outline: 2px solid var(--appearance-focus, #356da8); outline-offset: 2px; }
+.secondaryButton:not(:disabled):active { color: #fff; background: var(--appearance-strong, var(--creator-navy)); }
 
 @media (hover: hover) {
-  .hierarchyRow:not([aria-pressed='true']):hover { background: var(--creator-soft); border-color: #aac1dc; }
-  .secondaryButton:not(:disabled):hover { background: #e8f0fb; border-color: #aac1dc; }
-  .primaryButton:not(:disabled):hover { background: #14375c; }
-  .dangerButton:not(:disabled):hover { background: #fee2e2; border-color: #dc2626; }
+  .hierarchyRow:not([aria-pressed='true']):hover { background: var(--creator-soft); border-color: var(--appearance-line, #aac1dc); }
+  .secondaryButton:not(:disabled):hover { background: var(--appearance-soft, #e8f0fb); border-color: var(--appearance-line, #aac1dc); }
+  .primaryButton:not(:disabled):hover { background: var(--appearance-strong, #14375c); }
+  .dangerButton:not(:disabled):hover { background: var(--appearance-soft, #fee2e2); border-color: var(--appearance-focus, #dc2626); }
 }
 @media (prefers-reduced-motion: no-preference) {
   .hierarchyRow, .primaryButton, .secondaryButton, .dangerButton { transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease; }

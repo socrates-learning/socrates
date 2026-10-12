@@ -230,7 +230,7 @@ export function LibrarySubjectSwitcher({ options, label, defaultSlug, submitLabe
             style={
               standalone
                 ? {
-                  color: '#59687f',
+                  color: 'var(--appearance-muted, #59687f)',
                   fontSize: 12,
                   fontWeight: 800,
                   letterSpacing: '0.04em',
@@ -248,10 +248,10 @@ export function LibrarySubjectSwitcher({ options, label, defaultSlug, submitLabe
             style={
               standalone
                 ? {
-                  background: '#ffffff',
-                  border: '1px solid #c7d1e0',
+                  background: 'var(--appearance-surface, #ffffff)',
+                  border: '1px solid var(--appearance-line, #c7d1e0)',
                   borderRadius: 8,
-                  color: '#17233a',
+                  color: 'var(--appearance-text, #17233a)',
                   font: 'inherit',
                   minHeight: 42,
                   padding: '8px 10px',
@@ -274,8 +274,8 @@ export function LibrarySubjectSwitcher({ options, label, defaultSlug, submitLabe
           style={
             standalone
               ? {
-                background: '#155ee8',
-                border: '1px solid #0f4fc7',
+                background: 'var(--appearance-strong, #155ee8)',
+                border: '1px solid var(--appearance-focus, #0f4fc7)',
                 borderRadius: 8,
                 color: '#ffffff',
                 cursor: 'pointer',
@@ -308,7 +308,7 @@ export function PlannerFallback(props: FallbackProps) {
           aria-live="polite"
           style={{
             alignItems: 'stretch',
-            background: '#f3f6fb',
+            background: 'var(--appearance-surface, #f3f6fb)',
             display: 'flex',
             flexWrap: 'wrap',
             minHeight: 'calc(100vh - 126px)',
@@ -317,7 +317,7 @@ export function PlannerFallback(props: FallbackProps) {
           <aside
             aria-hidden="true"
             style={{
-              background: 'linear-gradient(180deg, #0c4dc3, #0a3c9f)',
+              background: 'linear-gradient(180deg, var(--appearance-strong, #0c4dc3), var(--appearance-strong, #0a3c9f))',
               boxSizing: 'border-box',
               display: 'grid',
               flex: '1 1 190px',
@@ -347,7 +347,7 @@ export function PlannerFallback(props: FallbackProps) {
           >
             <p
               style={{
-                color: '#48617f',
+                color: 'var(--appearance-muted, #48617f)',
                 fontSize: 15,
                 fontWeight: 700,
                 margin: '0 0 14px',
@@ -357,8 +357,8 @@ export function PlannerFallback(props: FallbackProps) {
             </p>
             <div
               style={{
-                background: '#ffffff',
-                border: '1px solid #dfe6f0',
+                background: 'var(--appearance-surface, #ffffff)',
+                border: '1px solid var(--appearance-line, #dfe6f0)',
                 borderRadius: 18,
                 boxShadow: '0 12px 30px rgba(15, 23, 42, 0.07)',
                 minHeight: 130,
@@ -366,8 +366,8 @@ export function PlannerFallback(props: FallbackProps) {
             />
             <div
               style={{
-                background: '#ffffff',
-                border: '1px solid #dfe6f0',
+                background: 'var(--appearance-surface, #ffffff)',
+                border: '1px solid var(--appearance-line, #dfe6f0)',
                 borderRadius: 18,
                 boxShadow: '0 12px 30px rgba(15, 23, 42, 0.07)',
                 marginTop: 22,

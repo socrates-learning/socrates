@@ -363,9 +363,9 @@ export default async function ConceptPage({
                       padding: '4px 8px',
                       borderRadius: '999px',
                       background:
-                        concept.status === 'archived' ? '#fee2e2' : '#fef3c7',
+                        concept.status === 'archived' ? 'var(--appearance-soft, #fee2e2)' : 'var(--appearance-soft, #fef3c7)',
                       color:
-                        concept.status === 'archived' ? '#991b1b' : '#92400e',
+                        concept.status === 'archived' ? 'var(--appearance-danger, #991b1b)' : 'var(--appearance-warning, #92400e)',
                       fontSize: '0.75rem',
                       verticalAlign: 'middle',
                     }}

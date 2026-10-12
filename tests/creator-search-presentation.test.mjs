@@ -1,7 +1,7 @@
 import { projectSharedTopicSource } from './fixtures/shared-topic-branches.mjs';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { readAppearanceSource as readFileSync } from './fixtures/appearance.mjs';
 import test from 'node:test';
 import { CreatorQuestionSearchPanel, editor, nodes, text, expandChrome } from './fixtures/creator-role-workspaces.mjs';
 

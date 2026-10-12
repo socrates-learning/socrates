@@ -1,0 +1,37 @@
+/* Light intentionally defines no overrides: every token retains its released fallback. */
+:root[data-appearance='light'] { color-scheme: light; }
+:root[data-appearance='navy'], :root[data-appearance='midnight'] {
+  color-scheme: dark;
+  --appearance-surface: #101e33;
+  --appearance-soft: #192b43;
+  --appearance-text: #edf2fa;
+  --appearance-muted: #b5c3d8;
+  --appearance-line: #556781;
+  --appearance-strong: #254b7b;
+  --appearance-link: #9cc7ff;
+  --appearance-focus: #a7ceff;
+  --appearance-danger: #ffadb7;
+  --appearance-danger-fill: #8c283d;
+  --appearance-success: #94dfb2;
+  --appearance-success-fill: #195d41;
+  --appearance-warning: #ffd494;
+  --appearance-warning-fill: #71501b;
+}
+:root[data-appearance='midnight'] {
+  --appearance-surface: #101114;
+  --appearance-soft: #1c1e24;
+  --appearance-text: #f3f4f7;
+  --appearance-muted: #bfc4d0;
+  --appearance-line: #626875;
+  --appearance-strong: #233e66;
+}
+:root[data-appearance='navy'] body { background: #0a1425; }
+:root[data-appearance='midnight'] body { background: #08090b; }
+:root[data-appearance='navy'] :is(input, textarea, select),
+:root[data-appearance='midnight'] :is(input, textarea, select) {
+  color: var(--appearance-text);
+  background-color: var(--appearance-surface);
+  accent-color: var(--appearance-link);
+}
+:root[data-appearance='navy'] :focus-visible,
+:root[data-appearance='midnight'] :focus-visible { outline-color: var(--appearance-focus); }

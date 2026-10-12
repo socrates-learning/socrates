@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { readAppearanceSource as readFileSync } from './fixtures/appearance.mjs';
 import test from 'node:test';
 import vm from 'node:vm';
 import ts from 'typescript';
+import { projectHomeNavigation } from './fixtures/home-navigation.mjs';
 
 const planner = readFileSync(new URL('../components/StudyPlanner.tsx', import.meta.url), 'utf8');
 const shell = readFileSync(new URL('../components/study-planner/LearnerShell.tsx', import.meta.url), 'utf8');
@@ -50,10 +51,10 @@ const noop = () => {};
 const nav = compile(block(planner, 'const learnerNavItems:', 'function createHomeRailItems(').replace('const learnerNavItems:', 'export const learnerNavItems:')).learnerNavItems;
 const railItems = compile('export '+block(planner, 'function createHomeRailItems(', 'const CreatorAlgorithmDiagnostics')).createHomeRailItems({ label: 'Creator Studio', href: '/creator' });
 const libraries = [{id:'one',slug:'nursing',name:'Nursing'},{id:'two',slug:'science',name:'Science'}];
-function header(role, mode, overrides = {}) {
-  const descriptors = block(planner, '  const classPrefix: LearnerHeaderPrefix =', '  function descendantNodeIds(');
+function header(role, mode, overrides = {}, source = planner) {
+  const descriptors = block(source, '  const classPrefix: LearnerHeaderPrefix =', '  function descendantNodeIds(');
   const prefix = mode === 'study' ? 'study-v2' : 'home-v2';
-  const expressions = planner.split('\n').filter(line => line.trim().startsWith(`<LearnerHeader classPrefix="${prefix}"`));
+  const expressions = source.split('\n').filter(line => line.trim().startsWith(`<LearnerHeader classPrefix="${prefix}"`));
   assert.equal(expressions.length, 1, 'Exercise the actual mounted header expression');
   return compile('export function renderHeader(){'+descriptors+'return '+expressions[0].trim()+';}', {
     ...components, role, mode, learnerNavItems:nav, email:'fixture@example.invalid', isSaving:false,
@@ -111,17 +112,22 @@ for (const role of [null,'learner','editor','admin']) for (const mode of ['dashb
     let original=rendered;
     if(mode==='dashboard') {
       assert.equal(rendered.props.items.some(item=>item.label==='Home'),false);
+      assert.equal(rendered.props.items.length,1);
+      assert.equal(rendered.props.items[0].label,'Profile');
+      assert.equal(rendered.props.items[0].href,'/profile');
+      // Project only the new Home navigation, then the earlier removed Home action.
+      const prior=header(role,mode,{},projectHomeNavigation('components/StudyPlanner.tsx',planner));
       // Project back only the removed Home action; retain every frozen DOM hash.
-      original={...rendered,props:{...rendered.props,items:[{
+      original={...prior,props:{...prior.props,items:[{
         label:'Home',icon:'home',className:'home-v2-nav-item',accountChevron:false,
         kind:'link',href:'/',onClick:noop,prefetch:false,
-      },...rendered.props.items]}};
+      },...prior.props.items]}};
     }
     assert.equal(digest(original),baseline[`header:${role}:${mode}`]);
     const links=all(tree,n=>n.type==='Link');
-    const expected=mode==='dashboard'?['/']:['/','/'];
+    const expected=mode==='dashboard'?['/','/profile']:['/','/'];
     if ((role==='editor'||role==='admin') && mode!=='dashboard') expected.push('/creator/concepts/new');
-    if(role==='admin') expected.push('/admin/users');
+    if(role==='admin' && mode!=='dashboard') expected.push('/admin/users');
     assert.deepEqual(links.map(n=>n.props.href),expected);
     assert.equal(all(tree,n=>n.type==='nav')[0].props['aria-label'],'Socrates learner navigation');
     assert.equal(links[0].props.prefetch,false);
@@ -186,7 +192,7 @@ test('ref-owning Study callback remains deferred through the declarative header 
   button.props.onClick();assert.equal(opened,1);
   assert.doesNotMatch(planner,/function renderLearnerHeader|items\.push\(/);
   assert.equal((planner.match(/<LearnerHeader classPrefix=/g)||[]).length,2);
-  assert.ok(planner.includes(`<LearnerHeader classPrefix="home-v2" brandHref="/" onHomeClick={handleHomeClick} items={mode === 'dashboard' ? items.filter(item => item.label !== 'Home') : items} />`));
+  assert.ok(planner.includes(`<LearnerHeader classPrefix="home-v2" brandHref="/" onHomeClick={handleHomeClick} items={mode === 'dashboard' ? [{ kind: 'link', label: 'Profile', icon: 'account', href: '/profile', className: 'home-v2-nav-item home-v2-profile', accountChevron: false }] : items} />`));
   assert.doesNotMatch(planner, /<SocratesShell variant="header"/);
   assert.match(planner, /<LearnerHeader classPrefix="study-v2"/);
 });

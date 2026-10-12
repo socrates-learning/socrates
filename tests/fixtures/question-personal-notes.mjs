@@ -1,3 +1,4 @@
+import { projectAppearance } from './appearance.mjs';
 import assert from 'node:assert/strict';
 // Only the exact additive My Note entry points are projected. Original source
 // and all existing preservation fingerprints remain authoritative.
@@ -39,6 +40,7 @@ const flaggedPresentation = [
   ]
 ];
 export function projectQuestionPersonalNotes(path, source) {
+  source = projectAppearance(source);
  if (path === "components/study-planner/StatsFlaggedReview.tsx" && source.includes("styles.workspace")) {
   for (const [presented, original] of flaggedPresentation) {
    assert.equal(source.split(presented).length, 2, "Exact Stats Flagged Review presentation");

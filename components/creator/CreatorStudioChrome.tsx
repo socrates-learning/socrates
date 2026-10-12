@@ -149,7 +149,7 @@ export function CreatorStudioTabs({
         padding: '0 12px',
         flexWrap: 'wrap',
         borderBottom: '1px solid #d9dde3',
-        background: 'linear-gradient(180deg, #f8fbff, #eef4fc)',
+        background: 'linear-gradient(180deg, var(--appearance-surface, #f8fbff), var(--appearance-surface, #eef4fc))',
       }}
     >
       {creatorStudioTabs.filter(tab => !learnerPresentation || tab.id === 'questions' || tab.id === 'flagged').map((tab) => {
@@ -168,12 +168,12 @@ export function CreatorStudioTabs({
               minHeight: '48px',
               margin: '0 -1px -1px 0',
               border: '1px solid',
-              borderColor: isActive ? '#9fb8dc' : '#c7d5e8',
+              borderColor: isActive ? 'var(--appearance-line, #9fb8dc)' : 'var(--appearance-line, #c7d5e8)',
               borderBottomColor: isActive ? '#ffffff' : '#d9dde3',
               borderRadius: '10px 10px 0 0',
               padding: '12px clamp(10px, 2vw, 28px) 11px',
-              background: isActive ? '#ffffff' : '#eaf2ff',
-              color: isActive ? '#061846' : '#24405f',
+              background: isActive ? 'var(--appearance-surface, #ffffff)' : 'var(--appearance-soft, #eaf2ff)',
+              color: isActive ? 'var(--appearance-text, #061846)' : 'var(--appearance-text, #24405f)',
               font: 'inherit',
               fontWeight: 800,
               cursor: 'pointer',

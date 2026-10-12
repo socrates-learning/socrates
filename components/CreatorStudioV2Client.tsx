@@ -821,10 +821,10 @@ function mapLearnerPublishedQuestionRow(
 function questionConceptChoiceStyle(selected: boolean, saving: boolean, depth: number) {
   return {
     alignItems: 'center',
-    background: selected ? 'var(--question-associated-surface, #e8f0ff)' : 'var(--question-choice-surface, #f7f9fc)',
-    border: selected ? '1px solid var(--question-associated-border, #8eb2f3)' : '1px solid transparent',
+    background: selected ? 'var(--question-associated-surface, var(--appearance-soft, #e8f0ff))' : 'var(--question-choice-surface, var(--appearance-surface, #f7f9fc))',
+    border: selected ? '1px solid var(--question-associated-border, var(--appearance-line, #8eb2f3))' : '1px solid transparent',
     borderRadius: 8,
-    color: selected ? 'var(--question-choice-color, #0f4eb8)' : 'var(--question-choice-color, #475569)',
+    color: selected ? 'var(--question-choice-color, var(--appearance-link, #0f4eb8))' : 'var(--question-choice-color, var(--appearance-muted, #475569))',
     cursor: saving ? 'not-allowed' : 'pointer',
     display: 'flex',
     fontSize: 14,
@@ -6250,7 +6250,7 @@ export function CreatorStudioV2Client({
         aria-label={`${expanded ? 'Hide' : 'Show'} concepts for ${topic.name}: ${label}`}
         aria-expanded={expanded} aria-controls={`${workspace}-concepts-${(topic.occurrenceKey || topic.key)}`}
         disabled={!ready || count === 0}
-        style={{ flex: '0 0 auto', width: 'auto', minWidth: 0, color: ready && count ? '#52647a' : '#94a3b8',
+        style={{ flex: '0 0 auto', width: 'auto', minWidth: 0, color: ready && count ? 'var(--appearance-muted, #52647a)' : 'var(--appearance-muted, #94a3b8)',
           fontSize: 12, marginLeft: 'auto', paddingRight: 10, whiteSpace: 'nowrap' }}
         onClick={event => {
           event.stopPropagation();
@@ -6411,8 +6411,8 @@ export function CreatorStudioV2Client({
         <TopicDropRow topicKey={topic.edgeKey || topic.key} {...(topic.occurrenceKey ? { occurrenceKey: topic.occurrenceKey } : {})}
           className={`${styles.topicRow} ${isActive ? styles.activeTopicRow : ''}`}
           style={{
-            background: hasConceptsInBranch ? undefined : '#f8fafc',
-            color: hasConceptsInBranch ? undefined : '#94a3b8',
+            background: hasConceptsInBranch ? undefined : 'var(--appearance-surface, #f8fafc)',
+            color: hasConceptsInBranch ? undefined : 'var(--appearance-muted, #94a3b8)',
             paddingLeft: `${12 + depth * 38}px`,
           }}
         >
@@ -6846,8 +6846,8 @@ export function CreatorStudioV2Client({
         <TopicDropRow topicKey={topic.key}
           className={`${styles.topicRow} ${isActive ? styles.activeTopicRow : ''}`}
           style={{
-            background: hasConceptsInBranch ? undefined : '#f8fafc',
-            color: hasConceptsInBranch ? undefined : '#94a3b8',
+            background: hasConceptsInBranch ? undefined : 'var(--appearance-surface, #f8fafc)',
+            color: hasConceptsInBranch ? undefined : 'var(--appearance-muted, #94a3b8)',
             paddingLeft: `${12 + depth * 38}px`,
           }}
         >
@@ -7420,7 +7420,7 @@ export function CreatorStudioV2Client({
                 <div
                   style={{
                     alignItems: 'center',
-                    color: '#687386',
+                    color: 'var(--appearance-muted, #687386)',
                     display: 'flex',
                     flexWrap: 'wrap',
                     fontSize: 13,
@@ -7431,7 +7431,7 @@ export function CreatorStudioV2Client({
                 >
                   <span>
                     Editing:{' '}
-                    <strong style={{ color: '#334155' }}>
+                    <strong style={{ color: 'var(--appearance-text, #334155)' }}>
                       {(conceptId || personalConceptEditorId)
                         ? conceptName || 'Untitled concept'
                         : 'New concept'}
@@ -7450,7 +7450,7 @@ export function CreatorStudioV2Client({
                       gap: 6,
                     }}
                   >
-                    <strong style={{ color: '#334155' }}>Status</strong>
+                    <strong style={{ color: 'var(--appearance-text, #334155)' }}>Status</strong>
                     <select
                       aria-label="Concept status"
                       value={conceptRecordStatus}
@@ -7476,7 +7476,7 @@ export function CreatorStudioV2Client({
                 {normalizedContentConceptSearch && (
                   <div
                     style={{
-                      border: '1px solid #d8e1ef',
+                      border: '1px solid var(--appearance-line, #d8e1ef)',
                       borderRadius: 12,
                       display: 'grid',
                       gap: 4,
@@ -7503,9 +7503,9 @@ export function CreatorStudioV2Client({
                             }
                             style={{
                               alignItems: 'flex-start',
-                              background: isSelected ? '#e8f0ff' : undefined,
-                              borderColor: isSelected ? '#8eb2f3' : undefined,
-                              color: isSelected ? '#0f4eb8' : undefined,
+                              background: isSelected ? 'var(--appearance-soft, #e8f0ff)' : undefined,
+                              borderColor: isSelected ? 'var(--appearance-line, #8eb2f3)' : undefined,
+                              color: isSelected ? 'var(--appearance-link, #0f4eb8)' : undefined,
                               display: 'flex',
                               flexDirection: 'column',
                               justifyContent: 'flex-start',
@@ -7516,11 +7516,11 @@ export function CreatorStudioV2Client({
                               {conceptOption.name}{' '}
 
                             </span>
-                            <small style={{ color: '#687386' }}>
+                            <small style={{ color: 'var(--appearance-muted, #687386)' }}>
                               Concept ID: {conceptOption.id}
                             </small>
                             {firstPath && (
-                              <small style={{ color: '#687386' }}>
+                              <small style={{ color: 'var(--appearance-muted, #687386)' }}>
                                 {firstPath}
                                 {conceptOption.paths.length > 1
                                   ? ` +${conceptOption.paths.length - 1}`
@@ -8695,7 +8695,7 @@ export function CreatorStudioV2Client({
                     {normalizedQuestionConceptSearch && (
                       <div
                         style={{
-                          border: '1px solid #d8e1ef',
+                          border: '1px solid var(--appearance-line, #d8e1ef)',
                           borderRadius: 12,
                           display: 'grid',
                           gap: 4,
@@ -8722,7 +8722,7 @@ export function CreatorStudioV2Client({
                               }}
                             >
                               <span>{option.name}</span>
-                              <small style={{ color: '#687386' }}>
+                              <small style={{ color: 'var(--appearance-muted, #687386)' }}>
                                 {questionConceptSearchPath
                                   ? `${questionConceptSearchPath} · `
                                   : ''}
@@ -8976,7 +8976,7 @@ export function CreatorStudioV2Client({
                     marginTop: 16,
                   }}
                 >
-                  <fieldset className={styles.questionAngles} disabled={isLearnerReadOnly || isSavingQuestion} style={{ minWidth: 0, margin: 0, padding: 12, border: '1px solid #e2e8f0', borderRadius: 8 }}>
+                  <fieldset className={styles.questionAngles} disabled={isLearnerReadOnly || isSavingQuestion} style={{ minWidth: 0, margin: 0, padding: 12, border: '1px solid var(--appearance-line, #e2e8f0)', borderRadius: 8 }}>
                     <legend style={{ fontWeight: 700 }}>Testing Angles</legend>
                     <p style={{ margin: '0 0 10px' }}>Choose one Primary angle and any additional angles. Primary guides learner evidence; Additional angles classify the Question.</p>
                     <input type="search" aria-label="Search Testing Angles" value={additionalAngleSearch} onChange={(event) => setAdditionalAngleSearch(event.target.value)} style={{ width: '100%', boxSizing: 'border-box', marginBottom: 8 }} />

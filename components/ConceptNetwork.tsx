@@ -202,8 +202,8 @@ export function ConceptNetwork({
             display: 'grid',
             placeItems: 'center',
             textAlign: 'center',
-            background: '#eff6ff',
-            borderColor: '#2563eb',
+            background: 'var(--appearance-surface, #eff6ff)',
+            borderColor: 'var(--appearance-focus, #2563eb)',
           }}
         >
           <strong>{conceptName}</strong>
@@ -224,8 +224,8 @@ export function ConceptNetwork({
               display: 'grid',
               placeItems: 'center',
               textAlign: 'center',
-              background: concept.hop === 1 ? '#ffffff' : '#f8fafc',
-              borderColor: concept.hop === 1 ? '#94a3b8' : '#cbd5e1',
+              background: concept.hop === 1 ? 'var(--appearance-surface, #ffffff)' : 'var(--appearance-surface, #f8fafc)',
+              borderColor: concept.hop === 1 ? 'var(--appearance-line, #94a3b8)' : 'var(--appearance-line, #cbd5e1)',
             }}
           >
             <strong>{concept.name}</strong>

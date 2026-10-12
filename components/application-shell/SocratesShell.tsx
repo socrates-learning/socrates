@@ -56,11 +56,17 @@ type NavigationProps = {
   onLogout?: () => void | Promise<void>;
 };
 
-export function ApplicationNavigation({ active, role, onHome, onStats, onCreator, onLogout, compact = false, branded = false, onComplete }: NavigationProps & { compact?: boolean; branded?: boolean; onComplete?: () => void }) {
+export function ApplicationNavigation({ active, role, onHome, onStats, onCreator, onLogout, compact = false, branded = false, home = false, onComplete }: NavigationProps & { compact?: boolean; branded?: boolean; home?: boolean; onComplete?: () => void }) {
   const context = useContext(Context);
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const actionPending = useRef(false);
+  const entries = applicationNavigation.filter(item =>
+    (item.kind !== 'link' || !item.adminOnly || role === 'admin') && (!home || item.id !== 'menu'));
+  if (home) {
+    const order = ['home', 'creator', 'stats', 'admin', 'account'];
+    entries.sort((left, right) => order.indexOf(left.id) - order.indexOf(right.id));
+  }
   async function logout() {
     if (actionPending.current || !(context?.allowNavigation() ?? true)) return;
     actionPending.current = true;
@@ -74,7 +80,7 @@ export function ApplicationNavigation({ active, role, onHome, onStats, onCreator
     } finally { actionPending.current = false; setBusy(false); }
   }
   return <nav className={`${styles.navigation} ${compact ? styles.icons : ''}`} aria-label="Socrates workspaces">
-    <div className={styles.entries}>{applicationNavigation.filter(item => item.kind !== 'link' || !item.adminOnly || role === 'admin').map(item => {
+    <div className={styles.entries}>{entries.map(item => {
       const content = <><span aria-hidden="true" className={styles.icon}>{branded ? <WorkspaceIcon id={item.id} /> : item.icon}</span><span className={styles.label}>{item.label}</span></>;
       return item.kind === 'button'
         ? <button key={item.id} type="button" aria-label={item.label} title={item.label}>{content}</button>
@@ -93,7 +99,7 @@ export function ApplicationNavigation({ active, role, onHome, onStats, onCreator
   </nav>;
 }
 
-export function SocratesShell({ children, variant = 'compact', ...navigation }: NavigationProps & { children?: ReactNode; variant?: 'home' | 'compact' | 'header' }) {
+export function SocratesShell({ children, variant = 'compact', headerAction, ...navigation }: NavigationProps & { children?: ReactNode; variant?: 'home' | 'compact' | 'header'; headerAction?: ReactNode }) {
   const pathname = usePathname();
   const context = useContext(Context);
   const router = useRouter();
@@ -122,6 +128,7 @@ export function SocratesShell({ children, variant = 'compact', ...navigation }: 
         }}><Image src="/brand/socrates-logo-dark.png" alt="Socrates — Learn anything." width={270} height={152} priority /></Link>
         <div className={styles.headerNavigation}><ApplicationNavigation {...navigation} active={active} branded /></div>
         <button ref={trigger} className={styles.headerTrigger} type="button" aria-label="Open workspace navigation" aria-haspopup="dialog" onClick={() => dialog.current?.showModal()}><WorkspaceIcon id="menu" />Navigation</button>
+        {headerAction}
       </header>
       <dialog ref={dialog} className={styles.drawer} aria-label="Workspace navigation" onClose={() => trigger.current?.focus()}>
         <button type="button" onClick={close} aria-label="Close workspace navigation">Close</button>
@@ -133,11 +140,11 @@ export function SocratesShell({ children, variant = 'compact', ...navigation }: 
   return <div className={variant === 'home' ? styles.home : styles.frame}>
     <aside className={styles.rail}>
       <button ref={trigger} className={styles.trigger} type="button" aria-label="Open workspace navigation" aria-haspopup="dialog" onClick={() => dialog.current?.showModal()}>☰</button>
-      <div className={styles.desktop}><ApplicationNavigation {...navigation} active={active} compact={variant !== 'home'} /></div>
+      <div className={styles.desktop}><ApplicationNavigation {...navigation} active={active} compact={variant !== 'home'} home={variant === 'home'} /></div>
     </aside>
     <dialog ref={dialog} className={styles.drawer} aria-label="Workspace navigation" onClose={() => trigger.current?.focus()}>
       <button type="button" onClick={close} aria-label="Close workspace navigation">Close</button>
-      <ApplicationNavigation {...navigation} active={active} onComplete={close} />
+      <ApplicationNavigation {...navigation} active={active} home={variant === 'home'} onComplete={close} />
     </dialog>
     {children && <div className={styles.workspace}>{children}</div>}
   </div>;
