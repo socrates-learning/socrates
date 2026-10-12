@@ -282,7 +282,8 @@ test('Creator header opt-in is staff-only; learners keep the released compact na
 test('Home dashboard keeps the released sidebar, complete white column and independent Logout with no profile menu', () => {
   assert.match(planner, /<LearnerHeader classPrefix="home-v2"/);
   assert.match(planner, /<SocratesShell variant="home" active="home"/);
-  assert.match(planner, /<SocratesShell active="stats"/);
+  assert.doesNotMatch(planner, /<SocratesShell active="stats"/);
+  assert.match(planner, /<div className=\{statsStyles.workspace\}>/);
   assert.doesNotMatch(planner, /variant="header"|home-v2-shell-top-nav/);
   const styles = read('components/application-shell/SocratesShell.module.css');
   const boundedHome = `@media (min-width: 1101px) {

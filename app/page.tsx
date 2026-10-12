@@ -1,5 +1,6 @@
 import { StudyPlanner } from '@/components/StudyPlanner';
 import './home.css';
+import './study-history.css';
 import { resolveActiveLibraryContext } from '@/lib/library-context';
 import { loadStudyPlannerInitialData } from '@/lib/study-planner-initial-data';
 import { headers } from 'next/headers';

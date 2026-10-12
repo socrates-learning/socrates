@@ -99,15 +99,27 @@ export function StatsFlaggedReview({ ownerId, libraryId }: { ownerId: string; li
       if (liveScope.current === scope) setRemoving(false);
     }
   }
-  return <section className={styles.review} aria-label="Flagged Review">
-    <h3>Flagged Review</h3>
+  return <section className={`${styles.review} ${styles.workspace}`} aria-label="Flagged Review">
+    <header className={styles.heading}>
+      <div className={styles.intro}>
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 22V3m0 1c5-5 11 4 16-1v12c-5 5-11-4-16 1" /></svg>
+        <div><h3>Flagged Review</h3><p>Review your flagged Questions and personal Cards.</p></div>
+      </div>
+      <label className={styles.search}>
+        <span className={styles.srOnly}>Search flags</span>
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="10" cy="10" r="6" /><path d="m15 15 5 5" /></svg>
+        <input type="search" placeholder="Search flags…" value={search} onChange={event => setSearch(event.target.value)} />
+      </label>
+    </header>
     <div className={styles.columns}>
       <section className={styles.panel} aria-label="Your flagged items">
         <h4>Flagged items{current?.items && ` (${items.length})`}</h4>
-        <label className={styles.search}>Search flags<input type="search" value={search} onChange={event => setSearch(event.target.value)} /></label>
-        {!current ? <p role="status">Loading your flags…</p> : !current.items ? <div role="alert"><p>Your flags could not be loaded.</p><button type="button" onClick={() => setAttempt(value => value + 1)}>Retry</button></div> : <>
-          {!items.length && <p>No flagged material yet.</p>}
-          {items.length > 0 && !visible.length && <p>No flags match your search.</p>}
+        {!current ? <p className={styles.state} role="status">Loading your flags…</p> : !current.items ? <div className={styles.state} role="alert"><p>Your flags could not be loaded.</p><button type="button" onClick={() => setAttempt(value => value + 1)}>Retry</button></div> : <>
+          {!items.length && <div className={styles.state}>
+            <span className={styles.stateIcon}><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M6 3h12v18l-6-4-6 4Z" /></svg></span>
+            <strong>No flagged material yet.</strong><p>Flag a Question or personal Card while studying to find it here.</p>
+          </div>}
+          {items.length > 0 && !visible.length && <div className={styles.state}><strong>No flags match your search.</strong><p>Try a different Question, Card, or flag note.</p></div>}
           <div className={styles.list} tabIndex={0} role="region" aria-label="Flagged items list">{visible.map(item => <button type="button" key={item.flag.id}
             className={styles.row} aria-pressed={selected?.flag.id === item.flag.id} disabled={removing}
             onClick={() => { setSelectedId(item.flag.id); setConceptOpen(false); setRemoveError(''); }}>
@@ -139,7 +151,10 @@ export function StatsFlaggedReview({ ownerId, libraryId }: { ownerId: string; li
           </div>
           {removeError && <p role="alert">{removeError}</p>}
           {conceptOpen && <FlaggedConcept key={`${scope}:${selected.flag.id}`} item={selected} ownerId={ownerId} libraryId={libraryId} onClose={closeConcept} />}
-        </> : <p>Select a flagged item to review it.</p>}
+        </> : <div className={styles.state}>
+          <span className={styles.stateIcon}><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="5" y="2" width="14" height="20" rx="1" /><path d="M8 7h8M8 11h8M8 15h5" /></svg></span>
+          <strong>No item selected</strong><p>Select a flagged item to review it.</p>
+        </div>}
       </section>
     </div>
   </section>;

@@ -21,6 +21,7 @@ import { MarkdownContent, cardMarkdownSummary, questionMarkdownKind, questionMar
 import ConceptMediaContent from '@/components/ConceptMediaContent';
 import { LearnerHeader, LibrarySubjectSwitcher, PlannerFallback, type LearnerHeaderPrefix, type LearnerNavIcon, type HeaderItem } from '@/components/study-planner/LearnerShell';
 import { PlannerStats } from '@/components/study-planner/PlannerStats';
+import statsStyles from '@/components/study-planner/StatsProgress.module.css';
 import { StudyModeStyles } from '@/components/study-planner/StudyModeStyles';
 import {
   getBootstrapErrorMessage,
@@ -3011,14 +3012,14 @@ export function StudyPlanner({
   return (
     <>
       <LearnerHeader classPrefix="home-v2" brandHref="/" onHomeClick={handleHomeClick} items={mode === 'dashboard' ? items.filter(item => item.label !== 'Home') : items} />
-      <main className={`home-v2-shell${mode === 'stats' ? ' home-v2-shell-stats' : ''}`} data-home-dashboard={mode === 'dashboard' ? '' : undefined}>
+      <main className={`home-v2-shell${mode === 'stats' ? ` home-v2-shell-stats ${statsStyles.shell}` : ''}`} data-home-dashboard={mode === 'dashboard' ? '' : undefined}>
         {mode !== 'stats' && (
           <SocratesShell variant="home" active="home" onHome={handleHomeClick} onStats={() => openStatsTab('progress')} onLogout={handleLogout} onCreator={handleCreatorClick} />
         )}
 
         <section className="home-v2-workspace">
           {mode === 'stats' ? (
-            <SocratesShell active="stats" onHome={handleHomeClick} onStats={() => openStatsTab('progress')} onLogout={handleLogout} onCreator={handleCreatorClick}>
+            <div className={statsStyles.workspace}>
             <PlannerStats
               activeTab={statsTab} onTabChange={openStatsTab}
               libraryName={activeLibrary.name} progress={learnerProgress} progressError={learnerProgressError}
@@ -3038,7 +3039,7 @@ export function StudyPlanner({
             />
             {statsTab === 'flagged' && userId && <StatsFlaggedReview key={`${userId}:${activeLibrary.id}`} ownerId={userId} libraryId={activeLibrary.id} />}
             {statsTab === 'progress' && userId && <StudyGoals key={`${userId}:${activeLibrary.id}`} libraryId={activeLibrary.id} requestScope={userId} />}
-            </SocratesShell>
+            </div>
           ) : (
             <>
               <div className="home-v2-topline">

@@ -95,11 +95,10 @@ export function StudyGoals({ libraryId, requestScope }: Props) {
     finally { mutation.current = false; setBusy(false); }
   }
 
-  return <><section className={styles.goals} aria-labelledby="study-goals-title">
+  return <div className={styles.layout}><section className={styles.goals} aria-labelledby="study-goals-title">
     <div className={styles.header}><div><h3 id="study-goals-title">Study goals</h3><p>Choose a deadline and Topics for an exam, course or quiz.</p></div>
       <button type="button" ref={newButton} className={styles.primary} disabled={!data || busy || loading || !!draft} onClick={() => edit()}>New goal</button>
     </div>
-    <p>Goals track available material in your chosen Topics without changing Study selections or sliders. Overlapping goals share progress; their daily targets are not additive.</p>
     {loading && <p role="status">Loading study goals…</p>}
     {error && <div role="alert"><p>{error}</p><button type="button" disabled={busy || loading} onClick={() => void reload()}>Retry / refresh goals</button></div>}
     {notice && <p role="status">{notice}</p>}
@@ -119,7 +118,10 @@ export function StudyGoals({ libraryId, requestScope }: Props) {
       {draft.topics.some(k => !data.topics.some(t => topicKey(t) === k)) && <p role="alert">Some saved Topics are no longer available. <button type="button" onClick={() => setDraft({ ...draft, topics: draft.topics.filter(k => data.topics.some(t => topicKey(t) === k)) })}>Remove unavailable Topics from this goal</button></p>}
       <div className={styles.actions}><button className={styles.primary} disabled={busy || !draft.topics.length || !draft.name.trim()} type="submit">{busy ? 'Saving…' : 'Save goal'}</button><button type="button" disabled={busy} onClick={() => { setDraft(null); newButton.current?.focus(); }}>Cancel</button></div>
     </form>}
-    {data && !data.goals.length && !loading && <p>No goals yet. Create one to track coverage and mastery toward a deadline.</p>}
+    {data && !data.goals.length && !loading && <div className={styles.empty}>
+      <svg aria-hidden="true" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M7 3v4m10-4v4M3 11h18" /></svg>
+      <h4>No goals yet</h4><p>Create a goal to track coverage and mastery toward a deadline.</p>
+    </div>}
     <div className={styles.list}>{data?.goals.map(goal => {
       const p = goal.progress, forecast = goalForecast(goal, data.today);
       const selected = new Set([...goal.official_topic_ids.map(id => `official:${id}`), ...goal.personal_topic_ids.map(id => `personal:${id}`)]);
@@ -135,12 +137,14 @@ export function StudyGoals({ libraryId, requestScope }: Props) {
         {!forecast.complete && <div className={styles.estimate}>
           <p>{forecast.forecastDate ? `Estimated completion: around ${goalDate(forecast.forecastDate)}, if your recent pace continues.` : 'A reliable completion date is not available yet.'}</p>
           {forecast.perDay !== null ? <p>Plan for about <strong>{forecast.perDay} {goal.objective === 'coverage' ? (forecast.perDay === 1 ? 'Question / Card' : 'Questions / Cards') : (forecast.perDay === 1 ? 'Question' : 'Questions')} per day</strong> at your observed progress per response.{forecast.minutes !== null ? ` Estimated session time: about ${forecast.minutes} ${forecast.minutes === 1 ? 'minute' : 'minutes'} per day, including pauses.` : ' More completed sessions are needed to estimate daily study time.'}</p> : forecast.minimumPerDay !== null && goal.objective === 'coverage' ? <p>At least {forecast.minimumPerDay} not-yet-reviewed {forecast.minimumPerDay === 1 ? 'Question / Card per day is' : 'Questions / Cards per day are'} needed by the deadline. Repeat reviews may require more; there is not enough history to estimate that workload or time.</p> : <p>{forecast.daysLeft <= 0 ? 'The deadline has passed. This goal stays visible; you can set a new date.' : 'More study history is needed to estimate a daily workload and study time.'}</p>}
-          <small>Estimates use up to 28 calendar days, including days off, and need at least 7 observed days, 3 study days, 10 responses and 3 {goal.objective === 'mastery' ? 'mastered Concepts first studied in that period' : 'newly reviewed items'}. {goal.objective === 'mastery' ? 'Older Concepts still count toward progress, but do not provide a known mastery completion date.' : 'Coverage pace counts first reviews, not repeat answers.'} Future content changes and learning pace can change the estimate.</small>
+          <details className={styles.explanation}><summary>How estimates are calculated</summary><small>Estimates use up to 28 calendar days, including days off, and need at least 7 observed days, 3 study days, 10 responses and 3 {goal.objective === 'mastery' ? 'mastered Concepts first studied in that period' : 'newly reviewed items'}. {goal.objective === 'mastery' ? 'Older Concepts still count toward progress, but do not provide a known mastery completion date.' : 'Coverage pace counts first reviews, not repeat answers.'} Future content changes and learning pace can change the estimate.</small></details>
         </div>}
         <div className={styles.actions}><button type="button" disabled={busy || loading || !!draft} onClick={() => edit(goal)}>Edit {goal.name}</button><button type="button" className={styles.danger} disabled={busy || loading || !!draft} onClick={() => setRemoveId(goal.id)}>Remove {goal.name}</button></div>
         {removeId === goal.id && <div role="group" aria-label={`Remove ${goal.name}?`}><p>Remove this goal? Learning history will stay intact.</p><div className={styles.actions}><button type="button" className={styles.danger} disabled={busy} onClick={() => void remove(goal)}>Confirm removal</button><button type="button" disabled={busy} onClick={() => setRemoveId(null)}>Keep goal</button></div></div>}
       </article>;
     })}</div>
+    <p className={styles.note}>Goals track available material in your chosen Topics without changing Study selections or sliders. Overlapping goals share progress; their daily targets are not additive.</p>
+  </section><StudyAdvisor libraryId={libraryId} requestScope={requestScope} goals={loading || error ? null : data} />
     {data && <p className={styles.updated}>Progress through {goalDate(data.today)} (UTC). Counts reflect current eligible material, deduplicated across shared Topic locations. <button type="button" disabled={busy || loading} onClick={() => void reload()}>Refresh progress</button></p>}
-  </section><StudyAdvisor libraryId={libraryId} requestScope={requestScope} goals={loading || error ? null : data} /></>;
+  </div>;
 }

@@ -34,14 +34,17 @@ export function StudyAdvisor({ libraryId, requestScope, goals }: Props) {
   return <section className={styles.goals} aria-labelledby="study-advisor-title" aria-busy={loading}>
     <div className={styles.header}><div><h3 id="study-advisor-title">Study Advisor</h3><p>Suggestions from your recent study evidence.</p></div>
       <button type="button" disabled={loading} onClick={() => setRefresh(value => value + 1)}>{error ? 'Retry Advisor' : 'Refresh advice'}</button></div>
-    <p>Advisory only. Your goals, sliders and Study selections stay under your control.</p>
     {loading && <p role="status">Loading your study evidence…</p>}
     {error && <p role="alert">{error}</p>}
     {current && <>
-      {!advice.length && <p>No specific recommendation yet. There may be too little recent evidence, or no pattern strong enough to suggest a change. Keep using Study and check back as your history grows.</p>}
-      {advice.map(item => <article key={item.id} className={styles.card}><h4>{item.title}</h4><p><strong>Observed: </strong>{item.observed}</p><p><strong>Why it matters: </strong>{item.why}</p><p><strong>Consider: </strong>{item.action}</p></article>)}
+      {!advice.length && <div className={styles.advisorEmpty}>
+        <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M9 18h6m-5 3h4M8 14a7 7 0 1 1 8 0c-1 1-1 2-1 4H9c0-2 0-3-1-4Z" /></svg>
+        <div><h4>No specific recommendation yet.</h4><p>There may be too little recent evidence, or no pattern strong enough to suggest a change. Keep using Study and check back as your history grows.</p></div>
+      </div>}
+      {advice.map(item => <article key={item.id} className={styles.card}><h4>{item.title}</h4><p><strong>Consider: </strong>{item.action}</p><details className={styles.explanation}><summary>Why this advice?</summary><p><strong>Observed: </strong>{item.observed}</p><p><strong>Why it matters: </strong>{item.why}</p></details></article>)}
       {!goals && <p>Goal progress is not available yet; deadline advice is withheld until it loads.</p>}
-      <p className={styles.updated}>Evidence through {goalDate(current.today)} (UTC), from the last 28 days. Topic advice needs at least 7 observed days and 3 study days. Retention advice needs 12 repeat responses and repeated difficulty on at least 3 items; coverage advice needs 20 responses. Shared Topic locations and overlapping material do not create duplicate suggestions. Refresh progress above to update goal forecasts.</p>
+      <details className={styles.explanation}><summary>Evidence and criteria</summary><p>Evidence through {goalDate(current.today)} (UTC), from the last 28 days. Topic advice needs at least 7 observed days and 3 study days. Retention advice needs 12 repeat responses and repeated difficulty on at least 3 items; coverage advice needs 20 responses. Shared Topic locations and overlapping material do not create duplicate suggestions. Refresh progress below to update goal forecasts.</p></details>
     </>}
+    <p className={styles.note}>Advisory only. Your goals, sliders and Study selections stay under your control.</p>
   </section>;
 }

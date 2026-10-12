@@ -1,3 +1,4 @@
+import { projectStatsProgress } from './fixtures/stats-progress-presentation.mjs';
 import { projectStatsFlagged } from './fixtures/stats-flagged-review.mjs';
 import * as topicGraphModule from '../lib/topic-placement-graph.ts';
 import assert from 'node:assert/strict';
@@ -30,7 +31,7 @@ function cases(){const result={};for(const role of ['learner','editor','admin'])
 
 const planner=readFileSync(new URL('../components/StudyPlanner.tsx',import.meta.url),'utf8');
 const stats=readFileSync(new URL('../components/study-planner/PlannerStats.tsx',import.meta.url),'utf8');
-const {PlannerStats}=compile(projectStatsFlagged('components/study-planner/PlannerStats.tsx', stats),{Date:FixtureDate});
+const {PlannerStats}=compile(projectStatsFlagged('components/study-planner/PlannerStats.tsx', projectStatsProgress('components/study-planner/PlannerStats.tsx', stats)),{Date:FixtureDate});
 function render(f){
  const panel=block(planner,"algorithmPanel={",'\n            />').slice('algorithmPanel={'.length,-1);
  const algorithmPanel=compile('export function panel(){return ('+panel+');}',{statsTab:f.tab,canViewAlgorithmDiagnostics:f.role==='editor'||f.role==='admin',activeLibrary:{id:'library'},userId:'fixture-user',CreatorAlgorithmDiagnostics:'Diagnostics'}).panel();

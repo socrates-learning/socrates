@@ -1,7 +1,8 @@
 'use client';
 
 import { occurrenceExpanded, topicGraphOccurrences, type OfficialTopicGraph, type TopicOccurrence } from '@/lib/topic-placement-graph';
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
+import styles from './StatsProgress.module.css';
 import type { StudyPlannerInitialData } from '@/lib/study-planner-initial-data';
 
 type Progress = StudyPlannerInitialData['learnerProgress'];
@@ -29,6 +30,10 @@ function HomeProgressBar({ value }: { value: number }) {
     <div
       className="home-v2-progress"
       aria-label={`${value}% coverage-adjusted progress`}
+      role="progressbar"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={value}
     >
       <span style={{ width: `${value}%` }} />
     </div>
@@ -63,13 +68,15 @@ export function PlannerStats({ graph, activeTab, onTabChange, libraryName, progr
 
     return (
       <div key={'occurrenceKey' in node ? node.occurrenceKey : node.id}>
-        <div className="home-v2-tree-row" style={{ paddingLeft: 10 + depth * 34 }}>
+        <div className="home-v2-tree-row" style={{ '--topic-depth': depth } as CSSProperties}>
+          <div className={styles.topic}>
           <button
             aria-label={
               hasChildren
                 ? `${isExpanded ? 'Collapse' : 'Expand'} ${node.name}`
                 : undefined
             }
+            aria-expanded={hasChildren ? isExpanded : undefined}
             className="home-v2-chevron"
             disabled={!hasChildren}
             type="button"
@@ -81,6 +88,7 @@ export function PlannerStats({ graph, activeTab, onTabChange, libraryName, progr
             <span className="home-v2-topic-name">{node.name}</span>
             <small>{formatProgressDetail(metric)}</small>
           </span>
+          </div>
           <HomeProgressBar value={progress} />
           <span className="home-v2-percent">{progress}%</span>
         </div>
@@ -93,14 +101,14 @@ export function PlannerStats({ graph, activeTab, onTabChange, libraryName, progr
 
   return (
             <>
-              <div className="home-v2-topline home-v2-stats-heading">
+              <div className={styles.heading}>
                 <div>
                   <h2>Stats</h2>
                   <p>Track your progress and learning activity.</p>
                 </div>
               </div>
 
-              <nav className="home-v2-stats-tabs" aria-label="Stats sections" role="tablist">
+              <nav className={styles.tabs} aria-label="Stats sections" role="tablist">
                 {(['progress', 'history'] as const).map((tab) => (
                   <button
                     aria-selected={activeTab === tab}
@@ -128,7 +136,7 @@ export function PlannerStats({ graph, activeTab, onTabChange, libraryName, progr
               </nav>
 
               {activeTab === 'progress' && (
-                <section className="home-v2-deck-card" aria-labelledby="tree-title">
+                <section className={`home-v2-deck-card ${styles.deck}`} aria-labelledby="tree-title">
                   <h3 id="tree-title">
                     Current Deck: <span>{libraryName}</span>
                   </h3>

@@ -1,3 +1,4 @@
+import { projectStatsProgress } from './fixtures/stats-progress-presentation.mjs';
 import { projectStudyFlaggedCorrections } from './fixtures/study-flagged-corrections.mjs';
 import { projectSharedTopicSource } from './fixtures/shared-topic-branches.mjs';
 import { projectStudyGoals } from './fixtures/study-goals.mjs';
@@ -65,7 +66,7 @@ test('only approved Content/Question presentation and Question selection differ 
   assert.equal(hash(projectNavyPresentation(projectQuestionSelection(projectQuestionPresentation(projectTagManagerPresentation(source))))), "3f918a1d04a8ae237a95fbe350a201f6ce7a77a45091d79f826a80d69a78ae04");
 });
 test('Home, Stats and Study/Cram match released 9585d78 after only the approved dashboard presentation projection', () => {
-  let planner = projectStudyGoals(projectSharedTopicSource('components/StudyPlanner.tsx', projectStudyFlaggedCorrections('components/StudyPlanner.tsx', read('components/StudyPlanner.tsx'))));
+  let planner = projectStudyGoals(projectSharedTopicSource('components/StudyPlanner.tsx', projectStudyFlaggedCorrections('components/StudyPlanner.tsx', projectStatsProgress('components/StudyPlanner.tsx', read('components/StudyPlanner.tsx')))));
   const homeHeader = `<LearnerHeader classPrefix="home-v2" brandHref="/" onHomeClick={handleHomeClick} items={mode === 'dashboard' ? items.filter(item => item.label !== 'Home') : items} />`;
   assert.equal(planner.split(homeHeader).length, 2);
   planner = planner.replace(homeHeader, '<LearnerHeader classPrefix="home-v2" brandHref="/" onHomeClick={handleHomeClick} items={items} />');
