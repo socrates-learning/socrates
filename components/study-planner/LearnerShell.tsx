@@ -2,6 +2,7 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
+import { HomeProfileAvatar } from '@/components/HomeProfileAvatar';
 import type { MouseEventHandler, ReactNode } from 'react';
 
 export type LearnerHeaderPrefix = 'home-v2' | 'study-v2';
@@ -155,6 +156,9 @@ export function LearnerHeader({ classPrefix, brandHref, onHomeClick, items }: {
 
         <nav className={`${classPrefix}-nav`} aria-label="Socrates learner navigation">
           {items.map((item) => {
+            if (classPrefix === 'home-v2' && item.kind === 'link' && item.href === '/profile' && item.className.split(' ').includes('home-v2-profile')) {
+              return <HomeProfileAvatar key={item.label} className={item.className} onClick={item.onClick} />;
+            }
             const content = <><LearnerHeaderIcon icon={item.icon} classPrefix={classPrefix} />{item.label}{item.accountChevron && <span aria-hidden="true">⌄</span>}</>;
             return item.kind === 'link' ? (
               <Link className={item.className} href={item.href} key={item.label} onClick={item.onClick} prefetch={item.prefetch}>{content}</Link>

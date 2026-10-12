@@ -17,6 +17,7 @@ function compile(source, bindings = {}) {
     if (name === 'react/jsx-runtime') return { jsx, jsxs: jsx, Fragment: 'fragment' };
     if (name === 'next/image') return { __esModule: true, default: 'Image' };
     if (name === 'next/link') return { __esModule: true, default: 'Link' };
+    if (name === '@/components/HomeProfileAvatar') return { HomeProfileAvatar: props => jsx('Link', { ...props, href: '/profile', 'aria-label': 'Open Profile' }) };
     throw new Error(`Unexpected presentation dependency: ${name}`);
   } });
   return exports;
