@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import DeleteAccount from '@/components/DeleteAccount';
 import Image from 'next/image';
 import { ArrowLeft, BookOpen, ExternalLink, LockKeyhole, Palette, RefreshCw, UserRound } from 'lucide-react';
 import { AppearanceSelector } from '@/components/AppearanceSelector';
@@ -158,6 +159,7 @@ export default async function AccountPage() {
           <section className={styles.panel} aria-labelledby="account-security-title">
             <div className={styles.heading}><span className={styles.icon}><LockKeyhole aria-hidden="true" /></span><div><h2 id="account-security-title">Account Security</h2><p>Manage your account security.</p></div></div>
             <div className={styles.security}><div><h3>Email &amp; Password</h3><p>Use your existing secure account controls in Profile.</p></div><Link href="/profile?section=security">Manage Security<ExternalLink size={15} aria-hidden="true" /></Link></div>
+            <DeleteAccount />
           </section>
         </div>
       </main>

@@ -39,6 +39,9 @@ export function PersonalProfile({ initialTab = 'information', email, initialDisp
 }) {
   const router = useRouter();
   const [tab, setTab] = useState<'information' | 'security' | 'preferences'>(initialTab);
+  // Do not expose hidden credential fields to browser autofill before the
+  // learner opens Security. Once opened, retain that tab's unsaved drafts.
+  const [securityVisited, setSecurityVisited] = useState(initialTab === 'security');
   const [details, setDetails] = useState(initialDetails);
   const [savedDetails, setSavedDetails] = useState(initialDetails);
   const [securityDirty, setSecurityDirty] = useState(false);
@@ -46,6 +49,11 @@ export function PersonalProfile({ initialTab = 'information', email, initialDisp
   const securityState = useCallback((dirty: boolean, pending: boolean) => { setSecurityDirty(dirty); setSecurityBusy(pending); }, []);
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const leaving = useRef(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const confirmation = useRef<HTMLDialogElement>(null);
+  const keepEditing = useRef<HTMLButtonElement>(null);
+  const returnFocus = useRef<HTMLElement | null>(null);
+  const requestedNavigation = useRef<(() => void) | null>(null);
   const [savedName, setSavedName] = useState(initialDisplayName);
   const [displayName, setDisplayName] = useState(initialDisplayName);
   const [savedPhoto, setSavedPhoto] = useState<Blob | null>(null);
@@ -63,12 +71,50 @@ export function PersonalProfile({ initialTab = 'information', email, initialDisp
   const detailsDirty = JSON.stringify(details) !== JSON.stringify(savedDetails);
   const profileDirty = displayName !== savedName || detailsDirty || Boolean(file) || removePhoto;
   const dirty = profileDirty || securityDirty;
-  const mayLeave = useCallback(() => {
+  const mayLeave = useCallback((resume?: () => void) => {
     if (saving.current || securityBusy) return false;
-    if (dirty && !window.confirm('Discard your unsaved profile changes?')) return false;
+    if (dirty) {
+      if (resume && !requestedNavigation.current) {
+        requestedNavigation.current = resume;
+        returnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        setConfirmOpen(true);
+      }
+      return false;
+    }
     leaving.current = true; return true;
   }, [dirty, securityBusy]);
   useSocratesNavigationGuard(mayLeave);
+
+  useEffect(() => { if (dirty) leaving.current = false; }, [dirty]);
+  useEffect(() => {
+    if (confirmOpen && confirmation.current && !confirmation.current.open) {
+      confirmation.current.showModal();
+      keepEditing.current?.focus();
+    }
+  }, [confirmOpen]);
+
+  function cancelNavigation() {
+    requestedNavigation.current = null;
+    setConfirmOpen(false);
+    confirmation.current?.close();
+    returnFocus.current?.focus();
+    returnFocus.current = null;
+  }
+  function discardAndLeave() {
+    if (saving.current || securityBusy) return;
+    const navigate = requestedNavigation.current;
+    requestedNavigation.current = null;
+    discard();
+    setSecurityVisited(false); setSecurityDirty(false);
+    leaving.current = true;
+    setConfirmOpen(false);
+    confirmation.current?.close();
+    navigate?.();
+  }
+  function openTab(next: typeof tab) {
+    if (next === 'security') setSecurityVisited(true);
+    setTab(next);
+  }
 
   useEffect(() => {
     const leave = (event: BeforeUnloadEvent) => { if (!leaving.current && (dirty || saving.current || securityBusy)) { event.preventDefault(); event.returnValue = ''; } };
@@ -151,7 +197,7 @@ export function PersonalProfile({ initialTab = 'information', email, initialDisp
     { id: 'security' as const, label: 'Account Security', Icon: LockKeyhole },
     { id: 'preferences' as const, label: 'Preferences', Icon: Settings },
   ];
-  return <div className={styles.shell}><SocratesShell variant="header" role={role} onHome={() => { window.location.assign('/'); }} headerAction={<button type="button" className={styles.backHome} onClick={() => { if (mayLeave()) window.location.assign('/'); }}><ArrowLeft aria-hidden="true" />Back to Home</button>}>
+  return <div className={styles.shell}><SocratesShell variant="header" role={role} onHome={() => { window.location.assign('/'); }} headerAction={<button type="button" className={styles.backHome} onClick={() => { const navigate = () => window.location.assign('/'); if (mayLeave(navigate)) navigate(); }}><ArrowLeft aria-hidden="true" />Back to Home</button>}>
     <main className={styles.page}>
       <div className={styles.heading}><h1>Profile</h1><p>Manage your personal information and account settings.</p></div>
       <div className={styles.grid}>
@@ -163,14 +209,14 @@ export function PersonalProfile({ initialTab = 'information', email, initialDisp
           <blockquote className={styles.quote}>“A disciplined mind leads to a brighter tomorrow.”<span>A DAILY REMINDER</span></blockquote>
         </section>
         <section className={`${styles.panel} ${styles.editor}`} aria-label="Profile settings">
-          <div className={styles.tabs} role="tablist" aria-label="Profile settings">{tabs.map(({ id, label, Icon }, index) => <button key={id} ref={element => { tabRefs.current[index] = element; }} id={`profile-tab-${id}`} role="tab" type="button" aria-selected={tab === id} aria-controls={`profile-panel-${id}`} tabIndex={tab === id ? 0 : -1} onClick={() => setTab(id)} onKeyDown={event => {
+          <div className={styles.tabs} role="tablist" aria-label="Profile settings">{tabs.map(({ id, label, Icon }, index) => <button key={id} ref={element => { tabRefs.current[index] = element; }} id={`profile-tab-${id}`} role="tab" type="button" aria-selected={tab === id} aria-controls={`profile-panel-${id}`} tabIndex={tab === id ? 0 : -1} onClick={() => openTab(id)} onKeyDown={event => {
             let next = index;
             if (event.key === 'ArrowRight') next = (index + 1) % tabs.length;
             else if (event.key === 'ArrowLeft') next = (index + tabs.length - 1) % tabs.length;
             else if (event.key === 'Home') next = 0;
             else if (event.key === 'End') next = tabs.length - 1;
             else return;
-            event.preventDefault(); setTab(tabs[next].id); tabRefs.current[next]?.focus();
+            event.preventDefault(); openTab(tabs[next].id); tabRefs.current[next]?.focus();
           }}><Icon aria-hidden="true" />{label}</button>)}</div>
           <form hidden={tab === 'security'} noValidate onSubmit={event => { void save(event); }} aria-busy={busy}>
             <fieldset disabled={busy || photoLoading} className={styles.fields}>
@@ -204,9 +250,24 @@ export function PersonalProfile({ initialTab = 'information', email, initialDisp
             {error && <p role="alert" className={styles.error}>{error}</p>}
             {message && <p role="status" className={styles.success}>{message}</p>}
           </form>
-          <div id="profile-panel-security" role="tabpanel" aria-labelledby="profile-tab-security" hidden={tab !== 'security'}><ProfileSecurity email={email} onState={securityState} /></div>
+          <div id="profile-panel-security" role="tabpanel" aria-labelledby="profile-tab-security" hidden={tab !== 'security'}>{securityVisited && <ProfileSecurity email={email} onState={securityState} />}</div>
         </section>
       </div>
     </main>
+    <dialog ref={confirmation} className={styles.leaveDialog} aria-labelledby="profile-leave-title" aria-describedby="profile-leave-message" onCancel={event => { event.preventDefault(); cancelNavigation(); }} onClose={() => { if (requestedNavigation.current) cancelNavigation(); }} onKeyDown={event => {
+      if (event.key !== 'Tab') return;
+      const choices = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')];
+      if (!choices.length) return;
+      event.preventDefault();
+      const current = choices.findIndex(choice => choice === document.activeElement);
+      choices[(current + (event.shiftKey ? -1 : 1) + choices.length) % choices.length].focus();
+    }}>
+      <h2 id="profile-leave-title">Unsaved Changes</h2>
+      <p id="profile-leave-message">You have unsaved profile changes. Would you like to discard them?</p>
+      <div className={styles.leaveActions}>
+        <button ref={keepEditing} type="button" onClick={cancelNavigation}>Keep Editing</button>
+        <button type="button" onClick={discardAndLeave} disabled={busy || securityBusy}>Discard Changes</button>
+      </div>
+    </dialog>
   </SocratesShell></div>;
 }

@@ -1,0 +1,324 @@
+ACCOUNT DELETION — LOCAL IMPLEMENTATION AND OPERATING BOUNDARIES
+
+Migration 127 is required. It has been exercised only on disposable databases.
+Nothing in this document authorizes a Production migration or deployment.
+
+Confirmation and completion
+---------------------------
+The signed-in owner types DELETE and verifies their current password. If their
+account already has a verified MFA factor, the current session must also be
+AAL2. This does not activate or import the paused staff-MFA implementation.
+An external-provider-only account without a password must use a separately
+verified recovery/support process; the application does not bypass identity
+verification for it.
+
+The server first checks the independent deletion ledger, then creates a durable
+pending operation. A signed, append-only deletion intent must be written and read
+back from that ledger before any private object or Auth identity is removed.
+The account's application permissions are fenced. Storage bytes are removed
+through the Storage API. The supported Auth hard-delete operation then removes
+the Auth identity and application data in one database transaction. Existing
+immutable-history, ownership, Library and media guards remain in force.
+Only the permitted structured author fields can become NULL, meaning Former
+Contributor. Official content, revisions, timestamps and required shared media
+remain. Published body text and citation author names are not silently rewritten.
+
+A failed Storage step never proceeds to Auth deletion. A failed Auth/application
+transaction leaves its database rows intact and a pending retry; already removed
+private image bytes cannot be restored by canceling. The UI therefore permits
+cancellation only before the confirmed operation starts. Successful completion
+is read back from the database and is never inferred from a network timeout.
+
+Retries and restricted evidence
+-------------------------------
+The HttpOnly, SameSite=Strict deletion receipt is scoped to the exact deletion
+API path. Its random secret is hashed in the database, never put in a URL or
+localStorage, and never logged. It can only finish the already confirmed
+operation. It provides no Profile, Account, content, role or Library access.
+The receipt cookie lasts seven days. Once it expires or is lost, an owner whose
+operation is still pending can sign in and reconfirm their current password on
+/account/deletion to issue a replacement. If this is impossible, authorized
+operations staff must verify the original pending request and identity before
+continuing cleanup through the same service-only functions and Storage/Auth
+APIs. Do not disable guards, change roles, fabricate a successful result, or
+delete Storage metadata with SQL. No public administrative retry UI is added.
+
+Completed operations retain a restricted tombstone: account UUID, completion
+and request times, receipt hash, and private-object path hashes. They contain
+no email, name, profile, notes, image bytes, image paths or study history.
+These identifiers are still pseudonymous personal data; they must not be
+described as fully anonymous. They prevent delayed writes and support backup
+reconciliation. Browser roles cannot read or write them. Service callers can
+only use the narrow deletion functions. Retention must outlast outstanding
+tokens/operations and all restorable backups; an expiry policy is not invented
+by this implementation.
+
+Security-log retention — actual provider behavior, checked 2026-10-13
+--------------------------------------------------------------------
+Socrates is on Supabase Free. Published retention for hosted Auth audit logs is
+one hour; API/database logs have one-day retention. Hosted retention is managed
+by Supabase. Free has no Log Drains or Platform Audit Logs. The desired up-to-
+90-day security-log policy is a ceiling, not a claim that 90 days are available
+on this plan. Do not promise recovery of provider logs beyond those windows.
+
+Separately, auth.audit_log_entries is an optional database sink. The supported
+Auth hard-delete operation leaves these records in disposable validation. They
+can contain account UUIDs, email and other event metadata; Supabase documents
+IP addresses and user agents as possible audit details. These are not erased
+by application-account deletion. No supported automatic database-table expiration
+or configurable 90-day TTL was established. Hosted-log retention must not be
+represented as retention of this SQL table or as a statement about every
+provider-internal copy.
+
+The read-only Production dashboard currently shows "Write audit logs to the
+database" OFF. This task did not change it. Existing historical SQL audit
+records may still remain; their Production count/oldest date was not queried.
+The only displayed setting is the database-writing switch, not a retention
+period. Do not turn security logging off, delete protected audit rows directly,
+or alter Auth tables/triggers to implement a guessed TTL. Obtain Supabase's
+supported retention/disposal procedure if a 90-day cap must also cover these
+historical records. That provider limitation remains explicit in deletion notices
+and operations policy; no claim of immediate erasure from security records.
+
+Backup retention — 30-day procedure with recovery safeguards
+-----------------------------------------------------------
+The Free dashboard has no scheduled backups/PITR. Three verified manual logical
+PostgreSQL custom-format exports were located under ~/.codex/local-evidence/:
+  shared-topic-branches-release-20261011/verified-recovery/database.dump
+  learning-support-release-20261011/recovery/database.dump
+  account-settings-combined-implementation-20261011/recovery/database.dump
+They have companion roles, manifests and isolated-restore proofs. Files are
+0600 inside 0700 directories. These permissions do not prove disk encryption,
+off-site redundancy or absence of Time Machine/cloud copies. Inventory any such
+copies before claiming complete expiration. Logical database dumps include
+Storage metadata, not object bytes: separately catalog object backups if used.
+
+New backup sets use 30-day retention, with one fresh restore-verified checkpoint
+always protected. Create a replacement at least weekly and before migrations;
+restore and verify it in isolation before it qualifies as a replacement. A named
+operator must review the private catalog daily. All artifacts containing personal
+data (dump, roles, Auth exports, extracted data, object copies) belong to one
+cataloged backup set. Keep hashes/aggregate proof separately from raw data.
+
+scripts/backup-retention.py defaults to a read-only expiry plan. It verifies
+identities, private permissions, no symlinks/hard links, creation/verification
+dates, and a matching passing restoration proof. It refuses to expire a set
+without a newer verified checkpoint less than 30 days old. Explicit holds win.
+Execution requires that exact plan's SHA-256 and a fresh plan no older than one
+hour. It rechecks ALL artifacts, including the retained replacement, before
+unlinking only enumerated expired files. It never deletes directories by glob.
+After interruption, inventory actual survivors and produce a new reviewed plan;
+do not reuse the old plan. File removal is logical deletion, not a promise of
+physical secure erasure on SSDs, snapshots or third-party backup systems.
+
+Itxier Meziani (the user) is the approval authority for backup expiration, release
+of holds and recovery decisions, and owns the manual backup review. Codex may
+execute technical operations only when explicitly authorized for the stated target
+and operation. Use a private catalog and a fresh private evidence output. Present
+the exact expiration plan, its SHA-256, replacement restore proof and any holds to
+the user; --apply-plan/--approve-sha256 requires explicit approval of that plan.
+This document is not standing authorization. No automatic deletion job or scheduler
+is enabled. The user must initiate daily review while deletion is active and retain
+the weekly/pre-migration replacement cadence. Without those reviews the 30-day
+policy is not operationally enforced and must not be advertised as such.
+
+Existing recovery checkpoints remain on explicit review holds; none were deleted
+or changed. Review these holds before their 30-day anniversaries in November
+2026, preserve a verified replacement, and authorize their release explicitly.
+A legal/recovery hold needs an owner, reason and dated review, not an indefinite
+exception. If no fresh recovery checkpoint exists, retain the last usable copy,
+raise an incident and create/verify a replacement; never silently delete it to
+meet the nominal deadline. Do not promise immediate erasure from retained backups.
+
+Independent deletion ledger — dedicated Supabase project
+---------------------------------------------------------
+Approved provider: socrates-deletion-ledger (nwycxucnsxdlmexpycbp), a separate
+Supabase Free project. Production is ljmiourzsxwhegshtwee. The ledger database is
+outside all Socrates application restores. Its Data API is disabled (no exposed
+schemas), and direct PostgreSQL connections verify TLS certificates/hostnames.
+Database SSL enforcement is enabled. This is NOT compliance-mode or administrator-
+proof immutable storage: privileged project administrators retain control.
+
+The application uses a dedicated LOGIN role inheriting only the append/read
+function role. It cannot enumerate, update, delete, truncate, alter tables,
+acknowledge checkpoints, or assume an administrative identity. Recovery uses a
+separate read/enumeration-only login. A third identity can enumerate and append
+checkpoint acknowledgements but cannot append deletion intents. Private tables
+have explicit ACLs, forced RLS, and mutation-rejecting triggers. Session-bound
+source identity comes from session_user; client claims cannot override it.
+Synthetic validation has its own source, ledger ID, credentials and signing keys.
+No real account IDs are used by the provider proof. After validation the three
+synthetic logins are NOLOGIN with no active sessions; their signed record and
+checkpoint remain retained in the separate synthetic namespace.
+
+The existing signed record format is unchanged: version, source, account UUID,
+confirmedAt, and HMAC signature. It contains no name, email, note, receipt secret,
+private path, image or study data. UUIDs remain pseudonymous personal data. An
+intent records a confirmed request, including an interrupted request, not proof
+that deletion has completed. Duplicate requests retain the original record.
+
+Required server configuration: DELETION_LEDGER_PROVIDER=supabase-postgres;
+DELETION_LEDGER_DATABASE_URL, PROJECT_REF, CA_CERT, SOURCE, ID, SIGNING_KEY and
+CHECKPOINT_PUBLIC_KEY (all latter names prefixed DELETION_LEDGER_). Credentials
+and HMAC keys are protected in macOS Keychain pending separately authorized
+server-secret installation. They are not configured in Production or exposed in
+NEXT_PUBLIC variables. CA/public-key PEM values can use escaped \n in private env
+files. The existing S3 implementation and tests remain for compatibility; no S3
+provider, bucket, Cloudflare service or paid subscription was provisioned.
+
+Independent protected checkpoint
+-------------------------------
+Each intent must be copied to an independent checkpoint BEFORE cleanup succeeds.
+Checkpoints are encrypted with AES-256-GCM, signed with a separate Ed25519 key,
+written exclusively and fsynced to a private directory on this FileVault-enabled
+Mac. Keychain holds the encryption/private-signing material and latest checkpoint
+hash. The application receives only the public verification key. The ledger
+receives signed receipts, never the checkpoint private key or filesystem access.
+The latest hash is outside the ledger database; restoring an older ledger state,
+removing records, changing content, or supplying an older checkpoint is detected.
+Every new checkpoint must contain all previously checkpointed records unchanged.
+
+Checkpoint root: ~/.codex/recovery/socrates-deletion-ledger/
+Operator secrets: Keychain service 'Socrates deletion ledger operator', accounts
+nwycxucnsxdlmexpycbp:production and nwycxucnsxdlmexpycbp:synthetic, with :head entries.
+Database-role environments use service 'Socrates deletion ledger environment'.
+The database administrator password is stored separately, never in application
+configuration. Record-integrity and checkpoint keys must remain recoverable for
+all retained records. Do not rotate or discard them without a verified plan.
+
+Operational checkpoint command (only under explicit user authorization on this Mac):
+  node scripts/checkpoint-deletion-ledger.mjs nwycxucnsxdlmexpycbp:production
+This reads Keychain, verifies the current pinned checkpoint, checks for missing
+records, writes and verifies the next encrypted checkpoint, pins its new head in
+Keychain, then appends signed acknowledgements. An interrupted acknowledgement
+can be retried safely. A missing head, lock left by an interrupted run, unavailable
+provider or integrity failure requires review; never reset the checkpoint head
+or omit missing records to make a retry succeed.
+
+There is no new scheduler or always-on checkpoint service. Itxier is the approval
+authority and custodian. Codex can perform a checkpoint only when the user explicitly
+authorizes it; the user may separately designate a trusted operator.
+While awaiting a checkpoint, confirmed deletion remains pending and the existing
+restricted retry can continue after acknowledgement. No private object or Auth
+identity is removed before verified acknowledgement. Free projects can auto-pause
+for inactivity; unavailability blocks deletion safely until service is restored.
+
+An encrypted recovery copy is now stored in the existing personal iCloud Drive,
+Socrates Recovery/Deletion Ledger/2026-10-13. Upload completion and private sharing
+status were verified, its local cloud cache was evicted, and a fresh download was
+hash-checked, decrypted and used to validate both ledger namespaces. The archive
+contains all three checkpoint generations, pinned heads, signed records/receipts,
+ledger recovery code/schema and 17 protected credential/key entries. Only ciphertext
+is stored in Drive. No new account, paid plan or provider was introduced.
+
+Archive: socrates-ledger-recovery-20261013-193ece357062ac09.enc
+SHA-256: 193ece357062ac098a464cf94517ea21b47d9ba8d7472d205cfe3c3fc150db9b
+Its archive key remains in local Keychain under service
+Socrates off-device ledger recovery local escrow, account
+nwycxucnsxdlmexpycbp:20261013:v1. Under explicit user approval, the same key is now
+also saved in the existing Apple Passwords account as
+Socrates Ledger Recovery — 2026-10-13, with the pinned archive hash in its notes.
+Saved-key readback matched the original and decrypted the downloaded archive.
+iCloud Passwords synchronization is enabled, the keychain is ready, and a completed
+outgoing sync with empty pending queues was observed. The original local Keychain
+entry is retained. The user confirmed this exact entry and its password are
+accessible on another trusted Apple device using the same Apple account. Separate
+off-device key custody is therefore established, supported by local saved-key
+readback/decryption and explicit other-device confirmation. No key or credential
+values are included in this document or verification reports. Recovery prerequisites
+are ready for a separately authorized final release; Production remains inactive.
+
+iCloud is a synced off-device copy, not immutable storage. Existing Apple-account
+recovery and trusted-device custody remain the user's responsibility; recovery after
+loss of every device has not been tested. Keep local copies and old generations.
+For each future authorized checkpoint, back up the new generation and current head
+off-device and repeat upload/readback/decryption checks. If that copy fails, retain
+the checkpoint and stop further destructive operations pending user direction.
+The existing implementation gates cleanup on a signed local checkpoint receipt;
+this procedure does not add an automatic remote-backup gate. Never expire ledger
+records, signed receipts or checkpoint generations while any restorable backup or
+pending operation depends on them. There is no automatic ledger deletion policy.
+
+Recovery configuration additionally requires CHECKPOINT_FILE, CHECKPOINT_SHA256
+and CHECKPOINT_ENCRYPTION_KEY, each prefixed DELETION_LEDGER_, copied from the
+independently pinned current head. Give the recovery tool only its read-only
+connection, HMAC verification material, checkpoint decryption key and public key;
+it does not require the checkpoint signing private key. Its snapshot refuses to
+proceed without this checkpoint. If a ledger restore is missing records, keep
+restored applications unavailable. Recover every original signed record from the
+verified encrypted checkpoint with controlled administrative approval, verify
+receipts and rerun reconciliation; do not promote a partial ledger.
+
+Provider proof: synthetic namespace only; append/read/enumeration separation,
+permission denials, signature validation, concurrent duplicates, TLS, checkpoint
+ordering, missing-record detection, and the existing recovery contract exercised.
+The recovery target in this focused provider proof is synthetic/in-memory; the
+previous disposable Auth/Storage deletion and restored-database proofs are retained
+and were not repeated. No Production deletion, Migration 127 or deployment occurred.
+
+Other unchanged limitations
+----------------------------
+1. Shared official revision bodies are preserved. If identifying information
+   was deliberately placed in published prose, a separate content/legal review
+   is needed; structural author anonymization is not a claim to erase such prose.
+2. Unknown legacy owned Storage paths, personal media referenced by official
+   history, and new unclassified restrictive foreign keys fail closed. Review
+   the exact ownership conflict instead of deleting contributed data by guess.
+
+Restoration safeguards
+----------------------
+1. Keep all restored services isolated; disable public ingress, mail/webhooks and
+   background jobs. Never restore directly into live Production. Verify the dump's
+   manifest/hash and isolated restore proof. Record the exact source, backup SHA,
+   timestamp and isolated target. Restore database ownership/permissions correctly.
+2. Install/verify Migration 127 in isolation if absent. Clone only necessary
+   Storage object backups to the isolated service; never point recovery at live
+   Auth or Storage. Verify API and database target identities agree.
+3. Retrieve the independent ledger using the protected recovery role and HMAC
+   key. Identify records newer than the backup, but reconcile ALL confirmed intents:
+   an older pending request can also be present in a newer backup. Unknown project,
+   altered records, missing checkpoints or unavailable ledger access is a hard stop.
+4. Run scripts/reconcile-account-deletions.mjs with explicit private environment,
+   checkpoint and output paths. This executable intentionally supports only named
+   disposable Docker DBs and loopback APIs (ACCOUNT_RECOVERY_DISPOSABLE=1,
+   DB_CONTAINER, DB_NAME, SUPABASE_URL, SERVICE_ROLE_KEY prefixed ACCOUNT_RECOVERY_).
+   Production recovery must use a separately approved isolated environment, not
+   relax these safeguards to point at live Production. A lock prevents concurrent
+   runs in one evidence directory. Review a crash-stale lock before removing it.
+5. Reapply existing service-only begin/status, Storage removal and supported Auth
+   hard deletion. Verify every public Auth-owner reference and Auth identity absent,
+   private Storage metadata/bytes absent, and official/other-account fingerprints
+   unchanged except approved Former Contributor attribution. The existing Concept
+   lifecycle trigger also stamps the CURRENT Concept row's updated_at on attribution
+   removal; the verifier permits only that run-bounded change for those exact rows.
+   Saved revision bodies/timestamps and every other field remain exact. Migration
+   127 is unchanged. Auth session/identity
+   cascades and refresh revocation use the already-tested deletion contract.
+6. Fetch the ledger again; require identical inventory. If it changes while work
+   runs, retry with deletion traffic paused. Verify installed contracts and storage
+   byte preservation. The resulting READY.json is a proof tied to a backup, ledger
+   digest and target; BLOCKED.json deliberately remains. Neither opens ingress.
+7. The user must review and approve the complete proof, ledger freshness,
+   backup roles, protected Auth audit-record retention and provider configuration
+   before any separately approved promotion. Require another reconciliation if
+   a later deletion, restore or data mutation invalidates the proof. Restore the
+   Auth signing/session-security configuration only through approved provider
+   procedures; do not revive deleted accounts or reuse an old readiness file.
+
+Failure procedure: remove/invalidate stale readiness, preserve restricted failure
+evidence and keep restored services unavailable. Fix routine isolated faults and
+rerun the same idempotent cleanup; do not omit a troublesome UUID, bypass ownership
+guards or manually delete Storage SQL rows. An unavailable ledger, lost integrity
+key, unclassified ownership conflict, missing bytes or preservation mismatch is
+not permission to serve users. No automatic promotion/rollback is implemented.
+
+Provider references reviewed 2026-10-13
+--------------------------------------
+https://supabase.com/docs/guides/auth/managing-user-data
+https://supabase.com/docs/reference/javascript/auth-admin-deleteuser
+https://supabase.com/docs/guides/auth/audit-logs
+https://supabase.com/docs/guides/platform/backups
+https://supabase.com/pricing
+https://supabase.com/docs/guides/observability/logs
+https://supabase.com/docs/guides/database/secure-data
+https://supabase.com/docs/guides/platform/free-project-pausing

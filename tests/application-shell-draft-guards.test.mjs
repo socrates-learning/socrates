@@ -69,7 +69,7 @@ test('shared header suppresses only the nested legacy header and keeps draft own
   assert.match(header, /const hasSocratesHeader = useHasSocratesHeader\(\)/);
   assert.match(header, /if \(hasSocratesHeader\) return null/);
   assert.match(shell, /<BrandedHeaderContext.Provider value=\{true\}>/);
-  assert.match(shell, /if \(!\(context\?\.allowNavigation\(\) \?\? true\)\) return;/);
+  assert.match(shell, /if \(!\(context\?\.allowNavigation\(navigate\) \?\? true\)\) return;/);
   assert.doesNotMatch(shell, /confirm\(|saveConcept|saveQuestion/);
   const h = editor({ confirm: () => false });
   button(h.render().tree, 'Questions').props.onClick();

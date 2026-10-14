@@ -84,6 +84,8 @@ export async function proxy(request: NextRequest) {
   // Media handlers independently verify authentication or the maintenance credential.
   // Keep API failures as API responses rather than login redirects; headers are stripped above.
   if (pathname.startsWith('/api/content-media/')) return continueRequest();
+  // Deletion verifies identity/receipt itself and must survive access revocation.
+  if (pathname === '/api/account/deletion' || pathname === '/account/deletion') return continueRequest();
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL || '',

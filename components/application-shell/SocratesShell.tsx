@@ -8,8 +8,8 @@ import { supabase } from '@/lib/supabase';
 import { applicationNavigation, workspaceFromLocation, type WorkspaceId } from '@/lib/application-shell-navigation';
 import styles from './SocratesShell.module.css';
 
-type Guard = () => boolean;
-type ShellContext = { registerGuard: (guard: Guard) => () => void; allowNavigation: () => boolean };
+type Guard = (resume?: () => void) => boolean;
+type ShellContext = { registerGuard: (guard: Guard) => () => void; allowNavigation: Guard };
 const Context = createContext<ShellContext | null>(null);
 const BrandedHeaderContext = createContext(false);
 
@@ -37,7 +37,7 @@ export function SocratesShellProvider({ children }: { children: ReactNode }) {
     guard.current = next;
     return () => { if (guard.current === next) guard.current = null; };
   }, []);
-  const allowNavigation = useCallback(() => guard.current?.() ?? true, []);
+  const allowNavigation = useCallback((resume?: () => void) => guard.current?.(resume) ?? true, []);
   const value = useMemo(() => ({ registerGuard, allowNavigation }), [registerGuard, allowNavigation]);
   return <Context.Provider value={value}>{children}</Context.Provider>;
 }
@@ -67,8 +67,8 @@ export function ApplicationNavigation({ active, role, onHome, onStats, onCreator
     const order = ['home', 'creator', 'stats', 'admin', 'account'];
     entries.sort((left, right) => order.indexOf(left.id) - order.indexOf(right.id));
   }
-  async function logout() {
-    if (actionPending.current || !(context?.allowNavigation() ?? true)) return;
+  async function logout(approved = false) {
+    if (actionPending.current || (!approved && !(context?.allowNavigation(() => { void logout(true); }) ?? true))) return;
     actionPending.current = true;
     setBusy(true);
     try {
@@ -88,11 +88,14 @@ export function ApplicationNavigation({ active, role, onHome, onStats, onCreator
           if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
           if (active === item.id) { event.preventDefault(); return; }
           event.preventDefault();
-          if (!(context?.allowNavigation() ?? true)) return;
-          if (item.id === 'home' && onHome) onHome(event);
-          else if (item.id === 'stats' && onStats) onStats();
-          else { if (item.id === 'creator') onCreator?.(); router.push(item.href); }
-          onComplete?.();
+          const navigate = () => {
+            if (item.id === 'home' && onHome) onHome(event);
+            else if (item.id === 'stats' && onStats) onStats();
+            else { if (item.id === 'creator') onCreator?.(); router.push(item.href); }
+            onComplete?.();
+          };
+          if (!(context?.allowNavigation(navigate) ?? true)) return;
+          navigate();
         }}>{content}</Link>;
     })}</div>
     <button className={styles.logout} type="button" aria-label="Log Out" title="Log Out" disabled={busy} onClick={() => { void logout(); }}><span aria-hidden="true" className={styles.icon}>{branded ? <WorkspaceIcon id="logout" /> : '↪'}</span><span className={styles.label}>Log Out</span></button>
@@ -122,9 +125,12 @@ export function SocratesShell({ children, variant = 'compact', headerAction, ...
         <Link href="/" className={styles.brand} prefetch={false} onClick={event => {
           if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
           event.preventDefault();
-          if (!(context?.allowNavigation() ?? true)) return;
-          if (navigation.onHome) navigation.onHome(event);
-          else router.push('/');
+          const navigate = () => {
+            if (navigation.onHome) navigation.onHome(event);
+            else router.push('/');
+          };
+          if (!(context?.allowNavigation(navigate) ?? true)) return;
+          navigate();
         }}><Image src="/brand/socrates-logo-dark.png" alt="Socrates — Learn anything." width={270} height={152} priority /></Link>
         <div className={styles.headerNavigation}><ApplicationNavigation {...navigation} active={active} branded /></div>
         <button ref={trigger} className={styles.headerTrigger} type="button" aria-label="Open workspace navigation" aria-haspopup="dialog" onClick={() => dialog.current?.showModal()}><WorkspaceIcon id="menu" />Navigation</button>

@@ -1,0 +1,58 @@
+{
+  "provider": "supabase-postgres",
+  "project": "nwycxucnsxdlmexpycbp",
+  "plan": "free",
+  "dataApiEnabled": false,
+  "sslEnforced": true,
+  "writer": [
+    "ledger_status",
+    "append_record",
+    "read_record"
+  ],
+  "recovery": [
+    "ledger_status",
+    "list_records",
+    "read_record"
+  ],
+  "checkpoint": [
+    "ledger_status",
+    "list_records",
+    "read_record",
+    "acknowledge_checkpoint"
+  ],
+  "directTablePrivileges": [],
+  "sourceBinding": "database session_user mapped to immutable ledger instance",
+  "recordMutation": "denied by ACL, forced RLS and statement triggers",
+  "administrativeImmutability": false,
+  "independentCheckpoint": {
+    "storage": "private encrypted local files on FileVault; pinned latest hash and keys in Keychain",
+    "signed": "Ed25519",
+    "encrypted": "AES-256-GCM",
+    "requiredBeforeCleanup": true,
+    "offDeviceCopyEstablished": true,
+    "automaticDeletion": false,
+    "offDeviceProvider": "existing personal iCloud Drive",
+    "offDeviceCiphertextVerified": true,
+    "offDeviceRecoveryKeyCustodyEstablished": true,
+    "offDeviceKeyCustodyStatus": "verified saved-key equality/decryption and user-confirmed retrieval on another trusted Apple device",
+    "lostDeviceRecoveryVerified": false,
+    "remoteCopyAutomaticallyGatesCleanup": false,
+    "archiveSha256": "193ece357062ac098a464cf94517ea21b47d9ba8d7472d205cfe3c3fc150db9b",
+    "applePasswordsEntryStored": true,
+    "savedPasswordReadbackAndDecryptionVerified": true,
+    "iCloudKeychainSyncObserved": true,
+    "offDeviceRetrievalEvidence": "explicit user confirmation; key value not transmitted"
+  },
+  "productionActivation": false,
+  "operationalAuthority": {
+    "approvalAuthority": "Itxier Meziani (user)",
+    "technicalExecutor": "Codex only under explicit user authorization for the operation and target",
+    "automaticExpiration": false,
+    "automaticRecovery": false,
+    "reviewOwner": "Itxier Meziani (user)",
+    "reviewCadence": "daily while deletion is active; replacement recovery checkpoint at least weekly and before migrations",
+    "expirationApproval": "exact fresh plan and SHA-256 after newer successful isolated restoration; holds preserved",
+    "standingAuthorization": false
+  },
+  "finalReleaseReadiness": "recovery_prerequisites_complete_production_activation_requires_separate_approval"
+}

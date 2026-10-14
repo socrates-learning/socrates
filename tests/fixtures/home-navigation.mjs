@@ -1,6 +1,31 @@
 import { projectAppearance } from './appearance.mjs';
 import assert from 'node:assert/strict';
 
+// Exact optional navigation-resumption hunks for the Profile confirmation dialog.
+// Existing synchronous guards and every original preservation fingerprint remain intact.
+const profileNavigationHunks = [
+  [
+    "type Guard = (resume?: () => void) => boolean;\ntype ShellContext = { registerGuard: (guard: Guard) => () => void; allowNavigation: Guard };\n",
+    "type Guard = () => boolean;\ntype ShellContext = { registerGuard: (guard: Guard) => () => void; allowNavigation: () => boolean };\n"
+  ],
+  [
+    "  const allowNavigation = useCallback((resume?: () => void) => guard.current?.(resume) ?? true, []);\n",
+    "  const allowNavigation = useCallback(() => guard.current?.() ?? true, []);\n"
+  ],
+  [
+    "  async function logout(approved = false) {\n    if (actionPending.current || (!approved && !(context?.allowNavigation(() => { void logout(true); }) ?? true))) return;\n",
+    "  async function logout() {\n    if (actionPending.current || !(context?.allowNavigation() ?? true)) return;\n"
+  ],
+  [
+    "          const navigate = () => {\n            if (item.id === 'home' && onHome) onHome(event);\n            else if (item.id === 'stats' && onStats) onStats();\n            else { if (item.id === 'creator') onCreator?.(); router.push(item.href); }\n            onComplete?.();\n          };\n          if (!(context?.allowNavigation(navigate) ?? true)) return;\n          navigate();\n",
+    "          if (!(context?.allowNavigation() ?? true)) return;\n          if (item.id === 'home' && onHome) onHome(event);\n          else if (item.id === 'stats' && onStats) onStats();\n          else { if (item.id === 'creator') onCreator?.(); router.push(item.href); }\n          onComplete?.();\n"
+  ],
+  [
+    "          const navigate = () => {\n            if (navigation.onHome) navigation.onHome(event);\n            else router.push('/');\n          };\n          if (!(context?.allowNavigation(navigate) ?? true)) return;\n          navigate();\n",
+    "          if (!(context?.allowNavigation() ?? true)) return;\n          if (navigation.onHome) navigation.onHome(event);\n          else router.push('/');\n"
+  ]
+];
+
 // Only the approved Home navigation relocation is excluded from earlier fingerprints.
 const hunks = {
   "components/StudyPlanner.tsx": [
@@ -34,6 +59,10 @@ const hunks = {
 export function projectHomeNavigation(path, source) {
   source = projectAppearance(source);
   if (path === 'components/application-shell/SocratesShell.tsx') {
+    for (const [current, released] of profileNavigationHunks) {
+      assert.equal(source.split(current).length, 2, 'Exactly one Profile navigation-resumption hunk');
+      source = source.replace(current, released);
+    }
     const actionSignature = "export function SocratesShell({ children, variant = 'compact', headerAction, ...navigation }: NavigationProps & { children?: ReactNode; variant?: 'home' | 'compact' | 'header'; headerAction?: ReactNode }) {";
     assert.equal(source.split(actionSignature).length, 2, 'Exactly one optional Profile header slot');
     source = source.replace(actionSignature, "export function SocratesShell({ children, variant = 'compact', ...navigation }: NavigationProps & { children?: ReactNode; variant?: 'home' | 'compact' | 'header' }) {");

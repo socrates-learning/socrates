@@ -98,3 +98,14 @@
   .saveRow > button { flex: 1; }
 }
 @media (prefers-reduced-motion: reduce) { .primary, .secondary, .remove { transition: none; } }
+
+.leaveDialog { width: min(440px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow-y: auto; margin: auto; padding: 24px; border: 1px solid #dce2e9; border-radius: 12px; background: #fff; color: #092149; box-shadow: 0 16px 56px #081b3d40; }
+.leaveDialog::backdrop { background: #081b3d80; }
+.leaveDialog h2 { margin: 0 0 12px; font-size: 1.3rem; }
+.leaveDialog p { margin: 0; line-height: 1.6; color: #4c6282; }
+.leaveActions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 12px; margin-top: 24px; }
+.leaveActions button { min-height: 44px; padding: 10px 16px; border: 1px solid #cbd5e3; border-radius: 6px; background: #fff; color: #092149; font: inherit; font-size: .9rem; font-weight: 650; cursor: pointer; }
+.leaveActions button:last-child { background: #092149; color: #fff; border-color: #092149; }
+.leaveActions button:focus-visible { outline: 3px solid #406b9e; outline-offset: 3px; }
+.leaveActions button:disabled { opacity: .5; cursor: not-allowed; }
+@media (hover: hover) { .leaveActions button:hover:not(:disabled) { background: #f2f4f7; } .leaveActions button:last-child:hover:not(:disabled) { background: #193f66; } }

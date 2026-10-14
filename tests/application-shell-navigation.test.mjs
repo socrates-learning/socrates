@@ -131,11 +131,11 @@ test('native Library switch retains server membership checks and safe Account re
 
 // Execute the shared navigation with inert framework boundaries; no workspace is reconstructed.
 function shellFixture(allowed = true, active = 'creator', role = 'learner', branded = false, home = false) {
-  const calls = [], exports = {};
+  const calls = [], exports = {}; let continuation;
   const jsx = (type, props) => ({ type, props });
   const definitions = compile(read('lib/application-shell-navigation.ts'), {});
   const modules = {
-    react: { createContext: () => ({}), useContext: () => ({ allowNavigation: () => { calls.push('guard'); return allowed; } }), useEffect: () => {}, useState: () => [false, () => {}], useRef: () => ({ current: false }) },
+    react: { createContext: () => ({}), useContext: () => ({ allowNavigation: resume => { calls.push('guard'); continuation = resume; return allowed; } }), useEffect: () => {}, useState: () => [false, () => {}], useRef: () => ({ current: false }) },
     'react/jsx-runtime': { jsx, jsxs: jsx }, 'next/link': { default: 'a', __esModule: true },
     'next/image': { default: 'Image', __esModule: true },
     'next/navigation': { useRouter: () => ({ push: path => calls.push(path) }), usePathname: () => '/' },
@@ -147,7 +147,7 @@ function shellFixture(allowed = true, active = 'creator', role = 'learner', bran
   });
   const tree = exports.ApplicationNavigation({ active, role, branded, home, onLogout: () => calls.push('logout') });
   const elements = []; function walk(n) { if (Array.isArray(n)) n.forEach(walk); else if (n?.props) { elements.push(n); walk(n.props.children); } } walk(tree);
-  return { calls, definitions, elements, renderShell: variant => exports.SocratesShell({ variant, role, active }) };
+  return { calls, definitions, elements, resume: () => continuation?.(), renderShell: variant => exports.SocratesShell({ variant, role, active }) };
 }
 test('shared entries retain URLs, native semantics, current state and inert Menu', () => {
   const h = shellFixture(); assert.deepEqual(h.calls, []);
@@ -167,6 +167,26 @@ for (const allowed of [true, false]) test(`shell navigation and Logout delegate 
   }
   const h = shellFixture(allowed); h.elements.find(n => n.props['aria-label'] === 'Log Out').props.onClick();
   await Promise.resolve(); assert.deepEqual(h.calls, allowed ? ['guard', 'logout'] : ['guard']);
+});
+test('a deferred Profile decision resumes the original destination and Logout action', async () => {
+  for (const href of ['/', '/#stats', '/account', '/creator', '/admin/users']) {
+    const h = shellFixture(false, 'profile', 'admin');
+    h.elements.find(n => n.props.href === href).props.onClick({ button: 0, preventDefault() {} });
+    assert.deepEqual(h.calls, ['guard']);
+    h.resume(); assert.deepEqual(h.calls, ['guard', href]);
+  }
+  const h = shellFixture(false, 'profile');
+  h.elements.find(n => n.props['aria-label'] === 'Log Out').props.onClick();
+  assert.deepEqual(h.calls, ['guard']);
+  h.resume(); await Promise.resolve();
+  assert.deepEqual(h.calls, ['guard', 'logout'], 'Resume does not re-open the guard');
+});
+test('the shared logo also retains its original deferred Home destination', () => {
+  const h = shellFixture(false, 'profile');
+  const tree = h.renderShell('header');
+  const collect = n => Array.isArray(n) ? n.flatMap(collect) : n?.props ? [n, ...collect(n.props.children)] : [];
+  collect(tree).find(n => n.type === 'a' && n.props.href === '/').props.onClick({ button: 0, preventDefault() {} });
+  assert.deepEqual(h.calls, ['guard']); h.resume(); assert.deepEqual(h.calls, ['guard', '/']);
 });
 test('modified link activation neither discards nor reroutes current workspace', () => {
   const h = shellFixture(); h.elements.find(n => n.props.href === '/account').props.onClick({ button: 0, ctrlKey: true, preventDefault: () => assert.fail('native new tab must remain native') });

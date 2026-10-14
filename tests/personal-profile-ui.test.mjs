@@ -6,9 +6,13 @@ const profile = loadMediaModule('lib/personal-profile.ts');
 const nodes = n => Array.isArray(n) ? n.flatMap(nodes) : n && typeof n === 'object' ? [n, ...nodes(n.props?.children)] : [];
 const text = n => Array.isArray(n) ? n.map(text).join('') : n && typeof n === 'object' ? text(n.props?.children) : typeof n === 'string' || typeof n === 'number' ? String(n) : '';
 const settle = async () => { for (let i = 0; i < 5; i++) await new Promise(resolve => setImmediate(resolve)); };
-function setup(transport, name = '') {
+function setup(transport, name = '', props = {}) {
   const h = hookHarness(); h.hooks.useCallback = fn => fn;
-  const calls = [], revoked = [], listeners = new Map(); let guard, refresh = 0, allow = false, serial = 0;
+  const calls = [], revoked = [], listeners = new Map(), routes = []; let guard, refresh = 0, serial = 0;
+  class Element { focus() { document.activeElement = this; } }
+  const trigger = new Element(), keep = new Element(), discardChoice = new Element();
+  const document = { activeElement: trigger };
+  const modal = { open: false, shows: 0, showModal() { this.open = true; this.shows++; }, close() { this.open = false; }, querySelectorAll() { return [keep, discardChoice]; } };
   const component = loadConceptModule('components/PersonalProfile.tsx', {
     react: h.hooks, 'react/jsx-runtime': jsx, 'lucide-react': { UserRound: 'Icon' },
     'next/navigation': { useRouter: () => ({ refresh: () => refresh++ }) },
@@ -17,14 +21,25 @@ function setup(transport, name = '') {
     '@/components/ProfileSecurity': { ProfileSecurity: 'Security' },
     './PersonalProfile.module.css': { __esModule: true, default: new Proxy({}, { get: (_o, key) => key }) },
   }, {
-    fetch: async (url, init) => { calls.push({ url, ...init }); return transport ? transport(url, init) : init.method === 'PUT' ? Response.json({ displayName: JSON.parse(init.body).displayName }) : new Response(null, { status: 204 }); },
+    fetch: async (url, init) => { calls.push({ url, ...init }); return transport ? transport(url, init) : init.method === 'PUT' ? Response.json(JSON.parse(init.body)) : new Response(null, { status: 204 }); },
     URL: { createObjectURL: () => `blob:fixture-${++serial}`, revokeObjectURL: value => revoked.push(value) },
-    window: { confirm: () => allow, addEventListener: (event, fn) => listeners.set(event, fn), removeEventListener: event => listeners.delete(event), location: { assign() {} } },
+    document, HTMLElement: Element,
+    window: { confirm: () => assert.fail('Internal Profile navigation must not use a browser confirmation'), addEventListener: (event, fn) => listeners.set(event, fn), removeEventListener: event => listeners.delete(event), location: { assign(path) { routes.push(path); } } },
   });
-  const render = () => h.render(() => component.PersonalProfile({ email: 'owner@example.invalid', initialDisplayName: name, role: 'learner' }));
+  const render = () => {
+    const tree = h.render(() => component.PersonalProfile({ email: 'owner@example.invalid', initialDisplayName: name, role: 'learner', ...props }));
+    nodes(tree).find(n => n.type === 'dialog').props.ref.current = modal;
+    nodes(tree).find(n => n.type === 'button' && text(n) === 'Keep Editing').props.ref.current = keep;
+    return tree;
+  };
   const button = label => nodes(render()).find(n => n.type === 'button' && text(n) === label);
   const input = () => nodes(render()).find(n => n.props?.id === 'profile-display-name');
-  return { h, calls, revoked, listeners, render, button, input, refresh: () => refresh, guard: () => { render(); return guard(); }, allow: value => allow = value, text: () => text(render()),
+  return { h, calls, revoked, listeners, render, button, input, modal, document, trigger, keep, discardChoice, routes,
+    refresh: () => refresh, guard: resume => { render(); return guard(resume); }, text: () => text(render()),
+    tab(id) { nodes(render()).find(n => n.props?.id === `profile-tab-${id}`).props.onClick(); },
+    security(dirty, busy = false) { nodes(render()).find(n => n.type === 'Security').props.onState(dirty, busy); },
+    discardNavigation() { const modalNode = nodes(render()).find(n => n.type === 'dialog'); nodes(modalNode).find(n => n.type === 'button' && text(n) === 'Discard Changes').props.onClick(); },
+    unload() { render(); h.effects(); const event = { prevented: false, preventDefault() { this.prevented = true; } }; listeners.get('beforeunload')(event); return event; },
     async load() { render(); h.effects(); await settle(); render(); h.effects(); return render(); },
     edit(value) { input().props.onChange({ target: { value } }); },
     photo(file) { nodes(render()).find(n => n.type === 'input' && n.props.type === 'file').props.onChange({ target: { files: [file] } }); },
@@ -98,8 +113,9 @@ test('leave and unload guards preserve drafts, pending photo reads abort on depa
   const s = setup(); await s.load(); s.edit('Unsaved'); s.render(); s.h.effects();
   assert.equal(s.guard(), false);
   let prevented = false; s.listeners.get('beforeunload')({ preventDefault() { prevented = true; } }); assert.ok(prevented);
-  s.allow(true); assert.equal(s.guard(), true);
-  s.h.cleanup(); assert.ok(s.calls[0].signal.aborted); assert.equal(s.listeners.size, 0);
+  let navigated = 0; assert.equal(s.guard(() => navigated++), false); s.render(); s.h.effects();
+  s.discardNavigation(); assert.equal(navigated, 1); assert.equal(s.guard(), true);
+  s.render(); s.h.effects(); s.h.cleanup(); assert.ok(s.calls[0].signal.aborted); assert.equal(s.listeners.size, 0);
 });
 test('authentication redirect or HTML page never acknowledges a saved profile or becomes an avatar', async () => {
   const s = setup(async (_url, init) => !init.method ? new Response(null, { status: 204 }) : new Response('<html>Sign in</html>', { headers: { 'Content-Type': 'text/html' } }));
@@ -109,4 +125,119 @@ test('authentication redirect or HTML page never acknowledges a saved profile or
   assert.equal(s.calls[1].redirect, 'error');
   const photo = setup(async () => new Response('<html>Sign in</html>', { headers: { 'Content-Type': 'text/html' } }));
   await photo.load(); assert.ok(photo.button('Retry')); assert.ok(photo.button('Remove Photo').props.disabled);
+});
+
+test('unopened Account Security cannot silently autofill and dirty a clean Profile', async () => {
+  const s = setup(); await s.load();
+  assert.equal(nodes(s.render()).filter(n => n.type === 'Security').length, 0);
+  assert.equal(s.guard(), true); assert.equal(s.modal.shows, 0);
+  assert.equal(s.unload().prevented, false);
+  s.tab('preferences'); assert.equal(nodes(s.render()).filter(n => n.type === 'Security').length, 0);
+  s.tab('security'); assert.equal(nodes(s.render()).filter(n => n.type === 'Security').length, 1);
+  s.security(true); s.tab('information');
+  assert.equal(nodes(s.render()).filter(n => n.type === 'Security').length, 1, 'Visited Security drafts survive tab changes');
+  assert.equal(s.guard(), false); assert.equal(s.unload().prevented, true);
+  s.security(false); assert.equal(s.guard(), true);
+});
+test('direct Account Security entry remains available and protects pending requests', async () => {
+  const s = setup(undefined, '', { initialTab: 'security' }); await s.load();
+  assert.equal(nodes(s.render()).filter(n => n.type === 'Security').length, 1);
+  s.security(false, true); let navigated = false;
+  assert.equal(s.guard(() => navigated = true), false); assert.equal(s.unload().prevented, true);
+  assert.equal(s.modal.shows, 0); assert.equal(navigated, false);
+  s.security(false, false); assert.equal(s.guard(), true);
+});
+test('clean entry, asynchronous photo completion and read failure do not create unsaved changes', async () => {
+  let finish;
+  const s = setup(() => new Promise(resolve => finish = resolve));
+  s.render(); s.h.effects(); assert.equal(s.guard(), true); assert.equal(s.unload().prevented, false);
+  finish(new Response(new Blob(['photo'], { type: 'image/png' }))); await settle();
+  assert.equal(s.guard(), true); assert.equal(s.unload().prevented, false); assert.ok(s.button('Save Changes').props.disabled);
+  const failure = setup(() => Response.json({ error: 'Photo unavailable.' }, { status: 503 })); await failure.load();
+  assert.equal(failure.guard(), true); assert.equal(failure.unload().prevented, false);
+});
+test('custom confirmation opens once, focuses Keep Editing and cancellation restores the trigger', async () => {
+  const s = setup(); await s.load(); s.edit('Draft');
+  let destination = '';
+  assert.equal(s.guard(() => destination = '/account'), false);
+  s.render(); s.h.effects();
+  assert.equal(s.modal.open, true); assert.equal(s.modal.shows, 1); assert.equal(s.document.activeElement, s.keep);
+  assert.equal(s.guard(() => destination = '/creator'), false); s.render(); s.h.effects();
+  assert.equal(s.modal.shows, 1);
+  const modal = nodes(s.render()).find(n => n.type === 'dialog');
+  assert.equal(modal.props['aria-labelledby'], 'profile-leave-title');
+  assert.equal(modal.props['aria-describedby'], 'profile-leave-message');
+  assert.match(text(modal), /You have unsaved profile changes\. Would you like to discard them\?/);
+  s.button('Keep Editing').props.onClick();
+  assert.equal(s.modal.open, false); assert.equal(s.document.activeElement, s.trigger);
+  assert.equal(destination, ''); assert.equal(s.input().props.value, 'Draft'); assert.equal(s.unload().prevented, true);
+});
+test('Tab and Shift+Tab cycle within the confirmation choices', async () => {
+  const s = setup(); await s.load(); s.edit('Draft'); s.guard(() => {}); s.render(); s.h.effects();
+  const dialog = nodes(s.render()).find(n => n.type === 'dialog');
+  const tab = shiftKey => {
+    let prevented = false;
+    dialog.props.onKeyDown({ key: 'Tab', shiftKey, currentTarget: s.modal, preventDefault() { prevented = true; } });
+    assert.equal(prevented, true);
+  };
+  assert.equal(s.document.activeElement, s.keep);
+  tab(false); assert.equal(s.document.activeElement, s.discardChoice);
+  tab(false); assert.equal(s.document.activeElement, s.keep);
+  tab(true); assert.equal(s.document.activeElement, s.discardChoice);
+  tab(true); assert.equal(s.document.activeElement, s.keep);
+  assert.equal(s.input().props.value, 'Draft');
+});
+test('Escape cancels without discarding; later confirmation preserves the new requested destination', async () => {
+  const s = setup(); await s.load(); s.edit('Draft'); const routes = [];
+  s.guard(() => routes.push('/account')); s.render(); s.h.effects();
+  let cancelled = false;
+  nodes(s.render()).find(n => n.type === 'dialog').props.onCancel({ preventDefault() { cancelled = true; } });
+  assert.equal(cancelled, true); assert.equal(s.modal.open, false); assert.deepEqual(routes, []);
+  assert.equal(s.input().props.value, 'Draft'); assert.equal(s.document.activeElement, s.trigger);
+  s.guard(() => routes.push('/#stats')); s.render(); s.h.effects(); s.discardNavigation();
+  assert.deepEqual(routes, ['/#stats']); assert.equal(s.input().props.value, ''); assert.equal(s.unload().prevented, false);
+  s.discardNavigation(); assert.deepEqual(routes, ['/#stats'], 'Duplicate confirmation cannot navigate twice');
+  assert.equal(s.calls.length, 1, 'Discard performs no profile mutation');
+});
+test('duplicate navigation requests never replace the originally requested destination', async () => {
+  const s = setup(); await s.load(); s.edit('Draft'); const routes = [];
+  s.guard(() => routes.push('/creator')); s.guard(() => routes.push('/account')); s.render(); s.h.effects();
+  s.discardNavigation(); assert.deepEqual(routes, ['/creator']); assert.equal(s.modal.open, false);
+});
+test('Back to Home uses the same confirmation and resumes Home only after discard', async () => {
+  const s = setup(); await s.load(); s.edit('Draft');
+  const shell = nodes(s.render()).find(n => n.type === 'Shell'); shell.props.headerAction.props.onClick();
+  s.render(); s.h.effects(); assert.equal(s.modal.open, true); assert.deepEqual(s.routes, []);
+  s.discardNavigation(); assert.deepEqual(s.routes, ['/']); assert.ok(s.button('Save Changes').props.disabled);
+});
+test('optional field saves and explicit discard clear the same guard used by navigation and unload', async () => {
+  const details = { username: '', location: '', age: null, language: '', timeZone: '' };
+  const s = setup(undefined, '', { initialDetails: details }); await s.load();
+  const age = () => nodes(s.render()).find(n => n.type === 'input' && n.props.type === 'number');
+  age().props.onChange({ target: { value: '28' } }); assert.equal(s.guard(), false);
+  s.save(); await settle(); assert.equal(age().props.value, 28); assert.equal(s.guard(), true);
+  assert.equal(s.unload().prevented, false); assert.ok(s.button('Save Changes').props.disabled);
+  age().props.onChange({ target: { value: '' } }); assert.equal(s.guard(), false);
+  s.button('Discard Changes').props.onClick(); assert.equal(age().props.value, 28); assert.equal(s.guard(), true);
+  age().props.onChange({ target: { value: '' } }); s.save(); await settle();
+  assert.equal(age().props.value, ''); assert.equal(s.unload().prevented, false);
+  assert.equal(JSON.parse(s.calls.at(-1).body).details.age, null);
+});
+test('failed saves keep edits and both guards; successful retry clears both without reloading', async () => {
+  let fail = true;
+  const s = setup((_url, init) => !init.method ? new Response(null, { status: 204 }) : fail ? Response.json({ error: 'Retry later.' }, { status: 503 }) : Response.json({ displayName: 'Saved' }));
+  await s.load(); s.edit('Saved'); s.save(); await settle();
+  assert.equal(s.unload().prevented, true); assert.equal(s.guard(), false); assert.equal(s.input().props.value, 'Saved');
+  assert.equal(s.button('Save Changes').props.disabled, false);
+  fail = false; s.save(); await settle();
+  assert.match(s.text(), /Changes saved/); assert.equal(s.unload().prevented, false); assert.equal(s.guard(), true);
+});
+test('saved photo additions and removals clear guards; failed deletion retains protection', async () => {
+  let fail = false;
+  const s = setup((_url, init) => !init.method ? new Response(null, { status: 204 }) : fail ? Response.json({ error: 'Photo failed.' }, { status: 503 }) : Response.json({ saved: true }));
+  await s.load(); s.photo(new Blob(['photo'], { type: 'image/png' })); assert.equal(s.unload().prevented, true);
+  s.save(); await settle(); assert.equal(s.guard(), true); assert.equal(s.unload().prevented, false);
+  s.button('Remove Photo').props.onClick(); fail = true; s.save(); await settle();
+  assert.equal(s.guard(), false); assert.equal(s.unload().prevented, true);
+  fail = false; s.save(); await settle(); assert.equal(s.guard(), true); assert.equal(s.unload().prevented, false);
 });
