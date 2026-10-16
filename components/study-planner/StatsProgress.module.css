@@ -41,3 +41,73 @@
   .deck:global(.home-v2-deck-card) { padding: 16px; }
   .tabs button { min-height: 48px; padding-inline: 16px; }
 }
+
+/* Stats sunrise presentation: scoped tokens also theme the existing child panels. */
+.shell {
+  --stats-canvas: var(--appearance-surface, #faf7f0);
+  --stats-heading: #d9b879;
+  --stats-gold: #80613a;
+  --stats-charcoal: #1d2e35;
+}
+:global(:root:not([data-appearance='navy']):not([data-appearance='midnight'])) .shell {
+  --appearance-surface: #fffdf8;
+  --appearance-soft: #f3eee4;
+  --appearance-text: #162b40;
+  --appearance-muted: #52677b;
+  --appearance-line: #ded5c7;
+  --appearance-strong: #80613a;
+  --appearance-link: #80613a;
+  --appearance-focus: #80613a;
+  --stats-canvas: #faf7f0;
+  --stats-heading: #80613a;
+}
+.shell:global(.home-v2-shell) {
+  background: var(--stats-canvas);
+  min-height: calc(100dvh - 164px);
+}
+.shell > :global(.home-v2-workspace) { min-width: 0; padding: 24px clamp(20px, 4vw, 60px) 36px; }
+.workspace { max-width: 1360px; }
+.shell:global(.home-v2-shell) .workspace :is(h2, h3) { color: var(--stats-heading); font-family: Georgia, 'Times New Roman', serif; font-weight: 700; letter-spacing: -.025em; }
+.heading { margin-bottom: 18px; }
+.heading h2 { font-size: clamp(2rem, 3.5vw, 2.875rem); line-height: 1.1; }
+.heading p { margin-top: 8px; }
+.tabs { margin-bottom: 20px; padding-top: 4px; gap: 4px; }
+.tabs button { background: var(--appearance-soft); min-height: 48px; padding-block: 10px; }
+.tabs button[aria-selected='true'], .tabs button:hover:not([aria-selected='true']), .tabs button:focus-visible {
+  color: #fffdf8;
+  background: var(--stats-gold);
+  border-color: var(--stats-gold);
+}
+.tabs button:focus-visible { outline-color: var(--appearance-focus); }
+.deck:global(.home-v2-deck-card) { padding: 20px 24px; border-radius: 12px; }
+.deck:global(.home-v2-deck-card) h3 { color: var(--stats-heading); font-size: clamp(1.5rem, 2.5vw, 2rem); margin-bottom: 6px; }
+.deck:global(.home-v2-deck-card) h3 span { color: inherit; }
+.deck :global(.home-v2-progress-overview) { margin-bottom: 14px; }
+.deck :global(.home-v2-tree-row) { min-height: 64px; padding-block: 10px; border-bottom: 1px solid var(--appearance-line); }
+.deck :global(.home-v2-tree-row):last-child { border-bottom: 0; }
+.deck :global(.home-v2-topic-name) { font-size: 1rem; }
+.deck :global(.home-v2-progress) { height: 12px; }
+.deck :global(.home-v2-progress) span { background: var(--stats-heading); }
+.workspace :global(.home-v2-history-row) { background: var(--appearance-surface); border-color: var(--appearance-line); }
+.workspace :global(.home-v2-history-row) small { background: var(--appearance-soft); }
+.workspace :global(.home-v2-history-empty) { background: var(--appearance-soft); border-color: var(--appearance-line); }
+.workspace :global(.home-v2-history-icon) { color: var(--stats-heading); background: var(--appearance-soft); }
+.workspace :global(.home-v2-algorithm-workspace) { background: transparent; }
+/* Only long Topic lists scroll internally; short windows and mobile keep document flow. */
+@media (min-width: 1000px) and (min-height: 720px) {
+  .deck :global(.home-v2-tree) { max-height: 25rem; overflow-y: auto; scrollbar-width: thin; scrollbar-gutter: stable; }
+}
+@media (max-width: 800px) {
+  .shell > :global(.home-v2-workspace) { padding: 20px 20px 28px; }
+  .deck:global(.home-v2-deck-card) { padding: 18px; }
+  .deck :global(.home-v2-tree-row) { padding-block: 12px; }
+  .shell .deck :global(.home-v2-progress) { grid-column: 1 / -1; grid-row: 2; }
+}
+@media (max-width: 520px) {
+  .shell:global(.home-v2-shell) { min-height: calc(100dvh - 148px); }
+  .shell > :global(.home-v2-workspace) { padding-inline: 16px; }
+  .tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; border-bottom: 0; padding: 4px; overflow: visible; }
+  .tabs button { border-radius: 8px; min-width: 0; padding-inline: 8px; }
+  .deck:global(.home-v2-deck-card) { padding: 16px; }
+  .heading h2 { font-size: 2rem; }
+}

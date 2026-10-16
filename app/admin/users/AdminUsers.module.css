@@ -1,0 +1,51 @@
+.page {
+  width: min(1480px, 100%);
+  margin: 0 auto;
+  padding: 28px clamp(16px, 3vw, 44px) 36px;
+  color: var(--studio-ink, #162b40);
+}
+
+.panel {
+  min-width: 0;
+  padding: clamp(20px, 2.5vw, 36px);
+  border: 1px solid var(--studio-line, #ded5c7);
+  border-radius: 14px;
+  background: var(--studio-panel, #fffdf8);
+  box-shadow: 0 10px 32px rgb(29 46 53 / 4%);
+}
+
+.heading { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+.eyebrow { margin: 0 0 8px; color: var(--admin-accent, #80613a); font-size: .8125rem; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; }
+.heading h1 { margin: 0; font-family: Georgia, 'Times New Roman', serif; font-size: clamp(2rem, 3.4vw, 3rem); font-weight: 600; line-height: 1.12; }
+.accessNote { display: flex; align-items: center; gap: 12px; max-width: 290px; padding: 14px 18px; border: 1px solid var(--studio-line, #ded5c7); border-radius: 10px; color: var(--studio-muted, #52677b); background: var(--appearance-soft, #f3eee4); font-size: .875rem; }
+.accessNote svg { flex: 0 0 32px; width: 32px; height: 32px; color: var(--admin-accent, #80613a); stroke-width: 1.6; }
+.description { margin: 16px 0 24px; color: var(--studio-muted, #52677b); line-height: 1.6; }
+.status { margin: 0 0 20px; padding: 12px 16px; border-left: 3px solid var(--admin-accent, #80613a); background: var(--appearance-soft, #f3eee4); color: var(--studio-ink, #162b40); overflow-wrap: anywhere; }
+.userList { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; align-items: start; min-width: 0; padding: 4px; }
+.userList:empty { padding: 0; }
+.userCard { min-width: 0; height: 100%; padding: 24px; border: 1px solid var(--studio-line, #ded5c7); border-radius: 10px; background: var(--studio-panel, #fffdf8); }
+.userCard h2 { margin: 0; color: var(--studio-ink, #162b40); font-family: Georgia, 'Times New Roman', serif; font-size: 1.25rem; line-height: 1.35; overflow-wrap: anywhere; }
+.currentRole { margin: 12px 0 18px; color: var(--studio-muted, #52677b); font-size: .9375rem; line-height: 1.5; }
+.userCard select { width: 100%; min-width: 0; min-height: 44px; padding: 10px 12px; border: 1px solid var(--studio-line, #ded5c7); border-radius: 7px; color: var(--studio-ink, #162b40); background: var(--studio-panel, #fffdf8); font: inherit; }
+.userList:focus-visible, .userCard select:focus-visible { outline: 3px solid var(--studio-focus, #80613a); outline-offset: 3px; }
+
+:global(:root[data-appearance='navy']) .page,
+:global(:root[data-appearance='midnight']) .page { --admin-accent: #ddbd83; }
+
+/* One list scroll surface only on roomy desktops; smaller windows use the document. */
+@media (min-width: 1200px) and (min-height: 720px) {
+  .page { height: calc(100dvh - var(--socrates-header-height, 164px)); }
+  .panel { height: 100%; display: flex; flex-direction: column; }
+  .heading, .description, .status { flex-shrink: 0; }
+  .userList { min-height: 0; overflow-y: auto; scrollbar-gutter: stable; }
+}
+@media (max-width: 1199px) {
+  .userList { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 700px) {
+  .heading { align-items: flex-start; flex-direction: column; gap: 16px; }
+  .accessNote { max-width: none; padding: 10px 12px; }
+  .userList { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  .userCard { padding: 20px; }
+  .description { margin-bottom: 18px; }
+}

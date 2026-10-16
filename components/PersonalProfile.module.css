@@ -109,3 +109,92 @@
 .leaveActions button:focus-visible { outline: 3px solid #406b9e; outline-offset: 3px; }
 .leaveActions button:disabled { opacity: .5; cursor: not-allowed; }
 @media (hover: hover) { .leaveActions button:hover:not(:disabled) { background: #f2f4f7; } .leaveActions button:last-child:hover:not(:disabled) { background: #193f66; } }
+
+/* Profile sunrise presentation: one private avatar, existing settings and guards. */
+.shell {
+  --profile-canvas: var(--appearance-surface, #faf7f0);
+  --profile-heading: #d9b879;
+  --profile-gold: #80613a;
+  --profile-charcoal: #1d2e35;
+  min-height: 100dvh;
+  background: var(--profile-canvas);
+}
+:global(:root:not([data-appearance='navy']):not([data-appearance='midnight'])) .shell {
+  --appearance-surface: #fffdf8;
+  --appearance-soft: #f3eee4;
+  --appearance-text: #162b40;
+  --appearance-muted: #52677b;
+  --appearance-line: #ded5c7;
+  --appearance-strong: #80613a;
+  --appearance-link: #80613a;
+  --appearance-focus: #80613a;
+  --profile-canvas: #faf7f0;
+  --profile-heading: #80613a;
+}
+.shell header > div { flex: initial; }
+.shell header nav { overflow: visible; }
+.backHome { position: absolute; z-index: 1; right: clamp(16px, 3vw, 44px); bottom: 16px; min-height: 44px; margin: 0; background: #162b40; border-color: #faf7f0; color: #fffdf8; }
+.backHome:focus-visible { outline-color: #e9ce98; }
+.page { max-width: 1488px; padding: 22px clamp(20px, 4vw, 60px) 32px; }
+.heading { margin-bottom: 22px; }
+.heading h1, .summary h2, .sectionHeading h2, .leaveDialog h2 { font-family: Georgia, 'Times New Roman', serif; color: var(--profile-heading); font-weight: 700; letter-spacing: -.025em; }
+.heading h1 { font-size: clamp(2rem, 3.5vw, 2.875rem); line-height: 1.1; margin-bottom: 8px; }
+.grid { grid-template-columns: minmax(260px, .32fr) minmax(0, 1fr); gap: 18px; }
+.panel { border-radius: 12px; }
+.summary { padding: 26px 24px; }
+.summary h2 { font-size: 1.7rem; margin-top: 18px; }
+.avatar { width: 212px; height: 212px; }
+.camera { width: 48px; height: 48px; }
+.summaryEmail { margin: 4px 0 0; color: var(--muted); font-size: .875rem; line-height: 1.5; overflow-wrap: anywhere; max-width: 100%; }
+.memberSince { font-size: .875rem; }
+.photoManagement { min-width: 0; border: 0; padding: 0; margin: 18px 0 0; width: 100%; }
+.photoManagement[hidden] { display: none; }
+.photoManagement .actions { justify-content: center; }
+.photoManagement .hint { font-size: .75rem; }
+.quote { margin-top: 22px; padding: 20px 8px 0; border-top: 1px solid var(--border); border-radius: 0; background: transparent; font-size: 1.25rem; line-height: 1.5; }
+.quote span { color: var(--profile-heading); font-size: .7rem; letter-spacing: .15em; margin-top: 12px; }
+.editor { padding: 0 24px 22px; }
+.tabs { margin-bottom: 22px; }
+.tabs button { min-height: 64px; padding: 18px 8px 14px; gap: 8px; }
+.tabs button[aria-selected='true'] { color: var(--profile-heading); border-bottom-color: var(--profile-heading); }
+.sectionHeading { margin-bottom: 26px; }
+.sectionHeading h2 { font-size: clamp(1.35rem, 2.2vw, 1.8rem); }
+.sectionIcon { color: var(--profile-heading); width: 44px; height: 44px; }
+.formGrid { column-gap: 24px; row-gap: 22px; }
+.field input, .field select { min-height: 44px; border-color: var(--border); }
+.field input[readonly] { background: var(--appearance-soft); }
+.primary, .secondary, .remove { min-height: 44px; }
+.primary { background: var(--profile-gold); border-color: var(--profile-gold); color: #fffdf8; }
+.secondary { border-color: var(--border); background: var(--appearance-surface); }
+.remove { border-color: var(--appearance-danger, #bc2036); }
+.page :focus-visible { outline-color: var(--appearance-focus); }
+.saveRow { margin-top: 24px; padding-top: 18px; }
+.securityGrid { gap: 24px; }
+.leaveDialog { background: var(--appearance-surface); color: var(--navy); border-color: var(--border); }
+.leaveDialog p { color: var(--muted); }
+.leaveActions button { background: var(--appearance-surface); color: var(--navy); border-color: var(--border); }
+.leaveActions button:last-child { background: var(--profile-gold); color: #fffdf8; border-color: var(--profile-gold); }
+.leaveActions button:focus-visible { outline-color: var(--appearance-focus); }
+@media (hover: hover) and (pointer: fine) {
+  .primary:hover:not(:disabled), .backHome:hover, .leaveActions button:last-child:hover:not(:disabled) { background: #6e522f; border-color: #6e522f; }
+  .tabs button:hover { color: var(--profile-heading); background: var(--appearance-soft); }
+  .secondary:hover:not(:disabled), .camera:hover:not(:disabled), .leaveActions button:first-child:hover:not(:disabled) { border-color: var(--profile-heading); background: var(--appearance-soft); }
+}
+.tabs button:focus-visible { color: var(--profile-heading); background: var(--appearance-soft); }
+@media (max-width: 1100px) {
+  .grid { grid-template-columns: minmax(240px, .36fr) minmax(0, 1fr); }
+  .summary { padding: 24px 18px; }
+  .avatar { width: 180px; height: 180px; }
+  .formGrid, .securityGrid { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 760px) {
+  .page { padding: 20px 16px 28px; }
+  .grid { grid-template-columns: minmax(0, 1fr); }
+  .summary { padding: 24px 20px; }
+  .photoManagement { max-width: 300px; }
+  .editor { padding: 0 16px 20px; }
+  .tabs button { min-height: 76px; padding: 14px 3px 10px; }
+  .sectionHeading { margin-bottom: 22px; }
+  .sectionHeading p { font-size: .875rem; }
+  .backHome { bottom: 10px; }
+}

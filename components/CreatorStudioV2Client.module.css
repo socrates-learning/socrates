@@ -2025,3 +2025,81 @@
   .searchDesign .questionSearchResult { padding: 10px; }
   .searchDesign .questionSearchFooter > button { width: 100%; }
 }
+
+/* Creator sunrise workspace: presentation only for the unified authorized editor. */
+:global([data-creator-shell]) .workspace {
+  --creator-navy: var(--appearance-text, #162b40);
+  --creator-muted: var(--appearance-muted, #52677b);
+  --creator-border: var(--appearance-line, #ded5c7);
+  --creator-soft: var(--appearance-soft, #f3eee4);
+  min-height: 0;
+  padding: 0 clamp(16px, 3vw, 44px) 24px;
+  background: var(--studio-canvas);
+  color: var(--studio-ink);
+}
+:global([data-creator-shell]) .studioShell { width: min(1500px, 100%); min-width: 0; border: 0; margin: 0 auto; border-radius: 0; overflow: visible; box-shadow: none; background: var(--studio-canvas); }
+:global([data-creator-shell]) .localHeader { padding: 18px 0; border: 0; gap: 16px; min-height: 88px; background: var(--studio-canvas); }
+:global([data-creator-shell]) .localHeader h1 { font: 700 clamp(1.85rem, 3vw, 2.7rem)/1.12 Georgia, 'Times New Roman', serif; color: var(--appearance-link, #80613a); letter-spacing: -.025em; }
+:global([data-creator-shell]) .localHeader p { margin: 6px 0 0; color: var(--creator-muted); }
+:global([data-creator-shell]) .headerActions { flex-wrap: wrap; gap: 8px; }
+:global([data-creator-shell]) .workspace [role='tablist'] { padding: 0; gap: 2px; border-bottom: 1px solid var(--creator-border); background: var(--studio-canvas); }
+:global([data-creator-shell]) .workspace [role='tab'] { min-height: 44px; padding: 10px clamp(14px, 2vw, 30px); border: 1px solid var(--creator-border); border-bottom: 0; border-radius: 7px 7px 0 0 !important; clip-path: none !important; background: var(--creator-soft) !important; color: var(--creator-navy); font-family: inherit; font-size: .9rem; font-weight: 600; line-height: 1.4; }
+:global([data-creator-shell]) .workspace [role='tab'][aria-selected='true'] { color: #fffdf8 !important; background: var(--studio-gold) !important; border-color: var(--studio-gold) !important; }
+:global([data-creator-shell]) .saveToolbar { background: var(--studio-canvas); padding: 14px 0 10px; box-shadow: none; }
+:global([data-creator-shell]) .workspace :is(.primaryButton, .secondaryButton, .toolButton, .menuButton) { border-radius: 7px; min-height: 40px; }
+:global([data-creator-shell]) .workspace .primaryButton { color: #fffdf8; border-color: var(--studio-gold); background: var(--studio-gold); box-shadow: 0 2px 5px rgb(22 43 64 / 9%); }
+:global([data-creator-shell]) .workspace :is(.secondaryButton, .toolButton, .menuButton) { background: var(--studio-panel); border-color: var(--creator-border); color: var(--creator-navy); }
+:global([data-creator-shell]) .workspace .panel { border-color: var(--creator-border); border-radius: 10px; background: var(--studio-panel); padding: 18px; box-shadow: none; }
+:global([data-creator-shell]) .workspace :is(.panel h2, .tagManagerHeading h2, .questionSearchHeading h2) { color: var(--appearance-link, #80613a) !important; font-family: Georgia, 'Times New Roman', serif; }
+:global([data-creator-shell]) .contentDesign > .panel:first-child { padding: 0; background: transparent; }
+:global([data-creator-shell]) .workspace .mainGrid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; padding: 0 0 18px; }
+:global([data-creator-shell]) .workspace :is(.conceptPanel, .topicPanel) { min-height: 0; }
+:global([data-creator-shell]) .workspace .conceptEditor { border-color: var(--creator-border); background: var(--studio-panel); color: var(--creator-navy); min-height: 210px; line-height: 1.65; }
+:global([data-creator-shell]) .contentDesign .conceptEditor { min-height: 300px; }
+:global([data-creator-shell]) .workspace .compactToolbar { background: var(--creator-soft); border-color: var(--creator-border); }
+:global([data-creator-shell]) .workspace .compactModes { border-color: var(--creator-border); background: var(--studio-panel); }
+:global([data-creator-shell]) .workspace .compactModes button[aria-pressed='true'] { background: var(--studio-gold); color: #fffdf8; }
+:global([data-creator-shell]) .workspace :is(.searchBox, .inlineDialog, .linkedConceptContext, .tagControlPanel, .questionSearchPanel) { border-color: var(--creator-border); background: var(--studio-panel); }
+:global([data-creator-shell]) .workspace :is(input, textarea, select) { color: var(--creator-navy); border-color: var(--creator-border); accent-color: var(--studio-gold); }
+:global([data-creator-shell]) .workspace :global(section[aria-label='Your Cards']) label.searchBox { display: flex; flex-direction: column; align-items: stretch; gap: 6px; padding: 0; margin-block: 10px; border: 0; font-size: .875rem; }
+:global([data-creator-shell]) .workspace :global(section[aria-label='Your Cards']) label.searchBox input { width: 100%; min-height: 42px; border: 1px solid var(--creator-border); border-radius: 7px; padding: 8px 12px; }
+:global([data-creator-shell]) .workspace .conceptPanel > :global(section[aria-label='Your Cards']) { margin-bottom: 18px; }
+:global([data-creator-shell]) .workspace .treeViewport { min-height: 180px; max-height: 440px; overflow-y: auto; border-color: var(--creator-border); background: var(--studio-panel); scrollbar-color: var(--studio-gold) var(--studio-panel); }
+:global([data-creator-shell]) .workspace :is(.topicRow, .conceptBrowseTopicRow, .conceptBrowseConceptRow) { border-color: var(--creator-border); }
+:global([data-creator-shell]) .workspace :is(.activeTopicRow, .selectedTopicRow) { background: var(--appearance-strong, #1d2e35); color: #fffdf8; }
+:global([data-creator-shell]) .workspace .activeTopicRow :is(.topicName, .folderIcon, .expandButton) { color: inherit; }
+:global([data-creator-shell]) .workspace :is(.selectedPanel, .sourcesPanel) { margin-inline: 0; }
+:global([data-creator-shell]) .workspace .questionSearchResults { scrollbar-color: var(--studio-gold) var(--studio-panel); }
+:global([data-creator-shell]) .workspace .questionSearchResult[aria-pressed='true'] { background: var(--appearance-strong, #1d2e35); color: #fffdf8; }
+:global([data-creator-shell]) .workspace .questionSearchResult [data-search-part='open-label'] { background: var(--studio-gold); color: #fffdf8; border-color: var(--studio-gold); }
+:global([data-creator-shell]) .workspace :is(button, a, input, textarea, select, summary, [tabindex]):focus-visible { outline: 3px solid var(--studio-focus); outline-offset: 2px; }
+:global([data-creator-shell]) .workspace [contenteditable='true']:focus-visible { outline-offset: -3px; }
+:global([data-creator-shell]) .workspace button:disabled { cursor: not-allowed; }
+@media (hover: hover) and (pointer: fine) {
+  :global([data-creator-shell]) .workspace :is(.secondaryButton, .toolButton, [role='tab']):not(:disabled):hover { border-color: var(--studio-gold); background: var(--creator-soft); }
+  :global([data-creator-shell]) .workspace [role='tab'][aria-selected='true']:hover,
+  :global([data-creator-shell]) .workspace .primaryButton:not(:disabled):hover { background: #6c502f; color: #fffdf8; }
+}
+@media (min-width: 1200px) and (min-height: 720px) {
+  :global([data-creator-shell]) .localHeader { position: sticky; top: 0; height: 96px; z-index: 32; }
+  :global([data-creator-shell]) .workspace [role='tablist'] { position: sticky; top: 96px; z-index: 31; }
+  :global([data-creator-shell]) .saveToolbar { top: 141px; z-index: 30; }
+  :global([data-creator-shell]) .workspace .conceptEditor { max-height: 420px; overflow-y: auto; }
+}
+@media (max-width: 1199px), (max-height: 719px) {
+  :global([data-creator-shell]) .saveToolbar { position: static; }
+}
+@media (max-width: 1000px) {
+  :global([data-creator-shell]) .workspace .mainGrid { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 780px) {
+  :global([data-creator-shell]) .workspace { padding: 0 14px 20px; }
+  :global([data-creator-shell]) .localHeader { align-items: flex-start; flex-wrap: wrap; }
+  :global([data-creator-shell]) .workspace .panel { padding: 14px; }
+  :global([data-creator-shell]) .workspace .conceptEditor { min-height: 180px; }
+  :global([data-creator-shell]) .workspace .treeViewport { max-height: 60dvh; }
+  :global([data-creator-shell]) .workspace .compactModes button { min-height: 40px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  :global([data-creator-shell]) .workspace * { transition: none !important; }
+}

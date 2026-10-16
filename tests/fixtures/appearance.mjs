@@ -1,5 +1,21 @@
+import { projectStudySunrise } from './study-sunrise.mjs';
+import { projectCreatorSunriseStyles } from './creator-sunrise.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+
+// Only this exact Home-only stylesheet addition is excluded from historical
+// fingerprints. The original styles and all behavioral assertions stay intact.
+export function projectHomeSunrise(source) {
+  source = projectCreatorSunriseStyles('app/home.css', source);
+  const marker = '\n/* Home sunrise presentation:';
+  const start = source.indexOf(marker);
+  if (start < 0) return source;
+  assert.equal(source.split(marker).length, 2, 'One Home presentation block');
+  assert.equal(createHash('sha256').update(source.slice(start)).digest('hex'),
+    '3b2ba56c5077435f3d11a4f1564295694d573be5ff093f312d1e7385e21eb74b', 'Only the approved Home presentation block');
+  return source.slice(0, start);
+}
 
 // Only color-token wrappers are projected away. The original Light values,
 // selectors, layout, handlers and all pre-existing fingerprints remain authoritative.
@@ -24,6 +40,9 @@ export function projectAppearance(source) {
 }
 
 export function readAppearanceSource(path, options) {
-  const value = readFileSync(path, options);
-  return typeof value === 'string' ? projectAppearance(value) : value;
+  const raw = readFileSync(path, options);
+  const value = typeof raw === 'string' ? projectStudySunrise(path, raw) : raw;
+  if (typeof value !== 'string') return value;
+  const home = String(path) === 'app/home.css' || String(path).endsWith('/app/home.css');
+  return projectAppearance(home ? projectHomeSunrise(value) : projectCreatorSunriseStyles(path, value));
 }

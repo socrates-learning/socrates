@@ -1262,6 +1262,153 @@ export function StudyModeStyles() {
             flex: 1 1 auto;
           }
         }
+
+        /* Study sunrise presentation: scoped colors and spacing; no content or session changes. */
+        .study-v2-header, .study-v2-page {
+          --study-canvas: var(--appearance-surface, #faf7f0);
+          --study-gold: #80613a;
+          --study-accent: #d9b879;
+          --study-ink: var(--appearance-text, #162b40);
+          --study-focus: #d9b879;
+          color: var(--study-ink);
+        }
+        :root:not([data-appearance='navy']):not([data-appearance='midnight']) :is(.study-v2-header, .study-v2-page) {
+          --appearance-surface: #fffdf8;
+          --appearance-soft: #f3eee4;
+          --appearance-text: #162b40;
+          --appearance-muted: #52677b;
+          --appearance-line: #ded5c7;
+          --appearance-strong: #80613a;
+          --appearance-link: #80613a;
+          --appearance-focus: #80613a;
+          --study-canvas: #faf7f0;
+          --study-accent: #80613a;
+          --study-focus: #80613a;
+        }
+        .study-v2-header {
+          position: relative;
+          min-height: 164px;
+          padding: 11px clamp(16px, 3vw, 44px) 87px;
+          gap: 18px;
+          background: var(--study-canvas);
+        }
+        .study-v2-header::after {
+          content: '';
+          position: absolute;
+          inset: auto 0 0;
+          height: 76px;
+          background: linear-gradient(180deg, rgb(29 46 53 / 8%), rgb(29 46 53 / 28%)), url('/images/socrates-header-mountains.jpg') center 23% / cover;
+          border-radius: 0 0 50% 5% / 0 0 9px 3px;
+          pointer-events: none;
+        }
+        .study-v2-header .study-v2-brand { color: var(--study-accent); min-width: 0; text-decoration: none; }
+        .study-v2-header .study-v2-brand strong { letter-spacing: -.045em; }
+        .study-v2-header .study-v2-brand span { color: var(--study-accent); font-size: 11px; letter-spacing: .22em; text-transform: uppercase; }
+        .study-v2-header .study-v2-nav { gap: 8px; }
+        .study-v2-header .study-v2-nav-item {
+          color: var(--study-ink);
+          background: transparent;
+          border-color: var(--appearance-line, #ded5c7);
+          min-height: 44px;
+          padding: 10px 12px;
+          text-decoration: none;
+        }
+        .study-v2-header .study-v2-nav-item:focus-visible {
+          color: #fffdf8;
+          background: var(--study-gold);
+          outline: 3px solid var(--study-focus);
+          outline-offset: 3px;
+        }
+        .study-v2-header .study-v2-brand:focus-visible { outline: 3px solid var(--study-focus); outline-offset: 4px; border-radius: 6px; }
+        .study-v2-page {
+          background: var(--study-canvas);
+          min-height: calc(100dvh - 164px);
+          padding: 24px clamp(12px, 3vw, 36px) 28px;
+        }
+        .study-v2-page .study-v2-shell {
+          max-width: 1090px;
+          padding: 20px;
+          box-shadow: 0 12px 30px rgb(29 46 53 / 10%);
+        }
+        .study-v2-page .study-v2-card {
+          height: clamp(420px, calc(100dvh - 260px), 720px);
+          min-height: 0;
+          padding-top: 16px;
+        }
+        .study-v2-page .study-v2-card-actions .study-v2-context-action {
+          color: var(--study-ink);
+          min-height: 44px;
+          font-size: 14px;
+          padding: 8px 14px;
+        }
+        .study-v2-page .study-v2-card-actions .study-v2-flag-action-active {
+          color: #fffdf8;
+          background: var(--study-gold);
+          border-color: var(--study-gold);
+        }
+        .study-v2-page .study-v2-question-content { padding-bottom: 56px; }
+        .study-v2-page .study-v2-answer-section h1,
+        .study-v2-page .study-v2-modal-header p { color: var(--study-accent); }
+        .study-v2-page .study-v2-card-front:focus-visible {
+          outline: 3px solid var(--study-focus);
+          outline-offset: 3px;
+          border-color: var(--study-focus);
+          box-shadow: none;
+        }
+        .study-v2-page :is(button, a, input, select, textarea):focus-visible {
+          outline: 3px solid var(--study-focus);
+          outline-offset: 3px;
+          box-shadow: none;
+        }
+        .study-v2-page .study-v2-feedback-row button:focus-visible,
+        .study-v2-page .study-v2-rating-button:focus-visible { outline-offset: -4px; }
+        .study-v2-page .study-v2-more-form textarea { background: var(--appearance-surface, #fffdf8); }
+        .study-v2-page .study-v2-modal-header > button { min-width: 44px; min-height: 44px; }
+        .study-v2-page .study-v2-modal-footer button { min-height: 44px; }
+        @media (hover: hover) and (pointer: fine) {
+          .study-v2-header .study-v2-nav-item:not(:disabled):hover {
+            color: #fffdf8;
+            background: var(--study-gold);
+            border-color: var(--study-gold);
+          }
+          .study-v2-page .study-v2-card-actions .study-v2-context-action:not(:disabled):hover,
+          .study-v2-page .study-v2-review-concept-action button:hover,
+          .study-v2-page .study-v2-feedback-row button:not(:disabled):hover {
+            background: var(--appearance-soft, #f3eee4);
+            color: var(--study-ink);
+            border-color: var(--study-accent);
+          }
+        }
+        /* Small or short windows use document flow so neither answers nor ratings are clipped. */
+        @media (max-width: 900px), (max-height: 719px) {
+          .study-v2-header { flex-direction: row; align-items: center; flex-wrap: wrap; }
+          .study-v2-page .study-v2-shell { padding: 12px; }
+          .study-v2-page .study-v2-card { height: auto; min-height: 420px; overflow: visible; }
+          .study-v2-page .study-v2-question-content { min-height: 340px; overflow-y: visible; overscroll-behavior: auto; }
+          .study-v2-page .study-v2-answer-body { overflow-y: visible; overscroll-behavior: auto; }
+          .study-v2-page .study-v2-more-panel { max-height: none; overflow-y: visible; }
+          .study-v2-page .study-v2-rating-row { min-height: 0; }
+          .study-v2-page .study-v2-rating-button { min-height: 100px; padding: 18px; }
+        }
+        @media (max-width: 520px) {
+          .study-v2-header { padding: 12px 16px 76px; gap: 12px; }
+          .study-v2-header::after { height: 64px; }
+          .study-v2-header .study-v2-brand-mark { height: 54px; width: 62px; }
+          .study-v2-header .study-v2-brand strong { font-size: 34px; }
+          .study-v2-header .study-v2-brand span { font-size: 9px; }
+          .study-v2-header .study-v2-nav { gap: 6px; }
+          .study-v2-header .study-v2-nav-item { font-size: 13px; padding: 8px; }
+          .study-v2-page { padding: 14px 10px 24px; }
+          .study-v2-page .study-v2-shell { padding: 8px; }
+          .study-v2-page .study-v2-card-topline { padding-inline: 10px; }
+          .study-v2-page .study-v2-card-actions { gap: 6px; }
+          .study-v2-page .study-v2-card-actions .study-v2-context-action { font-size: 13px; padding: 8px 10px; }
+          .study-v2-page .study-v2-answer-body { padding: 24px 16px; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .study-v2-header *, .study-v2-page * { animation: none; transition: none; scroll-behavior: auto; }
+        }
+        /* End Study sunrise presentation. */
       `}</style>
   );
 }

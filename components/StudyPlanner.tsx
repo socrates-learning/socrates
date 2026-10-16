@@ -3011,7 +3011,11 @@ export function StudyPlanner({
 
   return (
     <>
-      <LearnerHeader classPrefix="home-v2" brandHref="/" onHomeClick={handleHomeClick} items={mode === 'dashboard' ? [{ kind: 'link', label: 'Profile', icon: 'account', href: '/profile', className: 'home-v2-nav-item home-v2-profile', accountChevron: false }] : items} />
+      {mode === 'stats' ? (
+        <SocratesShell variant="header" active="stats" role={role} onHome={handleHomeClick} onCreator={handleCreatorClick} />
+      ) : (
+        <LearnerHeader classPrefix="home-v2" brandHref="/" onHomeClick={handleHomeClick} items={mode === 'dashboard' ? [{ kind: 'link', label: 'Profile', icon: 'account', href: '/profile', className: 'home-v2-nav-item home-v2-profile', accountChevron: false }] : items} />
+      )}
       <main className={`home-v2-shell${mode === 'stats' ? ` home-v2-shell-stats ${statsStyles.shell}` : ''}`} data-home-dashboard={mode === 'dashboard' ? '' : undefined}>
         {mode !== 'stats' && (
           <SocratesShell variant="home" active="home" role={role} onHome={handleHomeClick} onStats={() => openStatsTab('progress')} onLogout={handleLogout} onCreator={handleCreatorClick} />

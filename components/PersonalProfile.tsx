@@ -193,7 +193,7 @@ export function PersonalProfile({ initialTab = 'information', email, initialDisp
     setDisplayName(savedName); setDetails(savedDetails); setFile(null); setRemovePhoto(false); setMessage(''); setError('');
   }
   const tabs = [
-    { id: 'information' as const, label: 'Profile Information', Icon: UserRound },
+    { id: 'information' as const, label: 'Profile Information', Icon: null },
     { id: 'security' as const, label: 'Account Security', Icon: LockKeyhole },
     { id: 'preferences' as const, label: 'Preferences', Icon: Settings },
   ];
@@ -205,7 +205,14 @@ export function PersonalProfile({ initialTab = 'information', email, initialDisp
           <div className={styles.avatarWrap}><Avatar url={photoUrl} className={styles.avatar} /><button type="button" aria-label="Change profile photo" className={styles.camera} disabled={busy || photoLoading} onClick={() => { setTab('information'); fileInput.current?.click(); }}><Camera aria-hidden="true" /></button></div>
           <h2>{savedName || 'Your profile'}</h2>
           <p className={styles.username}>{savedDetails.username ? `@${savedDetails.username}` : 'Username not set'}</p>
+          <p className={styles.summaryEmail}>{email}</p>
           {memberSince && <p className={styles.memberSince}>Member since {memberSince}</p>}
+          <fieldset className={styles.photoManagement} disabled={busy || photoLoading} hidden={tab !== 'information'}>
+            <legend className={styles.visuallyHidden}>Profile Picture</legend>
+            <input ref={fileInput} className={styles.visuallyHidden} type="file" accept="image/jpeg,image/png,image/webp" aria-label="Upload profile picture" tabIndex={-1} onChange={event => choosePhoto(event.target.files?.[0])} />
+            <div className={styles.actions}><button type="button" className={styles.secondary} onClick={() => fileInput.current?.click()}>{shownPhoto ? 'Change Photo' : 'Upload Photo'}</button><button type="button" className={styles.remove} disabled={!shownPhoto} onClick={() => { setFile(null); setRemovePhoto(Boolean(savedPhoto)); setMessage(''); setError(''); }}>Remove Photo</button></div>
+            <p className={styles.hint}>JPEG, PNG, or WebP. Up to 3 MB. Images are cropped to a circle.</p>
+          </fieldset>
           <blockquote className={styles.quote}>“A disciplined mind leads to a brighter tomorrow.”<span>A DAILY REMINDER</span></blockquote>
         </section>
         <section className={`${styles.panel} ${styles.editor}`} aria-label="Profile settings">
@@ -217,23 +224,18 @@ export function PersonalProfile({ initialTab = 'information', email, initialDisp
             else if (event.key === 'End') next = tabs.length - 1;
             else return;
             event.preventDefault(); openTab(tabs[next].id); tabRefs.current[next]?.focus();
-          }}><Icon aria-hidden="true" />{label}</button>)}</div>
+          }}>{Icon && <Icon aria-hidden="true" />}{label}</button>)}</div>
           <form hidden={tab === 'security'} noValidate onSubmit={event => { void save(event); }} aria-busy={busy}>
             <fieldset disabled={busy || photoLoading} className={styles.fields}>
               <legend className={styles.visuallyHidden}>Profile details</legend>
               <div id="profile-panel-information" role="tabpanel" aria-labelledby="profile-tab-information" hidden={tab !== 'information'}>
-                <div className={styles.sectionHeading}><span className={styles.sectionIcon}><UserRound aria-hidden="true" /></span><div><h2>Profile Information</h2><p>Update your personal information and how you appear on Socrates.</p></div></div>
+                <div className={styles.sectionHeading}><div><h2>Profile Information</h2><p>Update your personal information and how you appear on Socrates.</p></div></div>
                 <div className={styles.formGrid}>
-                  <div><span className={styles.label}>Profile Picture</span><div className={styles.photoField}><Avatar url={photoUrl} className={styles.smallAvatar} /><div className={styles.photoControls}>
-                    <input ref={fileInput} className={styles.visuallyHidden} type="file" accept="image/jpeg,image/png,image/webp" aria-label="Upload profile picture" tabIndex={-1} onChange={event => choosePhoto(event.target.files?.[0])} />
-                    <div className={styles.actions}><button type="button" className={styles.secondary} onClick={() => fileInput.current?.click()}>{shownPhoto ? 'Change Photo' : 'Upload Photo'}</button><button type="button" className={styles.remove} disabled={!shownPhoto} onClick={() => { setFile(null); setRemovePhoto(Boolean(savedPhoto)); setMessage(''); setError(''); }}>Remove Photo</button></div>
-                    <p className={styles.hint}>JPEG, PNG, or WebP. Up to 3 MB. Images are cropped to a circle.</p>
-                  </div></div></div>
                   <div><label className={styles.field} htmlFor="profile-display-name">Display Name<input id="profile-display-name" name="displayName" type="text" autoComplete="nickname" maxLength={160} value={displayName} aria-describedby="profile-name-hint" onChange={event => { setDisplayName(event.target.value); setMessage(''); setError(''); }} /></label><p id="profile-name-hint" className={styles.hint}>This is how Socrates will greet you. Up to 80 characters; leave blank to keep your existing greeting.</p></div>
-                  <div><label className={styles.field}>Username<input name="profileUsername" autoComplete="off" maxLength={30} value={details.username} onChange={event => changeDetail('username', event.target.value)} /></label><p className={styles.hint}>A private profile label. Your sign-in email stays the same.</p></div>
                   <div><label className={styles.field}>Email Address<input type="email" value={email} readOnly /></label><p className={styles.hint}>Manage your email in Account Security.</p></div>
-                  <div><label className={styles.field}>Location <span>(optional)</span><input autoComplete="off" placeholder="City, state/region, or country" maxLength={100} value={details.location} onChange={event => changeDetail('location', event.target.value)} /></label><p className={styles.hint}>Optional and private to your account.</p></div>
+                  <div><label className={styles.field}>Username<input name="profileUsername" autoComplete="off" maxLength={30} value={details.username} onChange={event => changeDetail('username', event.target.value)} /></label><p className={styles.hint}>A private profile label. Your sign-in email stays the same.</p></div>
                   <div><label className={styles.field}>Age <span>(optional)</span><input type="number" min={0} max={120} step={1} value={details.age ?? ''} onChange={event => changeDetail('age', event.target.value === '' ? null : Number(event.target.value))} /></label><p className={styles.hint}>Leave empty if you prefer.</p></div>
+                  <div><label className={styles.field}>Location <span>(optional)</span><input autoComplete="off" placeholder="City, state/region, or country" maxLength={100} value={details.location} onChange={event => changeDetail('location', event.target.value)} /></label><p className={styles.hint}>Optional and private to your account.</p></div>
                 </div>
                 {photoLoading && <p role="status" className={styles.hint}>Loading your photo…</p>}
                 {photoError && <div role="alert" className={styles.error}>{photoError} <button className={styles.secondary} type="button" onClick={() => setPhotoRetry(value => value + 1)}>Retry</button></div>}

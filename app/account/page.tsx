@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import DeleteAccount from '@/components/DeleteAccount';
-import Image from 'next/image';
-import { ArrowLeft, BookOpen, ExternalLink, LockKeyhole, Palette, RefreshCw, UserRound } from 'lucide-react';
+import { BookOpen, ExternalLink, LockKeyhole, Palette, RefreshCw, UserRound } from 'lucide-react';
+import { SocratesShell } from '@/components/application-shell/SocratesShell';
 import { AppearanceSelector } from '@/components/AppearanceSelector';
 import styles from '@/components/AccountSettings.module.css';
 import { LibrarySwitcher } from '@/components/LibrarySwitcher';
@@ -114,10 +114,7 @@ export default async function AccountPage() {
 
   return (
     <div className={styles.page}>
-      <header className={styles.header}>
-        <Link href="/" className={styles.logo} prefetch={false}><Image src="/brand/socrates-logo-dark.png" alt="Socrates — Learn anything." width={270} height={152} priority /></Link>
-        <Link href="/" className={styles.back}><ArrowLeft size={18} aria-hidden="true" />Back to Home</Link>
-      </header>
+      <SocratesShell variant="header" active="account" role={context.role} />
       <main className={styles.main}>
         <div className={styles.title}>
           <h1>Account Settings</h1>

@@ -241,3 +241,23 @@ test('saved photo additions and removals clear guards; failed deletion retains p
   assert.equal(s.guard(), false); assert.equal(s.unload().prevented, true);
   fail = false; s.save(); await settle(); assert.equal(s.guard(), true); assert.equal(s.unload().prevented, false);
 });
+
+
+test('Profile has one avatar in the summary and keeps photo controls under the original loading/save lock', async () => {
+  const s = setup(undefined, 'Alex', { memberSince: 'January 1, 2026' });
+  let tree = s.render();
+  const summary = nodes(tree).find(n => n.props?.['aria-label'] === 'Profile summary');
+  const avatar = n => typeof n.type === 'function' && n.type.name === 'Avatar';
+  assert.equal(nodes(tree).filter(avatar).length, 1);
+  assert.equal(nodes(summary).filter(avatar).length, 1);
+  assert.match(text(summary), /Alex.*owner@example.invalid.*Member since January 1, 2026/);
+  assert.ok(nodes(summary).find(n => n.type === 'fieldset').props.disabled);
+  await s.load();
+  const controls = () => nodes(s.render()).find(n => n.type === 'fieldset' && n.props.className === 'photoManagement');
+  assert.equal(controls().props.disabled, false);
+  assert.equal(controls().props.hidden, false);
+  assert.ok(s.button('Upload Photo')); assert.ok(s.button('Remove Photo'));
+  s.tab('security'); assert.equal(controls().props.hidden, true);
+  s.tab('information'); assert.equal(controls().props.hidden, false);
+  assert.ok(s.button('Save Changes').props.disabled);
+});

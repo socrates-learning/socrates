@@ -845,3 +845,255 @@
     right: 20px;
   }
 }
+
+/* Home sunrise presentation: scoped to the existing dashboard and its adjacent header. */
+.home-v2-header:has(+ [data-home-dashboard]),
+.home-v2-shell[data-home-dashboard] {
+  --home-canvas: var(--appearance-surface, #faf7f0);
+  --home-panel: var(--appearance-surface, #fffdf8);
+  --home-ink: var(--appearance-text, #162b40);
+  --home-muted: var(--appearance-muted, #52677b);
+  --home-line: var(--appearance-line, #ded5c7);
+  --home-gold: var(--appearance-link, #80613a);
+  --home-rail: var(--appearance-surface, #1d2e35);
+  --home-rail-text: #f6f3ea;
+  --home-rail-accent: #f1c77e;
+  --home-rail-active: var(--appearance-strong, #5d5039);
+  --home-rail-hover: var(--appearance-soft, #314249);
+  --home-control: var(--appearance-link, #233f50);
+  --home-focus: var(--appearance-focus, #80613a);
+  --home-rail-width: clamp(230px, 19vw, 278px);
+  --home-header-height: clamp(160px, 22dvh, 230px);
+  color: var(--home-ink);
+}
+
+.home-v2-header:has(+ [data-home-dashboard]) {
+  position: relative;
+  height: var(--home-header-height);
+  padding: 24px 32px;
+  align-items: flex-start;
+  justify-content: flex-end;
+  background-image: linear-gradient(180deg, rgb(30 42 48 / 16%), rgb(20 33 42 / 40%)), url('/images/socrates-header-mountains.jpg');
+  background-position: center 18%;
+  box-shadow: none;
+}
+
+.home-v2-header:has(+ [data-home-dashboard])::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 -1px;
+  height: 24px;
+  border-radius: 65% 100% 0 0 / 100% 100% 0 0;
+  background: var(--home-canvas);
+  pointer-events: none;
+}
+
+.home-v2-header:has(+ [data-home-dashboard]) .home-v2-brand {
+  justify-content: center;
+  align-items: center;
+}
+
+.home-v2-header:has(+ [data-home-dashboard]) .home-v2-brand-logo {
+  width: min(80%, 210px);
+  height: auto;
+  max-height: calc(var(--home-header-height) - 32px);
+  object-fit: contain;
+  object-position: center;
+}
+
+.home-v2-header:has(+ [data-home-dashboard]) .home-v2-profile {
+  border-color: var(--home-rail-accent);
+  background-color: var(--home-rail);
+}
+
+.home-v2-shell[data-home-dashboard] {
+  background: var(--home-canvas);
+  min-height: calc(100dvh - var(--home-header-height));
+}
+
+.home-v2-shell[data-home-dashboard] > :first-child,
+.home-v2-shell[data-home-dashboard] > :first-child > aside,
+.home-v2-shell[data-home-dashboard] dialog {
+  background: var(--home-rail);
+  border-color: var(--home-rail);
+  color: var(--home-rail-text);
+}
+
+.home-v2-shell[data-home-dashboard] > :first-child > aside {
+  padding: 12px 14px 18px;
+}
+
+.home-v2-shell[data-home-dashboard] nav[aria-label='Socrates workspaces'] {
+  font-size: 17px;
+  font-weight: 500;
+  gap: 20px;
+}
+
+.home-v2-shell[data-home-dashboard] nav[aria-label='Socrates workspaces'] > div { gap: 8px; }
+
+.home-v2-shell[data-home-dashboard] nav[aria-label='Socrates workspaces'] :is(a, button),
+.home-v2-shell[data-home-dashboard] button[aria-label='Open workspace navigation'],
+.home-v2-shell[data-home-dashboard] button[aria-label='Close workspace navigation'] {
+  color: var(--home-rail-text);
+  min-height: 52px;
+  padding: 12px 14px;
+  border-radius: 7px;
+  font-weight: 500;
+}
+
+.home-v2-shell[data-home-dashboard] button[aria-label='Close workspace navigation'] {
+  background: transparent;
+  border: 1px solid var(--home-rail-accent);
+  font: inherit;
+}
+
+.home-v2-shell[data-home-dashboard] nav[aria-label='Socrates workspaces'] [aria-current='page'] {
+  color: var(--home-rail-accent);
+  background: var(--home-rail-active);
+  border-inline-start: 3px solid var(--home-rail-accent);
+}
+
+.home-v2-shell[data-home-dashboard] > .home-v2-workspace {
+  min-width: 0;
+  padding: 18px 24px 24px;
+}
+
+.home-v2-shell[data-home-dashboard] .home-v2-topline {
+  max-width: none;
+  margin-bottom: 18px;
+}
+
+.home-v2-shell[data-home-dashboard] .home-v2-topline h2 {
+  color: var(--home-gold);
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: clamp(30px, 3.1vw, 46px);
+  font-weight: 700;
+  line-height: 1.13;
+  letter-spacing: -.035em;
+  overflow-wrap: anywhere;
+}
+
+.home-v2-shell[data-home-dashboard] .home-v2-hero {
+  grid-template-columns: minmax(0, 1fr) minmax(248px, .45fr);
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.home-v2-shell[data-home-dashboard] .home-v2-study {
+  background-image: linear-gradient(180deg, rgb(20 33 42 / 20%), rgb(20 33 42 / 48%)), url('/images/socrates-mountains.jpg');
+  background-position: center 20%;
+  border-color: var(--home-line);
+  border-radius: 13px;
+  min-height: 148px;
+  box-shadow: 0 7px 18px rgb(22 43 64 / 14%);
+  font-size: clamp(42px, 5vw, 72px);
+  font-weight: 800;
+  color: #fffdf8;
+}
+
+.home-v2-shell[data-home-dashboard] .home-v2-study-options {
+  background: var(--home-panel);
+  border-color: var(--home-line);
+  border-radius: 12px;
+  padding: 10px 16px;
+}
+
+.home-v2-shell[data-home-dashboard] .home-v2-study-option { color: var(--home-ink); font-size: 15px; gap: 12px; }
+.home-v2-shell[data-home-dashboard] .home-v2-study-option-soon,
+.home-v2-shell[data-home-dashboard] .home-v2-study-option small { color: var(--home-muted); }
+.home-v2-shell[data-home-dashboard] .home-v2-study-option small { font-size: 12px; }
+
+.home-v2-shell[data-home-dashboard] .home-v2-setup-card {
+  width: 100%;
+  max-width: none;
+  margin-bottom: 0;
+  padding: 20px 22px;
+  background: var(--home-panel);
+  border-color: var(--home-line);
+  border-radius: 13px;
+  box-shadow: 0 2px 10px rgb(22 43 64 / 3%);
+}
+
+.home-v2-shell[data-home-dashboard] .home-v2-setup-heading { gap: 16px; margin-bottom: 10px; }
+.home-v2-shell[data-home-dashboard] .home-v2-setup-heading h3 { margin-bottom: 6px; color: var(--home-ink); font: 700 26px/1.2 Georgia, 'Times New Roman', serif; letter-spacing: -.02em; }
+.home-v2-shell[data-home-dashboard] .home-v2-setup-heading p { color: var(--home-muted); line-height: 1.45; }
+.home-v2-shell[data-home-dashboard] .home-v2-deck-icon { color: var(--home-gold); }
+.home-v2-shell[data-home-dashboard] .home-v2-library-switcher { margin-bottom: 0; }
+.home-v2-shell[data-home-dashboard] .home-v2-library-switcher :is(select, button) { border-color: var(--home-line); }
+.home-v2-shell[data-home-dashboard] .home-v2-library-switcher button { background: var(--appearance-strong, #233f50); }
+
+.home-v2-shell[data-home-dashboard] .home-v2-setup-tree { padding: 3px 5px 12px; scrollbar-color: var(--home-gold) var(--home-panel); scrollbar-gutter: stable; }
+.home-v2-shell[data-home-dashboard] .home-v2-setup-tree button[aria-pressed] { overflow-wrap: anywhere; }
+.home-v2-shell[data-home-dashboard] .home-v2-setup-tree div[aria-hidden='true'] { border-color: var(--home-line) !important; }
+.home-v2-shell[data-home-dashboard] :is(input[type='checkbox'], input[type='range']) { accent-color: var(--home-control) !important; }
+.home-v2-shell[data-home-dashboard] .home-v2-preference-slider { min-width: 36px; }
+.home-v2-shell[data-home-dashboard] :focus-visible { outline: 3px solid var(--home-focus); outline-offset: 3px; }
+.home-v2-shell[data-home-dashboard] > :first-child :focus-visible { outline-color: var(--home-rail-accent); }
+.home-v2-header:has(+ [data-home-dashboard]) .home-v2-brand:focus-visible { outline: 3px solid var(--home-rail-accent); outline-offset: -6px; }
+
+@media (hover: hover) and (pointer: fine) {
+  .home-v2-shell[data-home-dashboard] nav[aria-label='Socrates workspaces'] a:not([aria-current='page']):hover,
+  .home-v2-shell[data-home-dashboard] nav[aria-label='Socrates workspaces'] button:not(:disabled):hover { background: var(--home-rail-hover); }
+  .home-v2-shell[data-home-dashboard] .home-v2-study:not(:disabled):hover { border-color: var(--home-gold); box-shadow: 0 8px 20px rgb(22 43 64 / 24%); }
+  .home-v2-shell[data-home-dashboard] .home-v2-setup-tree button[aria-pressed]:hover { text-decoration: underline; text-underline-offset: 3px; }
+}
+
+@media (min-width: 1101px) {
+  .home-v2-header:has(+ [data-home-dashboard]) { margin-inline-start: var(--home-rail-width); }
+  .home-v2-header:has(+ [data-home-dashboard]) .home-v2-brand { position: absolute; inset: 0 auto 0 calc(-1 * var(--home-rail-width)); width: var(--home-rail-width); background: var(--home-rail); }
+  .home-v2-shell[data-home-dashboard] { grid-template-columns: var(--home-rail-width) minmax(0, 1fr); --home-dashboard-height: calc(100dvh - var(--home-header-height)); }
+  .home-v2-shell[data-home-dashboard] > :first-child > aside { height: var(--home-dashboard-height); }
+}
+
+@media (min-width: 1101px) and (min-height: 42rem) {
+  .home-v2-shell[data-home-dashboard] > .home-v2-workspace { grid-template-rows: auto auto minmax(0, 1fr); }
+  .home-v2-shell[data-home-dashboard] .home-v2-setup-card { grid-template-rows: auto minmax(8rem, 1fr); padding-block: 16px; }
+}
+
+@media (max-width: 1100px) {
+  .home-v2-header:has(+ [data-home-dashboard]) { align-items: center; flex-direction: row; justify-content: space-between; padding: 16px 24px 32px; }
+  .home-v2-header:has(+ [data-home-dashboard]) .home-v2-brand { width: 180px; }
+  .home-v2-header:has(+ [data-home-dashboard]) .home-v2-brand-logo { width: 100%; }
+  .home-v2-header:has(+ [data-home-dashboard]) .home-v2-profile { position: static; }
+  .home-v2-shell[data-home-dashboard] > :first-child > aside { padding: 4px 16px; }
+  .home-v2-shell[data-home-dashboard] .home-v2-setup-tree { max-height: 60dvh; overflow-y: auto; }
+}
+
+@media (max-width: 719px) {
+  .home-v2-shell[data-home-dashboard] > .home-v2-workspace { padding: 20px 16px; }
+  .home-v2-shell[data-home-dashboard] .home-v2-hero { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .home-v2-shell[data-home-dashboard] .home-v2-study { min-height: 132px; }
+  .home-v2-shell[data-home-dashboard] .home-v2-study-options { padding: 10px 14px; }
+  .home-v2-shell[data-home-dashboard] .home-v2-study-option { min-height: 44px; }
+  .home-v2-shell[data-home-dashboard] .home-v2-setup-card { padding: 16px 10px; }
+  .home-v2-shell[data-home-dashboard] .home-v2-setup-heading { padding-inline: 4px; }
+  .home-v2-shell[data-home-dashboard] .home-v2-setup-heading h3 { font-size: 24px; }
+  .home-v2-shell[data-home-dashboard] .home-v2-setup-heading p { font-size: 13px; }
+  .home-v2-shell[data-home-dashboard] .home-v2-setup-title-row { gap: 10px; }
+  .home-v2-shell[data-home-dashboard] .home-v2-setup-tree { padding-inline: 0; }
+  .home-v2-shell[data-home-dashboard] .home-v2-setup-tree div:has(> div[aria-hidden='true']) { margin-left: 12px !important; }
+  .home-v2-shell[data-home-dashboard] .home-v2-setup-tree div:has(> input[type='checkbox']),
+  .home-v2-shell[data-home-dashboard] .home-v2-setup-tree div:has(> button[aria-label^='Expand ']),
+  .home-v2-shell[data-home-dashboard] .home-v2-setup-tree div:has(> button[aria-label^='Collapse ']) { gap: 6px !important; }
+  .home-v2-shell[data-home-dashboard] .home-v2-setup-tree input[type='checkbox'] { min-width: 24px; min-height: 24px; flex-shrink: 0; }
+  .home-v2-shell[data-home-dashboard] .home-v2-setup-tree button[aria-pressed] { min-height: 24px; }
+  .home-v2-shell[data-home-dashboard] .home-v2-setup-tree div:has(> div > .home-v2-preference-slider) { padding-inline: 20px 4px !important; }
+  .home-v2-shell[data-home-dashboard] .home-v2-setup-tree div:has(> .home-v2-preference-slider) { gap: 6px !important; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-v2-shell[data-home-dashboard] *, .home-v2-header:has(+ [data-home-dashboard]) * { transition: none !important; }
+}
+
+/* Approved shared navigation gold: Home hover and focus only. */
+.home-v2-shell[data-home-dashboard] nav[aria-label='Socrates workspaces'] :is(a, button):not(:disabled):focus-visible {
+  background: #80613a;
+  color: #fffdf8;
+}
+@media (hover: hover) and (pointer: fine) {
+  .home-v2-shell[data-home-dashboard] nav[aria-label='Socrates workspaces'] a:not(:disabled):hover,
+  .home-v2-shell[data-home-dashboard] nav[aria-label='Socrates workspaces'] button:not(:disabled):hover {
+    background: #80613a;
+    color: #fffdf8;
+  }
+}

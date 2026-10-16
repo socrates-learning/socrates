@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readAppearanceSource as readFileSync } from './fixtures/appearance.mjs';
@@ -149,12 +150,12 @@ function shellFixture(allowed = true, active = 'creator', role = 'learner', bran
   const elements = []; function walk(n) { if (Array.isArray(n)) n.forEach(walk); else if (n?.props) { elements.push(n); walk(n.props.children); } } walk(tree);
   return { calls, definitions, elements, resume: () => continuation?.(), renderShell: variant => exports.SocratesShell({ variant, role, active }) };
 }
-test('shared entries retain URLs, native semantics, current state and inert Menu', () => {
+test('Creator entries retain URLs, native semantics and current state without obsolete Menu', () => {
   const h = shellFixture(); assert.deepEqual(h.calls, []);
   const links = h.elements.filter(n => n.type === 'a');
   assert.deepEqual(links.map(n => n.props.href), ['/', '/creator', '/#stats', '/account']);
   assert.equal(links.find(n => n.props.href === '/creator').props['aria-current'], 'page');
-  assert.equal(h.elements.find(n => n.props['aria-label'] === 'Menu').props.onClick, undefined);
+  assert.equal(h.elements.find(n => n.props['aria-label'] === 'Menu'), undefined);
   assert.equal(h.elements.find(n => n.type === 'nav').props['aria-label'], 'Socrates workspaces');
   for (const hash of ['#stats', '#stats-history', '#stats-algorithm']) assert.equal(h.definitions.workspaceFromLocation('/', hash), 'stats');
   assert.equal(h.definitions.workspaceFromLocation('/creator/concepts/example', ''), 'creator');
@@ -272,11 +273,11 @@ test('branded navigation preserves role-qualified destinations and the same guar
   assert.match(shell, /src="\/brand\/socrates-logo-dark\.png"/);
   assert.match(shell, /onClose=\{\(\) => trigger\.current\?\.focus\(\)\}/);
   assert.match(shell, /variant === 'header'/);
-  assert.match(read('app/creator/layout.tsx'), /variant=\{role === 'admin' \|\| role === 'editor' \? 'header' : 'compact'\}/);
+  assert.match(read('app/creator/layout.tsx'), /variant="header" role=\{role\}/);
 });
 
 
-test('Creator header opt-in is staff-only; learners keep the released compact navigation', async () => {
+test('Creator uses the same horizontal header for all authorized roles and retains its existing workspace', async () => {
   for (const role of ['admin', 'editor', 'learner']) {
     const exports = {}, jsx = (type, props) => ({ type, props });
     const modules = {
@@ -294,7 +295,8 @@ test('Creator header opt-in is staff-only; learners keep the released compact na
     const tree = await exports.default({ children: 'existing-workspace' });
     assert.equal(tree.type, 'session');
     assert.equal(tree.props.children.type, 'shell');
-    assert.equal(tree.props.children.props.variant, role === 'learner' ? 'compact' : 'header');
+    assert.equal(tree.props.children.props.variant, 'header');
+    assert.equal(tree.props.children.props.role, role);
     assert.equal(tree.props.children.props.children, 'existing-workspace');
   }
 });
@@ -371,6 +373,14 @@ for (const role of ['admin', 'editor', 'learner', null]) test(`Home desktop and 
   assert.match(planner, /<SocratesShell variant="home" active="home" role=\{role\}/);
 });
 
+test('the application-only release exposes no website destination for any role', () => {
+  for (const role of ['admin', 'editor', 'learner', null]) for (const home of [true, false]) {
+    const h = shellFixture(false, home ? 'home' : 'creator', role, !home, home);
+    assert.equal(h.elements.some(n => n.props.href?.startsWith('/website')), false);
+    assert.deepEqual(h.calls, []);
+  }
+});
+
 for (const allowed of [false, true]) test(`relocated Admin keeps the destination and leave guard: allowed=${allowed}`, () => {
   const h = shellFixture(allowed, 'home', 'admin', false, true);
   const admin = h.elements.find(n => n.props['aria-label'] === 'Admin');
@@ -412,4 +422,24 @@ for (const [path, expected] of Object.entries({
   const hash = source => createHash('sha256').update(source).digest('hex');
   assert.equal(hash(projectHomeNavigation(path, current)), expected);
   assert.notEqual(hash(projectHomeNavigation(path, `${current}\n// unrelated change\n`)), expected);
+});
+
+// Application-only release: retain the deployed login and authorization boundary.
+const applicationOnlyEntryIdentities = {
+  "app/page.tsx": "137f5fec40d316f51dae5f22ea89fb911a24991208ecf24794135c288f4fce09",
+  "app/login/page.tsx": "265a0117c973ce617ca40ebb43d7261e005998439d8e66605b4af3ed15545dd7",
+  "proxy.ts": "54b3f2e94064e8534bb2174b357d0c529d1c447d1b968cc8c929cd5da640b912",
+  "app/admin/layout.tsx": "4c2c8c03f1559ad8739fffe981fbba518a412905cfde473357850f7aea822205",
+  "lib/server-creator-route-access.ts": "ec57039ef0b5a49832f8b818649a882d918d0b066f918205aa0276d26b394d2c",
+  "lib/library-context.ts": "34d9feadd913a473551a0d7b384217802c4d5affa2923c05a10e5a60faf4aa1b",
+  "lib/creator-capabilities.ts": "3aa3f0340dca4a28dcb227c2e78621354a5d3f063a66333813515143b357e0db"
+};
+for (const [path, expected] of Object.entries(applicationOnlyEntryIdentities)) test(`Production entrypoint/security remains byte-identical: ${path}`, () => {
+  assert.equal(createHash('sha256').update(read(path)).digest('hex'), expected);
+});
+test('the unpublished website has no routes, components, assets or public-access helper', () => {
+  for (const path of ['app/website', 'components/public-homepage', 'components/public-website', 'lib/public-website-routes.ts', 'public/images/homepage-dashboard.jpg', 'public/images/homepage-study.jpg']) {
+    assert.equal(existsSync(new URL('../' + path, import.meta.url)), false, path);
+  }
+  assert.doesNotMatch(read('components/application-shell/SocratesShell.tsx'), /\/website|Visit Website/);
 });

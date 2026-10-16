@@ -62,7 +62,7 @@ export function ApplicationNavigation({ active, role, onHome, onStats, onCreator
   const [busy, setBusy] = useState(false);
   const actionPending = useRef(false);
   const entries = applicationNavigation.filter(item =>
-    (item.kind !== 'link' || !item.adminOnly || role === 'admin') && (!home || item.id !== 'menu'));
+    (item.kind !== 'link' || !item.adminOnly || role === 'admin') && item.id !== 'menu');
   if (home) {
     const order = ['home', 'creator', 'stats', 'admin', 'account'];
     entries.sort((left, right) => order.indexOf(left.id) - order.indexOf(right.id));
@@ -98,7 +98,7 @@ export function ApplicationNavigation({ active, role, onHome, onStats, onCreator
           navigate();
         }}>{content}</Link>;
     })}</div>
-    <button className={styles.logout} type="button" aria-label="Log Out" title="Log Out" disabled={busy} onClick={() => { void logout(); }}><span aria-hidden="true" className={styles.icon}>{branded ? <WorkspaceIcon id="logout" /> : '↪'}</span><span className={styles.label}>Log Out</span></button>
+    {home && <button className={styles.logout} type="button" aria-label="Log Out" title="Log Out" disabled={busy} onClick={() => { void logout(); }}><span aria-hidden="true" className={styles.icon}>{branded ? <WorkspaceIcon id="logout" /> : '↪'}</span><span className={styles.label}>Log Out</span></button>}
   </nav>;
 }
 
@@ -120,7 +120,7 @@ export function SocratesShell({ children, variant = 'compact', headerAction, ...
   const active = navigation.active ?? workspaceFromLocation(pathname, hash) ?? undefined;
   const close = () => dialog.current?.close();
   if (variant === 'header') return <BrandedHeaderContext.Provider value={true}>
-    <div className={styles.branded}>
+    <div className={styles.branded} data-creator-shell={active === 'creator' || undefined} data-admin-shell={active === 'admin' || undefined} data-stats-shell={active === 'stats' || undefined} data-account-shell={active === 'account' || undefined} data-profile-shell={pathname === '/profile' || undefined}>
       <header className={styles.header}>
         <Link href="/" className={styles.brand} prefetch={false} onClick={event => {
           if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;

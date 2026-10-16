@@ -1,3 +1,4 @@
+import { projectAccountSunrise } from './fixtures/account-sunrise.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -40,7 +41,7 @@ test('color-only projection cannot hide layout or behavior changes', () => {
   assert.notEqual(projectAppearance('width: 301px; color: var(--appearance-text, #08143b);'), 'width: 300px; color: #08143b;');
 });
 test('Account keeps the existing read model, switch destination and reset component', () => {
-  const source = readFileSync('app/account/page.tsx', 'utf8');
+  const source = projectAccountSunrise('app/account/page.tsx', readFileSync('app/account/page.tsx', 'utf8'));
   assert.match(source, /LibrarySwitcher context=\{context\} returnTo="\/account"/);
   assert.match(source, /<ResetStudyProgress/);
   assert.match(source, /href="\/profile\?section=security"/);

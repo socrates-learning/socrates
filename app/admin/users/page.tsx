@@ -1,8 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Header } from '@/components/Header';
+import { ShieldCheck } from 'lucide-react';
+import { SocratesShell } from '@/components/application-shell/SocratesShell';
 import { supabase } from '@/lib/supabase';
+import styles from './AdminUsers.module.css';
 
 type UserRoleRow = {
   user_id: string;
@@ -57,27 +59,37 @@ export default function AdminUsersPage() {
   }
 
   return (
-    <>
-      <Header />
-      <main className="layout" style={{ gridTemplateColumns: '1fr' }}>
-        <section className="panel">
-          <h2>Admin User Management</h2>
-          <p className="muted">
+    // The existing server Admin layout authorizes this page before rendering it.
+    <SocratesShell variant="header" active="admin" role="admin">
+      <main className={styles.page}>
+        <section className={styles.panel} aria-labelledby="user-management-title">
+          <div className={styles.heading}>
+            <div>
+              <p className={styles.eyebrow}>Administration</p>
+              <h1 id="user-management-title">User Management</h1>
+            </div>
+            <div className={styles.accessNote}>
+              <ShieldCheck aria-hidden="true" />
+              <span>Manage user roles and permissions.</span>
+            </div>
+          </div>
+          <p className={styles.description}>
             Permanent role-management interface for approved Socrates access.
             Users with no role are pending approval and cannot enter the app.
           </p>
 
-          {status && <p className="muted">{status}</p>}
+          {status && <p className={styles.status} role="status">{status}</p>}
 
-          <div className="grid">
+          <div className={styles.userList} role="region" aria-label="User accounts" tabIndex={0}>
             {users.map((user) => (
-              <div className="card" key={user.user_id}>
-                <h3>{user.email}</h3>
-                <p className="muted">
+              <div className={styles.userCard} key={user.user_id}>
+                <h2>{user.email}</h2>
+                <p className={styles.currentRole}>
                   Current role: {user.role || 'Pending approval / no role'}
                 </p>
 
                 <select
+                  aria-label={`Role for ${user.email}`}
                   defaultValue={user.role || ''}
                   onChange={(event) => {
                     if (event.target.value) {
@@ -97,6 +109,6 @@ export default function AdminUsersPage() {
           </div>
         </section>
       </main>
-    </>
+    </SocratesShell>
   );
 }

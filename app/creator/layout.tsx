@@ -39,7 +39,7 @@ export default async function CreatorLayout({
       email={email ?? 'Account'}
       role={role}
     >
-      <SocratesShell variant={role === 'admin' || role === 'editor' ? 'header' : 'compact'} role={role}>
+      <SocratesShell variant="header" role={role}>
         {children}
       </SocratesShell>
     </HeaderSessionProvider>

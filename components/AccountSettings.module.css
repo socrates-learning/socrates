@@ -57,3 +57,85 @@
 @media (max-width: 1000px) { .appearances { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 650px) { .main { padding: 22px 16px 36px; } .details, .libraries { grid-template-columns: minmax(0, 1fr); } .details > div + div { border-left: 0; border-top: 1px solid var(--appearance-line, #e2e6ed); padding: 12px 0 0; } .security { align-items: flex-start; flex-direction: column; } .header { gap: 12px; padding-inline: 16px; } .logo img { height: 88px; } .back { padding: 10px; font-size: .8rem; } }
 @media (max-width: 380px) { .appearances { grid-template-columns: minmax(0, 1fr); } .panel { padding: 14px; } .header { flex-wrap: wrap; } }
+
+/* Account sunrise presentation: local colors, existing controls and natural document flow. */
+.page {
+  --account-canvas: var(--appearance-surface, #faf7f0);
+  --account-heading: #d9b879;
+  --account-gold: #80613a;
+  --account-charcoal: #1d2e35;
+  min-height: 100dvh;
+  background: var(--account-canvas);
+}
+:global(:root:not([data-appearance='navy']):not([data-appearance='midnight'])) .page {
+  --appearance-surface: #fffdf8;
+  --appearance-soft: #f3eee4;
+  --appearance-text: #162b40;
+  --appearance-muted: #52677b;
+  --appearance-line: #ded5c7;
+  --appearance-strong: #80613a;
+  --appearance-link: #80613a;
+  --appearance-focus: #80613a;
+  --account-canvas: #faf7f0;
+  --account-heading: #80613a;
+}
+.main { max-width: 1360px; padding: 22px clamp(20px, 4vw, 60px) 36px; }
+.title h1, .heading h2 { color: var(--account-heading); font-family: Georgia, 'Times New Roman', serif; font-weight: 700; letter-spacing: -.025em; }
+.title h1 { font-size: clamp(2rem, 3.5vw, 2.875rem); line-height: 1.1; margin-bottom: 8px; }
+.title p { font-size: 1rem; }
+.sections { gap: 14px; margin-top: 22px; }
+.panel { padding: 18px 20px; border-radius: 12px; }
+.heading { gap: 14px; margin-bottom: 12px; }
+.heading h2 { font-size: clamp(1.3rem, 2vw, 1.6rem); line-height: 1.2; }
+.heading p { font-size: .875rem; }
+.icon { width: 46px; height: 46px; color: var(--account-heading); }
+.icon svg { width: 25px; height: 25px; }
+.details { gap: 20px; padding: 12px 18px; }
+.details dt { font-size: .85rem; }
+.details dd { font-size: 1rem; margin-top: 4px; }
+.appearance { min-height: 76px; padding: 12px; gap: 12px; }
+.appearance:has(:checked) { border-color: var(--account-heading); box-shadow: inset 0 0 0 1px var(--account-heading); }
+.appearance:has(input:focus-visible) { outline: 3px solid var(--appearance-focus); outline-offset: 3px; }
+.appearance input { width: 18px; height: 18px; flex-basis: 18px; accent-color: var(--account-heading); }
+.appearance strong { font-size: .875rem; }
+.appearance small { font-size: .75rem; }
+.swatch { width: 38px; height: 38px; flex-basis: 38px; }
+.swatch[data-swatch='light'] { background: var(--appearance-soft); color: var(--account-heading); }
+.saveStatus { font-size: .8rem; }
+.libraries { padding: 12px 16px; align-items: start; }
+.libraries h3, .security h3 { font-size: .95rem; }
+.libraries p, .security p { font-size: .85rem; }
+.libraries li { min-height: 44px; }
+.libraries li span { font-size: .8rem; }
+.libraries select { min-height: 44px; border-color: var(--appearance-line); background: var(--appearance-surface); color: var(--account-ink); }
+.libraries button, .security a { min-height: 44px; font-size: .85rem; }
+.page dialog { background: var(--appearance-surface); }
+.page dialog h2 { font-family: Georgia, 'Times New Roman', serif; }
+.progress h3 { font-size: 1rem; }
+.progress :global(.panel) { gap: 12px; }
+.progress :global(.panel) > div:has(> fieldset) { min-width: 0; }
+.progress select { width: 100%; min-width: 0; min-height: 44px; text-overflow: ellipsis; }
+@media (min-width: 1100px) {
+  .progress :global(.panel) > div:has(> fieldset) { grid-template-columns: auto minmax(180px, 1fr) auto; align-items: end; }
+  .progress :global(.panel) > div:has(> fieldset) > label { min-width: 0; max-width: none; }
+}
+@media (hover: hover) and (pointer: fine) {
+  .appearance:hover:not(:has(:disabled)) { border-color: var(--account-heading); }
+  .libraries button:hover:not(:disabled), .security a:hover { color: #fffdf8; background: var(--account-gold); border-color: var(--account-gold); }
+}
+.libraries button:focus-visible, .security a:focus-visible { color: #fffdf8; background: var(--account-gold); }
+@media (max-width: 650px) {
+  .main { padding: 20px 16px 28px; }
+  .panel { padding: 16px; }
+  .heading { align-items: flex-start; gap: 10px; }
+  .icon { width: 40px; height: 40px; }
+  .details, .libraries { padding: 12px; }
+  .appearances { gap: 8px; }
+  .appearance { flex-wrap: wrap; gap: 8px; padding: 10px; }
+  .appearance > span:last-child { flex: 1 0 100%; }
+  .libraries label { width: 100%; }
+}
+@media (max-width: 380px) {
+  .appearance { flex-wrap: nowrap; }
+  .appearance > span:last-child { flex: 1 1 auto; }
+}
