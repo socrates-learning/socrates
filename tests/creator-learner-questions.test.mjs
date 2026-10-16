@@ -85,7 +85,7 @@ test('busy and rejected discard preserve the learner standalone editor and attac
 test('legacy Card remains discoverable without canonical placement and Front/Back edit preserves its identity and association', async () => {
   const h = editor({ role: 'learner', placed: false }); let e = h.render(); assert.ok(workspace(e).cards.some(c => c.id === 'mine-card'));
   workspace(e).onOpen('mine-card'); e = h.render(); assert.equal(e.questionEditorState.identity.key, 'personal:card:mine-card'); assert.equal(e.personalQuestionConceptId, 'mine-concept');
-  const tree = workspace(e).editor; assert.equal(nodes(tree).filter(n => n.type === 'textarea').length, 2); assert.equal(nodes(tree).filter(n => n.type === 'select').length, 0);
+  const tree = workspace(e).editor; assert.equal(nodes(tree).filter(n => n.type?.name === 'PersonalCardField' && n.props.literal).length, 2); assert.equal(nodes(tree).filter(n => n.type === 'textarea').length, 1); assert.equal(nodes(tree).filter(n => n.type === 'select').length, 0);
   e.setQuestionPrompt('Updated Front'); e.setQuestionAnswer('Updated Back'); await h.render().saveCurrentQuestion();
   const write = h.calls.find(c => c.table === 'personal_cards'); assert.equal(write.operation, 'update'); assert.deepEqual(JSON.parse(JSON.stringify(write.filters)), [['id','mine-card'],['owner_id','owner']]);
   assert.equal(h.render().personalQuestionConceptId, 'mine-concept'); assert.equal(h.render().questionEditorState.identity.key, 'personal:card:mine-card');

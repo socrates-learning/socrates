@@ -333,7 +333,7 @@ export function editor({ projectOfficialTextEditor = false, projectTagBrowse = f
         insert(values) { mutation = { table, operation: 'insert', values, filters }; calls.push(mutation); return query; },
         update(values) { mutation = { table, operation: 'update', values, filters }; calls.push(mutation); return query; },
         delete() { mutation = { table, operation: 'delete', filters }; calls.push(mutation); return query; },
-        single: async () => ({ data: { id: filters.find(([key]) => key === 'id')?.[1] || 'saved-personal', ...mutation?.values }, error: null }),
+        single: async () => ({ data: { id: filters.find(([key]) => key === 'id')?.[1] || 'saved-personal', created_at: '2026-10-15T12:00:00Z', updated_at: '2026-10-15T12:00:00Z', ...mutation?.values }, error: null }),
         then(resolve) { return Promise.resolve(readResponse?.(table, read) ?? { data: [], error: null, ...(table === 'tags' ? { count: 0 } : {}) }).then(resolve); },
       };
       return query;
@@ -368,6 +368,7 @@ export function editor({ projectOfficialTextEditor = false, projectTagBrowse = f
     '@/lib/concept-media': conceptMedia,
     './creator/CreatorQuestionSearchPanel': { CreatorQuestionSearchPanel },
     './creator/CreatorLearnerQuestionsWorkspace': { CreatorLearnerQuestionsWorkspace() {} },
+    './creator/PersonalCardField': { PersonalCardField() {} },
     './creator/StandaloneCustomCardWorkspace': { StandaloneCustomCardWorkspace: () => null },
     '@/lib/standalone-custom-cards': standaloneCards,
     '@/lib/markdown-editing': markdownEditing,

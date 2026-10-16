@@ -245,7 +245,8 @@ function cardBlocks(source: string, interactive: boolean, budget: ParseBudget, d
   return blocks;
 }
 
-function parseCard(markdown: string, interactive: boolean) {
+// The personal editor consumes this same bounded interpretation. No second grammar.
+export function parseCard(markdown: string, interactive: boolean) {
   return cardBlocks(markdown, interactive, { work: 1000000, nodes: 4096 });
 }
 

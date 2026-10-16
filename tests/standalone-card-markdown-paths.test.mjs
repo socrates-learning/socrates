@@ -48,12 +48,12 @@ test('all three Study/Cram slots preserve standalone rich text and legacy plain 
  assert.match(planner,/Press Enter or Space, or activate the card, to reveal the answer/);
  assert.match(planner,/role=\{!hasStudyCandidate \|\| isAnswerVisible \? undefined : 'button'\}/);
 });
-test('only learner standalone authoring opts in; staff remains plain and legacy learner editor stays plain',()=>{
+test('all roles share standalone visual authoring; legacy Card readers remain literal',()=>{
  for(const role of ['admin','editor','learner']){
   const h=editor({role,placed:true});let e=h.render();
   if(role==='learner')nodes(e.tree).find(n=>n.props?.['aria-label']==='Make Topic the active topic').props.onClick();
   else nodes(e.tree).find(n=>n.type==='button' && text(n)==='Add Custom Card').props.onClick();
-  e=h.render();const child=nodes(e.tree).find(n=>n.type?.name==='StandaloneCustomCardWorkspace');assert.ok(child);assert.equal(child.props.richText,role==='learner'?true:undefined);
+  e=h.render();const child=nodes(e.tree).find(n=>n.type?.name==='StandaloneCustomCardWorkspace');assert.ok(child);assert.equal(child.props.richText,true);
  }
 });
 function flag(kind){

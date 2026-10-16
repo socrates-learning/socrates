@@ -93,5 +93,5 @@ test('raw-source search and compact result summaries retain identity; learner an
   assert.match(text(expandChrome(h.render().tree)), /Question Front link/);
   const learner = setup({ role: 'learner' }); assert.equal(fields(learner).length, 0);
   const personal = setup(); personal.render().selectExistingQuestion(question({ id: 'mine-card', source: 'personal', conceptId: 'mine-concept' }));
-  assert.equal(fields(personal).length, 0); assert.ok(nodes(personal.render().tree).some(n => n.type === 'textarea' && n.props['aria-label'] === 'Question front of card'));
+  assert.equal(fields(personal).length, 0); assert.ok(nodes(personal.render().tree).some(n => n.type?.name === 'PersonalCardField' && n.props.label === 'Question' && n.props.literal === true));
 });

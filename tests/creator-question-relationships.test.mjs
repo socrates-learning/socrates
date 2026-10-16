@@ -97,6 +97,7 @@ function editor({ editing = false, response, references = [] } = {}) {
     '@/lib/concept-media': conceptMedia,
     './creator/CreatorQuestionSearchPanel': { CreatorQuestionSearchPanel() {} },
     './creator/CreatorLearnerQuestionsWorkspace': { CreatorLearnerQuestionsWorkspace() {} },
+    './creator/PersonalCardField': { PersonalCardField() {} },
     './creator/StandaloneCustomCardWorkspace': { StandaloneCustomCardWorkspace: () => null },
     '@/lib/standalone-custom-cards': standaloneCards,
     '@/lib/markdown-editing': markdownEditing,

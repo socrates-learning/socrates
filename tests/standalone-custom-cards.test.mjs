@@ -74,7 +74,7 @@ function workspace(db, request=null, canCreate=true, richText=false) {
   const slots=[];let cursor=0,tree;let props={ownerId:'owner',canCreate,richText,target,topicName:'Topic',cards:[],request,
     onRequest(value){props={...props,request:value};},onSaved(card){props={...props,cards:[card]};},onDeleted(){props={...props,cards:[]};},onEditorState(){}};
   const hooks={useState(initial){const i=cursor++;if(!(i in slots))slots[i]=initial;return [slots[i],v=>{slots[i]=v;}];},useRef(initial){const i=cursor++;if(!(i in slots))slots[i]={current:initial};return slots[i];},useEffect(){}};
-  const modules={'./CardMarkdownField':{CardMarkdownField: function CardMarkdownField(){}},react:hooks,'react/jsx-runtime':{jsx:(type,props)=>({type,props}),jsxs:(type,props)=>({type,props})},'@/lib/supabase':{supabase:db},'@/lib/standalone-custom-cards':cards,'../CreatorStudioV2Client.module.css':new Proxy({}, {get:(_,k)=>k})};
+  const modules={'./PersonalCardField':{PersonalCardField: function PersonalCardField(){}},react:hooks,'react/jsx-runtime':{jsx:(type,props)=>({type,props}),jsxs:(type,props)=>({type,props})},'@/lib/supabase':{supabase:db},'@/lib/standalone-custom-cards':cards,'../CreatorStudioV2Client.module.css':new Proxy({}, {get:(_,k)=>k})};
   const context={Error,exports:{},require(name){assert.ok(name in modules);return modules[name];},window:{confirm:()=>true},requestAnimationFrame(){}};
   vm.runInNewContext(ts.transpileModule(readFileSync(new URL('../components/creator/StandaloneCustomCardWorkspace.tsx',import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText,context);
   function render(){cursor=0;tree=context.exports.StandaloneCustomCardWorkspace(props);return tree;}
@@ -87,7 +87,7 @@ test('actual workspace offers minimal learner authoring, saves and retains faile
   const db=store(),ui=workspace(db,{card:null,attachment:target,topicName:'Topic'});
   assert.equal(ui.nodes().filter(n=>n.type==='select').length,0);
   assert.equal(ui.nodes().filter(n=>n.type==='section').length,0);
-  let fields=ui.nodes().filter(n=>n.type==='textarea');assert.equal(fields.length,2);
+  let fields=ui.nodes().filter(n=>n.type==='textarea');assert.equal(fields.length,3);
   fields[0].props.onChange({target:{value:'Saved front'}});fields[1].props.onChange({target:{value:'Saved back'}});ui.render();
   ui.nodes().find(n=>n.type==='form').props.onSubmit({preventDefault(){}});await new Promise(resolve=>setImmediate(resolve));ui.render();
   assert.equal(ui.props.cards[0].question,'Saved front');assert.equal(ui.props.request.card.concept_id,null);
@@ -105,7 +105,7 @@ test('closed embedded Card editor renders no separate workspace', () => {
 
 test('rich learner fields retain independent source, limits, explicit saving, duplicate-save guard and failed drafts', async () => {
  const db=store(),ui=workspace(db,{card:null,attachment:target,topicName:'Topic'},true,true);
- const fields=()=>ui.nodes().filter(n=>n.type?.name==='CardMarkdownField');
+ const fields=()=>ui.nodes().filter(n=>n.type?.name==='PersonalCardField');
  assert.equal(fields().length,2);assert.deepEqual(fields().map(n=>n.props.maxLength),[10000,20000]);
  const front='## Front\n**Strong** [link](https://example.com)',back='> Back\n- Item';
  fields()[0].props.onChange(front);fields()[1].props.onChange(back);ui.render();

@@ -129,6 +129,7 @@ function editor({ role = 'admin', editing = false, response, references = [], ca
     '@/lib/concept-media': conceptMedia,
     './creator/CreatorQuestionSearchPanel': { CreatorQuestionSearchPanel },
     './creator/CreatorLearnerQuestionsWorkspace': { CreatorLearnerQuestionsWorkspace() {} },
+    './creator/PersonalCardField': { PersonalCardField() {} },
     './creator/StandaloneCustomCardWorkspace': { StandaloneCustomCardWorkspace: () => null },
     '@/lib/standalone-custom-cards': standaloneCards,
     '@/lib/markdown-editing': markdownEditing,

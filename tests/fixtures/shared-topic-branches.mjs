@@ -1,3 +1,4 @@
+import { projectCreatorConsolidation } from './creator-consolidation.mjs';
 import { projectAppearance } from './appearance.mjs';
 import { projectStatsFlagged } from './stats-flagged-review.mjs';
 import { registerHooks } from 'node:module';
@@ -231,6 +232,7 @@ const sharedIntegrationHunks = {
   ]
 };
 export function projectSharedTopicSource(path, source) {
+  if (path === 'components/CreatorStudioV2Client.tsx') source = projectCreatorConsolidation(path, source);
   source = projectAppearance(source);
  source = projectStatsFlagged(path, source);
  const hunks = sharedIntegrationHunks[path];

@@ -13,6 +13,7 @@ import { QuestionMarkdownField, type QuestionMarkdownState } from './creator/Que
 import OfficialVisualField, { type OfficialVisualMemory, type OfficialVisualHandle } from './creator/OfficialVisualField';
 import { CreatorQuestionSearchPanel } from './creator/CreatorQuestionSearchPanel';
 import { CreatorLearnerQuestionsWorkspace } from './creator/CreatorLearnerQuestionsWorkspace';
+import { PersonalCardField } from './creator/PersonalCardField';
 import { StandaloneCustomCardWorkspace, type StandaloneCardRequest } from './creator/StandaloneCustomCardWorkspace';
 import { deleteStandaloneCard, standaloneCardMatchesTopic, standaloneCardAttachment, type CreatorStandaloneCard, type StandaloneCardAttachment } from '@/lib/standalone-custom-cards';
 import {
@@ -945,6 +946,7 @@ export function CreatorStudioV2Client({
   const [standaloneEditorVersion, setStandaloneEditorVersion] = useState(0);
   const [standaloneError, setStandaloneError] = useState('');
   const standaloneEditorRef = useRef({ dirty: false, busy: false });
+  const personalCardCompositionRef = useRef({front: false, back: false});
   const [standaloneRequest, setStandaloneRequest] = useState<StandaloneCardRequest | null>(null);
   const [personalOverlays, setPersonalOverlays] = useState(
     initialPersonalContent.overlays
@@ -2937,6 +2939,7 @@ export function CreatorStudioV2Client({
   }
 
   function confirmDiscardQuestionChanges() {
+    if (personalCardCompositionRef.current.front || personalCardCompositionRef.current.back) return false;
     if (standaloneEditorRef.current.busy) return false;
     if (isQuestionDirty && !window.confirm('Discard the unsaved changes to this question?')) return false;
     return !standaloneRequest || closeStandaloneEditor();
@@ -4621,12 +4624,14 @@ export function CreatorStudioV2Client({
 
   // Draft state stays in Creator. New global navigation consults this guard once.
   useSocratesNavigationGuard(() => {
+    if (personalCardCompositionRef.current.front || personalCardCompositionRef.current.back) return false;
     if (isDirty && !window.confirm('You have unsaved changes. Leave without saving?')) return false;
     if (standaloneRequest && !closeStandaloneEditor()) return false;
     return true;
   });
 
   function navigateFromCreator(destination: string) {
+    if (personalCardCompositionRef.current.front || personalCardCompositionRef.current.back) return;
     if (window.location.pathname === destination) {
       return;
     }
@@ -4643,6 +4648,7 @@ export function CreatorStudioV2Client({
   }
 
   function goBackFromCreator() {
+    if (personalCardCompositionRef.current.front || personalCardCompositionRef.current.back) return;
     if (
       isDirty &&
       !window.confirm('You have unsaved changes. Leave without saving?')
@@ -6029,6 +6035,7 @@ export function CreatorStudioV2Client({
   }
 
   async function saveCurrentQuestion() {
+    if (personalCardCompositionRef.current.front || personalCardCompositionRef.current.back) return;
     if (
       conceptSaveLockRef.current ||
       !tryAcquireMutationLock(questionSaveLockRef)
@@ -7170,8 +7177,12 @@ export function CreatorStudioV2Client({
       /> : personalCardEditorId ? <>
         <p>Existing Card context: {personalConceptById.get(personalQuestionConceptId || '')?.name || 'Existing attachment'}</p>
         <form onSubmit={event => { event.preventDefault(); void saveCurrentQuestion(); }}>
-          <label className={styles.personalField}>Front<textarea value={questionPrompt} required disabled={isSavingQuestion} onChange={event => setQuestionPrompt(event.target.value)} /></label>
-          <label className={styles.personalField}>Back<textarea value={questionAnswer} required disabled={isSavingQuestion} onChange={event => setQuestionAnswer(event.target.value)} /></label>
+          <PersonalCardField key={`${questionEditorIdentityKey(questionEditorState)}:${personalQuestionConceptId}:Front`} literal label="Front" value={questionPrompt} onChange={setQuestionPrompt} maxLength={10000} disabled={isSavingQuestion}
+            onComposing={active => {personalCardCompositionRef.current.front = active;}} />
+          <PersonalCardField key={`${questionEditorIdentityKey(questionEditorState)}:${personalQuestionConceptId}:Back`} literal label="Back" value={questionAnswer} onChange={setQuestionAnswer} maxLength={20000} disabled={isSavingQuestion}
+            onComposing={active => {personalCardCompositionRef.current.back = active;}} />
+          <label className={styles.personalField}>Source / Reference (optional)<textarea value={personalCardSourceReference} disabled={isSavingQuestion} onChange={event => setPersonalCardSourceReference(event.target.value)} /></label>
+          <p>This Concept-backed Card keeps its existing plain-text format.</p>
           <button type="submit" className={styles.primaryButton} disabled={isSavingQuestion || !questionPrompt.trim() || !questionAnswer.trim()}>Save Card</button>
           <button type="button" className={styles.dangerButton} disabled={isSavingQuestion} onClick={() => void deleteCurrentPersonalCard()}>Delete Card</button>
         </form>
@@ -7588,6 +7599,7 @@ export function CreatorStudioV2Client({
                 <section className={`${styles.panel} ${styles.conceptPanel}`}>
                   {standaloneRequest ? (
             <StandaloneCustomCardWorkspace
+              richText
               key={`${standaloneEditorVersion}:${standaloneRequest.attachment.source}:${standaloneRequest.attachment.topicId}:${standaloneRequest.card?.id || 'new-card'}`}
               ownerId={initialPersonalContent.ownerId} canCreate={creatorCapabilities.personal.createCard && creatorCapabilities.library.canAccessActiveLibrary}
               request={standaloneRequest} onRequest={setStandaloneRequest}
@@ -8557,22 +8569,11 @@ export function CreatorStudioV2Client({
                       disabled={isSavingQuestion} readOnly={isCurrentQuestionReadOnly || questionImages.uncertain}
                       onChange={(source, format) => { setQuestionPrompt(source); setQuestionPromptFormat(format); setQuestionStatus(null); }} />
                   </div> : (
-                  <label style={{ display: 'grid', gap: 8 }}>
-                    <strong>Question</strong>
-                    <textarea
-                      className={styles.conceptEditor}
-                      style={{ minHeight: 180 }}
-                      value={questionPrompt}
-                      readOnly={isCurrentQuestionReadOnly}
-                      disabled={isSavingQuestion}
-                      onChange={(event) => {
-                        setQuestionPrompt(event.target.value);
-                        setQuestionStatus(null);
-                      }}
-                      placeholder="Front of card"
-                      aria-label="Question front of card"
-                    />
-                  </label>
+                  <PersonalCardField key={`${questionEditorIdentityKey(questionEditorState)}:${personalQuestionConceptId}:Question`}
+                    label="Question" literal value={questionPrompt} maxLength={10000}
+                    disabled={isSavingQuestion || isCurrentQuestionReadOnly}
+                    onComposing={active => {personalCardCompositionRef.current.front = active;}}
+                    onChange={value => {setQuestionPrompt(value); setQuestionStatus(null);}} />
                   )}
 
                   {questionSource === 'official' && creatorAuthority.canSaveQuestion && <QuestionImageAuthoring controller={questionImages} surface="front" disabled={isSavingQuestion} />}
@@ -8585,22 +8586,11 @@ export function CreatorStudioV2Client({
                       disabled={isSavingQuestion} readOnly={isCurrentQuestionReadOnly || questionImages.uncertain}
                       onChange={(source, format) => { setQuestionAnswer(source); setQuestionAnswerFormat(format); setQuestionStatus(null); }} />
                   </div> : (
-                  <label style={{ display: 'grid', gap: 8, marginTop: 18 }}>
-                    <strong>Answer</strong>
-                    <textarea
-                      className={styles.conceptEditor}
-                      style={{ minHeight: 180 }}
-                      value={questionAnswer}
-                      readOnly={isCurrentQuestionReadOnly}
-                      disabled={isSavingQuestion}
-                      onChange={(event) => {
-                        setQuestionAnswer(event.target.value);
-                        setQuestionStatus(null);
-                      }}
-                      placeholder="Back of card"
-                      aria-label="Answer back of card"
-                    />
-                  </label>
+                  <PersonalCardField key={`${questionEditorIdentityKey(questionEditorState)}:${personalQuestionConceptId}:Answer`}
+                    label="Answer" literal value={questionAnswer} maxLength={20000}
+                    disabled={isSavingQuestion || isCurrentQuestionReadOnly}
+                    onComposing={active => {personalCardCompositionRef.current.back = active;}}
+                    onChange={value => {setQuestionAnswer(value); setQuestionStatus(null);}} />
                   )}
 
 

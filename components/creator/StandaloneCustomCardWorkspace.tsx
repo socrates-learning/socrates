@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { saveStandaloneCard,
   type CreatorStandaloneCard, type StandaloneCardAttachment } from '@/lib/standalone-custom-cards';
-import { CardMarkdownField } from './CardMarkdownField';
+import { PersonalCardField } from './PersonalCardField';
 import styles from '../CreatorStudioV2Client.module.css';
 
 export type StandaloneCardRequest = { card: CreatorStandaloneCard | null; attachment: StandaloneCardAttachment; topicName: string };
@@ -18,12 +18,16 @@ export function StandaloneCustomCardWorkspace({ ownerId, canCreate, request, onR
 }) {
   const [front, setFront] = useState(request?.card?.question ?? '');
   const [back, setBack] = useState(request?.card?.answer ?? '');
+  const [sourceReference, setSourceReference] = useState(request?.card?.source_reference ?? '');
+  const [frontComposing, setFrontComposing] = useState(false);
+  const [backComposing, setBackComposing] = useState(false);
+  const composing = frontComposing || backComposing;
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
   const [error, setError] = useState('');
   const frontRef = useRef<HTMLTextAreaElement>(null);
-  const dirty = !!request && (front !== (request.card?.question ?? '') || back !== (request.card?.answer ?? ''));
-  useEffect(() => { onEditorState(dirty, busy); return () => onEditorState(false, false); }, [dirty, busy, onEditorState]);
+  const dirty = !!request && (front !== (request.card?.question ?? '') || back !== (request.card?.answer ?? '') || sourceReference !== (request.card?.source_reference ?? ''));
+  useEffect(() => { onEditorState(dirty, busy || composing); return () => onEditorState(false, false); }, [dirty, busy, composing, onEditorState]);
   useEffect(() => {
     if (!dirty) return;
     function protect(event: BeforeUnloadEvent) { event.preventDefault(); }
@@ -31,16 +35,18 @@ export function StandaloneCustomCardWorkspace({ ownerId, canCreate, request, onR
     return () => window.removeEventListener('beforeunload', protect);
   }, [dirty]);
   function open(next: StandaloneCardRequest | null) {
-    if (busyRef.current || (dirty && !window.confirm('Discard unsaved Card changes?'))) return;
+    if (busyRef.current || composing || (dirty && !window.confirm('Discard unsaved Card changes?'))) return;
     setFront(next?.card?.question ?? ''); setBack(next?.card?.answer ?? ''); setError(''); onRequest(next);
+    setSourceReference(next?.card?.source_reference ?? '');
     requestAnimationFrame(() => frontRef.current?.focus());
   }
   async function save() {
-    if (!request || busyRef.current || (!request.card && !canCreate)) return;
+    if (!request || busyRef.current || composing || (!request.card && !canCreate)) return;
     busyRef.current = true; onEditorState(dirty, true); setBusy(true); setError('');
     try {
-      const saved = await saveStandaloneCard(supabase, ownerId, request.attachment, front, back, request.card);
+      const saved = await saveStandaloneCard(supabase, ownerId, request.attachment, front, back, request.card, sourceReference);
       onSaved(saved); setFront(saved.question); setBack(saved.answer);
+      setSourceReference(saved.source_reference ?? '');
       onRequest({ ...request, card: saved });
     } catch (error) { setError(error instanceof Error ? error.message : 'Card could not be saved.'); }
     finally { busyRef.current = false; onEditorState(dirty, false); setBusy(false); }
@@ -49,16 +55,18 @@ export function StandaloneCustomCardWorkspace({ ownerId, canCreate, request, onR
   return <>
     <form onSubmit={(event) => { event.preventDefault(); void save(); }}>
       {richText ? <>
-        <CardMarkdownField label="Front" value={front} onChange={setFront} maxLength={10000} required disabled={busy} />
-        <CardMarkdownField label="Back" value={back} onChange={setBack} maxLength={20000} required disabled={busy} />
+        <PersonalCardField label="Front" value={front} onChange={setFront} maxLength={10000} disabled={busy} onComposing={setFrontComposing} />
+        <PersonalCardField label="Back" value={back} onChange={setBack} maxLength={20000} disabled={busy} onComposing={setBackComposing} />
       </> : <>
       <label className={styles.personalField}>Front<textarea ref={frontRef} value={front} maxLength={10000} required disabled={busy}
         onChange={(event) => setFront(event.target.value)} /></label>
       <label className={styles.personalField}>Back<textarea value={back} maxLength={20000} required disabled={busy}
         onChange={(event) => setBack(event.target.value)} /></label>
       </>}
-      <button type="submit" className={styles.primaryButton} disabled={busy || !front.trim() || !back.trim()}>Save Card</button>
-      <button type="button" className={styles.secondaryButton} disabled={busy} onClick={() => open(null)}>Cancel</button>
+      <label className={styles.personalField}>Source / Reference (optional)<textarea value={sourceReference} disabled={busy}
+        onChange={event => setSourceReference(event.target.value)} /></label>
+      <button type="submit" className={styles.primaryButton} disabled={busy || composing || !front.trim() || !back.trim()}>Save Card</button>
+      <button type="button" className={styles.secondaryButton} disabled={busy || composing} onClick={() => open(null)}>Cancel</button>
     </form>
     {error && <div className={`${styles.status} ${styles.error}`} role="alert">{error}</div>}
   </>;

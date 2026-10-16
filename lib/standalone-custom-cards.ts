@@ -36,14 +36,16 @@ export function standaloneCardMatchesTopic(card: CreatorStandaloneCard, target: 
 }
 
 export async function saveStandaloneCard(client: SupabaseClient, ownerId: string,
-  attachment: StandaloneCardAttachment, front: string, back: string, current: CreatorStandaloneCard | null) {
+  attachment: StandaloneCardAttachment, front: string, back: string, current: CreatorStandaloneCard | null,
+  sourceReference?: string) {
   if (current && (current.owner_id !== ownerId || !standaloneCardMatchesTopic(current, attachment))) {
     throw new Error('Card identity or Topic attachment changed. Reload before saving.');
   }
   const question = front.trim();
   const answer = back.trim();
   if (!question || !answer) throw new Error('Front and Back are required.');
-  const payload = { question, answer };
+  if (question.length > 10000 || answer.length > 20000) throw new Error('Card text exceeds the field limits.');
+  const payload = { question, answer, ...(sourceReference !== undefined ? {source_reference: sourceReference.trim() || null} : {}) };
   const query = current
     ? client.from('personal_cards').update(payload).eq('id', current.id).eq('owner_id', ownerId).is('concept_id', null)
     : client.from('personal_cards').insert({ ...payload, owner_id: ownerId, concept_id: null,
