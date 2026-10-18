@@ -13,7 +13,7 @@ export function projectHomeSunrise(source) {
   if (start < 0) return source;
   assert.equal(source.split(marker).length, 2, 'One Home presentation block');
   assert.equal(createHash('sha256').update(source.slice(start)).digest('hex'),
-    '3b2ba56c5077435f3d11a4f1564295694d573be5ff093f312d1e7385e21eb74b', 'Only the approved Home presentation block');
+    '2875db8f208ab4f05f7c273c3948fe194a6c686a13d1f14b462cd18826080945', 'Only the approved Home presentation block');
   return source.slice(0, start);
 }
 

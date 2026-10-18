@@ -65,12 +65,27 @@ test('Light heading, muted copy, navigation and control accents have readable co
   }
 });
 
-test('contained Topic scrolling retains a short-window and mobile fallback', () => {
+test('Topic expansion uses natural page flow with stationary desktop navigation', () => {
   assert.match(block, /min-width: 1101px\) and \(min-height: 42rem/);
   assert.match(block, /max-width: 1100px/);
   assert.match(block, /max-width: 719px/);
-  assert.match(block, /max-height: 60dvh; overflow-y: auto/);
+  assert.match(block, /height: auto;/);
+  assert.match(block, /contain: none;/);
+  assert.match(block, /max-height: none;/);
+  assert.match(block, /overflow: visible;/);
+  assert.doesNotMatch(block, /max-height: 60dvh|overflow-y: auto/);
+  const fixed = [];
+  parsed.walkDecls('position', declaration => {
+    if (declaration.value === 'fixed') {
+      fixed.push(declaration.parent.selector);
+      assert.equal(declaration.parent.parent.params, '(min-width: 1101px)');
+    }
+  });
+  assert.deepEqual(fixed, [
+    '.home-v2-header:has(+ [data-home-dashboard]) .home-v2-brand',
+    '.home-v2-shell[data-home-dashboard] > :first-child > aside',
+  ]);
   assert.match(block, /:focus-visible/);
   assert.match(block, /prefers-reduced-motion: reduce/);
-  assert.doesNotMatch(block, /overflow(?:-y)?:\s*(?:hidden|clip)|display:\s*none|position:\s*fixed/);
+  assert.doesNotMatch(block, /overflow(?:-y)?:\s*(?:hidden|clip)|display:\s*none/);
 });

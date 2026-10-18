@@ -908,6 +908,7 @@
 
 .home-v2-shell[data-home-dashboard] {
   background: var(--home-canvas);
+  height: auto;
   min-height: calc(100dvh - var(--home-header-height));
 }
 
@@ -1022,7 +1023,13 @@
 .home-v2-shell[data-home-dashboard] .home-v2-library-switcher :is(select, button) { border-color: var(--home-line); }
 .home-v2-shell[data-home-dashboard] .home-v2-library-switcher button { background: var(--appearance-strong, #233f50); }
 
-.home-v2-shell[data-home-dashboard] .home-v2-setup-tree { padding: 3px 5px 12px; scrollbar-color: var(--home-gold) var(--home-panel); scrollbar-gutter: stable; }
+/* Expanded Topics stay in the page flow instead of a constrained scroll panel. */
+.home-v2-shell[data-home-dashboard] .home-v2-setup-tree {
+  padding: 3px 5px 12px;
+  contain: none;
+  max-height: none;
+  overflow: visible;
+}
 .home-v2-shell[data-home-dashboard] .home-v2-setup-tree button[aria-pressed] { overflow-wrap: anywhere; }
 .home-v2-shell[data-home-dashboard] .home-v2-setup-tree div[aria-hidden='true'] { border-color: var(--home-line) !important; }
 .home-v2-shell[data-home-dashboard] :is(input[type='checkbox'], input[type='range']) { accent-color: var(--home-control) !important; }
@@ -1040,9 +1047,10 @@
 
 @media (min-width: 1101px) {
   .home-v2-header:has(+ [data-home-dashboard]) { margin-inline-start: var(--home-rail-width); }
-  .home-v2-header:has(+ [data-home-dashboard]) .home-v2-brand { position: absolute; inset: 0 auto 0 calc(-1 * var(--home-rail-width)); width: var(--home-rail-width); background: var(--home-rail); }
+  /* Keep the existing logo and navigation stationary while the document scrolls. */
+  .home-v2-header:has(+ [data-home-dashboard]) .home-v2-brand { position: fixed; inset: 0 auto auto 0; width: var(--home-rail-width); height: var(--home-header-height); z-index: 20; background: var(--home-rail); }
   .home-v2-shell[data-home-dashboard] { grid-template-columns: var(--home-rail-width) minmax(0, 1fr); --home-dashboard-height: calc(100dvh - var(--home-header-height)); }
-  .home-v2-shell[data-home-dashboard] > :first-child > aside { height: var(--home-dashboard-height); }
+  .home-v2-shell[data-home-dashboard] > :first-child > aside { position: fixed; inset: var(--home-header-height) auto 0 0; width: var(--home-rail-width); height: var(--home-dashboard-height); z-index: 20; }
 }
 
 @media (min-width: 1101px) and (min-height: 42rem) {
@@ -1056,7 +1064,6 @@
   .home-v2-header:has(+ [data-home-dashboard]) .home-v2-brand-logo { width: 100%; }
   .home-v2-header:has(+ [data-home-dashboard]) .home-v2-profile { position: static; }
   .home-v2-shell[data-home-dashboard] > :first-child > aside { padding: 4px 16px; }
-  .home-v2-shell[data-home-dashboard] .home-v2-setup-tree { max-height: 60dvh; overflow-y: auto; }
 }
 
 @media (max-width: 719px) {
