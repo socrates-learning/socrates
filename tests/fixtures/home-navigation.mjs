@@ -1,3 +1,4 @@
+import { projectAdminWebsiteNavigation } from './admin-website-navigation.mjs';
 import { projectCreatorNavigation } from './creator-sunrise.mjs';
 import { projectAppearance } from './appearance.mjs';
 import assert from 'node:assert/strict';
@@ -58,7 +59,7 @@ const hunks = {
 };
 
 export function projectHomeNavigation(path, source) {
-  if (path === 'components/application-shell/SocratesShell.tsx') source = projectCreatorNavigation(source);
+  if (path === 'components/application-shell/SocratesShell.tsx') source = projectCreatorNavigation(projectAdminWebsiteNavigation(source));
   source = projectAppearance(source);
   if (path === 'components/application-shell/SocratesShell.tsx') {
     for (const [current, released] of profileNavigationHunks) {

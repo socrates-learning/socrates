@@ -97,7 +97,11 @@ export function ApplicationNavigation({ active, role, onHome, onStats, onCreator
           if (!(context?.allowNavigation(navigate) ?? true)) return;
           navigate();
         }}>{content}</Link>;
-    })}</div>
+    })}
+      {home && role === 'admin' && <a href="/website" target="_blank" rel="noopener noreferrer" aria-label="Visit Website (opens in a new tab)" title="Visit Website (opens in a new tab)" style={{ fontSize: 14, fontWeight: 600 }}>
+        <span aria-hidden="true" className={styles.icon}>↗</span><span className={styles.label}>Visit Website</span>
+      </a>}
+    </div>
     {home && <button className={styles.logout} type="button" aria-label="Log Out" title="Log Out" disabled={busy} onClick={() => { void logout(); }}><span aria-hidden="true" className={styles.icon}>{branded ? <WorkspaceIcon id="logout" /> : '↪'}</span><span className={styles.label}>Log Out</span></button>}
   </nav>;
 }

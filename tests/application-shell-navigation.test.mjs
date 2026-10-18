@@ -344,7 +344,7 @@ test('Home sidebar retains its active Home destination and original actions with
   const h = shellFixture(true, 'home', 'admin', false, true);
   const home = h.elements.find(n => n.type === 'a' && n.props.href === '/');
   assert.equal(home.props['aria-current'], 'page');
-  assert.deepEqual(h.elements.filter(n => n.type === 'a').map(n => n.props.href), ['/', '/creator', '/#stats', '/admin/users', '/account']);
+  assert.deepEqual(h.elements.filter(n => n.type === 'a').map(n => n.props.href), ['/', '/creator', '/#stats', '/admin/users', '/account', '/website']);
   const event = { button: 0, preventDefault() {} };
   home.props.onClick(event); assert.deepEqual(h.calls, []);
   h.elements.find(n => n.type === 'a' && n.props.href === '/creator').props.onClick(event);
@@ -354,7 +354,7 @@ test('Home sidebar retains its active Home destination and original actions with
 for (const role of ['admin', 'editor', 'learner', null]) test(`Home desktop and mobile navigation preserve role restrictions: ${role}`, () => {
   const h = shellFixture(true, 'home', role, false, true);
   const actions = h.elements.filter(n => n.type === 'a' || n.type === 'button');
-  assert.deepEqual(actions.map(n => n.props['aria-label']), ['Home', 'Creator Studio', 'Stats', ...(role === 'admin' ? ['Admin'] : []), 'Account Settings', 'Log Out']);
+  assert.deepEqual(actions.map(n => n.props['aria-label']), ['Home', 'Creator Studio', 'Stats', ...(role === 'admin' ? ['Admin'] : []), 'Account Settings', ...(role === 'admin' ? ['Visit Website (opens in a new tab)'] : []), 'Log Out']);
   assert.equal(actions.find(n => n.props['aria-label'] === 'Account Settings').props.href, '/account');
   assert.equal(actions.find(n => n.props['aria-label'] === 'Admin')?.props.href, role === 'admin' ? '/admin/users' : undefined);
   const navigationInstances = [];
@@ -373,10 +373,10 @@ for (const role of ['admin', 'editor', 'learner', null]) test(`Home desktop and 
   assert.match(planner, /<SocratesShell variant="home" active="home" role=\{role\}/);
 });
 
-test('the application-only release exposes no website destination for any role', () => {
+test('the private website destination is limited to Admin Home navigation', () => {
   for (const role of ['admin', 'editor', 'learner', null]) for (const home of [true, false]) {
     const h = shellFixture(false, home ? 'home' : 'creator', role, !home, home);
-    assert.equal(h.elements.some(n => n.props.href?.startsWith('/website')), false);
+    assert.equal(h.elements.some(n => n.props.href?.startsWith('/website')), role === 'admin' && home);
     assert.deepEqual(h.calls, []);
   }
 });
@@ -437,9 +437,12 @@ const applicationOnlyEntryIdentities = {
 for (const [path, expected] of Object.entries(applicationOnlyEntryIdentities)) test(`Production entrypoint/security remains byte-identical: ${path}`, () => {
   assert.equal(createHash('sha256').update(read(path)).digest('hex'), expected);
 });
-test('the unpublished website has no routes, components, assets or public-access helper', () => {
-  for (const path of ['app/website', 'components/public-homepage', 'components/public-website', 'lib/public-website-routes.ts', 'public/images/homepage-dashboard.jpg', 'public/images/homepage-study.jpg']) {
+test('the private website does not change public routing or enable submissions', () => {
+  assert.doesNotMatch(read('proxy.ts'), /website|isPublicWebsitePath/);
+  assert.match(read('app/website/layout.tsx'), /await requireAdminWebsitePreview\(\)/);
+  assert.match(read('app/website/page.tsx'), /await requireAdminWebsitePreview\(\)/);
+  assert.match(read('components/public-website/PublicInformationPage.tsx'), /await requireAdminWebsitePreview\(\)/);
+  for (const path of ['app/api/contact', 'app/api/website', 'app/register']) {
     assert.equal(existsSync(new URL('../' + path, import.meta.url)), false, path);
   }
-  assert.doesNotMatch(read('components/application-shell/SocratesShell.tsx'), /\/website|Visit Website/);
 });

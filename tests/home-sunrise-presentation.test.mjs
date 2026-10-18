@@ -1,3 +1,4 @@
+import { projectAdminWebsiteNavigation } from './fixtures/admin-website-navigation.mjs';
 import { projectStatsSunrise } from './fixtures/stats-sunrise.mjs';
 import { projectCreatorNavigation } from './fixtures/creator-sunrise.mjs';
 import assert from 'node:assert/strict';
@@ -40,7 +41,7 @@ for (const [path, expected] of Object.entries({
   'lib/appearance.ts': 'a155794d7dc2fae1610a52fd2a1b37cd3cfcdf2158ac0a9a0d1704d65f6c1f9f',
   'app/appearance.css': '4be57050307cbf106f88004881833a41e353cd130b559c6003cbeb6cf1ecf241',
   'components/HomeProfileAvatar.tsx': '3e3f46c9502619ccf30a84f357302b9354679fc30218e058dfd94ed5180e1c0b',
-})) test(`unchanged behavior and security: ${path}`, () => assert.equal(hash(path === 'components/application-shell/SocratesShell.tsx' ? projectCreatorNavigation(read(path)) : projectStatsSunrise(path, read(path))), expected));
+})) test(`unchanged behavior and security: ${path}`, () => assert.equal(hash(path === 'components/application-shell/SocratesShell.tsx' ? projectCreatorNavigation(projectAdminWebsiteNavigation(read(path))) : projectStatsSunrise(path, read(path))), expected));
 
 test('Home palette follows existing dark appearance tokens without redefining them', () => {
   const tokens = {};
