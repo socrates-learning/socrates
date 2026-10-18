@@ -4,6 +4,7 @@ import { toggleOccurrenceKey, topicDescendantIds } from '@/lib/topic-placement-g
 
 import QuestionMediaContent from './QuestionMediaContent';
 import QuestionPersonalNote from './QuestionPersonalNote';
+import { StudySuggestion } from './study-planner/StudySuggestion';
 
 import {
   useEffect,
@@ -2433,6 +2434,10 @@ export function StudyPlanner({
             <span aria-hidden="true">⚑</span>
             {isCandidateFlagLoading ? 'Loading…' : 'Flag'}
           </button>
+        )}
+        {hasStudyCandidate && studyCandidate && userId && activeLibrary && !deck?.cram_mode && (
+          <StudySuggestion key={`${userId}:${activeLibrary.id}:${studyCandidate.candidateId}`} libraryId={activeLibrary.id}
+            questionId={studyCandidate.kind === 'official' ? studyCandidate.questionId : null} disabled={studySubmissionStatus !== 'idle'} />
         )}
         <button
           className="study-v2-context-action"

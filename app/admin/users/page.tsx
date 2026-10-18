@@ -1,9 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { ShieldCheck } from 'lucide-react';
 import { SocratesShell } from '@/components/application-shell/SocratesShell';
 import { supabase } from '@/lib/supabase';
+import { AdminWorkspace } from './AdminWorkspace';
 import styles from './AdminUsers.module.css';
 
 type UserRoleRow = {
@@ -61,33 +61,23 @@ export default function AdminUsersPage() {
   return (
     // The existing server Admin layout authorizes this page before rendering it.
     <SocratesShell variant="header" active="admin" role="admin">
-      <main className={styles.page}>
-        <section className={styles.panel} aria-labelledby="user-management-title">
-          <div className={styles.heading}>
-            <div>
-              <p className={styles.eyebrow}>Administration</p>
-              <h1 id="user-management-title">User Management</h1>
-            </div>
-            <div className={styles.accessNote}>
-              <ShieldCheck aria-hidden="true" />
-              <span>Manage user roles and permissions.</span>
-            </div>
+      <AdminWorkspace>
+        <section className={styles.userPanel} aria-labelledby="user-management-title">
+          <div className={styles.sectionHeading}>
+            <h2 id="user-management-title">User Management</h2>
+            <p>Manage user roles and permissions. Users with no role are pending approval and cannot enter the app.</p>
           </div>
-          <p className={styles.description}>
-            Permanent role-management interface for approved Socrates access.
-            Users with no role are pending approval and cannot enter the app.
-          </p>
-
           {status && <p className={styles.status} role="status">{status}</p>}
-
           <div className={styles.userList} role="region" aria-label="User accounts" tabIndex={0}>
+            <table className={styles.userTable}>
+              <caption className={styles.visuallyHidden}>Account email addresses, current roles and role assignment</caption>
+              <thead><tr><th scope="col">Account email</th><th scope="col">Current role</th><th scope="col">Assign role</th></tr></thead>
+              <tbody>
             {users.map((user) => (
-              <div className={styles.userCard} key={user.user_id}>
-                <h2>{user.email}</h2>
-                <p className={styles.currentRole}>
-                  Current role: {user.role || 'Pending approval / no role'}
-                </p>
-
+              <tr key={user.user_id}>
+                <th scope="row">{user.email}</th>
+                <td data-label="Current role"><span className={styles.roleBadge}>{user.role || 'Pending approval / no role'}</span></td>
+                <td data-label="Assign role">
                 <select
                   aria-label={`Role for ${user.email}`}
                   defaultValue={user.role || ''}
@@ -104,11 +94,16 @@ export default function AdminUsersPage() {
                   <option value="editor">Editor</option>
                   <option value="admin">Admin</option>
                 </select>
-              </div>
+                </td>
+              </tr>
             ))}
+              </tbody>
+            </table>
+            {!users.length && !status && <p className={styles.empty}>No accounts to display.</p>}
           </div>
+          <p className={styles.tableFooter}>{users.length} {users.length === 1 ? 'account' : 'accounts'}</p>
         </section>
-      </main>
+      </AdminWorkspace>
     </SocratesShell>
   );
 }

@@ -35,6 +35,7 @@ function pageFixture(replies = []) {
     'lucide-react': { ShieldCheck: 'shield' },
     '@/components/application-shell/SocratesShell': { SocratesShell: 'shell' },
     './AdminUsers.module.css': { default: {}, __esModule: true },
+    './AdminWorkspace': { AdminWorkspace: 'AdminWorkspace' },
     '@/lib/supabase': { supabase: { rpc: async (name, args) => { calls.push([name, args]); return replies.shift() ?? { data: rows, error: null }; } } },
   }).default;
   const tree = Page();
@@ -47,6 +48,28 @@ test('all released loading, pending approval and role mutation logic remains byt
   assert.equal(hash(between(page, '                  defaultValue=', '\n                >')), 'e09ba33d40e2be115c0b5b53e37124c176a97efbb9024e6bcfe6629d49927a8c');
   assert.equal((page.match(/supabase\.rpc\(/g) ?? []).length, 3);
 });
+
+test('Admin workspace starts with User Management and supports keyboard tab switching', () => {
+  const state = []; let cursor = 0, focused;
+  const Workspace = compile(read('app/admin/users/AdminWorkspace.tsx'), {
+    ...runtime, react: { useCallback: fn => fn, useState: initial => { const i = cursor++; if (!(i in state)) state[i] = initial; return [state[i], value => { state[i] = value; }]; } },
+    'lucide-react': { Mail: 'mail', Users: 'users' },
+    './AdminInbox': { AdminInbox: 'Inbox' },
+    './AdminUsers.module.css': { default: {}, __esModule: true },
+  }).AdminWorkspace;
+  const render = () => { cursor = 0; return nodes(Workspace({ children: jsx('UserControls', {}) })); };
+  let tree = render();
+  assert.equal(tree.find(n => n.props.id === 'admin-tab-users').props['aria-selected'], true);
+  assert.equal(tree.find(n => n.props.id === 'admin-panel-inbox').props.hidden, true);
+  tree.find(n => n.props.id === 'admin-tab-users').props.onKeyDown({ key: 'ArrowRight', preventDefault() {}, currentTarget: { parentElement: { querySelector: selector => ({ focus: () => { focused = selector; } }) } } });
+  tree = render();
+  assert.equal(focused, '#admin-tab-inbox');
+  assert.equal(tree.find(n => n.props.id === 'admin-tab-inbox').props.tabIndex, 0);
+  assert.equal(tree.find(n => n.props.id === 'admin-panel-users').props.hidden, true);
+  assert.equal(tree.find(n => n.props.id === 'admin-panel-inbox').props.hidden, false);
+});
+
+// Persistent Inbox behavior is covered in admin-inbox-ui.test.mjs.
 
 for (const role of ['learner', 'editor', 'admin']) test(`pending account: existing ${role} assignment and reload`, async () => {
   const h = pageFixture([{ error: null }, { data: [{ ...rows[0], role }], error: null }]);
@@ -131,9 +154,11 @@ test('Admin presentation can be removed exactly, preserving Creator and all navi
 });
 test('Admin-only styles retain responsive flow, theme inheritance and visible focus', () => {
   const css = read('app/admin/users/AdminUsers.module.css');
-  assert.match(css, /min-width: 1200px\) and \(min-height: 720px/);
+  assert.match(css, /min-width: 1200px\) and \(min-height: 960px/);
   assert.match(css, /overflow-y: auto/); assert.match(css, /max-width: 700px/);
   assert.match(css, /:focus-visible/); assert.match(css, /data-appearance='navy'/); assert.match(css, /data-appearance='midnight'/);
-  assert.doesNotMatch(css, /overflow(?:-y)?:\s*(?:hidden|clip)|display:\s*none/);
+  // Only screen-reader labels and the mobile table header may be visually clipped.
+  const visibleLayout = css.replace(/\.visuallyHidden \{[^}]+\}/, '').replace(/\.userTable thead \{ position: absolute;[^}]+\}/, '');
+  assert.doesNotMatch(visibleLayout, /overflow(?:-y)?:\s*(?:hidden|clip)|display:\s*none/);
   assert.doesNotMatch(page, /\.from\(|\.auth\.|fetch\(|\/api\//);
 });
