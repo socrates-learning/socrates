@@ -53,7 +53,7 @@ import {
   type StudySessionStartOutcome,
 } from '@/lib/study-session-start';
 import type { ReactNode } from 'react';
-import { composeHomeGroups, groupSelection, mutateHomeSettings, mutateTopicSubtreePreference, requireHomeSettings, type HomeGroup, type HomeSettings, type TopicPlacement } from '@/lib/home-deck-settings';
+import { composeHomeGroups, groupSelection, locationSelection, mutateHomeSettings, mutateTopicSubtreePreference, requireHomeSettings, type HomeGroup, type HomeSettings, type TopicPlacement } from '@/lib/home-deck-settings';
 
 type LibraryNode = {
   id: string;
@@ -1826,7 +1826,7 @@ export function StudyPlanner({
     setMessage('Saving study preference...');
     try {
       const next = await mutateTopicSubtreePreference((name, args) => supabase.rpc(name, args),
-        deck.id, activeLibrary.id, homeSettings, group.key, balance);
+        deck.id, activeLibrary.id, homeSettings, group.key, balance, group.occurrenceKey);
       if (settingsContext.current !== context) return;
       setHomeSettings(next);
       setGroupDrafts({});
@@ -1883,7 +1883,7 @@ export function StudyPlanner({
     setIsSaving(false);
   }
 
-  async function toggleNodeSelection(nodeId: string, shouldInclude: boolean) {
+  async function toggleNodeSelection(nodeId: string, shouldInclude: boolean, occurrenceKey?: string) {
     if (!activeLibrary?.id || !deck || !userId || settingsRequest.current || isSaving || settingsError) return;
     settingsRequest.current = true;
     const context = settingsContext.current;
@@ -1892,9 +1892,10 @@ export function StudyPlanner({
       shouldInclude ? 'Adding topic to deck...' : 'Removing topic from deck...'
     );
 
-    const { data, error } = await supabase.rpc('set_study_deck_node_selection', {
+    const located = homeSettings?.official_topic_graph?.version === 132 && occurrenceKey;
+    const { data, error } = await supabase.rpc(located ? 'set_study_deck_location_selection' : 'set_study_deck_node_selection', {
       p_deck_id: deck.id,
-      p_node_id: nodeId,
+      ...(located ? {p_location_id: occurrenceKey.slice(9), p_expected_revision: homeSettings.official_topic_graph!.revision} : {p_node_id: nodeId}),
       p_should_include: shouldInclude,
     });
 
@@ -2007,10 +2008,10 @@ export function StudyPlanner({
     const isLibraryTopic = node.source === 'official';
     const isCollection = node.source === 'collection';
     const isExpanded = isLibraryTopic ? (expandedNodeIds.has(node.occurrenceKey || node.id) || (node.originalPath !== false && expandedNodeIds.has(node.id))) : expandedPersonalTopicIds.has(node.key);
-    const branchConceptCount = branchConceptIds(node.id).filter(
+    const branchConceptCount = branchConceptIds(homeSettings?.official_topic_graph?.version === 132 ? node.occurrenceKey || node.id : node.id).filter(
       (conceptId) => (libraryAvailabilityQuestionCounts[conceptId] || 0) > 0
     ).length;
-    const selection = isLibraryTopic ? getTopicSelectionPresentation(
+    const selection = isLibraryTopic && homeSettings?.official_topic_graph?.version === 132 ? locationSelection(node,homeSettings) : isLibraryTopic ? getTopicSelectionPresentation(
       node.id,
       nodes,
       placements,
@@ -2023,7 +2024,7 @@ export function StudyPlanner({
       : homeSettings?.unified_deck_settings.topic_preference_state?.values[node.key])
       ?? (isLibraryTopic ? nodePreferences[node.id] : homeSettings!.personal_topic_preferences[node.id]) ?? 50;
     const conceptCount = isLibraryTopic ? branchConceptCount : isCollection ? null : personalBranchCounts(node.id).concepts;
-    const questionCount = isLibraryTopic ? branchAvailabilityQuestionCount(node.id)
+    const questionCount = isLibraryTopic ? branchAvailabilityQuestionCount(homeSettings?.official_topic_graph?.version === 132 ? node.occurrenceKey || node.id : node.id)
       : isCollection ? personalCollections.find(c => c.id === node.id)?.cardCount || 0 : personalBranchCounts(node.id).cards;
 
     return (
@@ -2108,9 +2109,9 @@ export function StudyPlanner({
                 aria-checked={selection.partial ? 'mixed' : selection.checked}
                 disabled={isSaving || Boolean(settingsError)}
                 aria-describedby={isCollection ? `topic-selection-${node.key}` : undefined}
-                title={node.shared ? 'Shared Topic: a mixed checkbox is included through a parent. Check to select directly. Unchecking removes only its direct selection; another selected parent can still include it.' : selection.inherited ? 'Included through a selected parent Topic. Uncheck to exclude this branch.' : undefined}
+                title={homeSettings?.official_topic_graph?.version === 132 ? 'Select this location and its descendants. Learning progress is shared across locations.' : node.shared ? 'Shared Topic: a mixed checkbox is included through a parent. Check to select directly. Unchecking removes only its direct selection; another selected parent can still include it.' : selection.inherited ? 'Included through a selected parent Topic. Uncheck to exclude this branch.' : undefined}
                 onChange={(event) =>
-                  void (isLibraryTopic ? toggleNodeSelection(node.id, event.currentTarget.checked) : saveGroupSetting(node, event.currentTarget.checked))
+                  void (isLibraryTopic ? toggleNodeSelection(node.id, event.currentTarget.checked, node.occurrenceKey) : saveGroupSetting(node, event.currentTarget.checked))
                 }
                 style={{
                   accentColor: '#08143b',
@@ -2124,8 +2125,8 @@ export function StudyPlanner({
                 <button
                   type="button"
                   aria-label={`Configure ${node.name} New to Mastery balance`}
-                  aria-pressed={configuredGroupKey === node.key}
-                  onClick={() => setConfiguredGroupKey(node.key)}
+                  aria-pressed={configuredGroupKey === (node.occurrenceKey || node.key)}
+                  onClick={() => setConfiguredGroupKey(node.occurrenceKey || node.key)}
                   style={{
                     background: 'none',
                     border: 0,
@@ -2185,7 +2186,7 @@ export function StudyPlanner({
 
         </div>
 
-        {(selection.explicit || selection.inherited) && !selection.excluded && !selection.excludedByAncestor && configuredGroupKey === node.key && (
+        {(selection.explicit || selection.inherited) && !selection.excluded && !selection.excludedByAncestor && configuredGroupKey === (node.occurrenceKey || node.key) && (
           <div
             style={{
               marginBottom: 8,

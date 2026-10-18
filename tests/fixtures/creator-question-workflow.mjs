@@ -32,6 +32,7 @@ vm.runInNewContext(ts.transpileModule(readFileSync(new URL('../../lib/creator-st
     compilerOptions: { module: ts.ModuleKind.CommonJS },
 }).outputText, runtimeContext);
 const exposed = [
+    'locationRequest', 'locationError', 'setLocationRequest', 'submitLocationChange', 'currentOfficialLocation', 'openMoveDialog',
     'topicGraph', 'setTopicGraph', 'setActiveTopicId', 'activeTopicEdge', 'setActiveTopicEdge', 'setActiveTopicOccurrence', 'renderPlacementControls', 'renderPlacementDialog', 'placementDialog', 'setPlacementChoice', 'submitPlacementChange', 'reloadRealTopicTree', 'moveActiveTopic', 'deleteActiveTopic', 'setMoveDestinationId',
     'questionConceptPreview', 'questionConceptPreviewContext', 'closeQuestionConceptPreview', 'renderQuestionConceptPreviewAction',
     'activeTopicId', 'conceptPlacementStatus', 'setConceptPlacementStatus', 'contentConceptDisclosureKeys', 'questionConceptDisclosureKeys', 'expandedTopicIds', 'expandedPersonalTopicIds', 'conceptsForTopicDisclosure', 'renderConceptCountControl', 'toggleExpanded',
@@ -154,6 +155,7 @@ export function editor({ role = 'admin', editing = false, response, references =
         'next/navigation': { useRouter: () => ({ push: path => routes.push(path), replace: path => routes.push(path), refresh: () => routes.push('refresh') }) },
         'lucide-react': new Proxy({}, { get: (_target, key) => `icon:${String(key)}` }),
         '@/components/Header': {},
+        '@/components/TopicLocationDialog': { TopicLocationDialog() {} },
         '@/components/MarkdownContent': { cardMarkdownSummary: source => source, questionMarkdownSummary: questionMarkdown.questionMarkdownSummary },
     './creator/QuestionMarkdownField': questionField,
     './creator/OfficialVisualField': visualFieldBoundary,

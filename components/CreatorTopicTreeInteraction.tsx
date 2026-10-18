@@ -165,7 +165,7 @@ export function CreatorTopicTreeInteraction({ context, disabled, onMove, childre
     const movingNode = session?.context.nodes.find(node => node.key === session.key);
     const isPersonalRoot = movingNode?.source === 'personal' && movingNode.parentKey === null;
     const options = session && keyboard ? [
-        ...session.context.nodes.map(node => {
+        ...session.context.nodes.filter(node => session.context.graph?.version !== 132 || (movingNode?.source === 'official' ? node.key.startsWith('location:') : !node.key.startsWith('location:'))).map(node => {
             const path = [node.name];
             const seen = new Set([node.key]);
             let parent = node.parentKey;
@@ -176,13 +176,13 @@ export function CreatorTopicTreeInteraction({ context, disabled, onMove, childre
                 path.unshift(ancestor.name);
                 parent = ancestor.parentKey;
             }
-            return {key: node.key, label: path.join(' › ')};
+            return {key: node.key, label: node.pathLabel || path.join(' › ')};
         }),
     ].filter(node => planTopicPosition(session.context, session.key, node.key, intent)) : [];
     const chosen = options.some(o => o.key === target) ? target : options[0]?.key ?? '';
     return <InteractionContext.Provider value={{ context, disabled, moving: session?.key ?? null, movingOccurrence: session?.occurrenceKey, pick, start, keyboard: openKeyboard }}>
     <div ref={root} className={styles.interaction} aria-busy={disabled}>
-      <p className={styles.instructions}>Drag the handle: a line places a sibling; a highlighted row makes it the parent. Select a handle for keyboard move options.{context.graph?.edges.some(edge => edge.kind === 'placement') && ' Moving a child of a shared parent changes that child placement at every appearance of the parent.'}{context.nodes.some(node => node.source === 'personal' && node.parentKey === null) && ' Grouping keeps the branch intact.'}</p>
+      <p className={styles.instructions}>Drag the handle: a line places a sibling; a highlighted row makes it the parent. Select a handle for keyboard move options.{context.graph?.version === 122 && context.graph.edges.some(edge => edge.kind === 'placement') && ' Moving a child of a shared parent changes that child placement at every appearance of the parent.'}{context.nodes.some(node => node.source === 'personal' && node.parentKey === null) && ' Grouping keeps the branch intact.'}</p>
       {keyboard && session && <div role="dialog" aria-label="Move or reorder Topic" className={styles.keyboard} onKeyDown={e => { if (e.key === 'Escape') {
             e.stopPropagation();
             cancel();
@@ -215,5 +215,5 @@ export function TopicDragHandle({ topicKey, occurrenceKey }: {
     const interaction = useContext(InteractionContext), node = interaction?.context.nodes.find(n => n.key === topicKey);
     if (!interaction || !node || !canPosition(interaction.context, node))
         return null;
-    return <button type="button" data-topic-drag-handle className={styles.handle} disabled={interaction.disabled} aria-label={`Move or reorder ${node.name}`} title="Drag to move, or select for keyboard options" onPointerDown={e => interaction.start(e, topicKey, occurrenceKey)} onClick={e => { e.stopPropagation(); interaction.keyboard(topicKey, e.currentTarget, e.detail > 0, occurrenceKey); }}><GripVertical size={16}/></button>;
+    return <button type="button" data-topic-drag-handle className={styles.handle} disabled={interaction.disabled} aria-label={`Move or reorder ${node.pathLabel || node.name}`} title="Drag to move, or select for keyboard options" onPointerDown={e => interaction.start(e, topicKey, occurrenceKey)} onClick={e => { e.stopPropagation(); interaction.keyboard(topicKey, e.currentTarget, e.detail > 0, occurrenceKey); }}><GripVertical size={16}/></button>;
 }

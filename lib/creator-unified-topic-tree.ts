@@ -161,11 +161,12 @@ export function composeUnifiedCreatorTopicTree({
   });
 
   const placedRootsByOfficialId = new Map<string, UnifiedCreatorTopicNode[]>();
-  const officialIds = new Set<string>();
+  const officialIds = new Set<string>(), officialLocations = new Set<string>();
   function collectOfficialIds(items: readonly CreatorOfficialTopicInput[]) {
     items.forEach((topic) => {
-      if (officialIds.has(topic.id)) return;
-      officialIds.add(topic.id);
+      const identity = topic.occurrenceKey?.startsWith('location:') ? topic.occurrenceKey : topic.id;
+      if (officialLocations.has(identity)) return;
+      officialLocations.add(identity); officialIds.add(topic.id);
       collectOfficialIds(topic.children);
     });
   }
@@ -236,7 +237,7 @@ export function flattenUnifiedCreatorTopics(
   function visit(items: readonly UnifiedCreatorTopicNode[]) {
     for (const topic of items) {
       if (!seen.has(topic.key)) { seen.add(topic.key); result.push(topic); }
-      const traversal = `${topic.key}:${topic.originalPath !== false}`;
+      const traversal = topic.occurrenceKey?.startsWith('location:') ? topic.occurrenceKey : `${topic.key}:${topic.originalPath !== false}`;
       if (traversed.has(traversal)) continue;
       traversed.add(traversal); visit(topic.children);
     }

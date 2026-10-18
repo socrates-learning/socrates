@@ -61,8 +61,9 @@ export function findConceptTopicPath(
   visited: Set<string> = new Set()
 ): ConceptTopic[] | null {
   for (const topic of topics) {
-    if (topic.originalPath === false || visited.has(topic.id)) continue;
-    visited.add(topic.id);
+    const identity = topic.occurrenceKey?.startsWith('location:') ? topic.occurrenceKey : topic.id;
+    if ((!topic.occurrenceKey?.startsWith('location:') && topic.originalPath === false) || visited.has(identity)) continue;
+    visited.add(identity);
     const path = [...ancestors, topic];
     if (topic.id === topicId) return path;
     const nested = findConceptTopicPath(topic.children, topicId, path, visited);
@@ -82,8 +83,9 @@ export function collectConceptTopicSearchIds(
   function scan(items: ConceptTopic[], parent?: string) {
     for (const topic of items) {
       if (parent) parents.set(topic.id, new Set([...(parents.get(topic.id) ?? []), parent]));
-      if (seen.has(topic.id)) continue;
-      seen.add(topic.id);
+      const identity = topic.occurrenceKey?.startsWith('location:') ? topic.occurrenceKey : topic.id;
+      if (seen.has(identity)) continue;
+      seen.add(identity);
       if (topic.name.toLocaleLowerCase().includes(query)) matches.push(topic.id);
       scan(topic.children, topic.id);
     }
@@ -98,7 +100,7 @@ export function collectConceptTopicSearchIds(
   // Preserve ancestor-before-child iteration order used by existing browse/search callers.
   const ordered = new Set<string>(), emitted = new Set<string>();
   function emit(items: ConceptTopic[]) {
-    for (const topic of items) { if (emitted.has(topic.id)) continue; emitted.add(topic.id); if (visible.has(topic.id)) ordered.add(topic.id); emit(topic.children); }
+    for (const topic of items) { const identity = topic.occurrenceKey?.startsWith('location:') ? topic.occurrenceKey : topic.id; if (emitted.has(identity)) continue; emitted.add(identity); if (visible.has(topic.id)) ordered.add(topic.id); emit(topic.children); }
   }
   if (visible.size) ancestors.forEach(id => ordered.add(id));
   emit(topics);

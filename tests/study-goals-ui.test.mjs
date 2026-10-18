@@ -24,20 +24,20 @@ test('ordinary learner receives goals without privileged calls; coverage and mas
  assert.match(t,/Finals/);assert.match(t,/Overdue/);assert.match(t,/Coverage: 2 \/ 12/);assert.match(t,/Mastery: 1 \/ 3/);assert.match(t,/coverage only/);assert.match(t,/reliable completion date is not available/);
  assert.deepEqual(s.calls,[{name:'get_study_goals',args:{p_library_id:'library'}}]);
 });
-test('create preserves selections outside search results and sends canonical source-qualified Topics only',async()=>{
+test('create preserves selections outside search results and sends selected location and personal Topic IDs only',async()=>{
  const s=setup();await s.load();s.button('New goal').props.onClick();
  s.field('Goal name').props.onChange({target:{value:'NCLEX'}});s.field('Deadline').props.onChange({target:{value:'2026-12-01'}});
  s.field('Nursing').props.onChange({target:{checked:true}});s.field('Find Topics').props.onChange({target:{value:'Notes'}});
  assert.equal(s.field('Nursing'),undefined);s.field('My Notes').props.onChange({target:{checked:true}});
  await nodes(s.render()).find(n=>n.type==='form').props.onSubmit({preventDefault(){}});
- assert.deepEqual(s.calls[1],{name:'save_study_goal',args:{p_library_id:'library',p_name:'NCLEX',p_deadline:'2026-12-01',p_objective:'coverage',p_official_topic_ids:['root'],p_personal_topic_ids:['own'],p_goal_id:null,p_expected_revision:null}});
+ assert.deepEqual(s.calls[1],{name:'save_placement_study_goal',args:{p_library_id:'library',p_name:'NCLEX',p_deadline:'2026-12-01',p_objective:'coverage',p_official_location_ids:['root'],p_personal_topic_ids:['own'],p_goal_id:null,p_expected_revision:null}});
  assert.equal(s.calls[2].name,'get_study_goals');assert.match(text(s.render()),/Goal saved/);assert.equal(nodes(s.render()).filter(n=>n.type==='form').length,0);
 });
 test('editing deadline/objective retains optimistic revision and associations; opening/cancel does not write',async()=>{
  const s=setup();await s.load();s.button('Edit Finals').props.onClick();s.button('Cancel').props.onClick();assert.equal(s.calls.length,1);
  s.button('Edit Finals').props.onClick();s.field('Deadline').props.onChange({target:{value:'2026-11-01'}});s.field('Completion objective').props.onChange({target:{value:'mastery'}});
  await nodes(s.render()).find(n=>n.type==='form').props.onSubmit({preventDefault(){}});
- assert.equal(s.calls[1].args.p_goal_id,'goal');assert.equal(s.calls[1].args.p_expected_revision,2);assert.equal(s.calls[1].args.p_deadline,'2026-11-01');assert.equal(s.calls[1].args.p_objective,'mastery');assert.deepEqual(s.calls[1].args.p_official_topic_ids,['root']);
+ assert.equal(s.calls[1].args.p_goal_id,'goal');assert.equal(s.calls[1].args.p_expected_revision,2);assert.equal(s.calls[1].args.p_deadline,'2026-11-01');assert.equal(s.calls[1].args.p_objective,'mastery');assert.deepEqual(s.calls[1].args.p_official_location_ids,['root']);
 });
 test('remove requires explicit inline confirmation and only calls goal deletion; cancel preserves goal',async()=>{
  const s=setup();await s.load();s.button('Remove Finals').props.onClick();assert.equal(s.calls.length,1);assert.match(text(s.render()),/Learning history will stay intact/);
@@ -52,7 +52,7 @@ test('failed read is an error, not zero progress; Retry restores authoritative d
  fail=false;s.button('Retry / refresh goals').props.onClick();await settle();assert.match(text(s.render()),/Finals/);assert.doesNotMatch(text(s.render()),/Read unavailable/);
 });
 test('stale-save conflict retains the complete unsaved goal form and does not report success',async()=>{
- const s=setup(name=>name==='save_study_goal'?{data:null,error:{message:'Goal changed. Reload before saving.',code:'40001'}}:{data:data(),error:null});await s.load();s.button('Edit Finals').props.onClick();s.field('Goal name').props.onChange({target:{value:'Keep my draft'}});
+ const s=setup(name=>name==='save_placement_study_goal'?{data:null,error:{message:'Goal changed. Reload before saving.',code:'40001'}}:{data:data(),error:null});await s.load();s.button('Edit Finals').props.onClick();s.field('Goal name').props.onChange({target:{value:'Keep my draft'}});
  await nodes(s.render()).find(n=>n.type==='form').props.onSubmit({preventDefault(){}});
  assert.match(text(s.render()),/Reload before saving/);assert.equal(s.field('Goal name').props.value,'Keep my draft');assert.doesNotMatch(text(s.render()),/Goal saved/);
 });
@@ -71,4 +71,15 @@ test('Stats integration is additive, lazy, Progress-only and remounts on actor o
  const source=readFileSync(new URL('../components/StudyPlanner.tsx',import.meta.url),'utf8');
  assert.match(source,/const StudyGoals = dynamic\(\(\) => import\('\.\/study-planner\/StudyGoals'\)/);
  assert.ok(source.includes('{statsTab === \'progress\' && userId && <StudyGoals key={`${userId}:${activeLibrary.id}`} libraryId={activeLibrary.id} requestScope={userId} />}'));
+});
+
+
+test('a shared Topic goal saves only the chosen location, not every canonical appearance',async()=>{
+ const d=data();d.topics.push({source:'official',id:'shared-alias',topic_id:'canonical-shared',name:'Shared',parent_id:'root',path:'Critical Care › Shared'});
+ const s=setup(()=>({data:d,error:null}));await s.load();s.button('New goal').props.onClick();
+ s.field('Goal name').props.onChange({target:{value:'Branch-specific goal'}});
+ s.field('Critical Care › Shared').props.onChange({target:{checked:true}});
+ await nodes(s.render()).find(n=>n.type==='form').props.onSubmit({preventDefault(){}});
+ assert.deepEqual(s.calls[1].args.p_official_location_ids,['shared-alias']);
+ assert.equal(s.calls[1].args.p_official_topic_ids,undefined);
 });

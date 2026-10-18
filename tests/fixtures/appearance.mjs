@@ -1,3 +1,4 @@
+import { projectIndependentTopicLocations } from './independent-topic-locations.mjs';
 import { projectStudySunrise } from './study-sunrise.mjs';
 import { projectCreatorSunriseStyles } from './creator-sunrise.mjs';
 import assert from 'node:assert/strict';
@@ -40,7 +41,9 @@ export function projectAppearance(source) {
 }
 
 export function readAppearanceSource(path, options) {
-  const raw = readFileSync(path, options);
+  const content = readFileSync(path, options);
+  const relative = String(path).match(/(components\/(?:CreatorStudioV2Client|StudyPlanner)\.tsx)$/)?.[1];
+  const raw = relative && typeof content === 'string' ? projectIndependentTopicLocations(relative, content) : content;
   const value = typeof raw === 'string' ? projectStudySunrise(path, raw) : raw;
   if (typeof value !== 'string') return value;
   const home = String(path) === 'app/home.css' || String(path).endsWith('/app/home.css');

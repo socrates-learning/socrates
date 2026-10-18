@@ -1,0 +1,16 @@
+.dialog { width: min(40rem, calc(100vw - 2rem)); max-height: calc(100dvh - 2rem); box-sizing: border-box; overflow-y: auto; margin: auto; padding: 1.5rem; border: 1px solid var(--appearance-border, #d9cdbb); border-radius: 12px; background: var(--appearance-surface, #faf7f0); color: var(--appearance-text, #162b40); box-shadow: 0 18px 60px #162b4044; }
+.dialog::backdrop { background: #162b4080; }
+.dialog h2 { margin: 0 0 1rem; font-family: Georgia, serif; color: var(--appearance-accent, #80613a); }
+.dialog p, .dialog li { line-height: 1.5; }
+.dialog label { display: grid; gap: .5rem; margin: .8rem 0; font-weight: 600; }
+.dialog select { width: 100%; min-width: 0; padding: .65rem; color: inherit; background: var(--appearance-surface, white); border: 1px solid var(--appearance-border, #cbbfae); border-radius: 6px; font: inherit; }
+.dialog fieldset { min-width: 0; border: 1px solid var(--appearance-border, #cbbfae); border-radius: 6px; padding: .75rem; }
+.dialog .choice { display: flex; align-items: center; gap: .65rem; }
+.choice input { accent-color: #80613a; }
+.actions { display: flex; flex-wrap: wrap; gap: .6rem; margin-top: 1.25rem; }
+.actions button { border: 1px solid var(--appearance-border, #cbbfae); border-radius: 6px; padding: .65rem .9rem; background: var(--appearance-surface, white); color: inherit; font: inherit; font-weight: 600; cursor: pointer; }
+.actions .primary { background: #80613a; color: white; border-color: #80613a; }
+.actions button:disabled { opacity: .5; cursor: default; }
+.dialog :focus-visible { outline: 3px solid #b28d54; outline-offset: 3px; }
+.destination, .dialog li { overflow-wrap: anywhere; }
+.error { border-left: 3px solid #80613a; padding-left: .75rem; font-weight: 600; }

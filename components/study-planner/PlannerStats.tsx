@@ -63,7 +63,7 @@ export function PlannerStats({ graph, activeTab, onTabChange, libraryName, progr
     const hasChildren = childNodes.length > 0;
     const isExpanded = occurrenceExpanded(node, expandedNodeIds);
     const metric =
-      progressByNodeId.get(node.id) || fallbackProgressMetric;
+      progressByNodeId.get(graph?.version === 132 && 'occurrenceKey' in node ? node.occurrenceKey.slice(9) : node.id) || fallbackProgressMetric;
     const progress = Math.round(metric.coverage_adjusted_progress_percent);
 
     return (

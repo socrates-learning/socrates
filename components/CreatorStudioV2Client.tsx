@@ -1,5 +1,7 @@
 'use client';
 
+import { indexTopicLocations, locationId, locationKey, topicOccurrencePath } from '@/lib/topic-placement-graph';
+import { TopicLocationDialog, type LocationRequest, type LocationChange } from '@/components/TopicLocationDialog';
 import { descendantOccurrenceKey, occurrenceExpanded, toggleOccurrenceKey, indexTopicGraph, originalTopicOccurrenceKey, topicDescendantIds, type OfficialTopicGraph } from '@/lib/topic-placement-graph';
 import { loadOfficialTopicGraph } from '@/lib/topic-placement-graph';
 
@@ -25,7 +27,7 @@ import {
   type FormEvent,
 } from 'react';
 import { getTopicSelectionPresentation } from '@/lib/topic-selection-presentation';
-import { groupSelection, mutateHomeSettings, requireHomeSettings, type HomeSettings } from '@/lib/home-deck-settings';
+import { groupSelection, locationSelection, mutateHomeSettings, requireHomeSettings, type HomeSettings } from '@/lib/home-deck-settings';
 import { useRouter } from 'next/navigation';
 import {
   ArrowUpDown,
@@ -967,11 +969,13 @@ export function CreatorStudioV2Client({
   const [topics, setTopics] = useState<Topic[]>(resolvedTopics);
   const [topicGraph, setTopicGraph] = useState<OfficialTopicGraph | null>(initialTopicGraph ?? null);
   const [activeTopicOccurrence, setActiveTopicOccurrence] = useState<string | null>(null);
+  const [locationRequest, setLocationRequest] = useState<LocationRequest | null>(null);
+  const [locationError, setLocationError] = useState('');
   const [activeTopicEdge, setActiveTopicEdge] = useState<string | null>(null);
   const [placementDialog, setPlacementDialog] = useState<{ mode: 'add' | 'remove'; topicId: string; edgeKey: string | null; graph: OfficialTopicGraph } | null>(null);
   const [placementChoice, setPlacementChoice] = useState('');
   const placementReturnFocus = useRef<HTMLButtonElement | null>(null);
-  const presentationTopics = useMemo(() => topicGraph?.edges.some(e => e.kind === 'placement')
+  const presentationTopics = useMemo(() => (topicGraph?.version === 132 || topicGraph?.edges.some(e => e.kind === 'placement'))
     ? buildConceptTopicTree(topicGraph.nodes, true, topicGraph) : topics, [topicGraph, topics]);
 
   const [activeTopicId, setActiveTopicId] = useState(
@@ -1091,7 +1095,8 @@ export function CreatorStudioV2Client({
         const settings = await mutateHomeSettings(rpc, learnerDeck.deckId, learnerDeck.libraryId, 'topic-selection', topic.id, include);
         snapshot = learnerDeckSnapshot(settings);
       } else {
-        const saved = await rpc('set_study_deck_node_selection', { p_deck_id: learnerDeck.deckId, p_node_id: topic.id, p_should_include: include });
+        const located = learnerDeck.snapshot.official_topic_graph?.version === 132 && topic.occurrenceKey;
+        const saved = await rpc(located ? 'set_study_deck_location_selection' : 'set_study_deck_node_selection', { p_deck_id: learnerDeck.deckId, ...(located ? {p_location_id: locationId(topic.occurrenceKey!),p_expected_revision: learnerDeck.snapshot.official_topic_graph!.revision} : {p_node_id: topic.id}), p_should_include: include });
         if (saved.error) throw new Error(saved.error.message);
         if (!Array.isArray(saved.data?.selected_node_ids) || !Array.isArray(saved.data?.excluded_node_ids)) throw new Error('Selection save was not confirmed.');
         const loaded = await rpc('get_home_study_bootstrap', { p_library_id: learnerDeck.libraryId, p_deck_id: learnerDeck.deckId });
@@ -1116,11 +1121,11 @@ export function CreatorStudioV2Client({
     const personalState = snapshot?.unified_deck_settings.topic_states.some(state => state.group_key === topic.key);
     const available = !!snapshot && (topic.source === 'official' || personalState);
     const selection = !available ? { checked: false, partial: false }
-      : topic.source === 'official' ? getTopicSelectionPresentation(topic.id, snapshot.nodes, snapshot.placements,
+      : topic.source === 'official' && snapshot.official_topic_graph?.version === 132 ? locationSelection(topic,snapshot) : topic.source === 'official' ? getTopicSelectionPresentation(topic.id, snapshot.nodes, snapshot.placements,
         new Set(snapshot.selected_node_ids), new Set(snapshot.excluded_node_ids), snapshot.concept_overrides, snapshot.official_topic_graph)
       : groupSelection({ ...topic, parent_id: null, children: [] }, snapshot);
     return <input key="study-selection" className={styles.topicCheckbox} type="checkbox"
-      title={topic.shared ? 'Shared Topic: removing its direct selection does not exclude it while another selected parent includes it.' : undefined}
+      title={snapshot?.official_topic_graph?.version === 132 ? 'Select this location and its descendants. Progress is shared.' : topic.shared ? 'Shared Topic: removing its direct selection does not exclude it while another selected parent includes it.' : undefined}
       aria-label={`Include ${topic.name} in Study`} checked={selection.checked}
       aria-checked={selection.partial ? 'mixed' : selection.checked}
       ref={input => { if (input) input.indeterminate = selection.partial; }}
@@ -2610,6 +2615,11 @@ export function CreatorStudioV2Client({
       topicDescendantIds(topicGraph, node.id).forEach(id => (questionConceptsByTopicId[id] || []).forEach(c => ids.add(c.id)));
       counts.set(node.id, ids.size);
     });
+    if (topicGraph?.version === 132) for (const location of topicGraph.locations || []) {
+      const ids = new Set<string>();
+      topicDescendantIds(topicGraph,locationKey(location.id)).forEach(id => (questionConceptsByTopicId[id] || []).forEach(c => ids.add(c.id)));
+      counts.set(locationKey(location.id),ids.size);
+    }
     return counts;
   }, [questionConceptsByTopicId, topics, topicGraph]);
   const needsQuestionTopicIds = useMemo(() => {
@@ -3463,7 +3473,11 @@ export function CreatorStudioV2Client({
       });
     };
     addOfficial(topics, null);
-    if (topicGraph) {
+    if (topicGraph?.version === 132) for (const node of nodes) node.pathLabel = topicOccurrencePath(topicGraph,originalTopicOccurrenceKey(topicGraph,node.id))?.map(n => n.name).join(' › ');
+    if (topicGraph?.version === 132) {
+      const index = indexTopicLocations(topicGraph);
+      for (const l of index.locations.values()) nodes.push({key: locationKey(l.id),id:l.topic_id,name:index.nodes.get(l.topic_id)!.name,pathLabel:topicOccurrencePath(topicGraph,locationKey(l.id))!.map(n => n.name).join(' › '),source:'official',parentKey:l.parent_location_id ? locationKey(l.parent_location_id) : null,placementKey:null,sort_order:l.sort_order});
+    } else if (topicGraph) {
       const byId = new Map(topicGraph.nodes.map(n => [n.id, n]));
       topicGraph.edges.forEach(edge => nodes.push({ key: edge.edge_key, id: edge.topic_id,
         name: `${byId.get(edge.topic_id)!.name} — ${byId.get(edge.parent_id)!.name}`,
@@ -3488,6 +3502,9 @@ export function CreatorStudioV2Client({
 
   async function positionTopicFromTree(plan: PositionPlan) {
     if (isMutatingTopic || structuralDropLock.current) return;
+    if (plan.rpc === 'change_official_topic_location' && topicGraph?.version === 132) {
+      setLocationError(''); setLocationRequest({kind:'drop',graph:topicGraph,sourceId:String(plan.args.p_location_id),destinationId:String(plan.args.p_destination_id),beforeId:plan.args.p_before_id as string | null}); return;
+    }
     setIsMutatingTopic(true);
     try {
       const outcome = await executeTopicPosition(
@@ -3922,6 +3939,9 @@ export function CreatorStudioV2Client({
   }
 
   function openMoveDialog() {
+    if (!activePersonalTopic && topicGraph?.version === 132 && activeTopic && creatorAuthority.canManageTopicTree) {
+      setLocationError(''); setLocationRequest({kind:'drop',graph:topicGraph,sourceId:currentOfficialLocation()}); return;
+    }
     if (!activeTopic && !activePersonalTopic) {
       showStatus('error', 'Select a topic to move.');
       return;
@@ -4067,6 +4087,9 @@ export function CreatorStudioV2Client({
     }
 
     if (activeLibraryId && activeTopic) {
+      if (dialogMode === 'add' && topicGraph?.version === 132) {
+        setLocationError(''); setLocationRequest({kind:'create',graph:topicGraph,sourceId:activeTopic.id,destinationId:currentOfficialLocation(),name}); return;
+      }
       setIsMutatingTopic(true);
       setStatus(null);
 
@@ -4335,6 +4358,31 @@ export function CreatorStudioV2Client({
     showStatus('success', `Moved “${activeTopic.name}” beneath ${destination.name}.`);
   }
 
+  function currentOfficialLocation() {
+    if (!topicGraph || !activeTopic) return '';
+    return locationId(activeTopicOccurrence || originalTopicOccurrenceKey(topicGraph,activeTopic.id));
+  }
+
+  async function submitLocationChange(change: LocationChange) {
+    const request = locationRequest;
+    if (!request || isMutatingTopic || !creatorAuthority.canManageTopicTree || request.graph.library_id !== activeLibraryId) return;
+    setIsMutatingTopic(true); setLocationError('');
+    try {
+      const { data, error } = await supabase.rpc(change.action === 'create' ? 'create_official_topic_at_location' : 'change_official_topic_location', change.action === 'create'
+        ? {p_library_id:activeLibraryId,p_parent_location_id:change.destinationId,p_name:request.name,p_scope:change.scope,p_expected_revision:request.graph.revision}
+        : {p_library_id:activeLibraryId,p_location_id:change.sourceId,p_destination_id:change.destinationId,p_action:change.action,p_scope:change.scope,p_include_children:change.includeChildren,p_before_id:change.beforeId,p_expected_revision:request.graph.revision});
+      if (error) throw error;
+      await reloadRealTopicTree(change.action === 'create' ? data?.topic_id : activeTopicId);
+      setLocationRequest(null); closeTopicDialog();
+      if (change.destinationId) setExpandedTopicIds(current => new Set(current).add(locationKey(change.destinationId!)));
+      if (change.action === 'create' && data?.location_id) { setActiveTopicOccurrence(locationKey(data.location_id)); setActiveTopicEdge(locationKey(data.location_id)); }
+      if (change.action === 'remove') {setActiveTopicOccurrence(null); setActiveTopicEdge(null);}
+      showStatus('success', change.action === 'create' ? 'Topic created.' : 'Topic locations saved. Shared content and learning progress were preserved.');
+    } catch (error) {
+      setLocationError(topicMutationErrorMessage(error));
+    } finally { setIsMutatingTopic(false); }
+  }
+
   function closePlacementDialog() {
     setPlacementDialog(null);
   }
@@ -4360,6 +4408,13 @@ export function CreatorStudioV2Client({
 
   function renderPlacementControls() {
     if (!topicGraph || !creatorAuthority.canManageTopicTree || activePersonalTopic || !activeTopic) return null;
+    if (topicGraph.version === 132) {
+      const sourceId = currentOfficialLocation();
+      const open = (kind: LocationRequest['kind']) => { setLocationError(''); setLocationRequest({kind,graph:topicGraph,sourceId,...(kind === 'add-existing' ? {destinationId:sourceId} : {})}); };
+      return <><button type="button" className={styles.toolButton} disabled={isMutatingTopic || !!locationRequest || activeTopic.id === rootTopicId} onClick={() => open('duplicate')}>Duplicate</button>
+        <button type="button" className={styles.toolButton} disabled={isMutatingTopic || !!locationRequest} onClick={() => open('add-existing')}>Add existing Topic here</button>
+        {activeTopic.id !== rootTopicId && <button type="button" className={styles.toolButton} disabled={isMutatingTopic || !!locationRequest} onClick={() => open('remove')}>Remove this placement</button>}</>;
+    }
     const incoming = indexTopicGraph(topicGraph).incoming.get(activeTopic.id) || [];
     const edge = incoming.find(e => e.edge_key === activeTopicEdge) || incoming.find(e => e.kind === 'primary');
     return <>
@@ -6224,7 +6279,7 @@ export function CreatorStudioV2Client({
         );
         node.children.forEach(collect);
       }
-      if (topicGraph) topicDescendantIds(topicGraph, topic.id).forEach(id =>
+      if (topicGraph) topicDescendantIds(topicGraph, topicGraph.version === 132 ? topic.occurrenceKey || topic.id : topic.id).forEach(id =>
         (questionConceptsByTopicId[id] || []).forEach(concept => add({ ...concept, source: 'official', topicId: id })));
       else collect(findTopic(topics, topic.id) || { ...topic, children: [] });
       personalOverlays.filter(overlay => topic.originalPath !== false && overlay.library_node_id === topic.id).forEach(overlay => {
@@ -6409,7 +6464,7 @@ export function CreatorStudioV2Client({
         : occurrenceExpanded(topic, expandedTopicIds));
     const isActive = !activePersonalTopicId && activeTopicId === topic.id && (!activeTopicOccurrence ? topic.originalPath !== false : activeTopicOccurrence === (topic.occurrenceKey || topic.id));
     const conceptCountInBranch =
-      questionConceptCountByTopicId.get(topic.id) || 0;
+      questionConceptCountByTopicId.get(topic.occurrenceKey?.startsWith('location:') ? topic.occurrenceKey : topic.id) || 0;
     const hasConceptsInBranch =
       conceptCountInBranch > 0 || personalOverlayConcepts.length > 0;
 
@@ -6483,7 +6538,7 @@ export function CreatorStudioV2Client({
 
   function renderPrerequisiteBrowseTopic(topic: Topic, depth = 0) {
     const directConcepts = questionConceptsByTopicId[topic.id] || [];
-    const conceptCountInBranch = questionConceptCountByTopicId.get(topic.id) || 0;
+    const conceptCountInBranch = questionConceptCountByTopicId.get(topic.occurrenceKey?.startsWith('location:') ? topic.occurrenceKey : topic.id) || 0;
     const isExpanded = occurrenceExpanded(topic, expandedPrerequisiteTopicIds);
     const canExpand = topic.children.length > 0 || directConcepts.length > 0;
     const topicPath =
@@ -6627,7 +6682,7 @@ export function CreatorStudioV2Client({
         return item ? [item] : [];
       });
     const conceptCountInBranch =
-      questionConceptCountByTopicId.get(topic.id) || 0;
+      questionConceptCountByTopicId.get(topic.occurrenceKey?.startsWith('location:') ? topic.occurrenceKey : topic.id) || 0;
     const canExpand =
       topic.children.length > 0 ||
       directConcepts.length > 0 ||
@@ -7116,7 +7171,7 @@ export function CreatorStudioV2Client({
                 </div>
               )}
 
-              <CreatorTopicTreeInteraction context={positioningContext} disabled={isMutatingTopic || !!dialogMode || !!placementDialog} onMove={positionTopicFromTree}>
+              <CreatorTopicTreeInteraction context={positioningContext} disabled={isMutatingTopic || !!dialogMode || !!placementDialog || !!locationRequest} onMove={positionTopicFromTree}>
               <div className={styles.treeViewport} aria-label="Topic Tree">
                 {visibleTopicComposition.officialRoots.map((topic) =>
                   renderUnifiedTopic(topic)
@@ -7296,6 +7351,7 @@ export function CreatorStudioV2Client({
   return (
     <>
       <Header />
+      {locationRequest && <TopicLocationDialog request={locationRequest} busy={isMutatingTopic} error={locationError} onCancel={() => setLocationRequest(null)} onConfirm={submitLocationChange} />}
       {isLearnerReadOnly ? <main className={styles.workspace}>
         <fieldset className={styles.studioShell} disabled={isSaving || isSavingQuestion} aria-label="Creator Studio editor">
           <CreatorStudioLocalHeader learnerPresentation onBack={goBackFromCreator} onClearConcept={clearDraft} onOpenLibraryOrganizer={() => {}} showClearConcept={false} />
@@ -8903,7 +8959,7 @@ export function CreatorStudioV2Client({
                     </div>
                   )}
 
-                  <CreatorTopicTreeInteraction context={positioningContext} disabled={isMutatingTopic || !!dialogMode || !!placementDialog} onMove={positionTopicFromTree} viewportLabel="Question Topic Tree">
+                  <CreatorTopicTreeInteraction context={positioningContext} disabled={isMutatingTopic || !!dialogMode || !!placementDialog || !!locationRequest} onMove={positionTopicFromTree} viewportLabel="Question Topic Tree">
                   <div
                     className={`${styles.treeViewport} ${styles.questionConceptBrowser}`}
                     tabIndex={0}

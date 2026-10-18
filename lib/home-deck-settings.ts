@@ -1,4 +1,4 @@
-import { requireTopicGraph, topicGraphOccurrences, type OfficialTopicGraph, type TopicOccurrence } from './topic-placement-graph';
+import { requireTopicGraph, topicGraphOccurrences, locationId, locationDescendants, type OfficialTopicGraph, type TopicOccurrence } from './topic-placement-graph';
 /** Wire contract of Migration 109. Presentation placement never supplies selection. */
 export type TopicState = {
   group_key: string; topic_id: string; selected: boolean; direct: boolean;
@@ -16,6 +16,9 @@ export type TopicPreferenceState = {
 };
 export type HomeSettings = {
   official_topic_graph?: OfficialTopicGraph;
+  location_selection?: { version: 132; graph_revision: string; states: {
+    location_id: string; topic_id: string; included: boolean; direct: boolean; source_location_id: string | null; distance: number;
+  }[] };
   unified_deck_settings: SettingsSnapshot;
   personal_topic_preferences: Record<string, number>;
   personal_collection_preferences: Record<string, number>;
@@ -82,8 +85,23 @@ export function requireHomeSettings(data: unknown): HomeSettings {
     const libraryId = s.topic_preference_state?.library_id;
     if (!libraryId) throw new Error('Topic graph has no confirmed Library settings.');
     requireTopicGraph(value.official_topic_graph, libraryId);
+    if (value.official_topic_graph.version === 132 && (value.location_selection?.version !== 132
+      || value.location_selection.graph_revision !== value.official_topic_graph.revision || !Array.isArray(value.location_selection.states))) {
+      throw new Error('Topic location selection could not be confirmed. Reload Home.');
+    }
   }
   return value;
+}
+export function locationSelection(group: { occurrenceKey?: string }, settings: HomeSettings) {
+  const graph = settings.official_topic_graph, states = settings.location_selection?.states;
+  if (graph?.version !== 132 || !group.occurrenceKey || !states) throw new Error('Confirmed Topic location required.');
+  const id = locationId(group.occurrenceKey), own = states.find(s => s.location_id === id);
+  if (!own) throw new Error('The Topic location is no longer available. Reload Home.');
+  const descendants = locationDescendants(graph,id), branch = states.filter(s => descendants.has(s.location_id));
+  const any = branch.some(s => s.included), all = branch.every(s => s.included);
+  return { checked: all && any, partial: any && !all, explicit: own.direct && own.included,
+    inherited: !own.direct && own.included, excluded: own.direct && !own.included,
+    excludedByAncestor: !own.direct && !own.included && own.source_location_id !== null };
 }
 export function groupSelection(group: HomeGroup, settings: HomeSettings) {
   const s = settings.unified_deck_settings;
@@ -113,13 +131,14 @@ function confirmedTopicPreferences(data: unknown, deckId: string, libraryId: str
 
 /** One current-subtree transaction, then readback. Never replay an uncertain reset. */
 export async function mutateTopicSubtreePreference(rpc: SettingsRpc, deckId: string, libraryId: string,
-  settings: HomeSettings, groupKey: string, balance: number) {
+  settings: HomeSettings, groupKey: string, balance: number, occurrenceKey?: string) {
   const before = confirmedTopicPreferences(settings.unified_deck_settings.topic_preference_state, deckId, libraryId);
   if (!(groupKey in before.values) || !Number.isInteger(balance) || balance < 0 || balance > 100) {
     throw new Error('A confirmed Topic and balance between 0 and 100 are required.');
   }
-  const result = await rpc('set_study_deck_topic_subtree_preference', {
-    p_deck_id: deckId, p_library_id: libraryId, p_group_key: groupKey,
+  const located = settings.official_topic_graph?.version === 132 && groupKey.startsWith('official:') && occurrenceKey;
+  const result = await rpc(located ? 'set_study_deck_location_preference' : 'set_study_deck_topic_subtree_preference', {
+    p_deck_id: deckId, p_library_id: libraryId, ...(located ? {p_location_id: locationId(occurrenceKey)} : {p_group_key: groupKey}),
     p_balance: balance, p_expected_revision: before.revision,
   });
   if (result.error) throw new Error(result.error.message);

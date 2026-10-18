@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation';
 import { MarkdownContent, questionMarkdownSummary } from '@/components/MarkdownContent';
 import type { OfficialContentFormat } from '@/lib/official-content-format';
 import { supabase } from '@/lib/supabase';
+import { loadOfficialTopicGraph, originalTopicOccurrenceKey, locationId, topicOccurrencePath, indexTopicLocations, type OfficialTopicGraph } from '@/lib/topic-placement-graph';
+import { TopicLocationDialog, type LocationRequest, type LocationChange } from '@/components/TopicLocationDialog';
 import type { ActiveLibrary } from '@/lib/library-context';
 import { broadcastTagCatalogUsageInvalidation } from '@/lib/tag-catalog-invalidation';
 
@@ -565,7 +567,11 @@ export function ArticleEditorClient({
   const [categoryParentId, setCategoryParentId] = useState('');
   const [categoryName, setCategoryName] = useState('');
   const [categoryMessage, setCategoryMessage] = useState('');
+  const [locationRequest, setLocationRequest] = useState<LocationRequest | null>(null);
+  const [locationBusy, setLocationBusy] = useState(false);
+  const [locationError, setLocationError] = useState('');
   const [availableNodes, setAvailableNodes] = useState(nodes);
+  const [topicGraph, setTopicGraph] = useState<OfficialTopicGraph | null>(null);
   const [tags, setTags] = useState(article.tags);
   const [tagInput, setTagInput] = useState('');
   const [availableTags, setAvailableTags] = useState<TagRecord[]>([]);
@@ -601,6 +607,23 @@ export function ArticleEditorClient({
   const [previewMarkdown, setPreviewMarkdown] = useState(article.body_markdown);
   const [message, setMessage] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const locationLabels = useMemo(() => {
+    const result = new Map<string,string>();
+    if (topicGraph?.version !== 132) return result;
+    const index = indexTopicLocations(topicGraph);
+    for (const node of topicGraph.nodes) {
+      const path = topicOccurrencePath(topicGraph,originalTopicOccurrenceKey(topicGraph,node.id))?.map(item => item.name).join(' › ');
+      if (path) result.set(node.id,path + ((index.byTopic.get(node.id)?.length || 0)>1 ? ' · Shared Topic' : ''));
+    }
+    return result;
+  },[topicGraph]);
+  const categoryLabel = (node: LibraryNode) => locationLabels.get(node.id) || getCategoryPath(node,availableNodes);
+  useEffect(() => {
+    let cancelled = false;
+    void loadOfficialTopicGraph(supabase,activeLibrary.id).then(graph => { if (!cancelled) setTopicGraph(graph); })
+      .catch(() => { if (!cancelled) setCategoryMessage('Current Topic locations could not be loaded. Retry before creating a subcategory.'); });
+    return () => { cancelled = true; };
+  },[activeLibrary.id]);
   const placementNodes = useMemo(
     () => availableNodes.filter((node) => node.parent_id !== null),
     [availableNodes]
@@ -1452,6 +1475,21 @@ export function ArticleEditorClient({
       return;
     }
 
+    if (locationBusy || locationRequest) return;
+    setLocationBusy(true);
+    try {
+      const graph = await loadOfficialTopicGraph(supabase,activeLibrary.id);
+      if (graph.version === 132) {
+        setTopicGraph(graph);
+        setLocationError('');
+        setLocationRequest({kind:'create',graph,sourceId:'',name,parentTopicId:parent.id,
+          destinationId:locationId(originalTopicOccurrenceKey(graph,parent.id))});
+        return;
+      }
+    } catch (error) {
+      setCategoryMessage(error instanceof Error ? error.message : 'Unable to confirm Topic locations.');
+      return;
+    } finally { setLocationBusy(false); }
     setCategoryMessage('Creating subcategory...');
 
     const { data, error } = await supabase
@@ -1479,6 +1517,26 @@ export function ArticleEditorClient({
     setNewPlacementId(createdNode.id);
     setCategoryName('');
     setCategoryMessage('Subcategory created and selected for placement.');
+  }
+
+  async function createSubcategoryAtLocation(change: LocationChange) {
+    const request = locationRequest;
+    if (!request || locationBusy) return;
+    setLocationBusy(true); setLocationError('');
+    try {
+      const {data,error} = await supabase.rpc('create_official_topic_at_location', {
+        p_library_id:activeLibrary.id,p_parent_location_id:change.destinationId,p_name:request.name,
+        p_scope:change.scope,p_expected_revision:request.graph.revision,
+      });
+      if (error) throw error;
+      const created = data?.graph?.nodes?.find((node: LibraryNode) => node.id === data.topic_id) as LibraryNode | undefined;
+      if (!created || created.library_id !== activeLibrary.id) throw new Error('Topic may have saved. Reload before trying again.');
+      setAvailableNodes(current => [...current.filter(node => node.id!==created.id),created].sort((a,b)=>a.name.localeCompare(b.name)));
+      setTopicGraph(data.graph);
+      setNewPlacementId(created.id); setCategoryName(''); setLocationRequest(null);
+      setCategoryMessage('Subcategory created and selected for placement.');
+    } catch (error) { setLocationError(error instanceof Error ? error.message : (error as {message?:string})?.message || 'Unable to save Topic.'); }
+    finally { setLocationBusy(false); }
   }
 
   function normalizeTagName(value: string) {
@@ -1952,7 +2010,7 @@ export function ArticleEditorClient({
               <div className="card" key={placementId}>
                 <strong>{isPrimary ? 'Primary Location' : 'Additional Location'}</strong>
                 <p className="muted">
-                  {node ? getCategoryPath(node, availableNodes) : 'Unknown category'}
+                  {node ? categoryLabel(node) : 'Unknown category'}
                 </p>
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                   {!isPrimary && (
@@ -1987,7 +2045,7 @@ export function ArticleEditorClient({
               <option value="">Choose location</option>
               {placementNodes.map((node) => (
                 <option key={node.id} value={node.id}>
-                  {getCategoryPath(node, availableNodes)}
+                  {categoryLabel(node)}
                 </option>
               ))}
             </select>
@@ -2011,7 +2069,7 @@ export function ArticleEditorClient({
               <option value="">Choose parent</option>
               {availableNodes.map((node) => (
                 <option key={node.id} value={node.id}>
-                  {getCategoryPath(node, availableNodes)}
+                  {categoryLabel(node)}
                 </option>
               ))}
             </select>
@@ -2029,10 +2087,12 @@ export function ArticleEditorClient({
 
         <br />
 
-        <button className="btn ghost" type="button" onClick={createSubcategory}>
+        <button className="btn ghost" type="button" disabled={locationBusy || !!locationRequest} onClick={createSubcategory}>
           + Create Subcategory
         </button>
         {categoryMessage && <p className="muted">{categoryMessage}</p>}
+        {locationRequest && <TopicLocationDialog request={locationRequest} busy={locationBusy} error={locationError}
+          onCancel={() => setLocationRequest(null)} onConfirm={createSubcategoryAtLocation} />}
       </div>
 
       <br />
@@ -2381,7 +2441,7 @@ export function ArticleEditorClient({
                           checked={newConceptPlacementIds.includes(node.id)}
                           onChange={() => toggleNewConceptPlacement(node.id)}
                         />
-                        {getCategoryPath(node, availableNodes)}
+                        {categoryLabel(node)}
                       </label>
                     ))}
                   </div>

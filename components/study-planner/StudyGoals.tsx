@@ -69,9 +69,9 @@ export function StudyGoals({ libraryId, requestScope }: Props) {
     mutation.current = true; setBusy(true); setError('');
     const ticket = epoch.current;
     try {
-      const { error: failure } = await supabase.rpc('save_study_goal', {
+      const { error: failure } = await supabase.rpc('save_placement_study_goal', {
         p_library_id: libraryId, p_name: draft.name, p_deadline: draft.deadline, p_objective: draft.objective,
-        p_official_topic_ids: draft.topics.filter(k => k.startsWith('official:')).map(k => k.slice(9)),
+        p_official_location_ids: draft.topics.filter(k => k.startsWith('official:')).map(k => k.slice(9)),
         p_personal_topic_ids: draft.topics.filter(k => k.startsWith('personal:')).map(k => k.slice(9)),
         p_goal_id: draft.id, p_expected_revision: draft.revision,
       });

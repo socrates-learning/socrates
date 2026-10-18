@@ -6,9 +6,58 @@ export type OfficialTopicEdge = {
   edge_key: string; parent_id: string; topic_id: string; sort_order: number; kind: 'primary' | 'placement';
 };
 export type OfficialTopicGraph = {
-  version: 122; library_id: string; revision: string; root_id: string | null;
+  version: 122 | 132; library_id: string; revision: string; root_id: string | null;
   nodes: OfficialTopicNode[]; edges: OfficialTopicEdge[];
+  locations?: OfficialTopicLocation[];
 };
+export type OfficialTopicLocation = {
+  id: string; library_id: string; topic_id: string; parent_location_id: string | null;
+  sort_order: number; is_original: boolean; legacy_occurrence_key?: string | null;
+};
+export const locationKey = (id: string) => `location:${id}`;
+export const locationId = (key: string) => key.startsWith('location:') ? key.slice(9) : key;
+
+/** A location has one parent. Canonical content may appear in many locations. */
+export function indexTopicLocations(graph: OfficialTopicGraph) {
+  const invalid = () => { throw new Error('The Topic locations are invalid. Reload the Library.'); };
+  if (graph.version !== 132 || !Array.isArray(graph.locations)) return invalid();
+  const locations = new Map(graph.locations.map(l => [l.id,l]));
+  const nodes = new Map(graph.nodes.map(n => [n.id,n]));
+  const children = new Map<string, OfficialTopicLocation[]>();
+  const byTopic = new Map<string, OfficialTopicLocation[]>();
+  const roots = graph.locations.filter(l => l.parent_location_id === null);
+  if (locations.size !== graph.locations.length || roots.length !== (nodes.size ? 1 : 0) || (roots[0]?.topic_id ?? null) !== graph.root_id) invalid();
+  const pairs = new Set<string>();
+  for (const l of locations.values()) {
+    const pair = `${l.parent_location_id}/${l.topic_id}`;
+    if (!nodes.has(l.topic_id) || l.library_id !== graph.library_id || !Number.isInteger(l.sort_order) || l.sort_order < 0 || pairs.has(pair)
+      || (l.parent_location_id !== null && !locations.has(l.parent_location_id))) invalid();
+    pairs.add(pair);
+    if (l.parent_location_id) children.set(l.parent_location_id,[...(children.get(l.parent_location_id) ?? []),l]);
+    byTopic.set(l.topic_id,[...(byTopic.get(l.topic_id) ?? []),l]);
+  }
+  for (const id of nodes.keys()) if (byTopic.get(id)?.filter(l => l.is_original).length !== 1) invalid();
+  children.forEach(rows => rows.sort((a,b) => a.sort_order-b.sort_order || a.id.localeCompare(b.id)));
+  const order: string[] = [], visited = new Set<string>();
+  function visit(l: OfficialTopicLocation, ancestry: Set<string>) {
+    if (visited.has(l.id) || ancestry.has(l.topic_id)) return invalid();
+    visited.add(l.id); order.push(l.id);
+    const next = new Set(ancestry).add(l.topic_id);
+    (children.get(l.id) ?? []).forEach(child => visit(child,next));
+  }
+  roots.forEach(l => visit(l,new Set()));
+  if (visited.size !== locations.size) invalid();
+  return { locations, nodes, children, byTopic, roots, order };
+}
+export function locationDescendants(graph: OfficialTopicGraph, id: string) {
+  const index = indexTopicLocations(graph), found = new Set<string>(), pending = [locationId(id)];
+  while (pending.length) {
+    const current = pending.pop()!;
+    if (found.has(current) || !index.locations.has(current)) continue;
+    found.add(current); pending.push(...(index.children.get(current) ?? []).map(l => l.id));
+  }
+  return found;
+}
 export type TopicOccurrence = {
   id: string; name: string; occurrenceKey: string; edgeKey: string | null;
   originalPath: boolean; originalParentId: string | null; shared: boolean; children: TopicOccurrence[];
@@ -45,11 +94,14 @@ export function indexTopicGraph(graph: OfficialTopicGraph) {
     }
   }
   if (order.length !== nodes.size) invalid();
-  return { nodes, children, incoming, order, shared: new Set(order.filter(id => paths.get(id) === 2)) };
+  const shared = graph.version === 132
+    ? new Set([...indexTopicLocations(graph).byTopic].filter(([, locations]) => locations.length > 1).map(([id]) => id))
+    : new Set(order.filter(id => paths.get(id) === 2));
+  return { nodes, children, incoming, order, shared };
 }
 export function requireTopicGraph(value: unknown, libraryId: string): OfficialTopicGraph {
   const g = value as OfficialTopicGraph | null;
-  if (!g || g.version !== 122 || g.library_id !== libraryId || typeof g.revision !== 'string'
+  if (!g || ![122,132].includes(g.version) || g.library_id !== libraryId || typeof g.revision !== 'string'
     || !/^[a-f0-9]{32}$/.test(g.revision) || !Array.isArray(g.nodes) || !Array.isArray(g.edges)) {
     throw new Error('The official Topic graph could not be confirmed for this Library.');
   }
@@ -57,6 +109,11 @@ export function requireTopicGraph(value: unknown, libraryId: string): OfficialTo
   return g;
 }
 export function topicDescendantIds(graph: OfficialTopicGraph, topicId: string, originalOnly = false): Set<string> {
+  if (graph.version === 132) {
+    const index = indexTopicLocations(graph);
+    const start = topicId.startsWith('location:') ? locationId(topicId) : index.byTopic.get(topicId)?.find(l => l.is_original)?.id;
+    return new Set(start ? [...locationDescendants(graph,start)].map(id => index.locations.get(id)!.topic_id) : []);
+  }
   const index = indexTopicGraph(graph), pending = [topicId], found = new Set<string>();
   while (pending.length) {
     const id = pending.pop()!;
@@ -67,6 +124,10 @@ export function topicDescendantIds(graph: OfficialTopicGraph, topicId: string, o
   return found;
 }
 export function originalTopicOccurrenceKey(graph: OfficialTopicGraph, id: string): string {
+  if (graph.version === 132) {
+    const original = indexTopicLocations(graph).byTopic.get(id)?.find(l => l.is_original);
+    return original ? locationKey(original.id) : '';
+  }
   const nodes = new Map(graph.nodes.map(n => [n.id, n])), path: string[] = [], seen = new Set<string>();
   for (let node = nodes.get(id); node; node = node.parent_id ? nodes.get(node.parent_id) : undefined) {
     if (seen.has(node.id)) throw new Error('Topic hierarchy contains a cycle.');
@@ -76,6 +137,18 @@ export function originalTopicOccurrenceKey(graph: OfficialTopicGraph, id: string
 }
 /** Children materialize one level at a time; a collapsed diamond has constant-size UI state. */
 export function topicGraphOccurrences(graph: OfficialTopicGraph): TopicOccurrence[] {
+  if (graph.version === 132) {
+    const index = indexTopicLocations(graph);
+    function occurrence(l: OfficialTopicLocation): TopicOccurrence {
+      const node = index.nodes.get(l.topic_id)!;
+      let children: TopicOccurrence[] | undefined;
+      return { id: node.id, name: node.name, occurrenceKey: locationKey(l.id),
+        edgeKey: l.parent_location_id ? locationKey(l.id) : null, originalPath: l.is_original,
+        originalParentId: node.parent_id, shared: index.byTopic.get(node.id)!.length > 1,
+        get children() { return children ??= (index.children.get(l.id) ?? []).map(occurrence); } };
+    }
+    return index.roots.map(occurrence);
+  }
   const index = indexTopicGraph(graph);
   function occurrence(id: string, key: string, edgeKey: string | null, originalPath: boolean): TopicOccurrence {
     const node = index.nodes.get(id)!;
@@ -115,6 +188,13 @@ export async function loadOfficialTopicGraph(client: { rpc: (name: string, args:
 
 /** Resolve only a real root-to-row path; never enumerate every path through a DAG. */
 export function topicOccurrencePath(graph: OfficialTopicGraph, key: string): OfficialTopicNode[] | null {
+  if (graph.version === 132) {
+    const index = indexTopicLocations(graph), path: OfficialTopicNode[] = [];
+    let l = index.locations.get(locationId(key));
+    if (!l) return null;
+    while (l) { path.unshift(index.nodes.get(l.topic_id)!); l = l.parent_location_id ? index.locations.get(l.parent_location_id) : undefined; }
+    return path;
+  }
   const index = indexTopicGraph(graph), parts = key.split('/');
   if (!graph.root_id || parts.shift() !== `primary:${graph.root_id}`) return null;
   const path = [index.nodes.get(graph.root_id)!];
@@ -127,6 +207,11 @@ export function topicOccurrencePath(graph: OfficialTopicGraph, key: string): Off
 }
 /** Find one deterministic descendant route under the actual clicked occurrence. */
 export function descendantOccurrenceKey(graph: OfficialTopicGraph, from: string, target: string): string | null {
+  if (graph.version === 132) {
+    const index = indexTopicLocations(graph);
+    const id = [...locationDescendants(graph,from)].find(id => index.locations.get(id)!.topic_id === target);
+    return id ? locationKey(id) : null;
+  }
   const path = topicOccurrencePath(graph, from);
   if (!path) return null;
   const index = indexTopicGraph(graph), pending = [{id: path[path.length - 1].id, key: from}], seen = new Set<string>();

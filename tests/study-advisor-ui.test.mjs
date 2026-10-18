@@ -1,3 +1,4 @@
+import { projectIndependentTopicLocations } from './fixtures/independent-topic-locations.mjs';
 import { projectStatsProgress } from './fixtures/stats-progress-presentation.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -41,7 +42,7 @@ test('Goal refresh reloads evidence and changed goals are recomputed without wri
  s.props({goals:{...goals([]),as_of:'2026-10-11T13:00:00Z'}});await s.load();assert.doesNotMatch(s.text(),/Review the pace for Finals/);assert.equal(s.calls.length,2);assert.ok(s.calls.every(c=>c.name==='get_study_advisor'));
 });
 test('Goal integration preserves original code via only the exact import, fragment, and sibling addition',()=>{
- let source=projectStatsProgress('components/study-planner/StudyGoals.tsx',readFileSync(new URL('../components/study-planner/StudyGoals.tsx',import.meta.url),'utf8'));
+ let source=projectStatsProgress('components/study-planner/StudyGoals.tsx',projectIndependentTopicLocations('components/study-planner/StudyGoals.tsx',readFileSync(new URL('../components/study-planner/StudyGoals.tsx',import.meta.url),'utf8')));
  for(const [a,b] of [["import { StudyAdvisor } from './StudyAdvisor';\n",''],['return <><section','return <section'],['</section><StudyAdvisor libraryId={libraryId} requestScope={requestScope} goals={loading || error ? null : data} /></>;','</section>;']]){assert.equal(source.split(a).length,2);source=source.replace(a,b);}
  // Original frozen Goal component identity, not a regenerated broad fingerprint.
  return import('node:crypto').then(({createHash})=>assert.equal(createHash('sha256').update(source).digest('hex'),'006a0e9267200159384be8884b753ee0a1efa5d19d70eccf29c9081e0de66086'));

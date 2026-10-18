@@ -87,7 +87,7 @@ export function deriveCreatorCapabilities({
       saveConcept: canAuthorInLibrary,
       saveQuestion: canAuthorInLibrary,
       publishContent: canAuthorInLibrary,
-      manageTopicTree: canAuthorInLibrary,
+      manageTopicTree: canAuthorInLibrary && role === 'admin',
       manageTags: isStaff,
       manageTestingAngleVocabulary: isStaff,
       managePrerequisites: canAuthorInLibrary,

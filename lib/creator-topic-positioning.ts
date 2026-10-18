@@ -1,10 +1,11 @@
-import { topicDescendantIds, type OfficialTopicGraph } from './topic-placement-graph';
+import { topicDescendantIds, indexTopicLocations, locationId, locationKey, locationDescendants, type OfficialTopicGraph } from './topic-placement-graph';
 import { compareCreatorTopics } from './creator-topic-order.js';
 export type StructuralTopic = {
     key: string;
     id: string;
     source: 'official' | 'personal';
     name: string;
+    pathLabel?: string;
     parentKey: string | null;
     placementKey: string | null;
     sort_order: number | null;
@@ -20,7 +21,7 @@ export type PositionContext = {
 };
 export type PositionPlan = {
     key: string;
-    rpc: 'position_library_node_in_library' | 'position_personal_topic' | 'position_official_topic_placement';
+    rpc: 'position_library_node_in_library' | 'position_personal_topic' | 'position_official_topic_placement' | 'change_official_topic_location';
     args: Record<string, string | null | string[]>;
     noop: boolean;
     destinationKey: string | null;
@@ -31,9 +32,30 @@ export function canPosition(context: PositionContext, node: StructuralTopic) {
 }
 /** Build assertions from the complete gesture-start snapshot, never filtered visible rows. */
 export function planTopicPosition(context: PositionContext, key: string, targetKey: string, intent: DropIntent): PositionPlan | null {
-    const moving = context.nodes.find(n => n.key === key), target = context.nodes.find(n => n.key === targetKey);
+    const moving = context.nodes.find(n => n.key === key);
+    let target = context.nodes.find(n => n.key === targetKey);
+    if (context.graph?.version === 132 && moving?.source === 'personal' && targetKey.startsWith('location:')) {
+        const location = indexTopicLocations(context.graph).locations.get(locationId(targetKey));
+        if (!location?.is_original) return null;
+        target = context.nodes.find(n => n.key === `official:topic:${location.topic_id}`);
+    }
     if (!moving || !canPosition(context, moving) || !target)
         return null;
+    if (moving.source === 'official' && context.graph?.version === 132) {
+        if (target.source !== 'official') return null;
+        const index = indexTopicLocations(context.graph);
+        const resolve = (key: string, id: string) => key.startsWith('location:') ? index.locations.get(locationId(key)) : index.byTopic.get(id)?.find(l => l.is_original);
+        const source = resolve(key,moving.id), to = resolve(targetKey,target.id);
+        if (!source?.parent_location_id || !to) return null;
+        const parent = intent === 'inside' ? to.id : to.parent_location_id;
+        if (!parent || locationDescendants(context.graph,source.id).has(parent)) return null;
+        const siblings = (index.children.get(parent) || []).filter(l => l.id !== source.id);
+        if (siblings.some(l => l.topic_id === source.topic_id)) return null;
+        const before = intent === 'inside' ? null : intent === 'before' ? to.id : siblings[siblings.findIndex(l => l.id === to.id)+1]?.id || null;
+        if (before === source.id) return null;
+        return { key: locationKey(source.id), rpc: 'change_official_topic_location', destinationKey: locationKey(parent), noop: false,
+            args: { p_library_id: context.libraryId,p_location_id: source.id,p_destination_id: parent,p_before_id: before,p_expected_revision: context.graph.revision } };
+    }
     if (moving.source === 'official' && context.graph) {
         const graph = context.graph;
         if (target.source !== 'official') return null;
