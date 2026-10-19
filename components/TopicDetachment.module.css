@@ -1,0 +1,23 @@
+.dialog { width: min(38rem, calc(100vw - 2rem)); max-height: calc(100dvh - 2rem); overflow-y: auto; padding: 1.5rem; border: 1px solid var(--appearance-line, #d8cebf); border-radius: 14px; background: var(--appearance-surface, #faf7f0); color: var(--appearance-text, #162b40); box-shadow: 0 16px 60px #162b4033; }
+.dialog::backdrop { background: #162b4080; }
+.dialog h2 { margin-top: 0; color: var(--appearance-link, #80613a); font-family: Georgia, serif; }
+.dialog p { line-height: 1.55; }
+.details { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: .6rem 1rem; }
+.details dt { font-weight: 600; }
+.details dd { margin: 0; overflow-wrap: anywhere; }
+.topicList { max-height: 10rem; overflow-y: auto; }
+.actions, .filters { display: flex; flex-wrap: wrap; gap: .6rem; margin-top: 1rem; }
+.actions button, .filters button, .row { border: 1px solid var(--appearance-line, #d8cebf); border-radius: 7px; padding: .65rem .9rem; color: inherit; background: var(--appearance-surface, #fff); font: inherit; cursor: pointer; }
+.actions .danger { background: #9b3434; border-color: #9b3434; color: #fff; }
+.actions .primary, .filters button[aria-pressed="true"] { background: #80613a; color: #fff; border-color: #80613a; }
+.dialog :focus-visible, .workspace :focus-visible { outline: 3px solid #b28d54; outline-offset: 3px; }
+.actions button:disabled, .filters button:disabled { opacity: .55; cursor: default; }
+.error { border-left: 3px solid #9b3434; padding-left: .75rem; }
+.workspace { min-width: 0; display: grid; gap: .75rem; }
+.workspace label, .dialog label { display: grid; gap: .4rem; }
+.workspace input, .dialog select { width: 100%; min-width: 0; padding: .65rem; border: 1px solid var(--appearance-line, #d8cebf); border-radius: 7px; color: inherit; background: var(--appearance-surface, #fff); font: inherit; }
+.results { display: grid; gap: .4rem; max-height: 22rem; overflow-y: auto; }
+.row { text-align: left; display: grid; gap: .3rem; overflow-wrap: anywhere; }
+.row[aria-pressed="true"] { border-color: #80613a; box-shadow: inset 3px 0 #80613a; }
+.row small { font-size: .85rem; }
+@media (max-width: 540px) { .details { grid-template-columns: 1fr; } .details dd { margin-bottom: .5rem; } .dialog { padding: 1rem; } }

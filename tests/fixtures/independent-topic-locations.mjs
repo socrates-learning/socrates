@@ -6,6 +6,15 @@ import { createHash } from 'node:crypto';
 // Actual location behavior is exercised separately in JS, SQL and the browser.
 const proofs = JSON.parse(readFileSync(new URL('./independent-topic-locations-proof.json', import.meta.url)));
 export function projectIndependentTopicLocations(path, source) {
+  // Exact detachment integration only; live behavior is tested separately.
+  if (path === 'components/CreatorStudioV2Client.tsx') {
+    const detachment = JSON.parse(readFileSync(new URL('./topic-detachment-proof.json', import.meta.url)));
+    for (const [candidate, baseline] of [...detachment.hunks].reverse()) {
+      if (source.split(candidate).length !== 2) throw new Error('Topic detachment integration mismatch');
+      source = source.replace(candidate, baseline);
+    }
+    if (createHash('sha256').update(source).digest('hex') !== detachment.baseline) throw new Error('Changes outside Topic detachment integration');
+  }
   const proof = proofs[path];
   if (!proof) return source;
   // Historical fingerprints exclude only the exact Creator collapse correction.

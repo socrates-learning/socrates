@@ -1,6 +1,9 @@
 'use client';
 
 import { indexTopicLocations, locationId, locationKey, topicOccurrencePath } from '@/lib/topic-placement-graph';
+import { TopicDetachmentDialog } from '@/components/TopicDetachmentDialog';
+import { TopicAssignmentWorkspace } from '@/components/TopicAssignmentWorkspace';
+import type { TopicManagementRpc } from '@/lib/topic-detachment';
 import { TopicLocationDialog, type LocationRequest, type LocationChange } from '@/components/TopicLocationDialog';
 import { descendantOccurrenceKey, occurrenceExpanded, toggleOccurrenceKey, indexTopicGraph, originalTopicOccurrenceKey, topicDescendantIds, type OfficialTopicGraph } from '@/lib/topic-placement-graph';
 import { loadOfficialTopicGraph } from '@/lib/topic-placement-graph';
@@ -969,6 +972,8 @@ export function CreatorStudioV2Client({
   const [topics, setTopics] = useState<Topic[]>(resolvedTopics);
   const [topicGraph, setTopicGraph] = useState<OfficialTopicGraph | null>(initialTopicGraph ?? null);
   const [activeTopicOccurrence, setActiveTopicOccurrence] = useState<string | null>(null);
+  const topicManagementRpc: TopicManagementRpc = useCallback((name, args) => supabase.rpc(name, args), []);
+  const [detachmentRequest, setDetachmentRequest] = useState<{libraryId: string; locationId: string} | null>(null);
   const [locationRequest, setLocationRequest] = useState<LocationRequest | null>(null);
   const [locationError, setLocationError] = useState('');
   const [activeTopicEdge, setActiveTopicEdge] = useState<string | null>(null);
@@ -2367,6 +2372,14 @@ export function CreatorStudioV2Client({
         })),
     [unifiedOfficialTopicRows]
   );
+  const topicAssignmentDisplayPath = useCallback((id: string): Topic[] | null => {
+    const canonical = findTopicPath(topics, id);
+    if (topicGraph?.detachment_version !== 134) return canonical;
+    const active = topicOccurrencePath(topicGraph, originalTopicOccurrenceKey(topicGraph, id));
+    if (active) return active.map(node => findTopicPath(topics, node.id)!.at(-1)!);
+    const topic = canonical?.at(-1);
+    return topic ? [{ ...topic, name: `Unassigned — ${topic.name}` }] : null;
+  }, [topics, topicGraph]);
   const normalizedContentConceptSearch = contentConceptSearch
     .trim()
     .toLocaleLowerCase();
@@ -2380,7 +2393,7 @@ export function CreatorStudioV2Client({
 
     Object.entries(questionConceptsByTopicId).forEach(
       ([topicId, conceptOptions]) => {
-        const path = findTopicPath(topics, topicId) || [];
+        const path = topicAssignmentDisplayPath(topicId) || [];
         const displayPath = path.length > 1 ? path.slice(1) : path;
         const pathLabel = displayPath.map((topic) => topic.name).join(' > ');
 
@@ -2454,6 +2467,7 @@ export function CreatorStudioV2Client({
     personalTopics,
     questionConceptsByTopicId,
     topics,
+    topicAssignmentDisplayPath,
   ]);
   const normalizedPrerequisiteSearch = prerequisiteSearch
     .trim()
@@ -2466,7 +2480,7 @@ export function CreatorStudioV2Client({
 
     Object.entries(questionConceptsByTopicId).forEach(
       ([topicId, conceptOptions]) => {
-        const path = findTopicPath(topics, topicId) || [];
+        const path = topicAssignmentDisplayPath(topicId) || [];
         const pathLabel = path.map((topic) => topic.name).join(' › ');
 
         conceptOptions.forEach((option) => {
@@ -2486,7 +2500,7 @@ export function CreatorStudioV2Client({
     return Array.from(conceptsById.values()).sort((left, right) =>
       left.name.localeCompare(right.name)
     );
-  }, [questionConceptsByTopicId, topics]);
+  }, [questionConceptsByTopicId, topicAssignmentDisplayPath]);
   const prerequisiteSearchResults = useMemo(() => {
     if (!normalizedPrerequisiteSearch) return [];
 
@@ -2653,11 +2667,11 @@ export function CreatorStudioV2Client({
   const selectedPaths = useMemo(
     () =>
       Array.from(selectedTopicIds)
-        .map((id) => ({ id, path: findTopicPath(topics, id) }))
+        .map((id) => ({ id, path: topicAssignmentDisplayPath(id) }))
         .filter(
           (item): item is { id: string; path: Topic[] } => item.path !== null
         ),
-    [selectedTopicIds, topics]
+    [selectedTopicIds, topicAssignmentDisplayPath]
   );
   const moveDestinations = useMemo(() => {
     if (!activeTopic) return [];
@@ -4413,7 +4427,7 @@ export function CreatorStudioV2Client({
       const open = (kind: LocationRequest['kind']) => { setLocationError(''); setLocationRequest({kind,graph:topicGraph,sourceId,...(kind === 'add-existing' ? {destinationId:sourceId} : {})}); };
       return <><button type="button" className={styles.toolButton} disabled={isMutatingTopic || !!locationRequest || activeTopic.id === rootTopicId} onClick={() => open('duplicate')}>Duplicate</button>
         <button type="button" className={styles.toolButton} disabled={isMutatingTopic || !!locationRequest} onClick={() => open('add-existing')}>Add existing Topic here</button>
-        {activeTopic.id !== rootTopicId && <button type="button" className={styles.toolButton} disabled={isMutatingTopic || !!locationRequest} onClick={() => open('remove')}>Remove this placement</button>}</>;
+        {activeTopic.id !== rootTopicId && <button type="button" className={styles.toolButton} disabled={isMutatingTopic || !!locationRequest} onClick={openTopicDetachment}>Remove this placement</button>}</>;
     }
     const incoming = indexTopicGraph(topicGraph).incoming.get(activeTopic.id) || [];
     const edge = incoming.find(e => e.edge_key === activeTopicEdge) || incoming.find(e => e.kind === 'primary');
@@ -4495,151 +4509,43 @@ export function CreatorStudioV2Client({
       showStatus('success', 'Topic deleted.');
       return;
     }
-    if (!activeTopic) return;
-    if (activeTopic.id === rootTopicId) {
-      showStatus('error', 'The Nursing root cannot be deleted.');
+    openTopicDetachment();
+  }
+
+  function openTopicDetachment() {
+    if (!activeTopic || !creatorAuthority.canManageTopicTree || isMutatingTopic) return;
+    if (!activeLibraryId || topicGraph?.detachment_version !== 134) {
+      showStatus('error', 'Safe Topic removal is unavailable. The verified Topic detachment migration must be installed first.');
       return;
     }
-    if (activeLibraryId && topicGraph) {
-      if (!creatorAuthority.canManageTopicTree) { showStatus('error', 'You do not have permission to delete official Topics.'); return; }
-      setIsMutatingTopic(true);
-      try {
-        const inspected = await supabase.rpc('get_official_topic_delete_impact', { p_library_id: activeLibraryId, p_topic_id: activeTopic.id });
-        if (inspected.error) throw inspected.error;
-        const impact = inspected.data as { library_id: string; topic_id: string; revision: string; canonical_topic_ids: string[];
-          incoming_locations: Array<{ parent_id: string }>; removed_extra_locations: unknown[]; concept_placements: unknown[]; article_placements: unknown[];
-          affected_concept_ids: string[]; affected_question_ids: string[]; content_records_deleted: boolean; blockers: Record<string, unknown[]> };
-        if (impact?.library_id !== activeLibraryId || impact.topic_id !== activeTopic.id || !impact.revision || impact.content_records_deleted !== false) throw new Error('Deletion impact could not be confirmed. Reload Topics.');
-        const blockers = Object.entries(impact.blockers).filter(([, values]) => values.length).map(([kind, values]) => `${kind.replaceAll('_', ' ')}: ${values.length}`);
-        if (blockers.length) { showStatus('error', `Cannot delete this Topic: ${blockers.join('; ')}. Resolve these dependencies first.`); return; }
-        const locations = impact.incoming_locations.map(e => topicGraph.nodes.find(n => n.id === e.parent_id)?.name || e.parent_id).join(', ');
-        const warning = `Delete Topic “${activeTopic.name}” permanently from all locations (${locations})?\n${impact.canonical_topic_ids.length} canonical Topics (${impact.canonical_topic_ids.map(id => topicGraph.nodes.find(n => n.id === id)?.name || id).join(', ')}); ${impact.removed_extra_locations.length} additional placements; ${impact.concept_placements.length} Concept placements; ${impact.article_placements.length} Article placements.\n${impact.affected_concept_ids.length} Concepts and ${impact.affected_question_ids.length} Questions lose these locations. Their content records and learning history survive. Shared targets owned elsewhere survive. This is not Remove this placement.`;
-        if (!window.confirm(warning)) return;
-        const result = await supabase.rpc('delete_official_topic_with_impact', { p_library_id: activeLibraryId, p_topic_id: activeTopic.id, p_expected_impact_revision: impact.revision });
-        if (result.error) throw result.error;
-        const parentTopicId = topicGraph.nodes.find(n => n.id === activeTopic.id)?.parent_id || undefined;
-        await reloadRealTopicTree(parentTopicId);
-        if (activeCreatorTab === 'questions' && !questionId && !isSavingQuestion && impact.canonical_topic_ids.includes(questionTopicId)) setQuestionTopicId(parentTopicId || rootTopicId);
-        setSelectedTopicIds(current => new Set([...current].filter(id => !impact.canonical_topic_ids.includes(id))));
-        setActiveTopicOccurrence(null); setActiveTopicEdge(null); closeTopicDialog();
-        showStatus('success', 'Topic structure deleted. Content records were preserved.');
-      } catch (error) {
-        showStatus('error', topicMutationErrorMessage(error));
-        try { await reloadRealTopicTree(); } catch { /* Keep the error; never replay deletion. */ }
-      } finally { setIsMutatingTopic(false); }
+    const target = topicGraph.locations?.find(l => l.id === currentOfficialLocation());
+    if (!target?.parent_location_id) {
+      showStatus('error', 'Select an active non-root Topic location to remove.');
       return;
     }
-    if (activeLibraryId) {
-      const activePath = findTopicPath(topics, activeTopic.id);
-      const parentTopicId = activePath?.at(-2)?.id;
-      setIsMutatingTopic(true);
-      setStatus(null);
-      const topicIdentity = createOfficialTopicIdentity(activeTopic.id);
-      const inspectCommand = resolveOfficialCreatorCommand(
-        {
-          type: 'inspect-delete',
-          recordType: 'library_node',
-          identity: topicIdentity,
-        },
-        creatorAuthority
-      );
-      const { data: summary, error: summaryError } = await supabase.rpc(
-        inspectCommand.rpc,
-        { p_record_type: 'library_node', p_record_id: activeTopic.id }
-      );
-      if (summaryError) {
-        setIsMutatingTopic(false);
-        showStatus(
-          'error',
-          `Unable to inspect topic: ${topicMutationErrorMessage(summaryError)}`
-        );
-        return;
-      }
-      const warning = (summary as { warning?: string } | null)?.warning;
-      if (!warning || !window.confirm(warning)) {
-        setIsMutatingTopic(false);
-        return;
-      }
-      const deleteCommand = resolveOfficialCreatorCommand(
-        {
-          type: 'delete-content',
-          recordType: 'library_node',
-          identity: topicIdentity,
-        },
-        creatorAuthority
-      );
-      const { error } = await supabase.rpc(deleteCommand.rpc, {
-        p_record_type: 'library_node',
-        p_record_id: activeTopic.id,
-      });
-      if (error) {
-        setIsMutatingTopic(false);
-        showStatus(
-          'error',
-          `Unable to remove topic: ${topicMutationErrorMessage(error)}`
-        );
-        return;
-      }
+    setDetachmentRequest({libraryId:activeLibraryId,locationId:target.id});
+  }
 
-      setSelectedTopicIds((current) => {
-        const next = new Set(current);
-        next.delete(activeTopic.id);
-        return next;
-      });
-
-      try {
-        await reloadRealTopicTree(parentTopicId);
-        if (
-          activeCreatorTab === 'questions' &&
-          !questionId &&
-          !isSavingQuestion &&
-          questionTopicId === activeTopic.id
-        ) {
-          setQuestionTopicId(parentTopicId || rootTopicId);
-        }
-        setSearchQuery('');
-        setDialogMode(null);
-        showStatus('success', 'Topic removed successfully.');
-      } catch (error) {
-        showStatus(
-          'error',
-          `Topic was removed, but the tree could not be refreshed: ${topicMutationErrorMessage(error)}`
-        );
-      } finally {
-        setIsMutatingTopic(false);
-      }
-      return;
-    }
-
-    if (activeTopic.children.length) {
-      showStatus('error', 'Move or remove this topic’s subtopics first.');
-      return;
-    }
-    if (!window.confirm(`Delete “${activeTopic.name}”?`)) return;
-
-    const activePath = findTopicPath(topics, activeTopic.id);
-    const parentTopicId = activePath?.at(-2)?.id;
-    setTopics((current) => removeTopic(current, activeTopic.id));
-    setSelectedTopicIds((current) => {
+  function installTopicAssignmentGraph(graph: OfficialTopicGraph, topicId?: string, assignedLocationId?: string) {
+    if (graph.library_id !== topicGraphLibrary.current) return;
+    topicGraphRead.current += 1;
+    setTopicGraph(graph);
+    setTopics(buildConceptTopicTree(graph.nodes, true));
+    const previousParent = topicGraph?.locations?.find(l => l.id === detachmentRequest?.locationId)?.parent_location_id;
+    const focus = graph.locations?.find(l => l.id === (assignedLocationId || previousParent))
+      || graph.locations?.find(l => l.parent_location_id === null);
+    setActiveTopicId(topicId || focus?.topic_id || graph.root_id || '');
+    setActivePersonalTopicId(null);
+    setActiveTopicOccurrence(focus ? locationKey(focus.id) : null);
+    setActiveTopicEdge(focus ? locationKey(focus.id) : null);
+    if (focus) setExpandedTopicIds(current => {
       const next = new Set(current);
-      next.delete(activeTopic.id);
+      let location: typeof focus | undefined = focus;
+      while (location) { next.add(locationKey(location.id)); location = graph.locations?.find(l => l.id === location?.parent_location_id); }
       return next;
     });
-    setActiveTopicId(
-      activeCreatorTab === 'questions'
-        ? parentTopicId || rootTopicId
-        : ''
-    );
-    if (
-      activeCreatorTab === 'questions' &&
-      !questionId &&
-      !isSavingQuestion &&
-      questionTopicId === activeTopic.id
-    ) {
-      setQuestionTopicId(parentTopicId || rootTopicId);
-    }
-    setDialogMode(null);
-    showStatus('success', `Deleted “${activeTopic.name}”.`);
+    setDetachmentRequest(null); closeTopicDialog();
+    showStatus('success', assignedLocationId ? 'Topic reassigned. Content and learning history were preserved.' : 'Topic placement removed. Content and learning history were preserved. Topics without a remaining location are available in Unassigned.');
   }
 
   function clearDraft() {
@@ -7051,6 +6957,7 @@ export function CreatorStudioV2Client({
                 <p>Select a topic, then add a subtopic beneath it.</p>
               </div>
 
+              <TopicAssignmentWorkspace graph={topicGraph} rpc={topicManagementRpc} canManage={creatorAuthority.canManageTopicTree} onReassigned={installTopicAssignmentGraph}>
               <div className={styles.treeControls}>
                 <label className={styles.searchBox}>
                   <span className={styles.srOnly}>Search topics</span>
@@ -7209,6 +7116,7 @@ export function CreatorStudioV2Client({
               <p className={styles.treeFooter}>
                 Keep nesting subtopics to any level. There’s no limit how deep you can go.
               </p>
+              </TopicAssignmentWorkspace>
                 </section>
     );
 
@@ -7351,6 +7259,7 @@ export function CreatorStudioV2Client({
   return (
     <>
       <Header />
+      {detachmentRequest && <TopicDetachmentDialog {...detachmentRequest} rpc={topicManagementRpc} onCancel={() => setDetachmentRequest(null)} onRemoved={installTopicAssignmentGraph} />}
       {locationRequest && <TopicLocationDialog request={locationRequest} busy={isMutatingTopic} error={locationError} onCancel={() => setLocationRequest(null)} onConfirm={submitLocationChange} />}
       {isLearnerReadOnly ? <main className={styles.workspace}>
         <fieldset className={styles.studioShell} disabled={isSaving || isSavingQuestion} aria-label="Creator Studio editor">
@@ -8687,6 +8596,7 @@ export function CreatorStudioV2Client({
                     <p>{questionId ? 'Browse Questions by Concept. This saved Question keeps its Primary; check other Concepts to add Related associations.' : 'Click a Concept name to set Primary and browse its Questions. Check other Concepts to add Related associations. Changing Primary removes the previous Primary association.'}</p>
                   </div>
 
+                  <TopicAssignmentWorkspace graph={topicGraph} rpc={topicManagementRpc} canManage={creatorAuthority.canManageTopicTree} onReassigned={installTopicAssignmentGraph}>
                   <div style={{ display: 'grid', gap: 8, marginBottom: 12 }}>
                     <div
                       style={{
@@ -9002,6 +8912,7 @@ export function CreatorStudioV2Client({
                   </div>
                   </CreatorTopicTreeInteraction>
 
+                  </TopicAssignmentWorkspace>
                 </section>
               </div>
 

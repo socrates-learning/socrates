@@ -9,6 +9,9 @@ export type OfficialTopicGraph = {
   version: 122 | 132; library_id: string; revision: string; root_id: string | null;
   nodes: OfficialTopicNode[]; edges: OfficialTopicEdge[];
   locations?: OfficialTopicLocation[];
+  detachment_version?: 134;
+  unassigned_topic_ids?: string[];
+  detached_original_topic_ids?: string[];
 };
 export type OfficialTopicLocation = {
   id: string; library_id: string; topic_id: string; parent_location_id: string | null;
@@ -36,7 +39,21 @@ export function indexTopicLocations(graph: OfficialTopicGraph) {
     if (l.parent_location_id) children.set(l.parent_location_id,[...(children.get(l.parent_location_id) ?? []),l]);
     byTopic.set(l.topic_id,[...(byTopic.get(l.topic_id) ?? []),l]);
   }
-  for (const id of nodes.keys()) if (byTopic.get(id)?.filter(l => l.is_original).length !== 1) invalid();
+  const unassigned = new Set(graph.unassigned_topic_ids ?? []);
+  const detachedOriginals = new Set(graph.detached_original_topic_ids ?? []);
+  if (graph.detachment_version !== undefined && graph.detachment_version !== 134) invalid();
+  if (graph.detachment_version === 134 && (!Array.isArray(graph.unassigned_topic_ids)
+    || !Array.isArray(graph.detached_original_topic_ids)
+    || unassigned.size !== graph.unassigned_topic_ids.length || detachedOriginals.size !== graph.detached_original_topic_ids.length
+    || [...unassigned, ...detachedOriginals].some(id => !nodes.has(id)))) invalid();
+  for (const id of nodes.keys()) {
+    const active = byTopic.get(id) ?? [];
+    if (graph.detachment_version === 134) {
+      if (unassigned.has(id) !== (active.length === 0)
+        || active.filter(l => l.is_original).length !== (detachedOriginals.has(id) ? 0 : 1)
+        || (unassigned.has(id) && !detachedOriginals.has(id))) invalid();
+    } else if (active.filter(l => l.is_original).length !== 1) invalid();
+  }
   children.forEach(rows => rows.sort((a,b) => a.sort_order-b.sort_order || a.id.localeCompare(b.id)));
   const order: string[] = [], visited = new Set<string>();
   function visit(l: OfficialTopicLocation, ancestry: Set<string>) {
@@ -111,7 +128,8 @@ export function requireTopicGraph(value: unknown, libraryId: string): OfficialTo
 export function topicDescendantIds(graph: OfficialTopicGraph, topicId: string, originalOnly = false): Set<string> {
   if (graph.version === 132) {
     const index = indexTopicLocations(graph);
-    const start = topicId.startsWith('location:') ? locationId(topicId) : index.byTopic.get(topicId)?.find(l => l.is_original)?.id;
+    const active = index.byTopic.get(topicId) ?? [];
+    const start = topicId.startsWith('location:') ? locationId(topicId) : (active.find(l => l.is_original) ?? active[0])?.id;
     return new Set(start ? [...locationDescendants(graph,start)].map(id => index.locations.get(id)!.topic_id) : []);
   }
   const index = indexTopicGraph(graph), pending = [topicId], found = new Set<string>();
@@ -125,7 +143,8 @@ export function topicDescendantIds(graph: OfficialTopicGraph, topicId: string, o
 }
 export function originalTopicOccurrenceKey(graph: OfficialTopicGraph, id: string): string {
   if (graph.version === 132) {
-    const original = indexTopicLocations(graph).byTopic.get(id)?.find(l => l.is_original);
+    const active = indexTopicLocations(graph).byTopic.get(id) ?? [];
+    const original = active.find(l => l.is_original) ?? active[0];
     return original ? locationKey(original.id) : '';
   }
   const nodes = new Map(graph.nodes.map(n => [n.id, n])), path: string[] = [], seen = new Set<string>();
