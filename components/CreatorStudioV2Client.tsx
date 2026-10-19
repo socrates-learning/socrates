@@ -3779,8 +3779,8 @@ export function CreatorStudioV2Client({
     </tr>;
   }
 
-  function toggleExpanded(topicId: string) {
-    setExpandedTopicIds(current => toggleOccurrenceKey(current, topicId));
+  function toggleExpanded(topicId: string, originalTopicId?: string) {
+    setExpandedTopicIds(current => toggleOccurrenceKey(current, topicId, originalTopicId));
   }
 
   function toggleSelected(topicId: string) {
@@ -6486,7 +6486,7 @@ export function CreatorStudioV2Client({
             aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${topic.name}`}
             onClick={(event) => {
               event.stopPropagation();
-              if (hasChildren) toggleExpanded(topic.occurrenceKey || topic.id);
+              if (hasChildren) toggleExpanded(topic.occurrenceKey || topic.id, topic.originalPath !== false ? topic.id : undefined);
             }}
           >
             {hasChildren ? (
@@ -6567,7 +6567,7 @@ export function CreatorStudioV2Client({
             onClick={() => {
               if (!canExpand) return;
               setExpandedPrerequisiteTopicIds((current) => {
-                return toggleOccurrenceKey(current, topic.occurrenceKey || topic.id);
+                return toggleOccurrenceKey(current, topic.occurrenceKey || topic.id, topic.originalPath !== false ? topic.id : undefined);
               });
             }}
           >
@@ -6700,7 +6700,7 @@ export function CreatorStudioV2Client({
           onClick={() => {
             if (!canExpand) return;
             setExpandedBrowseTopicIds((current) => {
-              return toggleOccurrenceKey(current, topic.occurrenceKey || topic.id);
+              return toggleOccurrenceKey(current, topic.occurrenceKey || topic.id, topic.originalPath !== false ? topic.id : undefined);
             });
           }}
         >
@@ -6973,7 +6973,7 @@ export function CreatorStudioV2Client({
             aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${topic.name}`}
             onClick={(event) => {
               event.stopPropagation();
-              if (hasChildren) toggleExpanded(topic.occurrenceKey || topic.id);
+              if (hasChildren) toggleExpanded(topic.occurrenceKey || topic.id, topic.originalPath !== false ? topic.id : undefined);
             }}
           >
             {hasChildren ? (

@@ -171,8 +171,10 @@ export function effectiveGraphTopicIds(graph: OfficialTopicGraph, selected: Read
 export function occurrenceExpanded(node: { id: string; occurrenceKey?: string; originalPath?: boolean }, keys: ReadonlySet<string>) {
   return keys.has(node.occurrenceKey || node.id) || (node.originalPath !== false && keys.has(node.id));
 }
-export function toggleOccurrenceKey(keys: ReadonlySet<string>, key: string): Set<string> {
-  const legacy = key.split('/').every(part => part.startsWith('primary:')) ? key.split('/').at(-1)!.slice(8) : key;
+export function toggleOccurrenceKey(keys: ReadonlySet<string>, key: string, originalTopicId?: string): Set<string> {
+  // Location IDs do not encode the canonical Topic ID. Original occurrences
+  // must clear their legacy expansion seed as well; aliases must not clear it.
+  const legacy = originalTopicId ?? (key.split('/').every(part => part.startsWith('primary:')) ? key.split('/').at(-1)!.slice(8) : key);
   const next = new Set(keys);
   if (next.has(key) || next.has(legacy)) { next.delete(key); next.delete(legacy); }
   else next.add(key);
