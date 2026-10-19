@@ -49,6 +49,43 @@ do $contracts$ declare f record; definition text; changed text; begin
  end loop;
 end $contracts$;
 
+-- Study Goals renders this array in wire order. Reading through the active
+-- view must not leave display order to the query plan. Match the Topic Tree:
+-- parent before descendants; official siblings by saved position then location
+-- ID (indexTopicLocations), personal siblings by position/name/ID with the
+-- Creator Tree's C-collation tie break. Keep the existing source groups and
+-- every returned identity, parent and path; this changes only array order.
+do $goal_order$ declare definition text; changed text; before text; after text; begin
+ definition:=pg_get_functiondef('public.get_study_goals(uuid)'::regprocedure);
+ if md5(definition)<>'13753955c2e0ea50d27414d735808cc3' then
+  raise exception '134 prerequisite changed: get_study_goals(uuid)'; end if;
+ before:=$before$coalesce((select jsonb_agg(to_jsonb(t)) from public.m132_goal_topics(p_library_id) t),'[]'::jsonb)$before$;
+ after:=$after$coalesce((
+  with recursive topics as materialized (
+   select * from public.m132_goal_topics(p_library_id)
+  ), siblings as (
+   select t.source,t.id,t.parent_id,
+    row_number() over(partition by t.source,t.parent_id order by
+     case when t.source='official' then l.sort_order else p.sort_order end nulls last,
+     case when t.source='personal' then t.name end collate "C",t.id) position
+   from topics t
+   left join public.m134_active_topic_locations l on t.source='official' and l.id=t.id and l.library_id=p_library_id
+   left join public.personal_topics p on t.source='personal' and p.id=t.id and p.owner_id=u
+  ), display_order as (
+   select s.source,s.id,array[s.position] positions from siblings s where s.parent_id is null
+   union all
+   select s.source,s.id,d.positions||s.position from display_order d
+   join siblings s on s.source=d.source and s.parent_id=d.id
+  )
+  select jsonb_agg(to_jsonb(t) order by t.source,d.positions,t.id)
+  from topics t left join display_order d on d.source=t.source and d.id=t.id
+ ),'[]'::jsonb)$after$;
+ if (length(definition)-length(replace(definition,before,'')))/length(before)<>1 then
+  raise exception '134 expected exactly one Study Goals Topic aggregation'; end if;
+ changed:=replace(definition,before,after);
+ execute changed;
+end $goal_order$;
+
 create or replace function public.m132_check_locations(p_library uuid) returns void
  language plpgsql security definer set search_path='' as $$
 begin

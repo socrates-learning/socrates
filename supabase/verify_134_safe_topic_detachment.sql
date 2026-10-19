@@ -27,6 +27,7 @@ do $verify$ declare r record; role_name text; t text; begin
  end loop;
  if position('if p_action=''remove'' then raise exception' in pg_get_functiondef('public.change_official_topic_location(uuid,uuid,uuid,text,text,boolean,uuid,text)'::regprocedure))=0 then raise exception 'Legacy physical removal still reachable'; end if;
  if md5(pg_get_functiondef('public.m132_require_revision(uuid,text)'::regprocedure))<>'7199144793cdb508b4ea601ff40b1d62' then raise exception 'Released Admin revision and locking boundary changed'; end if;
+ if md5(pg_get_functiondef('public.get_study_goals(uuid)'::regprocedure))<>'c89734516186d20f3707a0ef863a09fd' then raise exception 'Deterministic Study Goals Topic ordering contract changed'; end if;
  perform public.m132_check_locations(id) from public.libraries;
 end $verify$;
 select 'Migration 134 installed contract verified' as result;
