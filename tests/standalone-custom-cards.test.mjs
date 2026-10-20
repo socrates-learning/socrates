@@ -102,6 +102,29 @@ test('closed embedded Card editor renders no separate workspace', () => {
   const ui=workspace(store(),null,false);assert.equal(ui.render(),null);
 });
 
+test('creation-disabled workspace rejects a new Card but saves an existing owned Card', async () => {
+  const db=store();
+  const draft=workspace(db,{card:null,attachment:target,topicName:'Topic'},false,true);
+  const fields=draft.nodes().filter(n=>n.type?.name==='PersonalCardField');
+  fields[0].props.onChange('Forbidden new Front');fields[1].props.onChange('Forbidden new Back');draft.render();
+  draft.nodes().find(n=>n.type==='form').props.onSubmit({preventDefault(){}});
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(db.writes.length,0);assert.equal(db.rows.size,0);
+
+  db.rows.set(initial.id,{...initial});
+  const edit=workspace(db,{card:{...initial},attachment:target,topicName:'Topic'},false,true);
+  edit.nodes().find(n=>n.type?.name==='PersonalCardField').props.onChange('Historical Card edited');edit.render();
+  edit.nodes().find(n=>n.type==='form').props.onSubmit({preventDefault(){}});
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(db.writes.length,1);assert.equal(db.writes[0].op,'update');
+  const loaded=await loadCreatorPersonalContent(db,'owner');
+  assert.equal(loaded.standaloneCards.length,1);
+  assert.equal(loaded.standaloneCards[0].id,initial.id);
+  assert.equal(loaded.standaloneCards[0].owner_id,initial.owner_id);
+  assert.equal(loaded.standaloneCards[0].library_node_id,initial.library_node_id);
+  assert.equal(loaded.standaloneCards[0].question,'Historical Card edited');
+});
+
 
 test('rich learner fields retain independent source, limits, explicit saving, duplicate-save guard and failed drafts', async () => {
  const db=store(),ui=workspace(db,{card:null,attachment:target,topicName:'Topic'},true,true);

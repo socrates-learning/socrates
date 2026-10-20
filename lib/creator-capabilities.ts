@@ -98,7 +98,7 @@ export function deriveCreatorCapabilities({
     personal: {
       createTopic: true,
       createConcept: true,
-      createCard: true,
+      createCard: role !== 'admin',
       editOwnContent: true,
       deleteOwnContent: true,
       createOfficialContextOverlay: true,

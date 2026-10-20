@@ -10,7 +10,7 @@ import * as standaloneCards from '../lib/standalone-custom-cards.ts';
 import * as topicPositioning from '../lib/creator-topic-positioning.ts';
 import * as personalStructure from '../lib/creator-personal-structure.ts';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readAppearanceSource as readFileSync } from './fixtures/appearance.mjs';
 import test from 'node:test';
 import vm from 'node:vm';
 import ts from 'typescript';
@@ -218,9 +218,17 @@ for (const role of ['learner', 'admin', 'editor']) {
     }
   });
   for (const button of ['openAddDialog', 'openPersonalTopicDialog']) {
-    test(`${role}: ${button} creates a ${destination} Topic`, async () => {
+    test(`${role}: ${button} preserves authorized ${destination} Topic creation`, async () => {
       const h = editor({ role }); let e = h.render();
       e[button](); e = h.render();
+      // Migration 133 already made official Topic management Admin-only.
+      // Retain the Editor case as a denial check, not a permission override.
+      if (role === 'editor') {
+        assert.equal(e.dialogMode, null);
+        assert.equal(h.calls.length, 0);
+        assert.equal(e.creationDestination, 'official');
+        return;
+      }
       assert.equal(e.dialogMode, destination === 'personal' ? 'add-personal' : 'add');
       e.setNameDraft('New Topic'); await h.render().saveNameDialog();
       assert.equal(h.calls[0].name, destination === 'personal' ? 'create_personal_topic' : 'create_library_node_in_library');
@@ -380,7 +388,8 @@ for (const role of ['admin', 'editor']) {
     e.setActivePersonalTopicId('mine-topic'); e = h.render();
     e.openPersonalTopicDialog(); e = h.render();
     assert.equal(e.dialogMode, null);
-    assert.match(e.status.message, /Select an eligible Topic/);
+    if (role === 'admin') assert.match(e.status.message, /Select an eligible Topic/);
+    else assert.equal(e.status, null, 'Editor has no official Topic creation entry point');
     assert.equal(h.calls.length, 0);
   });
 }
@@ -512,8 +521,8 @@ test('standalone Cards use existing search, open without a Concept, and remain i
 });
 
 
-test('Add Custom Card reuses the Content left pane and retains the Topic Tree without navigation', () => {
-  const h=editor({role:'admin',placed:true});let e=h.render();
+test('Legacy Editor Add Custom Card reuses the Content left pane and retains the Topic Tree without navigation', () => {
+  const h=editor({role:'editor',placed:true});let e=h.render();
   e.setActiveCreatorTab('content');e.setConcept('Existing draft');e=h.render();
   const control=nodes(e.tree).find(n=>n.props?.className==='treeControls');
   nodes(control).find(n=>n.type==='button' && visibleText(n)==='Add Custom Card').props.onClick();e=h.render();
@@ -533,9 +542,17 @@ test('Add Custom Card reuses the Content left pane and retains the Topic Tree wi
   assert.deepEqual(h.routes,[]);assert.equal(h.calls.length,0);
 });
 
-for (const role of ['admin','editor']) test(`${role}: explicit Add Custom uses identical owned Card action while normal destination stays role-derived`,()=>{
+for (const role of ['admin','editor']) test(`${role}: explicit Add Custom respects creation capability while normal destination stays role-derived`,()=>{
   const h=editor({role,placed:true});let e=h.render();
-  const action=nodes(e.tree).find(n=>n.type==='button'&&visibleText(n)==='Add Custom Card');assert.ok(action);
+  const action=nodes(e.tree).find(n=>n.type==='button'&&visibleText(n)==='Add Custom Card');
+  if(role==='admin') {
+    assert.equal(action,undefined);
+    assert.equal(e.standaloneRequest,null);
+    assert.equal(e.creationDestination,'official');
+    assert.deepEqual(h.calls,[]);assert.deepEqual(h.routes,[]);
+    return;
+  }
+  assert.ok(action);
   action.props.onClick();e=h.render();
   assert.equal(e.creationDestination,role==='learner'?'personal':'official');
   const cardEditor=nodes(e.tree).find(n=>n.type?.name==='StandaloneCustomCardWorkspace');
