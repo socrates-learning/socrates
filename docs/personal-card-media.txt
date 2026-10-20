@@ -1,0 +1,104 @@
+Learner Card images — local candidate (Migration 136)
+
+Saved standalone learner Cards support up to four private images on each side.
+Images are side-specific blocks beneath the existing formatted text. No change
+to the Card text grammar, canonical Card ID, Topic attachment or Study algorithm
+is required. Save Card atomically saves text and the image-reference manifest.
+Descriptions are required. A stale Card revision fails without discarding the
+draft; an identical retry can recover a lost save acknowledgement.
+
+Authority
+The server obtains the authenticated actor and current working Library. Every
+reservation, upload stage, save and delivery verifies current Card ownership,
+active account and current attachment Library access. Image mutation requires
+the existing learner role; Admin/Editor historical text editing is unchanged.
+Unsaved and Concept-backed Cards have no image tools. Existing learner-only
+movement context enables the image presentation in the standalone workspace.
+No new official-media authority or browser Storage permissions are granted.
+
+Files and quotas
+The existing isolated decoder verifies JPEG, PNG and single-frame WebP, strips
+metadata, and enforces 3 MiB input/output, 4096 pixels per dimension and 12 MP.
+The immutable staging/copy/readback pipeline is reused. Normalized bytes are
+delivered through authenticated, no-store, nosniff, sandboxed responses and are
+digest-checked again by VerifiedMediaImage. No remote-image URL is accepted.
+
+An owner lock serializes quota decisions. The limit is 100 MiB across personal
+live assets, active reservations and uncollected/uncertain object attempts.
+Two active upload slots and ten new reservations per ten minutes are enforced
+in the database. Reservation slots expire after 60 seconds of inactivity;
+retries recheck the slot/quota before starting a fresh immutable attempt.
+Uncertain Storage writes remain charged until existing cleanup confirms their
+absence. Failed acknowledgement retries reuse the logical reservation key.
+
+Lifecycle
+Replacement and removal affect the draft until Save Card succeeds. Cancelling
+does not remove saved references. Card deletion unlinks its media references
+and cancels pending operations in the same transaction as the existing Card
+deletion. It does not change m111 learning-history deletion rules. Storage bytes
+are never removed in these operations: existing reference/version/lease checks,
+the 24-hour orphan grace period and the existing cleanup worker remain final.
+Removing an image therefore does not free its Storage quota immediately.
+
+Moves retain the asset ID and its immutable upload-Library path. Authorization
+is resolved from the Card's current attachment; the original Library is only
+Storage provenance. Back-side image components mount only in the existing
+answer-revealed branch, used by both Study and Cram.
+
+Account deletion and recovery
+Existing account-deletion inventory includes these personal assets and immutable
+upload attempt paths. New save receipts cascade from the Card and use the same
+active-account/purge fence. Independent deletion-ledger intent must still be
+durable before deleting bytes or the Auth identity. No ledger bypass is added.
+Recovery requires both database and private Storage object bytes. Restore only
+into an isolated environment, verify fingerprints and image hashes, then apply
+the existing deletion-ledger reconciliation before opening access.
+
+Release gates
+This migration is local only. It must not reach Production until synthetic HTTP
+upload/reload/move/replacement/removal, concurrency, quota, account-deletion and
+database-plus-Storage recovery checks pass, along with focused UI/security
+tests, TypeScript, ESLint and the optimized build. Run the installed verifier
+after migration. Verify protected source/data fingerprints and the exact file
+manifest before making a release checkpoint. No Production authorization,
+environment configuration, Storage policy or educational record is changed by
+developing this candidate.
+
+Local verification record — 2026-10-20
+Focused browser checks used the optimized app at 127.0.0.1:3496 and synthetic
+accounts only. Phone width 390px had no horizontal overflow. Image upload,
+description save/full reload, visible keyboard focus, Preview, normal Study
+and Cram reveal were checked. Network evidence confirms Back delivery begins
+only after reveal. No feedback ratings were submitted during browser checks.
+
+Disposable SQL checks cover active roles, ownership, Library access, binding,
+revision conflicts, retry receipts, side/total limits, owner quotas and atomic
+Card reference cleanup. The installed Migration 136 contract was verified on
+a fresh empty synthetic schema based on the existing Migration 135 contract.
+
+The explicit integration scripts are personal-card-media-http.integration.mjs,
+personal-card-media-storage.integration.mjs and
+personal-card-media-recovery.integration.mjs. They accept only the named local
+fixture directory through PERSONAL_CARD_MEDIA_TEST_DIRECTORY. They do not read
+repository environment files or remote credentials. Run HTTP, then Storage,
+then recovery backup-delete/restore/reconcile against fresh disposable fixtures;
+do not rerun deletion setup against a completed fixture. Private fixture keys
+and account identifiers are external, ignored evidence, not Git content.
+
+Actual local Auth, PostgREST, Storage and native image decoding were exercised.
+Storage v1.84.12 matches the restored local Storage schema; no schema workaround
+was used. JPEG, PNG and static WebP upload, failed uploads, retry identity,
+movement, removal/replacement, parallel saves and parallel quota decisions pass.
+
+Recovery used an authenticated AES-256-GCM archive containing a database dump
+and every current synthetic Storage object with SHA-256 hashes. Restoration
+matched every public/private application-table fingerprint and all object bytes.
+The unchanged deletion/reconciliation code replayed a durable independent local
+ledger fixture. Ledger outage, Storage outage and interrupted Auth deletion
+fail closed and support retry. Hosted ledger-provider availability and Production
+recovery were deliberately not tested. Those remain release-time prerequisites.
+
+Temporary test services must be stopped and Colima restored from its temporary
+12 GiB allocation to 4 GiB after verification, retaining all containers, images,
+volumes and databases. Do not prune, reset, push, deploy or apply this migration
+to Production as part of this local checkpoint.

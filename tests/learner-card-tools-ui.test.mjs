@@ -10,6 +10,8 @@ import * as cards from '../lib/standalone-custom-cards.ts';
 import * as search from '../lib/learner-card-search.ts';
 import { containTopicDialogFocus } from '../lib/topic-detachment.ts';
 import { projectLearnerCardTools } from './fixtures/learner-card-tools.mjs';
+import { loadConceptModule } from './fixtures/concept-media-authoring.mjs';
+const cardMedia=loadConceptModule('lib/personal-card-media.ts',{});
 
 const initial = { id:'card',owner_id:'owner',concept_id:null,library_node_id:'official',library_id:'library',personal_topic_id:null,
   question:'Front unchanged',answer:'Back unchanged',source_reference:'Book reference',created_at:'2026-01-01T00:00:00Z',updated_at:'2026-10-20T00:00:00Z' };
@@ -48,6 +50,7 @@ async function mount() {
         row={...row,...payload,updated_at:'2026-10-20T00:01:00Z'};return {data:{...row},error:null};}};return q;}};
   const {MoveCardDialog}=compile('components/creator/MoveCardDialog.tsx',{'@/lib/topic-detachment':{containTopicDialogFocus},'../TopicLocationDialog.module.css':css,'./LearnerCardTools.module.css':css},dom);
   const {StandaloneCustomCardWorkspace}=compile('components/creator/StandaloneCustomCardWorkspace.tsx',{'@/lib/supabase':{supabase:db},'@/lib/standalone-custom-cards':cards,
+    '@/lib/personal-card-media':cardMedia,'./PersonalCardImageAuthoring':{PersonalCardImageAuthoring(){throw Error('Image tools must not mount in the textarea compatibility fixture');}},
     './MoveCardDialog':{MoveCardDialog},'./PersonalCardField':{PersonalCardField(){throw Error('This fixture uses the existing textarea mode');}},'./LearnerCardTools.module.css':css,'../CreatorStudioV2Client.module.css':css},dom);
   const {CreatorLearnerQuestionsWorkspace}=compile('components/creator/CreatorLearnerQuestionsWorkspace.tsx',{'@/components/MarkdownContent':{cardMarkdownSummary:value=>value},'@/lib/learner-card-search':search,
     '../CreatorStudioV2Client.module.css':css,'./LearnerCardTools.module.css':css},dom);

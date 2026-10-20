@@ -3,6 +3,7 @@
 import { toggleOccurrenceKey, topicDescendantIds } from '@/lib/topic-placement-graph';
 
 import QuestionMediaContent from './QuestionMediaContent';
+import PersonalCardMediaContent from './PersonalCardMediaContent';
 import QuestionPersonalNote from './QuestionPersonalNote';
 import { StudySuggestion } from './study-planner/StudySuggestion';
 
@@ -2514,6 +2515,7 @@ export function StudyPlanner({
                       </>
                       : <h1 style={studyCandidate?.kind === 'official' && studyCandidate.mediaHint?.front ? { margin: '0 auto', flexShrink: 0 } : undefined}>{studyCandidate?.kind === 'official' ? <MarkdownContent markdown={studyCandidate.prompt} mode="question" format={studyCandidate.promptFormat} interactiveLinks={false} /> : studyCandidate?.prompt}</h1>}
                   {studyCandidate?.kind === 'official' && <QuestionMediaContent questionId={studyCandidate.questionId} hint={studyCandidate.mediaHint} surface="front" prompt={studyCandidate.prompt} answer={studyCandidate.answer} presentation="study" />}
+                  {studyCandidate?.kind === 'personal' && studyCandidate.personalConceptId === null && <PersonalCardMediaContent cardId={studyCandidate.cardId} side="front" front={studyCandidate.prompt} back={studyCandidate.answer} />}
                   <p
                     className="study-v2-sr-only"
                     id="study-card-reveal-instruction"
@@ -2556,6 +2558,7 @@ export function StudyPlanner({
                         {studyCandidate?.prompt}
                       </h2>}
                       {studyCandidate?.kind === 'official' && <QuestionMediaContent questionId={studyCandidate.questionId} hint={studyCandidate.mediaHint} surface="front" prompt={studyCandidate.prompt} answer={studyCandidate.answer} presentation="study" />}
+                      {studyCandidate?.kind === 'personal' && studyCandidate.personalConceptId === null && <PersonalCardMediaContent cardId={studyCandidate.cardId} side="front" front={studyCandidate.prompt} back={studyCandidate.answer} />}
                     </section>
                     <section
                       className="study-v2-answer-section"
@@ -2568,6 +2571,7 @@ export function StudyPlanner({
                           ? <MarkdownContent markdown={studyAnswer ?? ''} mode="question" format={studyCandidate.answerFormat} />
                           : <p>{studyCandidate?.kind === 'official' ? <MarkdownContent markdown={studyAnswer ?? ''} mode="question" format={studyCandidate.answerFormat} /> : studyAnswer}</p>}
                       {studyCandidate?.kind === 'official' && <QuestionMediaContent questionId={studyCandidate.questionId} hint={studyCandidate.mediaHint} surface="answer" prompt={studyCandidate.prompt} answer={studyCandidate.answer} presentation="study" />}
+                      {studyCandidate?.kind === 'personal' && studyCandidate.personalConceptId === null && <PersonalCardMediaContent cardId={studyCandidate.cardId} side="answer" front={studyCandidate.prompt} back={studyCandidate.answer} />}
                     </section>
                     {authoredStudyExplanation && (
                       <section

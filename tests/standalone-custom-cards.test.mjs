@@ -7,6 +7,8 @@ import * as cards from '../lib/standalone-custom-cards.ts';
 import { loadCreatorPersonalContent } from '../lib/creator-personal-content.ts';
 import { adaptStudyCandidateRow } from '../lib/study-candidates.ts';
 import { adaptPersonalStudyAttemptResult } from '../lib/personal-study-attempts.ts';
+import { loadConceptModule } from './fixtures/concept-media-authoring.mjs';
+const cardMedia=loadConceptModule('lib/personal-card-media.ts',{});
 
 const target = { source: 'official', topicId: 'topic', libraryId: 'library' };
 const initial = { id: 'card', owner_id: 'owner', concept_id: null, library_node_id: 'topic', library_id: 'library', personal_topic_id: null,
@@ -74,7 +76,7 @@ function workspace(db, request=null, canCreate=true, richText=false) {
   const slots=[];let cursor=0,tree;let props={ownerId:'owner',canCreate,richText,target,topicName:'Topic',cards:[],request,
     onRequest(value){props={...props,request:value};},onSaved(card){props={...props,cards:[card]};},onDeleted(){props={...props,cards:[]};},onEditorState(){}};
   const hooks={useState(initial){const i=cursor++;if(!(i in slots))slots[i]=initial;return [slots[i],v=>{slots[i]=v;}];},useRef(initial){const i=cursor++;if(!(i in slots))slots[i]={current:initial};return slots[i];},useEffect(){}};
-  const modules={'./MoveCardDialog':{MoveCardDialog(){}},'./LearnerCardTools.module.css':new Proxy({}, {get:(_,k)=>k}),'./PersonalCardField':{PersonalCardField: function PersonalCardField(){}},react:hooks,'react/jsx-runtime':{jsx:(type,props)=>({type,props}),jsxs:(type,props)=>({type,props})},'@/lib/supabase':{supabase:db},'@/lib/standalone-custom-cards':cards,'../CreatorStudioV2Client.module.css':new Proxy({}, {get:(_,k)=>k})};
+  const modules={'@/lib/personal-card-media':cardMedia,'./PersonalCardImageAuthoring':{PersonalCardImageAuthoring(){throw Error('Legacy text fixture must not mount image tools');}},'./MoveCardDialog':{MoveCardDialog(){}},'./LearnerCardTools.module.css':new Proxy({}, {get:(_,k)=>k}),'./PersonalCardField':{PersonalCardField: function PersonalCardField(){}},react:hooks,'react/jsx-runtime':{jsx:(type,props)=>({type,props}),jsxs:(type,props)=>({type,props})},'@/lib/supabase':{supabase:db},'@/lib/standalone-custom-cards':cards,'../CreatorStudioV2Client.module.css':new Proxy({}, {get:(_,k)=>k})};
   const context={Error,exports:{},require(name){assert.ok(name in modules);return modules[name];},window:{confirm:()=>true},requestAnimationFrame(){}};
   vm.runInNewContext(ts.transpileModule(readFileSync(new URL('../components/creator/StandaloneCustomCardWorkspace.tsx',import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText,context);
   function render(){cursor=0;tree=context.exports.StandaloneCustomCardWorkspace(props);return tree;}

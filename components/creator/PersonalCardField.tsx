@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useId, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import type { EditorView } from 'prosemirror-view';
 import type { PersonalCardSession } from '@/lib/personal-card-authoring';
 import { safeLink } from '@/lib/official-content-format';
@@ -11,9 +11,10 @@ import visualStyles from './OfficialVisualField.module.css';
 
 /** Editing only. The owner-qualified caller retains all persistence and navigation. */
 export function PersonalCardField({ label, value, onChange, disabled = false, maxLength,
-  literal = false, onComposing }: {
+  literal = false, onComposing, media }: {
   label: string; value: string; onChange: (value: string) => void; disabled?: boolean;
   maxLength: number; literal?: boolean; onComposing?: (active: boolean) => void;
+  media?: (preview: boolean) => ReactNode;
 }) {
   const id = useId();
   const host = useRef<HTMLDivElement>(null);
@@ -122,5 +123,6 @@ export function PersonalCardField({ label, value, onChange, disabled = false, ma
       {literal ? <p style={{whiteSpace: 'pre-wrap'}}>{value || 'Nothing to preview yet.'}</p> : value ? <MarkdownContent markdown={value} mode="card" /> : <p>Nothing to preview yet.</p>}
     </div>}
     {error && <p role="status">{error}</p>}
+    {media?.(mode === 'preview')}
   </div>;
 }
