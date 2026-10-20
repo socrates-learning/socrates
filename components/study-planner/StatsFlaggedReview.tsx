@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { getSafeInternalPath } from '@/lib/safe-internal-path';
 import { MarkdownContent, cardMarkdownSummary, questionMarkdownSummary } from '@/components/MarkdownContent';
 import QuestionMediaContent from '@/components/QuestionMediaContent';
 import ConceptMediaContent from '@/components/ConceptMediaContent';
@@ -13,6 +14,7 @@ import styles from './StatsFlaggedReview.module.css';
 
 function safeSource(value: string | null) {
   if (!value) return undefined;
+  if (getSafeInternalPath(value, '')) return value;
   try { const url = new URL(value); return ['https:', 'http:'].includes(url.protocol) ? url.href : undefined; } catch { return undefined; }
 }
 

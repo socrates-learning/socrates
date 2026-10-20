@@ -4,6 +4,7 @@ import { readAppearanceSource as readFileSync } from './fixtures/appearance.mjs'
 import { createHash } from 'node:crypto';
 import { loadConceptModule, hookHarness, jsx } from './fixtures/concept-media-authoring.mjs';
 import * as model from '../lib/stats-flagged-review.ts';
+import * as internalPaths from '../lib/safe-internal-path.ts';
 import { projectQuestionPersonalNotes } from './fixtures/question-personal-notes.mjs';
 
 const path = 'components/study-planner/StatsFlaggedReview.tsx';
@@ -16,6 +17,7 @@ function harness(load) {
   const hooks = hookHarness(); hooks.hooks.useCallback = fn => fn;
   const { StatsFlaggedReview } = loadConceptModule(path, {
     react: hooks.hooks, 'react/jsx-runtime': jsx,
+    '@/lib/safe-internal-path': internalPaths,
     '@/lib/supabase': { supabase: {} }, '@/lib/stats-flagged-review': { ...model, loadFlaggedReview: load },
     '@/components/MarkdownContent': { MarkdownContent: 'Markdown', cardMarkdownSummary: x => x, questionMarkdownSummary: x => x },
     '@/components/QuestionMediaContent': { __esModule: true, default: 'QuestionMedia' },
@@ -70,10 +72,18 @@ test('populated details keep existing media surfaces, personal-note scope and on
   assert.doesNotMatch(text(tree), /Edit Question|Edit This|Save Question/);
 });
 
-test('the complete released logic, Concept dialog and note integration retain their original fingerprints', () => {
-  assert.equal(createHash('sha256').update(source.slice(0, source.indexOf('  return <section className='))).digest('hex'), '7713bdfe220b2dd5ab49f24aaeeb2732ebb5d1ad9672b471bd8dc2e9a7993abc');
-  assert.equal(createHash('sha256').update(projectQuestionPersonalNotes(path, source)).digest('hex'), '9cb7bca1a105255eee31a57f685ff79dbe580c7f51e879aef53e7642e23d6da5');
-  assert.throws(() => projectQuestionPersonalNotes(path, source.replace('placeholder="Search flags…"', 'placeholder="Different"')), /Exact Stats Flagged Review presentation/);
+test('released logic and dialog retain their fingerprints apart from the exact internal-reference correction', () => {
+  let original = source;
+  for (const addition of [
+    "import { getSafeInternalPath } from '@/lib/safe-internal-path';\n",
+    "  if (getSafeInternalPath(value, '')) return value;\n",
+  ]) {
+    assert.equal(original.split(addition).length, 2, 'Exact internal-reference correction');
+    original = original.replace(addition, '');
+  }
+  assert.equal(createHash('sha256').update(original.slice(0, original.indexOf('  return <section className='))).digest('hex'), '7713bdfe220b2dd5ab49f24aaeeb2732ebb5d1ad9672b471bd8dc2e9a7993abc');
+  assert.equal(createHash('sha256').update(projectQuestionPersonalNotes(path, original)).digest('hex'), '9cb7bca1a105255eee31a57f685ff79dbe580c7f51e879aef53e7642e23d6da5');
+  assert.throws(() => projectQuestionPersonalNotes(path, original.replace('placeholder="Search flags…"', 'placeholder="Different"')), /Exact Stats Flagged Review presentation/);
 });
 
 test('workspace styles stack without clipping content and provide neutral surfaces and visible focus', () => {
