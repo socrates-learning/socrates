@@ -3,6 +3,7 @@ import { projectStatsProgress } from './fixtures/stats-progress-presentation.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import {createHash} from 'node:crypto';
 import * as advisor from '../lib/study-advisor.ts';
 import * as goalModel from '../lib/study-goals.ts';
 import {evidence,goals} from './fixtures/study-advisor.mjs';
@@ -41,9 +42,56 @@ test('Goal refresh reloads evidence and changed goals are recomputed without wri
  const s=setup();await s.load();assert.match(s.text(),/Review the pace for Finals/);
  s.props({goals:{...goals([]),as_of:'2026-10-11T13:00:00Z'}});await s.load();assert.doesNotMatch(s.text(),/Review the pace for Finals/);assert.equal(s.calls.length,2);assert.ok(s.calls.every(c=>c.name==='get_study_advisor'));
 });
-test('Goal integration preserves original code via only the exact import, fragment, and sibling addition',()=>{
- let source=projectStatsProgress('components/study-planner/StudyGoals.tsx',projectIndependentTopicLocations('components/study-planner/StudyGoals.tsx',readFileSync(new URL('../components/study-planner/StudyGoals.tsx',import.meta.url),'utf8')));
+// Reverse only the two exact presentation hunks approved in 56680ff.
+// The existing projections and frozen digest still check every remaining byte.
+function projectApprovedGoalTopicTree(source) {
+  const hunks = [
+  [
+    "import { StudyGoalTopicTree } from './StudyGoalTopicTree';\n",
+    ""
+  ],
+  [
+    "      <StudyGoalTopicTree topics={data.topics} selected={draft.topics} query={query} busy={busy} onChange={topics => setDraft({ ...draft, topics })} />\n",
+    "      <fieldset className={styles.topics}><legend>Topics and subject areas ({draft.topics.length} selected)</legend>\n        {data.topics.filter(t => t.path.toLocaleLowerCase().includes(query.toLocaleLowerCase())).map(t => <label key={topicKey(t)}><input type=\"checkbox\" disabled={busy} checked={draft.topics.includes(topicKey(t))} onChange={e => setDraft({ ...draft, topics: e.target.checked ? [...draft.topics, topicKey(t)] : draft.topics.filter(k => k !== topicKey(t)) })} /><span>{t.path}{t.source === 'personal' ? ' (My Topic)' : ''}</span></label>)}\n        {!data.topics.some(t => t.path.toLocaleLowerCase().includes(query.toLocaleLowerCase())) && <p>No matching Topics.</p>}\n      </fieldset>\n"
+  ]
+];
+  for (const [approved, previous] of hunks) {
+    assert.equal(source.split(approved).length, 2, 'Approved Goal Topic Tree integration must occur exactly once');
+    source = source.replace(approved, previous);
+  }
+  return source;
+}
+function assertPreservedGoalIntegration(input) {
+ let source=projectStatsProgress('components/study-planner/StudyGoals.tsx',projectIndependentTopicLocations('components/study-planner/StudyGoals.tsx',projectApprovedGoalTopicTree(input)));
  for(const [a,b] of [["import { StudyAdvisor } from './StudyAdvisor';\n",''],['return <><section','return <section'],['</section><StudyAdvisor libraryId={libraryId} requestScope={requestScope} goals={loading || error ? null : data} /></>;','</section>;']]){assert.equal(source.split(a).length,2);source=source.replace(a,b);}
  // Original frozen Goal component identity, not a regenerated broad fingerprint.
- return import('node:crypto').then(({createHash})=>assert.equal(createHash('sha256').update(source).digest('hex'),'006a0e9267200159384be8884b753ee0a1efa5d19d70eccf29c9081e0de66086'));
+ assert.equal(createHash('sha256').update(source).digest('hex'),'006a0e9267200159384be8884b753ee0a1efa5d19d70eccf29c9081e0de66086');
+}
+test('Goal integration preserves original code via only the exact import, fragment, and sibling addition',()=>{
+ assertPreservedGoalIntegration(readFileSync(new URL('../components/study-planner/StudyGoals.tsx',import.meta.url),'utf8'));
+});
+
+const goalSource = () => readFileSync(new URL('../components/study-planner/StudyGoals.tsx',import.meta.url),'utf8');
+for (const [description, before, after] of [
+ ['save operation', "supabase.rpc('save_placement_study_goal'", "supabase.rpc('save_study_goal'"],
+ ['placement scope', 'p_official_location_ids:', 'p_official_topic_ids:'],
+ ['revision safeguard', 'p_expected_revision: draft.revision', 'p_expected_revision: null'],
+ ['Advisor evidence guard', 'goals={loading || error ? null : data}', 'goals={data}'],
+ ['tree selection binding', 'selected={draft.topics}', 'selected={[]}'],
+]) test(`Goal preservation rejects an unrelated change to the ${description}`,()=>{
+ const source=goalSource();
+ assert.equal(source.split(before).length,2,'Negative probe must change exactly one existing fragment');
+ assert.throws(()=>assertPreservedGoalIntegration(source.replace(before,after)));
+});
+for (const [description, fragment] of [
+ ['tree import', "import { StudyGoalTopicTree } from './StudyGoalTopicTree';\n"],
+ ['tree rendering', "      <StudyGoalTopicTree topics={data.topics} selected={draft.topics} query={query} busy={busy} onChange={topics => setDraft({ ...draft, topics })} />\n"],
+]) test(`Goal preservation rejects a missing or duplicated approved ${description}`,()=>{
+ const source=goalSource();
+ assert.equal(source.split(fragment).length,2);
+ assert.throws(()=>assertPreservedGoalIntegration(source.replace(fragment,'')));
+ assert.throws(()=>assertPreservedGoalIntegration(source.replace(fragment,fragment+fragment)));
+});
+test('Goal preservation rejects changes outside both approved presentation hunks',()=>{
+ assert.throws(()=>assertPreservedGoalIntegration(goalSource()+'\n// Unapproved source change\n'));
 });
