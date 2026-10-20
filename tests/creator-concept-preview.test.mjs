@@ -197,7 +197,8 @@ function snapshot(h) {
     existing: e.existingQuestions, content: e.concept, contentDirty: e.isContentDirty });
 }
 function clickPreview(h, id = 'primary', source = 'official') {
-  const button = h.render().renderQuestionConceptPreviewAction(source, id, id === 'primary' ? 'Primary' : 'Related');
+  const button = nodes(h.render().renderQuestionConceptPreviewAction(source, id, id === 'primary' ? 'Primary' : 'Related'))
+    .find(node => node.type === 'button' && node.props['aria-label']?.startsWith('View Concept:'));
   assert.ok(button); let stopped = false; button.props.onClick({ stopPropagation() { stopped = true; } }); assert.ok(stopped);
 }
 for (const role of ['admin', 'editor']) for (const editing of [false, true]) test(`${role}: ${editing ? 'saved' : 'new'} dirty Question is byte-identical after opening, switching and closing previews`, () => {
@@ -241,7 +242,8 @@ test('learner, unselected and foreign personal Concepts have no preview action; 
   assert.equal(learner.render().renderQuestionConceptPreviewAction('official', 'primary', 'Primary'), null);
   assert.equal(nodes(learner.render().tree).filter(n => n.props?.['aria-haspopup'] === 'dialog' && text(n) === 'View Concept').length, 0);
   const h = questionSetup(); let e = h.render(); e.selectPersonalQuestionConcept('mine-concept', 'mine-topic'); e = h.render();
-  const button = e.renderQuestionConceptPreviewAction('personal', 'mine-concept', 'Mine'); assert.ok(button);
+  const button = nodes(e.renderQuestionConceptPreviewAction('personal', 'mine-concept', 'Mine'))
+    .find(node => node.type === 'button' && node.props['aria-label'] === 'View Concept: Mine'); assert.ok(button);
   const before = snapshot(h); button.props.onClick({ stopPropagation() {} });
   assert.deepEqual(snapshot(h), before); assert.equal(h.render().questionConceptPreview.target.source, 'personal');
   assert.equal(e.renderQuestionConceptPreviewAction('personal', 'missing-owner', 'Other'), null);

@@ -1,4 +1,5 @@
 import { projectIndependentTopicLocations } from './independent-topic-locations.mjs';
+import { projectConceptNavigation } from './creator-concept-navigation.mjs';
 import { projectStudySunrise } from './study-sunrise.mjs';
 import { projectCreatorSunriseStyles } from './creator-sunrise.mjs';
 import assert from 'node:assert/strict';
@@ -41,7 +42,7 @@ export function projectAppearance(source) {
 }
 
 export function readAppearanceSource(path, options) {
-  const content = readFileSync(path, options);
+  const content = projectConceptNavigation(path, readFileSync(path, options));
   const relative = String(path).match(/(components\/(?:CreatorStudioV2Client|StudyPlanner)\.tsx)$/)?.[1];
   const raw = relative && typeof content === 'string' ? projectIndependentTopicLocations(relative, content) : content;
   const value = typeof raw === 'string' ? projectStudySunrise(path, raw) : raw;

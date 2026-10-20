@@ -32,6 +32,7 @@ vm.runInNewContext(ts.transpileModule(readFileSync(new URL('../../lib/creator-st
     compilerOptions: { module: ts.ModuleKind.CommonJS },
 }).outputText, runtimeContext);
 const exposed = [
+    'openConceptForEditing', 'returnFromConcept', 'conceptReturn', 'conceptNavigationPending', 'conceptNavigationError', 'conceptNavigationFingerprint', 'conceptNavigationIsBusy', 'cancelConceptNavigation',
     'detachmentRequest', 'installTopicAssignmentGraph', 'openTopicDetachment', 'locationRequest', 'locationError', 'setLocationRequest', 'submitLocationChange', 'currentOfficialLocation', 'openMoveDialog',
     'topicGraph', 'setTopicGraph', 'setActiveTopicId', 'activeTopicEdge', 'setActiveTopicEdge', 'setActiveTopicOccurrence', 'renderPlacementControls', 'renderPlacementDialog', 'placementDialog', 'setPlacementChoice', 'submitPlacementChange', 'reloadRealTopicTree', 'moveActiveTopic', 'deleteActiveTopic', 'setMoveDestinationId',
     'questionConceptPreview', 'questionConceptPreviewContext', 'closeQuestionConceptPreview', 'renderQuestionConceptPreviewAction',
@@ -68,7 +69,7 @@ const exposed = [
 const renderMarker = '  return (\n    <>\n      <Header />';
 assert.equal(source.split(renderMarker).length, 2, 'Expected one main Creator render boundary');
 const compiled = ts.transpileModule(source.replace('  return (\n    <>\n      <Header />', `  capture({ ${exposed} });\n  return (\n    <>\n      <Header />`), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText;
-export function editor({ role = 'admin', editing = false, response, references = [], cards = true, placed = false, neutralFixture = false, readResponse, confirm = () => true, questionImages } = {}) {
+export function editor({ role = 'admin', editing = false, response, references = [], cards = true, placed = false, neutralFixture = false, readResponse, confirm = () => true, questionImages, authorizeNavigation = async () => true } = {}) {
     const slots = [];
     let effects = [];
     let unloadEffect;
@@ -122,6 +123,7 @@ export function editor({ role = 'admin', editing = false, response, references =
                 insert(values) { mutation = { table, operation: 'insert', values, filters }; calls.push(mutation); return query; },
                 update(values) { mutation = { table, operation: 'update', values, filters }; calls.push(mutation); return query; },
                 delete() { mutation = { table, operation: 'delete', filters }; calls.push(mutation); return query; },
+                maybeSingle: async () => readResponse?.(table, filters) || { data: null, error: null },
                 single: async () => ({ data: { id: filters.find(([key]) => key === 'id')?.[1] || 'saved-personal', ...mutation?.values }, error: null }),
                 then(resolve) { return Promise.resolve(readResponse?.(table, filters) || { data: [], error: null, ...(table === 'tags' ? { count: 0 } : {}) }).then(resolve); },
             };
@@ -180,6 +182,7 @@ export function editor({ role = 'admin', editing = false, response, references =
         '@/lib/topic-placement-graph': topicGraphModule,
     '@/lib/concept-topic-tree': { buildConceptTopicTree },
         '@/lib/supabase': { supabase: database },
+        '@/lib/creator-concept-navigation': { authorizeConceptNavigation: authorizeNavigation },
         '@/lib/creator-personal-structure': personalStructure,
         '@/lib/safe-navigation': { navigateBackOrFallback: () => routes.push('back-or-fallback') },
         '@/lib/tag-catalog-invalidation': { broadcastTagCatalogUsageInvalidation() { } },
@@ -207,7 +210,7 @@ export function editor({ role = 'admin', editing = false, response, references =
     const context = {
         exports: {}, capture: value => { api = value; },
         require(name) { assert.ok(name in modules, `Unexpected import: ${name}`); return modules[name]; },
-        document: { activeElement: focusTarget }, HTMLElement: FocusTarget,
+        document: { activeElement: focusTarget, getElementById: () => focusTarget }, HTMLElement: FocusTarget,
         window: { addEventListener: (name, fn) => listeners.set(name, fn), removeEventListener: name => listeners.delete(name), requestAnimationFrame: fn => fn(), confirm: message => { confirmations.push(message); return confirm(message); }, location: { pathname: '/creator' }, history: { replaceState: (_a, _b, path) => routes.push(path) } },
     };
     vm.runInNewContext(compiled, context);

@@ -267,7 +267,7 @@ test('learner has no official edit capability; colliding personal UUID never tak
 });
 
 // Render and execute the real shared Flagged browser with strict, explicit imports.
-function flaggedBrowser({ personal = false, learner = false, officialQuestionEditor } = {}) {
+function flaggedBrowser({ personal = false, learner = false, officialQuestionEditor, officialConceptEditor, missingConcept = false } = {}) {
   const slots = [], reads = [], writes = []; let cursor = 0, load;
   const flag = { id: 'flag', question_id: personal ? null : 'q1', personal_card_id: personal ? 'q1' : null, note: 'Retained flag note', created_at: '2026-01-01T00:00:00Z' };
   let flags = [flag];
@@ -279,7 +279,7 @@ function flaggedBrowser({ personal = false, learner = false, officialQuestionEdi
       order(key, value) { filters.push(['order', key, value]); return query; }, delete() { deleting = true; return query; },
       then(resolve) {
         if (deleting) { writes.push({ table, filters }); flags = []; }
-        return Promise.resolve({ data: table === 'study_candidate_flags' ? flags : table === 'questions' ? [{ id: 'q1', concept_id: 'primary', prompt: 'Flagged Front' }] : [{ id: 'primary', name: 'Primary' }], error: null }).then(resolve);
+        return Promise.resolve({ data: table === 'study_candidate_flags' ? flags : table === 'questions' ? [{ id: 'q1', concept_id: 'primary', prompt: 'Flagged Front' }] : missingConcept ? [] : [{ id: 'primary', name: 'Primary' }], error: null }).then(resolve);
       },
     }; return query;
   } };
@@ -292,7 +292,7 @@ function flaggedBrowser({ personal = false, learner = false, officialQuestionEdi
   };
   const context = { exports: {}, require(name) { assert.ok(name in modules, `Unexpected Flagged import: ${name}`); return modules[name]; } };
   vm.runInNewContext(ts.transpileModule(readFileSync(new URL('../components/StudyCreatorFlaggedBrowser.tsx', import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText, context);
-  const props = { ownerId: 'owner', learnerPresentation: learner, neutralPresentation: true, officialQuestionEditor,
+  const props = { ownerId: 'owner', learnerPresentation: learner, neutralPresentation: true, officialQuestionEditor, officialConceptEditor,
     material: { cards: [], standaloneCards: personal ? [{ id: 'q1', concept_id: null, question: 'Card Front', answer: 'Card Back' }] : [], concepts: [], topics: [], overlays: [] } };
   return { reads, writes, props, render() { cursor = 0; return context.exports.StudyCreatorFlaggedBrowser(props); }, async load() { await load(); } };
 }
@@ -332,4 +332,28 @@ test('loading, busy and error states remain in Details without hiding existing n
   capability.busy = false; capability.error = 'Read failed; draft preserved'; assert.equal(edit().props.disabled, false);
   assert.ok(nodes(h.render()).some(n => n.props.role === 'alert' && text(n) === capability.error));
   assert.match(text(h.render()), /Retained flag note/); assert.ok(nodes(h.render()).some(n => n.type === 'button' && text(n) === 'Unflag'));
+});
+
+test('Flagged Edit Concept uses the authoritative Question relationship, preserves search and notes, and explains unavailable Concepts', async () => {
+  for (const options of [{}, { personal: true }, { learner: true }, { missingConcept: true }]) {
+    const opened = []; let cancelled = 0;
+    const capability = { open: async (...args) => opened.push(args), cancel: () => cancelled++, pending: false, busy: false };
+    const h = flaggedBrowser({ ...options, officialConceptEditor: capability }); h.render(); await h.load();
+    const edit = nodes(h.render()).find(n => n.type === 'button' && text(n) === 'Edit Concept');
+    assert.equal(Boolean(edit), !options.personal && !options.learner && !options.missingConcept);
+    if (edit) {
+      await edit.props.onClick({ currentTarget: { id: edit.props.id } });
+      assert.deepEqual(plain(opened), [['q1', 'primary', 'flag-concept-flag']]);
+      capability.pending = true;
+      assert.equal(nodes(h.render()).find(n => n.type === 'button' && text(n) === 'Edit Concept').props.disabled, true);
+      const search = nodes(h.render()).find(n => n.props['aria-label'] === 'Search flagged material');
+      search.props.onChange({ target: { value: 'retained flag note' } });
+      assert.equal(nodes(h.render()).find(n => n.props['aria-label'] === 'Search flagged material').props.value, 'retained flag note');
+      nodes(h.render()).find(n => n.props.className?.startsWith('flaggedRow')).props.onClick();
+      assert.equal(cancelled, 1);
+    }
+    if (options.missingConcept) assert.match(text(h.render()), /associated Concept is unavailable/);
+    if (!options.learner) assert.match(text(h.render()), /Retained flag note/);
+    assert.equal(h.writes.length, 0);
+  }
 });

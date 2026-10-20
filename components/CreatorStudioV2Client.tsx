@@ -57,6 +57,7 @@ import type { QuestionMediaHint } from '@/lib/question-media';
 import ConceptImageAuthoring, { ConceptImageEntry, useConceptImageAuthoring, type ConceptImageEditorHandle } from '@/components/creator/ConceptImageAuthoring';
 import { withoutConceptMediaTokens } from '@/lib/concept-media';
 import { supabase } from '@/lib/supabase';
+import { authorizeConceptNavigation } from '@/lib/creator-concept-navigation';
 import { movePersonalStructure, refreshPersonalStructure } from '@/lib/creator-personal-structure';
 import { CreatorTopicTreeInteraction, TopicDropRow, TopicDragHandle } from './CreatorTopicTreeInteraction';
 import { planTopicPosition, executeTopicPosition, type PositionContext, type PositionPlan, type StructuralTopic } from '@/lib/creator-topic-positioning';
@@ -1140,6 +1141,31 @@ export function CreatorStudioV2Client({
   }
 
   const [activeCreatorTab, setActiveCreatorTab] = useState<CreatorStudioTab>(isLearnerReadOnly ? 'questions' : 'content');
+  const canNavigateToConcept = creatorAuthority.role === 'admin' && creatorAuthority.canSaveConcept &&
+    creatorCapabilities.library.canAccessActiveLibrary && creatorCapabilities.library.canManageActiveLibrary;
+  const [conceptNavigationPending, setConceptNavigationPending] = useState(false);
+  const [conceptNavigationError, setConceptNavigationError] = useState('');
+  const conceptNavigationGeneration = useRef(0);
+  const conceptNavigationLock = useRef(false);
+  const conceptNavigationLive = useRef('');
+  const conceptNavigationFocus = useRef<string | null>(null);
+  const [conceptReturn, setConceptReturn] = useState<{
+    tab: 'questions' | 'flagged'; focusId: string; topicId: string;
+    occurrence: string | null; edge: string | null;
+  } | null>(null);
+  const cancelConceptNavigation = useCallback(() => {
+    conceptNavigationGeneration.current++;
+    conceptNavigationLock.current = false;
+    setConceptNavigationPending(false);
+    setConceptNavigationError('');
+  }, []);
+  useEffect(() => () => cancelConceptNavigation(),
+    [activeCreatorTab, activeLibraryId, canNavigateToConcept, creatorCapabilities.subject.userId, cancelConceptNavigation]);
+  useEffect(() => {
+    if (!conceptNavigationFocus.current) return;
+    document.getElementById(conceptNavigationFocus.current)?.focus();
+    conceptNavigationFocus.current = null;
+  }, [activeCreatorTab]);
   const [editorMode, setEditorMode] = useState<EditorMode>('write');
   const [dialogMode, setDialogMode] = useState<DialogMode>(null);
   const topicDialogReturnFocusRef = useRef<HTMLElement | null>(null);
@@ -1728,6 +1754,14 @@ export function CreatorStudioV2Client({
     (questionImages.guardActive && !isCurrentQuestionReadOnly && isQuestionDirty) ||
     (activeCreatorTab === 'content' ? !isCurrentContentReadOnly && isContentDirty :
       (activeCreatorTab === 'questions' || activeCreatorTab === 'search' || (!isLearnerReadOnly && activeCreatorTab === 'flagged')) ? !isCurrentQuestionReadOnly && isQuestionDirty : false);
+  const conceptNavigationFingerprint = JSON.stringify([
+    activeCreatorTab, activeLibraryId, creatorCapabilities.subject.userId, canNavigateToConcept,
+    conceptEditorIdentityKey(conceptEditorState), currentDraftFingerprint, conceptName, referenceDraft,
+    questionEditorIdentityKey(questionEditorState), currentQuestionFingerprint, currentPersonalCardFingerprint,
+    conceptVisualGeneration, questionVisualGeneration, conceptImages.items, questionImages.items,
+    isSaving, isSavingQuestion, conceptImages.pending, questionImages.pending,
+  ]);
+  useEffect(() => { conceptNavigationLive.current = conceptNavigationFingerprint; });
   const visibleSaveFeedback =
     saveFeedback === 'saving' || (saveFeedback === 'saved' && !isDirty)
       ? saveFeedback
@@ -3095,10 +3129,11 @@ export function CreatorStudioV2Client({
 
   function selectExistingQuestion(
     question: ExistingQuestion,
-    skipDiscardConfirmation = false
+    skipDiscardConfirmation = false,
+    reloadAfterConfirmedDiscard = false
   ) {
     if (isSavingQuestion) return;
-    if (
+    if (!reloadAfterConfirmedDiscard &&
       isQuestionEditorIdentity(
         questionEditorStateRef.current,
         question.source,
@@ -4621,21 +4656,21 @@ export function CreatorStudioV2Client({
     navigateBackOrFallback(router);
   }
 
-  async function openConceptFromSearch(selectedConceptId: string) {
+  async function openConceptFromSearch(selectedConceptId: string, handoff?: { isCurrent: () => boolean }) {
     if (
       isConceptEditorIdentity(
         conceptEditorStateRef.current,
         'official',
         selectedConceptId
       )
-    ) return;
+    ) return true;
     if (isContentDirty && !window.confirm('Discard the unsaved changes to this concept?')) {
       return;
     }
 
     const destination = `/creator/concepts/${selectedConceptId}`;
     const shouldLoadInPlace =
-      isLearnerReadOnly || window.location.pathname === destination;
+      Boolean(handoff) || isLearnerReadOnly || window.location.pathname === destination;
     const requestGeneration = conceptSelectionGenerationRef.current + 1;
     conceptSelectionGenerationRef.current = requestGeneration;
     const requestTargetKey = createCreatorEntityKey(
@@ -4681,7 +4716,8 @@ export function CreatorStudioV2Client({
 
       if (
         requestGeneration !== conceptSelectionGenerationRef.current ||
-        conceptSelectionTargetKeyRef.current !== requestTargetKey
+        conceptSelectionTargetKeyRef.current !== requestTargetKey ||
+        (handoff && !handoff.isCurrent())
       ) return;
 
       const loadedConcept = conceptResult.data;
@@ -4689,6 +4725,7 @@ export function CreatorStudioV2Client({
       if (
         conceptResult.error ||
         !loadedConcept ||
+        (handoff && loadedConcept.id !== selectedConceptId) ||
         placementResult.error ||
         !placements.length ||
         tagResult.error ||
@@ -4697,9 +4734,10 @@ export function CreatorStudioV2Client({
       ) {
         setStatus({
           tone: 'error',
-          message: 'This published Concept could not be loaded for the active Library.',
+          message: handoff ? 'This Concept could not be loaded for the active Library. Your drafts are unchanged.'
+            : 'This published Concept could not be loaded for the active Library.',
         });
-        return;
+        return false;
       }
 
       type LearnerReferenceRow = {
@@ -4776,6 +4814,12 @@ export function CreatorStudioV2Client({
       setConceptTags(loadedTags);
       setPrerequisites(loadedPrerequisites);
       setReferences(loadedReferences);
+      if (handoff) {
+        setReferenceDraft(emptyReferenceDraft);
+        setEditingReferenceId(null);
+        setReferenceStatus(null);
+        setPendingRemovalId(null);
+      }
       setSavedDraftFingerprint(
         draftFingerprint(
           loadedConcept.body_markdown || '',
@@ -4797,9 +4841,98 @@ export function CreatorStudioV2Client({
           ? 'Published Concept · read-only'
           : 'Concept selected',
       });
-      return;
+      return true;
     }
     navigateFromCreator(destination);
+  }
+
+  function conceptNavigationIsBusy() {
+    return isSaving || isSavingQuestion ||
+      conceptImages.pending || questionImages.pending || questionImages.uncertain || Boolean(conceptImages.inspector) ||
+      Boolean(questionImages.inspector) || standaloneEditorRef.current.busy || Boolean(standaloneRequest);
+  }
+
+  async function openConceptForEditing(id: string, originQuestionId: string | null, focusId: string) {
+    if (!canNavigateToConcept || !activeLibraryId || conceptNavigationLock.current ||
+      conceptSaveLockRef.current || questionSaveLockRef.current ||
+      conceptNavigationIsBusy() || (activeCreatorTab !== 'questions' && activeCreatorTab !== 'flagged')) return;
+    if (activeCreatorTab === 'questions' && (questionSource !== 'official' || !isQuestionConceptAssociated(id))) return;
+    const generation = ++conceptNavigationGeneration.current;
+    const fingerprint = conceptNavigationFingerprint;
+    const isCurrent = () => generation === conceptNavigationGeneration.current &&
+      conceptNavigationLive.current === fingerprint;
+    const returnContext = { tab: activeCreatorTab, focusId, topicId: activeTopicId,
+      occurrence: activeTopicOccurrence, edge: activeTopicEdge };
+    conceptNavigationLock.current = true;
+    setConceptNavigationPending(true);
+    setConceptNavigationError('');
+    try {
+      const allowed = await authorizeConceptNavigation({ conceptId: id, questionId: originQuestionId, libraryId: activeLibraryId });
+      if (!isCurrent()) return;
+      if (!allowed) {
+        setConceptNavigationError('This Concept is unavailable for editing in the active Library, or your Administrator access has changed.');
+        return;
+      }
+      if (!confirmDiscardQuestionChanges()) return;
+      // Reload only after explicit discard. The existing editor's saved
+      // fingerprint identifies the persisted Primary, even after a prior save.
+      let restoredQuestion: ExistingQuestion | undefined;
+      if (isQuestionDirty && questionId && questionSource === 'official') {
+        const savedPrimary = JSON.parse(savedQuestionFingerprint).conceptId;
+        restoredQuestion = (await fetchExistingQuestions(savedPrimary, activeLibraryId))
+          ?.find(item => item.source === 'official' && item.id === questionId);
+        if (!isCurrent()) return;
+        if (!restoredQuestion) {
+          setConceptNavigationError('The saved Question could not be reloaded. Your drafts are unchanged. Please try again.');
+          return;
+        }
+      } else if (isQuestionDirty && questionSource === 'personal' && personalCardEditorId) {
+        const card = personalCards.find(item => item.id === personalCardEditorId && item.owner_id === initialPersonalContent.ownerId);
+        const personalConcept = card?.concept_id ? personalConceptById.get(card.concept_id) : null;
+        if (!card || !personalConcept) {
+          setConceptNavigationError('Finish the current personal Card edit before opening this Concept. Your draft is unchanged.');
+          return;
+        }
+        restoredQuestion = mapPersonalCard(card, personalConcept);
+      }
+      const loaded = await openConceptFromSearch(id, { isCurrent });
+      if (!loaded) {
+        if (loaded === false && isCurrent()) setConceptNavigationError('The Concept was not opened. Your drafts are unchanged.');
+        return;
+      }
+      // Only discard after the destination is fully loaded. Failed reads leave
+      // both drafts intact; successful saves use the existing save handlers.
+      if (isQuestionDirty) {
+        if (restoredQuestion) selectExistingQuestion(restoredQuestion, true, true);
+        else resetQuestionEditor(primaryQuestionConceptId);
+      }
+      setConceptReturn(returnContext);
+      conceptNavigationFocus.current = 'creator-concept-editor-heading';
+      setActiveCreatorTab('content');
+    } catch {
+      if (isCurrent()) setConceptNavigationError('The Concept could not be opened. Your drafts are unchanged. Please try again.');
+    } finally {
+      if (generation === conceptNavigationGeneration.current) {
+        conceptNavigationLock.current = false;
+        setConceptNavigationPending(false);
+      }
+    }
+  }
+
+  function returnFromConcept(destination: CreatorStudioTab = conceptReturn?.tab || 'questions') {
+    if (!conceptReturn || conceptNavigationIsBusy() || conceptSaveLockRef.current || questionSaveLockRef.current) return;
+    if (isContentDirty) {
+      if (!window.confirm('Discard the unsaved changes to this concept?')) return;
+      resetConceptEditor([], false);
+    }
+    if (destination === conceptReturn.tab) {
+      setActiveTopicId(conceptReturn.topicId);
+      setActiveTopicOccurrence(conceptReturn.occurrence);
+      setActiveTopicEdge(conceptReturn.edge);
+      conceptNavigationFocus.current = conceptReturn.focusId;
+    }
+    setActiveCreatorTab(destination);
+    setConceptReturn(null);
   }
 
   function openPersonalConcept(selectedConceptId: string) {
@@ -6256,7 +6389,7 @@ export function CreatorStudioV2Client({
     );
   }
 
-  function renderQuestionConceptPreviewAction(source: ContentSource, id: string, name: string) {
+  function renderQuestionConceptPreviewAction(source: ContentSource, id: string, name: string, origin = 'question-primary') {
     if (isLearnerReadOnly || !creatorAuthority.canSaveQuestion || questionSource !== source) return null;
     const personal = source === 'personal' ? personalConceptById.get(id) : null;
     if (source === 'official' ? !isQuestionConceptAssociated(id) :
@@ -6269,6 +6402,7 @@ export function CreatorStudioV2Client({
       ...(personal ? { source: 'personal' as const, topicId: personal.topic_id } : { source: 'official' as const }),
     };
     return (
+      <span style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
       <button type="button" className={styles.secondaryButton}
         aria-label={`View Concept: ${name}`} aria-haspopup="dialog"
         style={{ justifySelf: 'start', flexShrink: 0 }}
@@ -6279,6 +6413,13 @@ export function CreatorStudioV2Client({
         }}>
         View Concept
       </button>
+      {source === 'official' && canNavigateToConcept && <button type="button"
+        id={`${origin}-edit-${id}`} className={styles.secondaryButton} aria-label={`Edit Concept: ${name}`}
+        disabled={conceptNavigationPending || conceptNavigationIsBusy()}
+        onClick={event => { event.stopPropagation(); void openConceptForEditing(id, questionId, event.currentTarget.id); }}>
+        Edit Concept
+      </button>}
+      </span>
     );
   }
 
@@ -6326,7 +6467,7 @@ export function CreatorStudioV2Client({
                   title="Use this as Primary and remove the previous Primary association."
                   onClick={() => makeQuestionConceptPrimary(item.id)}>Make Primary</button>
               )}
-              {isSelected && renderQuestionConceptPreviewAction('official', item.id, item.name)}
+              {isSelected && renderQuestionConceptPreviewAction('official', item.id, item.name, `question-tree-${topic.occurrenceKey || topic.key}`)}
             </div>
           );
         })}
@@ -7290,6 +7431,10 @@ export function CreatorStudioV2Client({
             presentation="navy"
             activeTab={activeCreatorTab}
             onSelect={(tab) => {
+              cancelConceptNavigation();
+              if (conceptReturn && activeCreatorTab === 'content' && tab !== 'content') {
+                returnFromConcept(tab); return;
+              }
               const isQuestionSearchTransition =
                 (activeCreatorTab === 'questions' && tab === 'search') ||
                 (activeCreatorTab === 'search' && tab === 'questions');
@@ -7303,6 +7448,13 @@ export function CreatorStudioV2Client({
           />
 
           {saveToolbar}
+          {conceptReturn && activeCreatorTab === 'content' && <button type="button"
+            className={styles.secondaryButton} disabled={conceptNavigationIsBusy()}
+            onClick={() => returnFromConcept()}>
+            {conceptReturn.tab === 'flagged' ? 'Back to flagged item' : 'Back to Question'}
+          </button>}
+          {conceptNavigationPending && <p role="status">Opening Concept…</p>}
+          {conceptNavigationError && <p role="alert">{conceptNavigationError}</p>}
 
           {activeCreatorTab === 'tags' && (
             <section className={`${styles.panel} ${styles.tagManagerDesign}`} aria-label="Tag Manager">
@@ -7366,7 +7518,8 @@ export function CreatorStudioV2Client({
             </section>
           )}
 
-          {activeCreatorTab === 'flagged' && (
+          {(activeCreatorTab === 'flagged' || conceptReturn?.tab === 'flagged') && (
+            <div hidden={activeCreatorTab !== 'flagged'}>
             <CreatorStudioFlaggedTab
               material={{
                 topics: personalTopics,
@@ -7376,14 +7529,27 @@ export function CreatorStudioV2Client({
                 overlays: personalOverlays,
               }}
               ownerId={initialPersonalContent.ownerId}
+              officialConceptEditor={canNavigateToConcept ? {
+                open: (questionId, conceptId, focusId) => {
+                  cancelFlaggedQuestionEdit();
+                  return openConceptForEditing(conceptId, questionId, focusId);
+                },
+                cancel: cancelConceptNavigation,
+                pending: conceptNavigationPending,
+                busy: conceptNavigationIsBusy(),
+              } : undefined}
               officialQuestionEditor={creatorAuthority.canSaveQuestion ? {
-                open: openFlaggedQuestion,
+                open: (questionId, conceptId) => {
+                  cancelConceptNavigation();
+                  return openFlaggedQuestion(questionId, conceptId);
+                },
                 cancel: cancelFlaggedQuestionEdit,
                 pending: flaggedQuestionPending,
                 busy: flaggedQuestionEditIsBusy(),
                 error: flaggedQuestionError,
               } : undefined}
             />
+            </div>
           )}
 
           {activeCreatorTab === 'content' ? (
@@ -7581,7 +7747,7 @@ export function CreatorStudioV2Client({
             />
                   ) : (<>
               <div>
-                <h2>1. Concept / Explanation</h2>
+                <h2 id="creator-concept-editor-heading" tabIndex={-1}>1. Concept / Explanation</h2>
                 <p>Main concept creation space.</p>
               </div>
               {conceptSource === 'personal' && (
@@ -8478,6 +8644,8 @@ export function CreatorStudioV2Client({
                         onClick={clearQuestionConceptAssociations}>Clear Concept associations</button>
                     </div>
                   )}
+                  {questionSource === 'official' && questionId && !linkedQuestionConcept &&
+                    <p role="status">The associated Concept is unavailable in this Library.</p>}
                   {questionSource === 'personal' && personalQuestionConceptId && (
                     <div className={styles.linkedConceptContext} aria-label="Primary Concept">
                       <strong>

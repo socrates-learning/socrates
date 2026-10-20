@@ -42,6 +42,12 @@ export type FlaggedQuestionEditor = {
   busy: boolean;
   error: string;
 };
+export type FlaggedConceptEditor = {
+  open: (questionId: string, conceptId: string, focusId: string) => Promise<void>;
+  cancel: () => void;
+  pending: boolean;
+  busy: boolean;
+};
 
 type StudyCreatorFlaggedBrowserProps = {
   material: Pick<CreatorPersonalContent, 'topics' | 'concepts' | 'cards' | 'overlays' | 'standaloneCards'>;
@@ -49,6 +55,7 @@ type StudyCreatorFlaggedBrowserProps = {
   neutralPresentation?: boolean;
   learnerPresentation?: boolean;
   officialQuestionEditor?: FlaggedQuestionEditor;
+  officialConceptEditor?: FlaggedConceptEditor;
   navyPresentationClassName?: string;
 };
 
@@ -66,6 +73,7 @@ export function StudyCreatorFlaggedBrowser({
   neutralPresentation = false,
   learnerPresentation = false,
   officialQuestionEditor,
+  officialConceptEditor,
   navyPresentationClassName,
 }: StudyCreatorFlaggedBrowserProps) {
   const [flags, setFlags] = useState<FlagRow[]>([]);
@@ -204,6 +212,7 @@ export function StudyCreatorFlaggedBrowser({
     resolvedFlags.find((item) => item.flag.id === selectedFlagId) ?? null;
 
   async function unflag(flagId: string) {
+    officialConceptEditor?.cancel();
     officialQuestionEditor?.cancel();
     setRemovingId(flagId);
     setError('');
@@ -258,6 +267,7 @@ export function StudyCreatorFlaggedBrowser({
               style={neutralPresentation ? { gridTemplateColumns: 'minmax(0, 1fr) 18px' } : undefined}
               key={item.flag.id}
               onClick={() => {
+                officialConceptEditor?.cancel();
                 officialQuestionEditor?.cancel();
                 setSelectedFlagId(item.flag.id);
               }}
@@ -301,6 +311,14 @@ export function StudyCreatorFlaggedBrowser({
                 {officialQuestionEditor.pending && <p role="status" data-flagged-part={navyPresentation ? 'feedback' : undefined}>Loading the Question editor…</p>}
                 {officialQuestionEditor.error && <p className={styles.flagError} role="alert" data-flagged-part={navyPresentation ? 'feedback' : undefined}>{officialQuestionEditor.error}</p>}
               </>}
+              {!learnerPresentation && selected.owner === 'official' && officialConceptEditor &&
+                (selected.question && selected.concept ? <button type="button"
+                  id={`flag-concept-${selected.flag.id}`} className={styles.secondary}
+                  data-flagged-action={navyPresentation ? 'edit' : undefined}
+                  disabled={officialConceptEditor.pending || officialConceptEditor.busy || removingId !== null}
+                  onClick={event => void officialConceptEditor.open(selected.question!.id, selected.concept!.id, event.currentTarget.id)}>
+                  Edit Concept
+                </button> : <p role="status">The associated Concept is unavailable.</p>)}
               <button className={styles.dangerButton} data-flagged-action={navyPresentation ? 'unflag' : undefined} disabled={removingId === selected.flag.id} onClick={() => void unflag(selected.flag.id)} type="button">{removingId === selected.flag.id ? 'Removing…' : 'Unflag'}</button>
             </div>
           ) : (
