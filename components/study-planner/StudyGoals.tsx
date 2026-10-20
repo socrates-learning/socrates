@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { goalDate, goalForecast, goalPercent, requireStudyGoals, topicKey, type StudyGoal, type StudyGoalsData } from '@/lib/study-goals';
 import styles from './StudyGoals.module.css';
 import { StudyAdvisor } from './StudyAdvisor';
+import { StudyGoalTopicTree } from './StudyGoalTopicTree';
 
 type Props = { libraryId: string; requestScope: string };
 type Draft = { id: string | null; revision: number | null; name: string; deadline: string; objective: 'coverage' | 'mastery'; topics: string[] };
@@ -111,10 +112,7 @@ export function StudyGoals({ libraryId, requestScope }: Props) {
       </div>
       <p>Mastery uses official Concepts above the existing 75% threshold. Personal Cards contribute to coverage; they do not have an official mastery score.</p>
       <label>Find Topics<input type="search" value={query} disabled={busy} onChange={e => setQuery(e.target.value)} /></label>
-      <fieldset className={styles.topics}><legend>Topics and subject areas ({draft.topics.length} selected)</legend>
-        {data.topics.filter(t => t.path.toLocaleLowerCase().includes(query.toLocaleLowerCase())).map(t => <label key={topicKey(t)}><input type="checkbox" disabled={busy} checked={draft.topics.includes(topicKey(t))} onChange={e => setDraft({ ...draft, topics: e.target.checked ? [...draft.topics, topicKey(t)] : draft.topics.filter(k => k !== topicKey(t)) })} /><span>{t.path}{t.source === 'personal' ? ' (My Topic)' : ''}</span></label>)}
-        {!data.topics.some(t => t.path.toLocaleLowerCase().includes(query.toLocaleLowerCase())) && <p>No matching Topics.</p>}
-      </fieldset>
+      <StudyGoalTopicTree topics={data.topics} selected={draft.topics} query={query} busy={busy} onChange={topics => setDraft({ ...draft, topics })} />
       {draft.topics.some(k => !data.topics.some(t => topicKey(t) === k)) && <p role="alert">Some saved Topics are no longer available. <button type="button" onClick={() => setDraft({ ...draft, topics: draft.topics.filter(k => data.topics.some(t => topicKey(t) === k)) })}>Remove unavailable Topics from this goal</button></p>}
       <div className={styles.actions}><button className={styles.primary} disabled={busy || !draft.topics.length || !draft.name.trim()} type="submit">{busy ? 'Saving…' : 'Save goal'}</button><button type="button" disabled={busy} onClick={() => { setDraft(null); newButton.current?.focus(); }}>Cancel</button></div>
     </form>}

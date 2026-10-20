@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 import * as model from '../lib/study-goals.ts';
 import {loadConceptModule, hookHarness, jsx} from './fixtures/concept-media-authoring.mjs';
 
-const nodes = n => Array.isArray(n) ? n.flatMap(nodes) : n && typeof n === 'object' ? [n, ...nodes(n.props?.children)] : [];
+const nodes = n => Array.isArray(n) ? n.flatMap(nodes) : n && typeof n === 'object' && !n.props?.hidden ? [n, ...nodes(n.props?.children)] : [];
 const text = n => Array.isArray(n) ? n.map(text).join('') : n && typeof n === 'object' ? text(n.props?.children) : typeof n === 'string' || typeof n === 'number' ? String(n) : '';
 const settle = () => new Promise(resolve => setImmediate(resolve));
 const progress = {total_items:12, covered_items:2, personal_items:3, total_concepts:3, mastered_concepts:1, recent_responses:2, recent_official_responses:1, recent_study_days:1, recent_coverage_gain:2, recent_mastery_cohort:0, observation_days:1, timed_sessions:0, timed_responses:0, seconds_per_response:null};
@@ -12,11 +12,21 @@ const goal = {id:'goal', name:'Finals', deadline:'2026-10-01', objective:'covera
 const data = () => ({library_id:'library', today:'2026-10-11', as_of:'2026-10-11T12:00:00Z', mastery_threshold:0.75, topics:[{source:'official', id:'root', name:'Nursing', parent_id:null, path:'Nursing'}, {source:'personal', id:'own', name:'Notes', parent_id:null, path:'My Notes'}], goals:[structuredClone(goal)]});
 function setup(handler) {
   const hooks=hookHarness(), calls=[];
+  let treeHooks=hookHarness();
+  const css={__esModule:true,default:new Proxy({}, {get:(_o,k)=>k})};
+  const tree=loadConceptModule('components/study-planner/StudyGoalTopicTree.tsx', {react:{useState:(...args)=>treeHooks.hooks.useState(...args)},'react/jsx-runtime':jsx,'@/lib/study-goals':model,'./StudyGoals.module.css':css});
   const rpc=(name,args)=>{calls.push({name,args:JSON.parse(JSON.stringify(args))}); return Promise.resolve(handler ? handler(name,args) : {data:data(),error:null});};
-  const {StudyGoals}=loadConceptModule('components/study-planner/StudyGoals.tsx', {react:hooks.hooks, 'react/jsx-runtime':jsx, '@/lib/supabase':{supabase:{rpc}}, '@/lib/study-goals':model, './StudyAdvisor':{StudyAdvisor() {}}, './StudyGoals.module.css':{__esModule:true,default:new Proxy({}, {get:(_o,k)=>k})}});
-  const render=()=>hooks.render(()=>StudyGoals({libraryId:'library',requestScope:'learner'}));
+  const {StudyGoals}=loadConceptModule('components/study-planner/StudyGoals.tsx', {react:hooks.hooks, 'react/jsx-runtime':jsx, '@/lib/supabase':{supabase:{rpc}}, '@/lib/study-goals':model, './StudyAdvisor':{StudyAdvisor() {}}, './StudyGoalTopicTree':tree, './StudyGoals.module.css':css});
+  const mountTree=n=>Array.isArray(n)?n.map(mountTree):n&&typeof n==='object'&&n.props
+    ?n.type===tree.StudyGoalTopicTree?treeHooks.render(()=>tree.StudyGoalTopicTree(n.props)):{...n,props:{...n.props,children:mountTree(n.props.children)}}:n;
+  const render=()=>{
+    const view=hooks.render(()=>StudyGoals({libraryId:'library',requestScope:'learner'}));
+    if(!nodes(view).some(n=>n.type===tree.StudyGoalTopicTree))treeHooks=hookHarness();
+    return mountTree(view);
+  };
   const button=name=>nodes(render()).find(n=>n.type==='button' && text(n)===name);
-  const field=label=>nodes(render()).filter(n=>n.type==='label').flatMap(n=>text(n).startsWith(label)?nodes(n).filter(c=>['input','select'].includes(c.type)):[])[0];
+  const field=label=>nodes(render()).find(n=>n.type==='input'&&(n.props['aria-label']===label||n.props['aria-label']===`${label} (My Topic)`))
+    ??nodes(render()).filter(n=>n.type==='label').flatMap(n=>text(n).startsWith(label)?nodes(n).filter(c=>['input','select'].includes(c.type)):[])[0];
   return {hooks,calls,render,button,field,async load(){render();hooks.effects();await settle();return render();}};
 }
 test('ordinary learner receives goals without privileged calls; coverage and mastery stay distinct and overdue goals visible',async()=>{

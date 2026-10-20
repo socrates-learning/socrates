@@ -21,11 +21,28 @@
 .fields { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
 .fields label:last-child { grid-column: 1 / -1; }
 .goals label { display: grid; gap: 8px; line-height: 1.45; min-width: 0; }
-.topics { max-height: 19rem; overflow-y: auto; margin: 16px 0; min-width: 0; border: 1px solid var(--appearance-line, #c8cbd1); border-radius: 8px; padding: 10px; }
+.topics { margin: 16px 0; min-width: 0; border: 1px solid var(--appearance-line, #c8cbd1); border-radius: 8px; padding: 10px; }
 .topics legend { max-width: 100%; padding-inline: 4px; }
-.topics label { display: flex; align-items: center; gap: 10px; padding: 8px 4px; overflow-wrap: anywhere; }
-.topics label:hover { background: var(--appearance-soft, #f4f4f5); }
-.topics input { flex-shrink: 0; width: 18px; min-height: 18px; accent-color: var(--appearance-strong, #102d51); }
+.topics .topicHelp { font-size: .875rem; margin: 0 0 12px; }
+.topicTree, .topicChildren { list-style: none; padding: 0; margin: 0; min-width: 0; }
+.topicBranch { min-width: 0; }
+.topicRow { display: flex; align-items: flex-start; gap: 10px; min-height: 48px; padding: 6px 4px; padding-inline-start: min(calc(var(--goal-topic-depth) * 22px + 4px), 30%); box-sizing: border-box; border-radius: 5px; }
+.topicRow:hover { background: var(--appearance-soft, #f4f4f5); }
+.goals .topicExpander, .topicLeaf { display: flex; align-items: center; justify-content: center; width: 28px; height: 32px; min-height: 32px; padding: 0; flex-shrink: 0; font-size: 13px; color: var(--appearance-text, #162B40); }
+.goals .topicExpander { background: transparent; border: 0; border-radius: 4px; }
+.goals .topicExpander:hover, .goals .topicExpander:focus-visible { color: var(--stats-heading, #80613A); background: var(--appearance-soft, #FAF7F0); }
+.topics .topicChoice { display: flex; align-items: flex-start; gap: 10px; flex: 1; min-width: 0; padding-block: 5px; cursor: pointer; }
+.topics input { flex-shrink: 0; width: 18px; height: 18px; min-height: 18px; margin: 2px 0 0; padding: 0; accent-color: var(--appearance-strong, #162B40); }
+.topicLabel { min-width: 0; overflow-wrap: anywhere; font-weight: 650; line-height: 1.4; }
+.topicInclusion { display: block; margin-top: 3px; color: var(--appearance-muted, #515967); font-size: .8rem; font-weight: 400; line-height: 1.45; }
+.topicPersonal { display: inline-block; margin-inline-start: 8px; color: var(--stats-heading, #80613A); font-size: .75rem; font-weight: 500; }
+.topicChoice:has(input:disabled) { cursor: default; }
+@media (max-width: 600px) {
+  .topics { padding: 8px 6px; }
+  .topicRow { padding-inline-start: min(calc(var(--goal-topic-depth) * 10px + 2px), 18%); gap: 4px; }
+  .goals .topicExpander, .topicLeaf { width: 24px; }
+  .topics .topicChoice { gap: 6px; }
+}
 .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
 .actions button { max-width: 100%; }
 .scope { overflow-wrap: anywhere; font-size: .875rem; }
