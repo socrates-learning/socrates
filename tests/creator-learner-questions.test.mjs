@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import ts from 'typescript';
 import React from 'react';
+import * as learnerCardSearch from '../lib/learner-card-search.ts';
 import * as jsx from 'react/jsx-runtime';
 import { editor, nodes, text } from './fixtures/creator-role-workspaces.mjs';
 
@@ -14,9 +15,11 @@ vm.runInNewContext(ts.transpileModule(readFileSync(new URL('../components/Markdo
 const markdown = markdownContext.exports;
 const childSource = readFileSync(new URL('../components/creator/CreatorLearnerQuestionsWorkspace.tsx', import.meta.url), 'utf8');
 function presentation(props) {
-  let search = '';
+  let search = learnerCardSearch.EMPTY_LEARNER_CARD_FILTERS;
   const modules = {
     '@/components/MarkdownContent': markdown,
+    '@/lib/learner-card-search': learnerCardSearch,
+    './LearnerCardTools.module.css': { __esModule: true, default: new Proxy({}, { get: (_, key) => String(key) }) },
     react: { useState: () => [search, value => { search = value; }] },
     'react/jsx-runtime': { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }) },
     '../CreatorStudioV2Client.module.css': { __esModule: true, default: new Proxy({}, { get: (_, key) => String(key) }) },

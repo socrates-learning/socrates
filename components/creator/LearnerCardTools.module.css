@@ -1,0 +1,23 @@
+.filters { margin: .65rem 0 1rem; border: 1px solid var(--appearance-line, #ddd3c4); border-radius: 8px; padding: .65rem; }
+.filters summary { cursor: pointer; color: var(--appearance-link, #80613a); font-weight: 600; }
+.filterGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .7rem; margin-top: .7rem; }
+.filterGrid label, .destinationSearch { display: grid; gap: .35rem; min-width: 0; }
+.filterGrid input, .filterGrid select, .destinationSearch input { width: 100%; min-width: 0; box-sizing: border-box; padding: .55rem; background: var(--appearance-surface, #faf7f0); color: var(--appearance-text, #162b40); border: 1px solid var(--appearance-line, #ddd3c4); border-radius: 6px; }
+.filterGrid button, .actions button, .moveButton { padding: .5rem .8rem; border: 1px solid var(--appearance-line, #ddd3c4); border-radius: 6px; background: var(--appearance-surface, #faf7f0); color: var(--appearance-text, #162b40); cursor: pointer; }
+.hint { font-size: .85rem; line-height: 1.5; color: var(--appearance-muted, #526278); }
+.actions { display: flex; justify-content: flex-end; gap: .6rem; flex-wrap: wrap; margin-top: 1rem; }
+.actions .primary { background: var(--appearance-accent, #80613a); color: var(--appearance-accent-contrast, #fff); }
+.destinations { max-height: min(45dvh, 24rem); overflow-y: auto; margin: .8rem 0; padding: .6rem; min-width: 0; border: 1px solid var(--appearance-line, #ddd3c4); border-radius: 8px; }
+.destination { display: flex; align-items: flex-start; gap: .6rem; padding: .65rem .25rem; border-bottom: 1px solid var(--appearance-line, #ddd3c4); overflow-wrap: anywhere; }
+.destination:last-child { border-bottom: 0; }
+.destination input { margin-top: .25rem; flex: 0 0 auto; accent-color: var(--appearance-link, #80613a); }
+.destination small { display: block; margin-top: .3rem; }
+.currentTopic { overflow-wrap: anywhere; }
+.filters :focus-visible, .actions :focus-visible, .moveButton:focus-visible, .destinationSearch :focus-visible, .destination:focus-within { outline: 2px solid var(--appearance-focus, #80613a); outline-offset: 2px; }
+.filters button:disabled, .actions button:disabled, .moveButton:disabled { cursor: default; opacity: .55; }
+@media (max-width: 540px) { .filterGrid { grid-template-columns: minmax(0, 1fr); } .actions button { flex: 1 1 auto; } }
+
+.moveDialog h2 { color: var(--appearance-link, #80613a); }
+.moveDialog .destination { display: flex; }
+.moveDialog .destination input { width: 1rem; min-width: 1rem; height: 1rem; padding: 0; margin: .25rem 0 0; }
+.moveDialog .destination span { flex: 1 1 auto; min-width: 0; }

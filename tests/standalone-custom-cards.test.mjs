@@ -39,7 +39,7 @@ test('standalone save, fresh bootstrap reload, edit and delete retain owner and 
   const edited=await cards.saveStandaloneCard(db,'owner',target,'Changed','Back',loaded.standaloneCards[0]);
   assert.equal((await loadCreatorPersonalContent(db,'owner')).standaloneCards[0].question,'Changed');
   assert.deepEqual(db.writes[1].payload,{question:'Changed',answer:'Back'});
-  assert.deepEqual(db.writes[1].filters,[['id','card'],['owner_id','owner'],['concept_id',null]]);
+  assert.deepEqual(db.writes[1].filters,[['id','card'],['owner_id','owner'],['concept_id',null],['updated_at',initial.updated_at]]);
   await cards.deleteStandaloneCard(db,'owner',edited);assert.equal((await loadCreatorPersonalContent(db,'owner')).standaloneCards.length,0);
 });
 
@@ -74,11 +74,11 @@ function workspace(db, request=null, canCreate=true, richText=false) {
   const slots=[];let cursor=0,tree;let props={ownerId:'owner',canCreate,richText,target,topicName:'Topic',cards:[],request,
     onRequest(value){props={...props,request:value};},onSaved(card){props={...props,cards:[card]};},onDeleted(){props={...props,cards:[]};},onEditorState(){}};
   const hooks={useState(initial){const i=cursor++;if(!(i in slots))slots[i]=initial;return [slots[i],v=>{slots[i]=v;}];},useRef(initial){const i=cursor++;if(!(i in slots))slots[i]={current:initial};return slots[i];},useEffect(){}};
-  const modules={'./PersonalCardField':{PersonalCardField: function PersonalCardField(){}},react:hooks,'react/jsx-runtime':{jsx:(type,props)=>({type,props}),jsxs:(type,props)=>({type,props})},'@/lib/supabase':{supabase:db},'@/lib/standalone-custom-cards':cards,'../CreatorStudioV2Client.module.css':new Proxy({}, {get:(_,k)=>k})};
+  const modules={'./MoveCardDialog':{MoveCardDialog(){}},'./LearnerCardTools.module.css':new Proxy({}, {get:(_,k)=>k}),'./PersonalCardField':{PersonalCardField: function PersonalCardField(){}},react:hooks,'react/jsx-runtime':{jsx:(type,props)=>({type,props}),jsxs:(type,props)=>({type,props})},'@/lib/supabase':{supabase:db},'@/lib/standalone-custom-cards':cards,'../CreatorStudioV2Client.module.css':new Proxy({}, {get:(_,k)=>k})};
   const context={Error,exports:{},require(name){assert.ok(name in modules);return modules[name];},window:{confirm:()=>true},requestAnimationFrame(){}};
   vm.runInNewContext(ts.transpileModule(readFileSync(new URL('../components/creator/StandaloneCustomCardWorkspace.tsx',import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText,context);
   function render(){cursor=0;tree=context.exports.StandaloneCustomCardWorkspace(props);return tree;}
-  function nodes(root=tree,result=[]){if(Array.isArray(root))root.forEach(r=>nodes(r,result));else if(root&&typeof root==='object'){result.push(root);if(root.props?.children !== undefined) nodes(root.props.children,result);}return result;}
+  function nodes(root=tree,result=[]){if(Array.isArray(root))root.forEach(r=>{if(r !== undefined) nodes(r,result);});else if(root&&typeof root==='object'){result.push(root);if(root.props?.children !== undefined) nodes(root.props.children,result);}return result;}
   function text(node){const c=node?.props?.children;return typeof c==='string'?c:Array.isArray(c)?c.map(x=>typeof x==='string'?x:text(x)).join(''):'';}
   render();return {render,nodes,text,get props(){return props;}};
 }

@@ -18,6 +18,7 @@ import { QuestionMarkdownField, type QuestionMarkdownState } from './creator/Que
 import OfficialVisualField, { type OfficialVisualMemory, type OfficialVisualHandle } from './creator/OfficialVisualField';
 import { CreatorQuestionSearchPanel } from './creator/CreatorQuestionSearchPanel';
 import { CreatorLearnerQuestionsWorkspace } from './creator/CreatorLearnerQuestionsWorkspace';
+import { learnerCardTopics } from '@/lib/learner-card-search';
 import { PersonalCardField } from './creator/PersonalCardField';
 import { StandaloneCustomCardWorkspace, type StandaloneCardRequest } from './creator/StandaloneCustomCardWorkspace';
 import { deleteStandaloneCard, standaloneCardMatchesTopic, standaloneCardAttachment, type CreatorStandaloneCard, type StandaloneCardAttachment } from '@/lib/standalone-custom-cards';
@@ -7263,15 +7264,28 @@ export function CreatorStudioV2Client({
 
   // Standalone and legacy Cards share browsing, but keep distinct persistence paths.
   const learnerCards = isLearnerReadOnly ? filterPersonalCardsForSearch(EMPTY_QUESTION_SEARCH_FILTERS) : [];
+  const learnerTopics = isLearnerReadOnly ? learnerCardTopics(unifiedTopicComposition.officialRoots, topicGraph?.detached_original_topic_ids) : [];
+  const learnerTopicKeys = new Set(learnerTopics.map(topic => topic.key));
   const learnerQuestions = <CreatorLearnerQuestionsWorkspace
       busy={isSaving || isSavingQuestion || isMutatingTopic}
-      cards={learnerCards.map(card => ({ id: card.id, front: card.prompt, standalone: card.conceptId === null,
-        back: standaloneCards.find(item => item.id === card.id)?.answer || personalCards.find(item => item.id === card.id)?.answer || '' }))}
+      topics={learnerTopics}
+      cards={learnerCards.map(card => {
+        const standalone = standaloneCards.find(item => item.id === card.id);
+        const legacy = personalCards.find(item => item.id === card.id);
+        const concept = legacy && personalConceptById.get(legacy.concept_id);
+        const attachment = standalone && standaloneCardAttachment(standalone);
+        const topicKeys = attachment ? [`${attachment.source}:topic:${attachment.topicId}`]
+          : [concept ? `personal:topic:${concept.topic_id}` : '', ...personalOverlays.filter(overlay => overlay.personal_concept_id === legacy?.concept_id).map(overlay => `official:topic:${overlay.library_node_id}`)];
+        return { id: card.id, front: card.prompt, standalone: card.conceptId === null,
+          back: standalone?.answer || legacy?.answer || '', sourceReference: standalone?.source_reference || legacy?.source_reference || '',
+          createdAt: card.createdAt, updatedAt: card.updatedAt, topicKeys: topicKeys.filter(key => learnerTopicKeys.has(key)) };
+      })}
       onOpen={id => { const card = learnerCards.find(item => item.id === id); if (card) selectExistingQuestion(card); }}
       onNew={() => openLearnerDraft(standaloneRequest?.attachment || null, standaloneRequest?.topicName || 'Selected Topic')}
       topicTree={contentTopicPanel}
       editor={standaloneRequest ? <StandaloneCustomCardWorkspace
         richText
+        movement={activeLibraryId ? { topics: learnerTopics, libraryId: activeLibraryId } : undefined}
         key={`${standaloneEditorVersion}:${standaloneRequest.card?.id || 'new-card'}`}
         ownerId={initialPersonalContent.ownerId}
         canCreate={creatorCapabilities.personal.createCard && creatorCapabilities.library.canAccessActiveLibrary}

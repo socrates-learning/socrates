@@ -68,7 +68,7 @@ for(const [name,from,to] of [
   // Append is used for the import probe so it does not depend on import formatting.
   const changed=name==='new unrelated import'?currentSource+"\nimport 'unapproved';\n":currentSource.replace(from,to);
   assert.notEqual(changed,currentSource);
-  assert.throws(()=>projectConceptNavigation(path,changed),/Exact Concept navigation candidate/);
+  assert.throws(()=>projectConceptNavigation(path,changed),/Exact (Concept navigation candidate|learner Card tools integration)/);
 });
 test('detachment projection independently rejects edits outside its approved hunks',()=>{
   const beforeNavigation=projectConceptNavigation(path,currentSource);

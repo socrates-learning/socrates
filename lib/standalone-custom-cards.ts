@@ -47,16 +47,43 @@ export async function saveStandaloneCard(client: SupabaseClient, ownerId: string
   if (question.length > 10000 || answer.length > 20000) throw new Error('Card text exceeds the field limits.');
   const payload = { question, answer, ...(sourceReference !== undefined ? {source_reference: sourceReference.trim() || null} : {}) };
   const query = current
-    ? client.from('personal_cards').update(payload).eq('id', current.id).eq('owner_id', ownerId).is('concept_id', null)
+    ? client.from('personal_cards').update(payload).eq('id', current.id).eq('owner_id', ownerId).is('concept_id', null).eq('updated_at', current.updated_at)
     : client.from('personal_cards').insert({ ...payload, owner_id: ownerId, concept_id: null,
       library_node_id: attachment.source === 'official' ? attachment.topicId : null,
       library_id: attachment.source === 'official' ? attachment.libraryId : null,
       personal_topic_id: attachment.source === 'personal' ? attachment.topicId : null });
   const { data, error } = await query.select('id,owner_id,concept_id,library_node_id,library_id,personal_topic_id,question,answer,source_reference,created_at,updated_at').single();
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(error.code === 'PGRST116' ? 'This Card changed or is no longer available. Reload it before saving; your draft has been kept.' : error.message);
   const saved = data as CreatorStandaloneCard;
   if (saved.owner_id !== ownerId || !standaloneCardMatchesTopic(saved, attachment)) throw new Error('Saved Card identity mismatch.');
   return saved;
+}
+
+/** One conditional owner-scoped UPDATE. Existing RLS, attachment validation and
+ * structure locks validate the destination; no privileged RPC or new grants. */
+export async function moveStandaloneCard(client: SupabaseClient, ownerId: string,
+  current: CreatorStandaloneCard, destination: StandaloneCardAttachment) {
+  if (current.owner_id !== ownerId || !current.updated_at) throw new Error('An existing owned Card revision is required.');
+  standaloneCardAttachment(current);
+  if (standaloneCardMatchesTopic(current, destination)) throw new Error('Choose a different Topic.');
+  const payload = {
+    library_node_id: destination.source === 'official' ? destination.topicId : null,
+    library_id: destination.source === 'official' ? destination.libraryId : null,
+    personal_topic_id: destination.source === 'personal' ? destination.topicId : null,
+  };
+  const { data, error } = await client.from('personal_cards').update(payload)
+    .eq('id', current.id).eq('owner_id', ownerId).is('concept_id', null).eq('updated_at', current.updated_at)
+    .select('id,owner_id,concept_id,library_node_id,library_id,personal_topic_id,question,answer,source_reference,created_at,updated_at').single();
+  if (error) throw new Error(error.code === 'PGRST116'
+    ? 'This Card changed or is no longer available. Reload it before moving.'
+    : 'The move could not be confirmed. Reload the Card before retrying; your content has been kept.');
+  const moved = data as CreatorStandaloneCard;
+  if (moved.id !== current.id || moved.owner_id !== ownerId || !standaloneCardMatchesTopic(moved, destination)
+    || moved.question !== current.question || moved.answer !== current.answer
+    || moved.source_reference !== current.source_reference || moved.created_at !== current.created_at) {
+    throw new Error('The move could not be confirmed. Reload the Card before retrying.');
+  }
+  return moved;
 }
 
 export async function deleteStandaloneCard(client: SupabaseClient, ownerId: string, card: CreatorStandaloneCard) {

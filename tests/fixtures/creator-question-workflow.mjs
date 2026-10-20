@@ -12,6 +12,7 @@ import * as homeSettings from '../../lib/home-deck-settings.ts';
 // Adapted from the released role-workspace harness. Effects run only when explicitly
 // requested; DOM geometry, real focus, RLS, and browser drag/drop are not proved here.
 import * as standaloneCards from '../../lib/standalone-custom-cards.ts';
+import * as learnerCardSearch from '../../lib/learner-card-search.ts';
 import * as topicPositioning from '../../lib/creator-topic-positioning.ts';
 import * as personalStructure from '../../lib/creator-personal-structure.ts';
 import assert from 'node:assert/strict';
@@ -173,6 +174,7 @@ export function editor({ role = 'admin', editing = false, response, references =
         './creator/PersonalCardField': { PersonalCardField() {} },
     './creator/StandaloneCustomCardWorkspace': { StandaloneCustomCardWorkspace: () => null },
         '@/lib/standalone-custom-cards': standaloneCards,
+        '@/lib/learner-card-search': learnerCardSearch,
         '@/lib/markdown-editing': markdownEditing,
         '@/lib/topic-selection-presentation': topicSelection,
         '@/lib/home-deck-settings': homeSettings,
