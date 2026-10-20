@@ -2165,23 +2165,6 @@ export function StudyPlanner({
               </span>
             </div>
 
-            <span
-              title="Study-ready questions in this branch"
-              style={{
-                background: 'var(--appearance-surface, #f8fafc)',
-                border: '1px solid var(--appearance-line, #dbe3ee)',
-                borderRadius: 999,
-                color: 'var(--appearance-muted, #475569)',
-                flexShrink: 0,
-                fontSize: 12,
-                fontWeight: 700,
-                minWidth: 40,
-                padding: '5px 9px',
-                textAlign: 'center',
-              }}
-            >
-              {questionCount}
-            </span>
           </div>
 
         </div>

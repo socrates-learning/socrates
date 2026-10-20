@@ -113,16 +113,20 @@ test('shared occurrences keep slider visibility and checkbox targets separate wh
  assert.equal(sliders(f).length,1);assert.equal(sliders(f)[0].props.value,73);assert.equal(named('Include Leaf A in Study')[0].props.checked,true);
 });
 
-test('Topic rows retain names and right-side counts without concept-count or selection prose',()=>{
+test('Topic rows retain names and controls without unlabeled counts or selection prose',()=>{
  const f=fixture();
  f.context.branchAvailabilityQuestionCount=id=>({Nursing:142,'Branch A':63,'Branch B':82}[id]??60);
  f.context.getTopicSelectionPresentation=id=>({checked:id!=='Branch B',explicit:id==='Nursing',inherited:id==='Branch A',partial:id==='Nursing'});
  const markup=require('react-dom/server').renderToStaticMarkup(f.render());
  for(const name of ['Nursing','Branch A','Branch B']) assert.ok(markup.includes(`>${name}</button>`));
  const badges=elements(f.render()).filter(n=>n.props.title==='Study-ready questions in this branch');
- assert.deepEqual(badges.map(n=>n.props.children),[142,63,82]);
+ assert.equal(badges.length,0);
+ assert.doesNotMatch(markup,/>\s*(?:142|63|82)\s*</);
  assert.doesNotMatch(markup,/>[^<]*(?:concepts?|Selected directly|Included by parent|Partially included|Excluded by parent|Excluded)[^<]*</i);
- for(const id of ['Nursing','Branch A','Branch B']) assert.equal(find(f,`Include ${id} in Study`).props['aria-describedby'],undefined);
+ for(const id of ['Nursing','Branch A','Branch B']) {
+  assert.equal(find(f,`Include ${id} in Study`).props['aria-describedby'],undefined);
+  assert.equal(find(f,`Configure ${id} New to Mastery balance`).type,'button');
+ }
  assert.deepEqual(f.writes,[]);
 });
 test('Topic checkboxes retain checked, unchecked and indeterminate states without status text',()=>{

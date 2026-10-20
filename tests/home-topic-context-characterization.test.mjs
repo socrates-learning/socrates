@@ -73,7 +73,7 @@ function settingsFixture(located = false) {
   });
 }
 
-test('released row has separate native controls, an inert badge and no row-wide action', () => {
+test('Home row keeps separate native controls without a count badge or row-wide action', () => {
   const f = fixture();
   for (const el of elements(f.render())) {
     if (el.type === 'div' || el.type === 'span') assert.equal(el.props.onClick, undefined);
@@ -85,8 +85,21 @@ test('released row has separate native controls, an inert badge and no row-wide 
   assert.equal(f.control('Expand Topic').props.disabled, true);
   assert.equal(f.control('Include Topic in Study').props.type, 'checkbox');
   const badge = elements(f.render()).find(el => el.props.title === 'Study-ready questions in this branch');
-  assert.equal(badge.type, 'span'); assert.equal(badge.props.children, 142);
-  assert.equal(badge.props.tabIndex, undefined); assert.deepEqual(f.events, []);
+  assert.equal(badge, undefined); assert.deepEqual(f.events, []);
+});
+
+test('personal Topic badges are absent while labeled legacy collection counts remain', () => {
+  const topic = fixture('personal');
+  const collection = fixture('collection');
+  for (const f of [topic, collection]) {
+    assert.equal(elements(f.render()).some(el => el.props.title === 'Study-ready questions in this branch'), false);
+    assert.equal(f.control('Include Topic in Study').props.type, 'checkbox');
+    assert.equal(f.control('Configure Topic New to Mastery balance').type, 'button');
+    assert.deepEqual(f.events, []);
+  }
+  const text = elements(collection.render()).find(el => el.type === 'span' && el.props.className === 'muted');
+  assert.deepEqual(Array.from(text.props.children), [3, ' ', 'Cards']);
+  assert.equal(collection.control('Include Topic in Study').props['aria-describedby'], 'topic-selection-personal:collection:same');
 });
 
 test('configuration remains local even during saving; writes and slider are disabled by released state', () => {
