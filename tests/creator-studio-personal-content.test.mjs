@@ -66,6 +66,7 @@ function loaderDatabase(rows) {
       const query = {
         select(columns) { calls.push({ table, operation: 'select', columns }); return query; },
         eq(column, value) { calls.push({ table, operation: 'eq', column, value }); return query; },
+        limit(count) { calls.push({ table, operation: 'limit', count }); return query; },
         order(column) { calls.push({ table, operation: 'order', column }); return query; },
         then(resolve, reject) {
           return Promise.resolve({ data: rows[table] || [], error: null }).then(resolve, reject);
@@ -76,7 +77,7 @@ function loaderDatabase(rows) {
   };
 }
 
-test('personal bootstrap is five bounded owner-scoped reads with no per-item wave', async () => {
+test('personal bootstrap is six bounded owner-scoped reads with no per-item wave', async () => {
   const database = loaderDatabase(personalRows());
   const loaded = await loadCreatorPersonalContent(database, 'learner-owner');
 
@@ -88,10 +89,10 @@ test('personal bootstrap is five bounded owner-scoped reads with no per-item wav
   assert.equal(loaded.topicPlacements.length, 1);
   assert.deepEqual(
     [...new Set(database.calls.filter((call) => call.operation === 'select').map((call) => call.table))].sort(),
-    ['personal_cards', 'personal_concept_official_placements', 'personal_concepts', 'personal_topic_official_placements', 'personal_topics']
+    ['personal_cards', 'personal_collections', 'personal_concept_official_placements', 'personal_concepts', 'personal_topic_official_placements', 'personal_topics']
   );
-  assert.equal(database.calls.filter((call) => call.operation === 'select').length, 5);
-  assert.equal(database.calls.filter((call) => call.operation === 'eq' && call.column === 'owner_id' && call.value === 'learner-owner').length, 5);
+  assert.equal(database.calls.filter((call) => call.operation === 'select').length, 6);
+  assert.equal(database.calls.filter((call) => call.operation === 'eq' && call.column === 'owner_id' && call.value === 'learner-owner').length, 6);
 });
 
 test('personal bootstrap fails closed if a backend response crosses the owner boundary', async () => {
@@ -126,7 +127,9 @@ test('every personal command requires owner, capability, and matching source-qua
     { type: 'delete-card', target: 'personal', ownerId: 'learner-owner', cardKey: 'personal:card:card-a' },
   ];
   for (const command of validCommands) {
-    assert.match(resolveCreatorCommandRoute(command, learner), /^personal-/);
+    if (['create-concept','create-card'].includes(command.type)) {
+      assert.throws(() => resolveCreatorCommandRoute(command, learner), /creation is not permitted/);
+    } else assert.match(resolveCreatorCommandRoute(command, learner), /^personal-/);
   }
 
   assert.throws(

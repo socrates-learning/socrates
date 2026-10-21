@@ -83,6 +83,8 @@ type OverlayActionTarget = {
 
 type UnifiedStudyCreatorBrowserProps = {
   data: OfficialBrowserData | null;
+  allowLegacyCreation?: boolean;
+  allowTopicCreation?: boolean;
   filter: UnifiedBrowseFilter;
   material: PersonalMaterial;
   onAddCard: (target: OverlayActionTarget) => void;
@@ -164,6 +166,8 @@ function titleFor(item: BrowseItem) {
 
 export function SocratesStudyCreatorBrowser({
   data,
+  allowLegacyCreation = false,
+  allowTopicCreation = true,
   filter,
   material,
   onAddCard,
@@ -828,7 +832,7 @@ export function SocratesStudyCreatorBrowser({
               </strong>
             </div>
             <div className={styles.personalLayerActions}>
-              <button
+              {allowLegacyCreation && (<button
                 onClick={() =>
                   onAddConcept({
                     libraryNodeId: contextNodeId,
@@ -841,8 +845,8 @@ export function SocratesStudyCreatorBrowser({
                 type="button"
               >
                 ＋ Add My Concept
-              </button>
-              <button
+              </button>)}
+              {allowLegacyCreation && (<button
                 onClick={() =>
                   onAddCard({
                     libraryNodeId: contextNodeId,
@@ -855,7 +859,7 @@ export function SocratesStudyCreatorBrowser({
                 type="button"
               >
                 ＋ Add My Card
-              </button>
+              </button>)}
             </div>
           </div>
           {inspectorTab === 'questions' ? (
@@ -1051,13 +1055,13 @@ export function SocratesStudyCreatorBrowser({
             </div>
           ) : (
             <div className={styles.inspectorList}>
-              <button
+              {allowLegacyCreation && (<button
                 className={styles.primary}
                 onClick={() => onCreateCard(concept.id)}
                 type="button"
               >
                 ＋ New Card
-              </button>
+              </button>)}
               {conceptCards.map((card) => (
                 <article key={card.id}>
                   <span className={styles.personalOwnerMark}>M</span>
@@ -1202,13 +1206,13 @@ export function SocratesStudyCreatorBrowser({
             {!material.topics.length && (
               <div className={styles.compactEmpty}>No custom Topics yet.</div>
             )}
-            <button
+            {allowTopicCreation && (<button
               className={styles.newCustomTopic}
               onClick={() => onCreateTopic()}
               type="button"
             >
               ＋ New Custom Topic
-            </button>
+            </button>)}
           </section>
           {normalizedSearch &&
             visibleOfficialIds.size === 0 &&
@@ -1288,18 +1292,18 @@ export function SocratesStudyCreatorBrowser({
         </div>
         {selectedPersonalTopic && (
           <div className={styles.contextCreationBar}>
-            <button
+            {allowLegacyCreation && (<button
               className={styles.primary}
               onClick={() => onCreateConcept(selectedPersonalTopic.id)}
               type="button"
             >
               ＋ New Personal Concept
-            </button>
+            </button>)}
           </div>
         )}
         {selectedOfficialTopic && !normalizedSearch && (
           <div className={styles.contextCreationBar}>
-            <button
+            {allowLegacyCreation && (<button
               className={styles.primary}
               onClick={() =>
                 onAddConcept({
@@ -1313,7 +1317,7 @@ export function SocratesStudyCreatorBrowser({
               type="button"
             >
               ＋ Add My Concept Here
-            </button>
+            </button>)}
           </div>
         )}
         <div className={styles.contentListHeader}>
@@ -1396,13 +1400,13 @@ export function SocratesStudyCreatorBrowser({
         </div>
         {selectedPersonalTopic && (
           <div className={styles.contextActions}>
-            <button
+            {allowTopicCreation && (<button
               className={styles.secondary}
               onClick={() => onCreateTopic(selectedPersonalTopic.id)}
               type="button"
             >
               ＋ Child Topic
-            </button>
+            </button>)}
             <button
               className={styles.dangerButton}
               onClick={() => onDeleteTopic(selectedPersonalTopic)}

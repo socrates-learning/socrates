@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
+import { projectLegacyRetirement } from './legacy-personal-retirement.mjs';
 import { projectLearnerCardTools } from './learner-card-tools.mjs';
 
 // Historical fingerprints continue to protect every byte outside this exact
@@ -8,7 +9,7 @@ import { projectLearnerCardTools } from './learner-card-tools.mjs';
 const proof = JSON.parse(readFileSync(new URL('./creator-concept-navigation-proof.json', import.meta.url)));
 export function projectConceptNavigation(path, source) {
   if (typeof source !== 'string' || !String(path).endsWith('components/CreatorStudioV2Client.tsx')) return source;
-  source = projectLearnerCardTools(path, source);
+  source = projectLearnerCardTools(path, projectLegacyRetirement(path, source));
   const hash = value => createHash('sha256').update(value).digest('hex');
   assert.equal(hash(source), proof.candidate, 'Exact Concept navigation candidate');
   for (const [candidate, baseline] of [...proof.hunks].reverse()) {

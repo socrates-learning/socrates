@@ -97,11 +97,11 @@ export function deriveCreatorCapabilities({
     },
     personal: {
       createTopic: true,
-      createConcept: true,
+      createConcept: role === 'editor',
       createCard: role !== 'admin',
       editOwnContent: true,
       deleteOwnContent: true,
-      createOfficialContextOverlay: true,
+      createOfficialContextOverlay: role === 'editor',
       managePersonalDecks: true,
       manageFlags: true,
     },

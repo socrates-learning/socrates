@@ -1,6 +1,7 @@
 import { loadOfficialTopicGraph } from '@/lib/topic-placement-graph';
 import type { OfficialContentFormat } from '@/lib/official-content-format';
 import { Header, HeaderSessionProvider } from '@/components/Header';
+import { loadCreatorPersonalContent } from '@/lib/creator-personal-content';
 import { StudyCreatorClient } from '@/components/StudyCreatorClient';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
 import { getVerifiedRequestAuthContext } from '@/lib/server-auth-context';
@@ -41,8 +42,12 @@ export default async function StudyCreatorPage() {
   }
 
   if (!userId) redirect('/login?next=/study-creator');
-  // Staff new-content authority belongs to the canonical Creator interface.
-  if (role === 'admin' || role === 'editor') redirect('/creator');
+  // Staff author new official content in Creator. Owners may still manage
+  // historical personal records here, without gaining new creation tools.
+  if (role === 'admin' || role === 'editor') {
+    const material = await loadCreatorPersonalContent(await createSupabaseServerClient(), userId);
+    if (!material.concepts.length && !material.cards.length && !material.hasLegacyCollections) redirect('/creator');
+  }
 
   const activeLibraryContext = await resolveActiveLibraryContext();
   const activeLibrary = activeLibraryContext.library;
@@ -168,7 +173,7 @@ export default async function StudyCreatorPage() {
   return (
     <HeaderSessionProvider email={email ?? 'Account'} role={role}>
       <Header />
-      <StudyCreatorClient officialBrowser={officialBrowser} ownerId={userId} />
+      <StudyCreatorClient officialBrowser={officialBrowser} ownerId={userId} allowTopicCreation={role === 'learner'} />
     </HeaderSessionProvider>
   );
 }

@@ -7266,6 +7266,14 @@ export function CreatorStudioV2Client({
   const learnerCards = isLearnerReadOnly ? filterPersonalCardsForSearch(EMPTY_QUESTION_SEARCH_FILTERS) : [];
   const learnerTopics = isLearnerReadOnly ? learnerCardTopics(unifiedTopicComposition.officialRoots, topicGraph?.detached_original_topic_ids) : [];
   const learnerTopicKeys = new Set(learnerTopics.map(topic => topic.key));
+  const historicalContentLink = (initialPersonalContent.hasLegacyCollections ||
+    personalConcepts.some(item => item.owner_id === initialPersonalContent.ownerId) ||
+    personalCards.some(item => item.owner_id === initialPersonalContent.ownerId)) ? (
+      <button type="button" className={styles.toolButton} onClick={() => navigateFromCreator('/study-creator')}>
+        Historical personal content
+      </button>
+    ) : null;
+
   const learnerQuestions = <CreatorLearnerQuestionsWorkspace
       busy={isSaving || isSavingQuestion || isMutatingTopic}
       topics={learnerTopics}
@@ -7419,6 +7427,7 @@ export function CreatorStudioV2Client({
       {isLearnerReadOnly ? <main className={styles.workspace}>
         <fieldset className={styles.studioShell} disabled={isSaving || isSavingQuestion} aria-label="Creator Studio editor">
           <CreatorStudioLocalHeader learnerPresentation onBack={goBackFromCreator} onClearConcept={clearDraft} onOpenLibraryOrganizer={() => {}} showClearConcept={false} />
+          {historicalContentLink}
           <CreatorStudioTabs learnerPresentation activeTab={activeCreatorTab} onSelect={tab => {
             if (tab !== 'questions' && tab !== 'flagged') return;
             if (tab !== activeCreatorTab && !confirmDiscardQuestionChanges()) return;
@@ -7441,6 +7450,7 @@ export function CreatorStudioV2Client({
             canClearConcept={!isCurrentContentReadOnly}
           />
 
+          {historicalContentLink}
           <CreatorStudioTabs
             presentation="navy"
             activeTab={activeCreatorTab}

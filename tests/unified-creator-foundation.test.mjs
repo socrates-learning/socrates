@@ -116,11 +116,11 @@ test('learner receives published browse and own-personal capabilities only', () 
   assert.equal(manifest.official.manageLibraries, false);
   assert.equal(manifest.official.manageArticles, false);
   assert.equal(manifest.personal.createTopic, true);
-  assert.equal(manifest.personal.createConcept, true);
+  assert.equal(manifest.personal.createConcept, false);
   assert.equal(manifest.personal.createCard, true);
   assert.equal(manifest.personal.editOwnContent, true);
   assert.equal(manifest.personal.deleteOwnContent, true);
-  assert.equal(manifest.personal.createOfficialContextOverlay, true);
+  assert.equal(manifest.personal.createOfficialContextOverlay, false);
   assert.equal(manifest.personal.managePersonalDecks, true);
   assert.equal(manifest.personal.manageFlags, true);
   assert.equal(manifest.administration.manageUsersAndRoles, false);

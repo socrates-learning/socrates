@@ -167,7 +167,9 @@ export function resolveCreatorCommandRoute(
     case 'create-card':
       assertOwnPersonalTarget(command.ownerId, capabilities);
       assertCommandKey(command.conceptKey, 'personal', 'concept');
-      if (!capabilities.personal.createCard) {
+      // This command creates a Concept-backed Card; standalone authoring uses its
+      // existing separate path. Keep the legacy Editor permission unchanged.
+      if (!capabilities.personal.createCard || capabilities.subject.role !== 'editor') {
         throw new Error('Personal Card creation is not permitted.');
       }
       return 'personal-card-owner-write';

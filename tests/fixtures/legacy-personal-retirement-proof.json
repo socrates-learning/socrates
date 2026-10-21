@@ -1,0 +1,18 @@
+{
+  "candidate": "c97c90b2a608153eff9e8e9268affa5a11c8d85d6fe03fe0fbd2ed4493a2d16b",
+  "baseline": "a616167b6f28dfa4ca4fab63fc5118153adf1435ea7a8afa885fdb249c26927c",
+  "hunks": [
+    [
+      "  const learnerCards = isLearnerReadOnly ? filterPersonalCardsForSearch(EMPTY_QUESTION_SEARCH_FILTERS) : [];\n  const learnerTopics = isLearnerReadOnly ? learnerCardTopics(unifiedTopicComposition.officialRoots, topicGraph?.detached_original_topic_ids) : [];\n  const learnerTopicKeys = new Set(learnerTopics.map(topic => topic.key));\n  const historicalContentLink = (initialPersonalContent.hasLegacyCollections ||\n    personalConcepts.some(item => item.owner_id === initialPersonalContent.ownerId) ||\n    personalCards.some(item => item.owner_id === initialPersonalContent.ownerId)) ? (\n      <button type=\"button\" className={styles.toolButton} onClick={() => navigateFromCreator('/study-creator')}>\n        Historical personal content\n      </button>\n    ) : null;\n\n  const learnerQuestions = <CreatorLearnerQuestionsWorkspace\n      busy={isSaving || isSavingQuestion || isMutatingTopic}\n      topics={learnerTopics}\n",
+      "  const learnerCards = isLearnerReadOnly ? filterPersonalCardsForSearch(EMPTY_QUESTION_SEARCH_FILTERS) : [];\n  const learnerTopics = isLearnerReadOnly ? learnerCardTopics(unifiedTopicComposition.officialRoots, topicGraph?.detached_original_topic_ids) : [];\n  const learnerTopicKeys = new Set(learnerTopics.map(topic => topic.key));\n  const learnerQuestions = <CreatorLearnerQuestionsWorkspace\n      busy={isSaving || isSavingQuestion || isMutatingTopic}\n      topics={learnerTopics}\n"
+    ],
+    [
+      "      {isLearnerReadOnly ? <main className={styles.workspace}>\n        <fieldset className={styles.studioShell} disabled={isSaving || isSavingQuestion} aria-label=\"Creator Studio editor\">\n          <CreatorStudioLocalHeader learnerPresentation onBack={goBackFromCreator} onClearConcept={clearDraft} onOpenLibraryOrganizer={() => {}} showClearConcept={false} />\n          {historicalContentLink}\n          <CreatorStudioTabs learnerPresentation activeTab={activeCreatorTab} onSelect={tab => {\n            if (tab !== 'questions' && tab !== 'flagged') return;\n            if (tab !== activeCreatorTab && !confirmDiscardQuestionChanges()) return;\n",
+      "      {isLearnerReadOnly ? <main className={styles.workspace}>\n        <fieldset className={styles.studioShell} disabled={isSaving || isSavingQuestion} aria-label=\"Creator Studio editor\">\n          <CreatorStudioLocalHeader learnerPresentation onBack={goBackFromCreator} onClearConcept={clearDraft} onOpenLibraryOrganizer={() => {}} showClearConcept={false} />\n          <CreatorStudioTabs learnerPresentation activeTab={activeCreatorTab} onSelect={tab => {\n            if (tab !== 'questions' && tab !== 'flagged') return;\n            if (tab !== activeCreatorTab && !confirmDiscardQuestionChanges()) return;\n"
+    ],
+    [
+      "            canClearConcept={!isCurrentContentReadOnly}\n          />\n\n          {historicalContentLink}\n          <CreatorStudioTabs\n            presentation=\"navy\"\n            activeTab={activeCreatorTab}\n",
+      "            canClearConcept={!isCurrentContentReadOnly}\n          />\n\n          <CreatorStudioTabs\n            presentation=\"navy\"\n            activeTab={activeCreatorTab}\n"
+    ]
+  ]
+}

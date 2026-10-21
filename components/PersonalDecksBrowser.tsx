@@ -174,17 +174,16 @@ export function PersonalDecksBrowser({ ownerId, material }: Props) {
   async function saveCollection(event: React.FormEvent) {
     event.preventDefault();
     if (!dialog || dialog.kind === 'delete' || !name.trim()) return;
+    if (dialog.kind === 'create') { setError('New Personal Deck creation is retired. Existing Decks remain editable.'); return; }
     setIsSaving(true);
     setError('');
-    const result = dialog.kind === 'create'
-      ? await supabase.from('personal_collections').insert({ owner_id: ownerId, name: name.trim() }).select('id').single()
-      : await supabase.from('personal_collections').update({ name: name.trim() }).eq('id', dialog.collection.id).eq('owner_id', ownerId).select('id').single();
+    const result = await supabase.from('personal_collections').update({ name: name.trim() }).eq('id', dialog.collection.id).eq('owner_id', ownerId).select('id').single();
     if (result.error) setError(errorMessage(result.error));
     else {
       await loadCollections();
       setSelectedId(result.data.id);
       setDialog(null);
-      setMessage(dialog.kind === 'create' ? 'Personal Deck created.' : 'Personal Deck renamed.');
+      setMessage('Personal Deck renamed.');
     }
     setIsSaving(false);
   }
@@ -248,7 +247,7 @@ export function PersonalDecksBrowser({ ownerId, material }: Props) {
       <div className={styles.columns} aria-label="Personal Decks workspace">
         <section className={styles.pane} aria-label="Personal Deck list">
           <div className={styles.heading}><div><h2>1. Personal Decks</h2><p>Organize your personal Cards into focused collections.</p></div><span>Private</span></div>
-          <button className={styles.primaryWide} onClick={() => openDialog({ kind: 'create' })} type="button">＋ New Personal Deck</button>
+          <p>Existing Personal Decks remain available. Organize new Cards through Topics in Creator Studio.</p>
           <label className={styles.search}><span>⌕</span><span className={styles.srOnly}>Search Personal Decks</span><input aria-label="Search Personal Decks" onChange={(event) => setDeckSearch(event.target.value)} placeholder="Search decks…" value={deckSearch} /></label>
           <div className={styles.deckList}>
             {filteredCollections.map((collection) => {

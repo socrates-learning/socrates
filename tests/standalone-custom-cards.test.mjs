@@ -18,7 +18,7 @@ function store() {
   return { rows, writes, fail(message) { failure = message; }, from(table) {
     let op = 'select', payload, filters = [];
     const q = {
-      select() { return q; }, eq(k,v) { filters.push([k,v]); return q; }, is(k,v) { filters.push([k,v]); return q; }, order() { return q; },
+      select() { return q; }, eq(k,v) { filters.push([k,v]); return q; }, is(k,v) { filters.push([k,v]); return q; }, order() { return q; }, limit() { return q; },
       insert(p) { op='insert'; payload=p; return q; }, update(p) { op='update';payload=p;return q; }, delete() { op='delete';return q; },
       async single() {
         writes.push({table,op,payload,filters});

@@ -54,6 +54,7 @@ export type CreatorPersonalTopicPlacement = {
 
 export type CreatorPersonalContent = {
   ownerId: string;
+  hasLegacyCollections?: boolean;
   topics: CreatorPersonalTopic[];
   concepts: CreatorPersonalConcept[];
   cards: CreatorPersonalCard[];
@@ -84,6 +85,7 @@ export async function loadCreatorPersonalContent(
     cardResult,
     overlayResult,
     topicPlacementResult,
+    collectionResult,
   ] = await Promise.all([
     supabase
       .from('personal_topics')
@@ -112,6 +114,7 @@ export async function loadCreatorPersonalContent(
       .eq('owner_id', ownerId)
       .order('created_at')
       .order('id'),
+    supabase.from('personal_collections').select('id, owner_id').eq('owner_id', ownerId).limit(1),
   ]);
 
   const error = [
@@ -120,6 +123,7 @@ export async function loadCreatorPersonalContent(
     cardResult.error,
     overlayResult.error,
     topicPlacementResult.error,
+    collectionResult.error,
   ].find(Boolean);
   if (error) throw new Error(`Unable to load personal Creator material: ${error.message}`);
 
@@ -129,6 +133,7 @@ export async function loadCreatorPersonalContent(
     ...(cardResult.data ?? []),
     ...(overlayResult.data ?? []),
     ...(topicPlacementResult.data ?? []),
+    ...(collectionResult.data ?? []),
   ];
   if (ownerScopedRows.some((row) => row.owner_id !== ownerId)) {
     throw new Error('Personal Creator material crossed the authenticated owner boundary.');
@@ -137,6 +142,7 @@ export async function loadCreatorPersonalContent(
   const standaloneCards = (cardResult.data ?? []).filter((card) => card.concept_id === null) as CreatorStandaloneCard[];
   return {
     ownerId,
+    hasLegacyCollections: (collectionResult.data ?? []).length > 0,
     standaloneCards,
     topics: (topicResult.data ?? []) as CreatorPersonalTopic[],
     concepts: (conceptResult.data ?? []) as CreatorPersonalConcept[],

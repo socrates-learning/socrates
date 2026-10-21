@@ -1,10 +1,11 @@
+import { projectLegacyRetirement } from './fixtures/legacy-personal-retirement.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { loadConceptModule as load, hookHarness, jsx, ids } from './fixtures/concept-media-authoring.mjs';
 const base='23e401095f78968d65ecd0fc202c0927898ea086';
-const source=path=>readFileSync(new URL('../'+path,import.meta.url),'utf8');
+const source=path=>projectLegacyRetirement(path,readFileSync(new URL('../'+path,import.meta.url),'utf8'));
 const original=path=>execFileSync('git',['show',base+':'+path],{encoding:'utf8'});
 
 test('Study integration changes only the three personal image mounts and their import',()=>{

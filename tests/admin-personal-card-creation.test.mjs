@@ -11,14 +11,14 @@ const library={activeLibraryId:'library',canAccessActiveLibrary:true,canManageAc
 const manifest=role=>deriveCreatorCapabilities({role,userId:'owner',library});
 
 for(const role of ['admin','learner','editor']) {
-  test(`${role}: only new Admin personal Card creation is restricted`,()=>{
+  test(`${role}: new creation restrictions preserve historical access`,()=>{
     const capabilities=manifest(role);
     assert.deepEqual(capabilities.personal,{
-      createTopic:true,createConcept:true,createCard:role!=='admin',editOwnContent:true,
-      deleteOwnContent:true,createOfficialContextOverlay:true,managePersonalDecks:true,manageFlags:true,
+      createTopic:true,createConcept:role==='editor',createCard:role!=='admin',editOwnContent:true,
+      deleteOwnContent:true,createOfficialContextOverlay:role==='editor',managePersonalDecks:true,manageFlags:true,
     });
     const command={type:'create-card',target:'personal',ownerId:'owner',conceptKey:'personal:concept:owned'};
-    if(role==='admin') assert.throws(()=>resolveCreatorCommandRoute(command,capabilities),/creation is not permitted/);
+    if(role!=='editor') assert.throws(()=>resolveCreatorCommandRoute(command,capabilities),/creation is not permitted/);
     else assert.equal(resolveCreatorCommandRoute(command,capabilities),'personal-card-owner-write');
     assert.equal(resolveCreatorCommandRoute({type:'update-card',target:'personal',ownerId:'owner',cardKey:'personal:card:owned'},capabilities),'personal-card-owner-write');
     assert.throws(()=>resolveCreatorCommandRoute({...command,ownerId:'other'},capabilities),/only the signed-in owner/);

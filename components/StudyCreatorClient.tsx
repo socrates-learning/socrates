@@ -73,6 +73,7 @@ type OverlayEditor = {
 type StudyCreatorClientProps = {
   ownerId: string;
   officialBrowser: OfficialBrowserData | null;
+  allowTopicCreation?: boolean;
 };
 
 type EditorModal =
@@ -96,7 +97,9 @@ function getErrorMessage(error: unknown) {
 export function StudyCreatorClient({
   ownerId,
   officialBrowser,
+  allowTopicCreation = true,
 }: StudyCreatorClientProps) {
+  const allowLegacyCreation = false;
   const [topics, setTopics] = useState<PersonalTopic[]>([]);
   const [concepts, setConcepts] = useState<PersonalConcept[]>([]);
   const [cards, setCards] = useState<PersonalCard[]>([]);
@@ -139,6 +142,10 @@ export function StudyCreatorClient({
   const dialogRef = useRef<HTMLElement | null>(null);
   const modalOpenerRef = useRef<HTMLElement | null>(null);
   const selectionRestoredRef = useRef(false);
+
+  function rejectLegacyCreation() {
+    setError('Create new Cards in Creator Studio. Historical Concepts, Cards, and Decks remain editable here.');
+  }
 
   const loadMaterial = useCallback(async () => {
     setError('');
@@ -508,6 +515,7 @@ export function StudyCreatorClient({
   }
 
   function openTopicEditor(record: PersonalTopic | null, parentId = '') {
+    if (!record && !allowTopicCreation) return;
     clearFeedback();
     closeMenus();
     rememberModalOpener();
@@ -520,6 +528,7 @@ export function StudyCreatorClient({
     record: PersonalConcept | null,
     defaultTopicId = ''
   ) {
+    if (!record) { rejectLegacyCreation(); return; }
     clearFeedback();
     closeMenus();
     rememberModalOpener();
@@ -534,6 +543,7 @@ export function StudyCreatorClient({
   }
 
   function openCardEditor(record: PersonalCard | null, defaultConceptId = '') {
+    if (!record) { rejectLegacyCreation(); return; }
     clearFeedback();
     closeMenus();
     rememberModalOpener();
@@ -545,6 +555,7 @@ export function StudyCreatorClient({
   }
 
   function openOverlayEditor(target: OverlayEditor) {
+    if (!allowLegacyCreation) { rejectLegacyCreation(); return; }
     clearFeedback();
     rememberModalOpener();
     setConceptName(
@@ -558,6 +569,7 @@ export function StudyCreatorClient({
 
   async function saveOverlayConcept(event: React.FormEvent) {
     event.preventDefault();
+    if (!allowLegacyCreation) { rejectLegacyCreation(); return; }
     if (!overlayEditor || !conceptName.trim() || !conceptTopicId) return;
     setIsSaving(true);
     clearFeedback();
@@ -612,6 +624,7 @@ export function StudyCreatorClient({
   }
 
   function addCardForOfficialConcept(target: OverlayEditor) {
+    if (!allowLegacyCreation) { rejectLegacyCreation(); return; }
     const existing = overlays.find(
       (overlay) =>
         overlay.library_node_id === target.libraryNodeId &&
@@ -627,6 +640,7 @@ export function StudyCreatorClient({
   async function saveTopic(event: React.FormEvent) {
     event.preventDefault();
     if (!editorModal || editorModal.kind !== 'topic' || !topicName.trim()) return;
+    if (!editorModal.record && !allowTopicCreation) return;
     if (!editorModal.record && !topicParentId && !topicCanonicalId) {
       setError('Choose a canonical Topic for this branch.');
       return;
@@ -676,6 +690,7 @@ export function StudyCreatorClient({
 
   async function saveConcept(event: React.FormEvent) {
     event.preventDefault();
+    if (editorModal?.kind === 'concept' && !editorModal.record) { rejectLegacyCreation(); return; }
     if (
       !editorModal ||
       editorModal.kind !== 'concept' ||
@@ -716,6 +731,7 @@ export function StudyCreatorClient({
 
   async function saveCard(event: React.FormEvent) {
     event.preventDefault();
+    if (editorModal?.kind === 'card' && !editorModal.record) { rejectLegacyCreation(); return; }
     if (
       !editorModal ||
       editorModal.kind !== 'card' ||
@@ -943,8 +959,9 @@ export function StudyCreatorClient({
       <section className={styles.workspace} aria-label="Study Creator workspace">
         <header className={styles.workspaceHeader}>
           <div>
-            <h1>Study Creator</h1>
-            <p>Build on Socrates with study material of your own.</p>
+            <h1>Historical personal content</h1>
+            <p>Edit your existing Concepts, Cards, and Personal Decks. Create new Cards in Creator Studio.</p>
+            <a href="/creator">Back to Creator Studio</a>
           </div>
         </header>
         <nav className={styles.contextSwitch} aria-label="Study Creator sections" role="tablist">
@@ -990,10 +1007,10 @@ export function StudyCreatorClient({
               <details className={styles.newMenu}>
                 <summary>＋ New</summary>
                 <div>
-                  <button onClick={() => openTopicEditor(null)} type="button">New Custom Topic</button>
-                  <button disabled={!topics.length} onClick={() => openConceptEditor(null)} type="button">New Personal Concept</button>
-                  <button disabled={!concepts.length} onClick={() => openCardEditor(null)} type="button">New Personal Card</button>
-                  <button onClick={() => setBrowseMode('decks')} type="button">New Personal Deck</button>
+                  {allowTopicCreation && <button onClick={() => openTopicEditor(null)} type="button">New Custom Topic</button>}
+                  {allowLegacyCreation && <button disabled={!topics.length} onClick={() => openConceptEditor(null)} type="button">New Personal Concept</button>}
+                  {allowLegacyCreation && <button disabled={!concepts.length} onClick={() => openCardEditor(null)} type="button">New Personal Card</button>}
+                  <button onClick={() => setBrowseMode('decks')} type="button">Existing Personal Decks</button>
                 </div>
               </details>
               <label className={styles.unifiedSearch}>
@@ -1095,7 +1112,7 @@ export function StudyCreatorClient({
                   <button
                     aria-describedby={!selectedTopic ? 'new-concept-requirement' : undefined}
                     className={styles.primary}
-                    disabled={!selectedTopic}
+                    disabled={!allowLegacyCreation || !selectedTopic}
                     onClick={() => openConceptEditor(null)}
                     title={!selectedTopic ? 'Select or create a Topic first' : undefined}
                     type="button"
@@ -1117,7 +1134,7 @@ export function StudyCreatorClient({
                         {conceptMenuId === concept.id && (
                           <div className={styles.actionMenu} data-overflow-menu role="menu">
                             <button onClick={() => openConceptEditor(concept)} role="menuitem" type="button">Edit Concept</button>
-                            <button onClick={() => { setSelectedConceptId(concept.id); openCardEditor(null, concept.id); }} role="menuitem" type="button">Add Card</button>
+                            {allowLegacyCreation && <button onClick={() => { setSelectedConceptId(concept.id); openCardEditor(null, concept.id); }} role="menuitem" type="button">Add Card</button>}
                             <button className={styles.menuDanger} onClick={() => requestDelete({ kind: 'concept', record: concept })} role="menuitem" type="button">Delete Concept</button>
                           </div>
                         )}
@@ -1126,7 +1143,7 @@ export function StudyCreatorClient({
                   })}
                   {!selectedTopic && <div className={styles.inlineEmpty} id="new-concept-requirement">Select or create a Topic to organize your Concepts.</div>}
                   {selectedTopic && !selectedTopicConcepts.length && <div className={styles.inlineEmpty}>No Concepts yet. Create one to begin adding Cards.</div>}
-                  {selectedTopicConcepts.length > 0 && (
+                  {allowLegacyCreation && selectedTopicConcepts.length > 0 && (
                     <button className={styles.addPlaceholder} onClick={() => openConceptEditor(null)} type="button">⊕ Add another Concept to this Topic</button>
                   )}
                 </div>
@@ -1180,7 +1197,7 @@ export function StudyCreatorClient({
                   <button
                     aria-describedby={!selectedConcept ? 'new-card-requirement' : undefined}
                     className={styles.primary}
-                    disabled={!selectedConcept}
+                    disabled={!allowLegacyCreation || !selectedConcept}
                     onClick={() => openCardEditor(null)}
                     title={!selectedConcept ? 'Select or create a Concept first' : undefined}
                     type="button"
@@ -1204,8 +1221,8 @@ export function StudyCreatorClient({
                   ))}
                   {!selectedConcept && <div className={styles.inlineEmpty} id="new-card-requirement">Select or create a Concept to start making Cards.</div>}
                   {selectedConcept && !selectedConceptCards.length && <div className={styles.inlineEmpty}>No Cards yet. Create the first Card for this Concept.</div>}
-                  {selectedConceptCards.length > 0 && <button className={styles.addPlaceholder} onClick={() => openCardEditor(null)} type="button">⊕ Add another Card to this Concept</button>}
-                  {!selectedConcept && selectedTopic && <button className={styles.addPlaceholder} onClick={() => openConceptEditor(null)} type="button">⊕ Create a Concept in this Topic</button>}
+                  {allowLegacyCreation && selectedConceptCards.length > 0 && <button className={styles.addPlaceholder} onClick={() => openCardEditor(null)} type="button">⊕ Add another Card to this Concept</button>}
+                  {allowLegacyCreation && !selectedConcept && selectedTopic && <button className={styles.addPlaceholder} onClick={() => openConceptEditor(null)} type="button">⊕ Create a Concept in this Topic</button>}
                 </div>
               </div>
             ) : selectedConcept ? (
@@ -1223,7 +1240,7 @@ export function StudyCreatorClient({
                   <p>{selectedConceptCards.length} personal Card{selectedConceptCards.length === 1 ? '' : 's'}</p>
                   <div className={styles.detailActions}>
                     <button className={styles.secondary} onClick={() => openConceptEditor(selectedConcept)} type="button">Edit Concept</button>
-                    <button className={styles.primary} onClick={() => openCardEditor(null)} type="button">＋ New Card</button>
+                    {allowLegacyCreation && <button className={styles.primary} onClick={() => openCardEditor(null)} type="button">＋ New Card</button>}
                   </div>
                 </div>
               </div>
@@ -1232,6 +1249,8 @@ export function StudyCreatorClient({
         </div>
         ) : browseMode === 'socrates' ? (
           <SocratesStudyCreatorBrowser
+            allowLegacyCreation={allowLegacyCreation}
+            allowTopicCreation={allowTopicCreation}
             data={officialBrowser}
             filter={browseFilter}
             material={{ topics, concepts, cards, overlays }}
