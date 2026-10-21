@@ -38,6 +38,10 @@ export default function AdminUsersPage() {
     role: string,
     currentRole: string | null
   ) {
+    if (role !== 'admin' && role !== 'learner') {
+      setStatus('Choose Administrator or Learner. New Editor assignments are disabled.');
+      return;
+    }
     setStatus(`Updating ${email}...`);
 
     const { error } = role === 'learner' && !currentRole
@@ -80,7 +84,7 @@ export default function AdminUsersPage() {
                 <td data-label="Assign role">
                 <select
                   aria-label={`Role for ${user.email}`}
-                  defaultValue={user.role || ''}
+                  value={user.role === 'admin' || user.role === 'learner' ? user.role : ''}
                   onChange={(event) => {
                     if (event.target.value) {
                       updateRole(user.email, event.target.value, user.role);
@@ -91,7 +95,6 @@ export default function AdminUsersPage() {
                     Assign role
                   </option>
                   <option value="learner">Learner</option>
-                  <option value="editor">Editor</option>
                   <option value="admin">Admin</option>
                 </select>
                 </td>

@@ -43,10 +43,25 @@ function pageFixture(replies = []) {
 }
 const settle = async () => { for (let i = 0; i < 8; i++) await Promise.resolve(); };
 
-test('all released loading, pending approval and role mutation logic remains byte-identical', () => {
-  assert.equal(hash(between(page, '  const [users,', '\n  return (')), '79927831b9bb2b6e587fb64dffacb4b47bc471a27c5143dd46a5b09daca9bd9a');
-  assert.equal(hash(between(page, '                  defaultValue=', '\n                >')), 'e09ba33d40e2be115c0b5b53e37124c176a97efbb9024e6bcfe6629d49927a8c');
-  assert.equal((page.match(/supabase\.rpc\(/g) ?? []).length, 3);
+const approvedRoleGuard = `    if (role !== 'admin' && role !== 'learner') {
+      setStatus('Choose Administrator or Learner. New Editor assignments are disabled.');
+      return;
+    }
+`;
+function verifyRoleManagementSource(source) {
+  assert.equal(source.split(approvedRoleGuard).length, 2);
+  const projected = source.replace(approvedRoleGuard, '').replace(
+    "                  value={user.role === 'admin' || user.role === 'learner' ? user.role : ''}",
+    "                  defaultValue={user.role || ''}");
+  assert.equal(hash(between(projected, '  const [users,', '\n  return (')), '79927831b9bb2b6e587fb64dffacb4b47bc471a27c5143dd46a5b09daca9bd9a');
+  assert.equal(hash(between(projected, '                  defaultValue=', '\n                >')), 'e09ba33d40e2be115c0b5b53e37124c176a97efbb9024e6bcfe6629d49927a8c');
+  assert.equal((source.match(/supabase\.rpc\(/g) ?? []).length, 3);
+}
+test('exact approved role guard and controlled selector preserve existing RPC and provisioning contracts', () => {
+  verifyRoleManagementSource(page);
+  assert.throws(() => verifyRoleManagementSource(page.replace('!currentRole', "currentRole === 'editor'")));
+  assert.throws(() => verifyRoleManagementSource(page.replace('new_role: role', "new_role: 'admin'")));
+  assert.throws(() => verifyRoleManagementSource(page.replace("? user.role : ''", "? user.role : 'learner'")));
 });
 
 test('Admin workspace starts with User Management and supports keyboard tab switching', () => {
@@ -71,9 +86,9 @@ test('Admin workspace starts with User Management and supports keyboard tab swit
 
 // Persistent Inbox behavior is covered in admin-inbox-ui.test.mjs.
 
-for (const role of ['learner', 'editor', 'admin']) test(`pending account: existing ${role} assignment and reload`, async () => {
+for (const role of ['learner', 'admin']) test(`pending account: existing ${role} assignment and reload`, async () => {
   const h = pageFixture([{ error: null }, { data: [{ ...rows[0], role }], error: null }]);
-  assert.equal(h.select.props.defaultValue, '');
+  assert.equal(h.select.props.value, '');
   assert.equal(h.select.props['aria-label'], 'Role for pending@preview.invalid');
   h.select.props.onChange({ target: { value: role } }); await settle();
   assert.equal(h.calls[0][0], role === 'learner' ? 'provision_invited_learner' : 'set_user_role_by_email');
@@ -94,9 +109,34 @@ test('an existing account uses the normal role setter, including returning to le
 test('no selection does not trigger a role change; failed changes retain the list and show the existing error', async () => {
   const h = pageFixture([{ error: { message: 'Synthetic denial' } }]);
   h.select.props.onChange({ target: { value: '' } }); assert.equal(h.calls.length, 0);
-  h.select.props.onChange({ target: { value: 'editor' } }); await settle();
+  h.select.props.onChange({ target: { value: 'admin' } }); await settle();
   assert.equal(h.calls.length, 1); assert.equal(h.state[1], 'Error: Synthetic denial'); assert.equal(h.state[0], rows);
 });
+
+test('Editor and unknown commands are rejected before any RPC', async () => {
+  for (const value of ['editor', 'Editor', 'owner', 'admin ', 'unknown']) {
+    const h = pageFixture();
+    h.select.props.onChange({ target: { value } }); await settle();
+    assert.equal(h.calls.length, 0);
+    assert.match(h.state[1], /New Editor assignments are disabled/);
+    assert.equal(h.state[0], rows);
+  }
+});
+test('legacy and unknown role records remain visible without being mapped to another role', () => {
+  const original = rows[0].role;
+  try {
+    for (const role of ['editor', 'unknown', 'admin', 'learner', null]) {
+      rows[0].role = role;
+      const h = pageFixture();
+      const options = nodes(h.select).filter(n => n.type === 'option').map(n => n.props.value);
+      assert.deepEqual(options, ['', 'learner', 'admin']);
+      assert.equal(h.select.props.value, ['admin','learner'].includes(role) ? role : '');
+      assert.ok(nodes(h.tree).some(n => n.type === 'span' && n.props.children === (role || 'Pending approval / no role')));
+      assert.equal(h.calls.length, 0);
+    }
+  } finally { rows[0].role = original; }
+});
+
 test('initial load preserves empty and error handling without new queries', async () => {
   for (const reply of [{ data: null, error: null }, { data: null, error: { message: 'Synthetic list failure' } }]) {
     const h = pageFixture([reply]); h.effects[0](); await settle();
