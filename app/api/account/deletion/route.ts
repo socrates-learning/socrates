@@ -62,6 +62,7 @@ export async function POST(request: Request) {
     await deletionLedger().assertReady();
     const receipt = randomBytes(32).toString('hex');
     const started = await deletionAdmin().rpc('begin_account_deletion', { p_user: data.user.id, p_receipt_hash: receiptHash(receipt) });
+    if (started.error?.code === 'P1391') return reply({ error: 'Your account has not been deleted. Another authorized active Administrator must exist before you can delete this account.' }, 403);
     if (started.error) return reply({ error: 'Deletion could not start. Your account has not been deleted. Contact the account administrator if this persists.' }, 409);
     (await cookies()).set(deletionCookie, receipt, { httpOnly: true, secure: new URL(request.url).protocol === 'https:', sameSite: 'strict', path: '/api/account/deletion', maxAge: 7 * 24 * 60 * 60 });
     return reply({ state: 'pending' });

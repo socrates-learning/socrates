@@ -115,9 +115,10 @@ if(phase==='reconcile'){
  async reapply(id){assert.equal(id,saved.owner);const hash=sha(randomBytes(32));assert.equal((await client.rpc('begin_account_deletion',{p_user:id,p_receipt_hash:hash})).error,null);await continueDeletion(service(client),hash);},
  async verifyAbsent(id){assert.equal(sql(`select count(*) from auth.users where id=${q(id)}`,'card136_recovery'),'0');assert.equal(sql(`select count(*) from public.personal_card_media_saves where owner_id=${q(id)}`,'card136_recovery'),'0');},
  async identity(){return 'isolated card136_recovery';},
+ async hasActiveAdministrator(){return sql("select exists(select 1 from public.user_roles r join public.account_deletion_state s on s.user_id=r.user_id where r.role='admin' and s.state='active')",'card136_recovery')==='t';},
  async writeReadiness(report){fs.writeFileSync(dir+'/recovery-READY.json',JSON.stringify(report,null,2));}
  };
- const report=await reconcileDeletions({ledger:{snapshot},target,checkpoint:saved.checkpoint});assert.equal(report.reconciled,1);assert.equal(preservation('card136_recovery'),saved.before);
+ const report=await reconcileDeletions({ledger:{snapshot},target,checkpoint:saved.checkpoint});assert.equal(report.reconciled,1);assert.equal(report.state,'verified-isolated');assert.equal(preservation('card136_recovery'),saved.before);
  const official=await client.storage.from(saved.official.bucket).download(saved.official.name);assert.equal(official.error,null);assert.equal(sha(Buffer.from(await official.data.arrayBuffer())),saved.official.sha256);
  for(const o of objects){if(sql(`select count(*) from storage.objects where bucket_id=${q(o.bucket)} and name=${q(o.name)}`,'card136_recovery')==='1'){const r=await client.storage.from(o.bucket).download(o.name);assert.equal(r.error,null);assert.equal(sha(Buffer.from(await r.data.arrayBuffer())),o.sha256);}}
  console.log('PASS: independent durable deletion intent replayed after restore; deleted account stays absent; remaining media and educational data preserved');

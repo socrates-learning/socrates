@@ -96,6 +96,7 @@ function recoveryFixture(options = {}) {
     reapply: async id => { if (options.interrupted) throw new Error('Interrupted'); remaining.delete(id); },
     verifyAbsent: async id => { assert.equal(remaining.has(id), false); if (options.residual) throw new Error('Residual data'); },
     identity: async () => 'isolated-instance', writeReadiness: async r => { certificate = r; },
+    hasActiveAdministrator: async () => !options.noAdmin,
   };
   const checkpoint = { isolated: true, source: 'fixture', backupSha256: 'c'.repeat(64), createdAt: '2026-10-05T12:00:00Z' };
   return { ledger, target, checkpoint, remaining, state: () => ({ certificate, blocked }), options };
@@ -104,6 +105,16 @@ test('recovery reconciles intents before AND after the snapshot, verifies and st
   const f = recoveryFixture(); const r = await reconcileDeletions(f);
   assert.equal(r.reconciled, 2); assert.equal(f.remaining.size, 0); assert.equal(f.state().blocked, true); assert.equal(f.state().certificate.state, 'verified-isolated');
   await reconcileDeletions(f); assert.equal(f.remaining.size, 0);
+});
+test('valid ledger replay with no remaining Administrator completes privacy cleanup but never reports ordinary readiness', async () => {
+  const f = recoveryFixture({ noAdmin: true }); const r = await reconcileDeletions(f);
+  assert.equal(f.remaining.size, 0); assert.equal(r.reconciled, 2);
+  assert.equal(r.state, 'administrator-recovery-required'); assert.equal(r.administratorRecoveryRequired, true);
+  assert.equal(f.state().blocked, true); assert.equal(f.state().certificate.state, r.state);
+});
+test('unavailable Administrator verification fails closed after reconciliation', async () => {
+  const f = recoveryFixture(); f.target.hasActiveAdministrator = async () => { throw new Error('Unavailable'); };
+  await assert.rejects(reconcileDeletions(f)); assert.equal(f.state().blocked, true); assert.equal(f.state().certificate, null);
 });
 for (const option of ['offline', 'changing', 'corruptOther', 'interrupted', 'residual']) test(`recovery remains blocked without readiness after ${option}`, async () => {
   const f = recoveryFixture({ [option]: true }); await assert.rejects(reconcileDeletions(f));

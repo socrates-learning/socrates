@@ -58,7 +58,12 @@ function routeFixture(options = {}) {
     signOut: async input => { calls.push(['cleanup', input.scope]); return { error: options.cleanupFailure ? {} : null }; },
   } };
   let pending = false, complete = false;
-  const admin = { rpc: async (name, args) => { calls.push([name, args]); pending = true; return { error: options.databaseFailure ? {} : null }; } };
+  const admin = { rpc: async (name, args) => {
+    calls.push([name, args]);
+    const error = options.finalAdmin ? { code: 'P1391', message: 'private database detail' } : options.databaseFailure ? {} : null;
+    if (!error) pending = true;
+    return { error };
+  } };
   const service = { status: async () => pending ? { userId: 'owner', state: complete ? 'complete' : 'pending', objects: [] } : null,
     recordIntent: async id => { calls.push(['ledger', id]); },
     remove: async () => { calls.push('remove'); }, deleteIdentity: async id => { calls.push(['delete', id]); complete = true; } };
@@ -86,6 +91,25 @@ for (const option of ['anonymous', 'wrongPassword', 'wrongUser', 'cleanupFailure
 });
 test('MFA accounts retain the existing AAL2 requirement as well as current-password proof', async () => {
   const f = routeFixture({ mfa: true, aal2: true }); assert.equal((await f.post()).status, 200); assert.equal(f.calls[0][0], 'reauth');
+});
+test('final Administrator refusal is actionable, leaves no receipt or deletion and preserves the session', async () => {
+  const f = routeFixture({ finalAdmin: true });
+  const response = await f.post();
+  assert.equal(response.status, 403);
+  assert.deepEqual(await response.json(), { error: 'Your account has not been deleted. Another authorized active Administrator must exist before you can delete this account.' });
+  assert.equal(f.jar.size, 0);
+  assert.deepEqual(await (await f.get()).json(), { state: 'none' });
+  assert.ok(!f.calls.some(c => ['ledger', 'delete', 'cookie'].includes(c[0]) || ['remove', 'browser-signout'].includes(c)));
+  assert.deepEqual(f.calls.slice(0, 2), [['reauth', 'owner@example.invalid'], ['cleanup', 'local']]);
+  f.options.finalAdmin = false;
+  assert.equal((await f.post()).status, 200);
+});
+test('request parameters cannot activate a recovery bypass', async () => {
+  for (const key of ['recovery', 'skipAdminCheck', 'confirmedLedger', 'metadata']) {
+    const f = routeFixture({ finalAdmin: true });
+    assert.equal((await f.post({ ...request, [key]: true })).status, 400);
+    assert.equal(f.calls.length, 0);
+  }
 });
 test('CSRF, target injection, and missing receipt fail before deletion', async () => {
   const f = routeFixture(); assert.equal((await f.post(request, 'https://evil.invalid')).status, 403);

@@ -55,6 +55,15 @@ test('failed identity verification preserves account and never calls cleanup', a
   assert.deepEqual(s.routes, ['/account/deletion']); assert.ok(s.button('Keep My Account'));
   s.button('Keep My Account').props.onClick(); assert.deepEqual(s.routes, ['/account/deletion', '/account']);
 });
+test('final Administrator refusal remains visible and allows Keep My Account or Escape without cleanup', async () => {
+  const message = 'Your account has not been deleted. Another authorized active Administrator must exist before you can delete this account.';
+  const s = setup(async (_url, init) => init?.method === 'POST' ? Response.json({ error: message }, { status: 403 }) : Response.json({ state: 'none' }));
+  await s.load(); s.button('Delete Account').props.onClick(); s.edit('current password', 'password'); s.edit('DELETE'); s.submit(); await settle();
+  assert.ok(text(s.render()).includes(message)); assert.equal(s.modal.open, true);
+  assert.equal(s.calls.filter(c => c.method === 'DELETE').length, 0);
+  assert.ok(!s.button('Keep My Account').props.disabled); assert.ok(!s.button('Retry Deletion'));
+  assert.equal(s.escape(), true); assert.equal(s.modal.open, false); assert.equal(s.focused(), true);
+});
 test('interrupted cleanup retains an honest pending state and retries without repeating password submission', async () => {
   let fail = true;
   const s = setup(async (_url, init) => init?.method === 'DELETE' && fail ? Response.json({ error: 'Retry cleanup.' }, { status: 503 }) : Response.json({ state: init?.method === 'DELETE' ? 'complete' : init?.method === 'POST' ? 'pending' : 'none' }));

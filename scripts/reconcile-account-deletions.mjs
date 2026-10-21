@@ -25,6 +25,34 @@ export function isolatedDatabase(env) {
   return statement => execFileSync('docker', ['exec', '-i', container, 'psql', '-U', 'postgres', '-d', database, '-XAt', '-v', 'ON_ERROR_STOP=1'], { input: statement, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, stdio: ['pipe', 'pipe', 'pipe'] }).trim();
 }
 
+// Only the isolated operator's database-owner connection can reach the private
+// preparation core. No RPC, application service key, metadata or session flag
+// enables recovery. The signed, checkpoint-acknowledged intent must already exist.
+export async function prepareConfirmedRecoveryDeletion({ ledger, snapshot, account, receipt, sql }) {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(account)
+      || !/^[0-9a-f]{64}$/.test(receipt)) throw new Error('Invalid isolated recovery identity');
+  const expected = snapshot.records.find(event => event.account === account);
+  const confirmed = await ledger.read(account);
+  if (!expected || !confirmed || confirmed.source !== snapshot.source
+      || ['version', 'source', 'account', 'confirmedAt'].some(key => confirmed[key] !== expected[key])) throw new Error('Recovery requires an existing independently verified deletion intent');
+  // Older backups retain the original 127 operation. Accept only its exact
+  // released body; unknown/newer contracts require explicit recovery review.
+  const operation = sql(`select case
+    when current_user <> 'postgres' then 'denied'
+    when exists(select 1 from pg_proc where oid=to_regprocedure('account_deletion_private.prepare_account_deletion(uuid,text)')
+      and md5(pg_get_functiondef(oid))='de546f075d4e6e9c88692380fcf6a308' and not prosecdef and proowner='postgres'::regrole
+      and proacl=array['postgres=X/postgres']::aclitem[])
+      and exists(select 1 from pg_namespace where nspname='account_deletion_private' and nspowner='postgres'::regrole
+        and coalesce(nspacl,acldefault('n',nspowner))=array['postgres=UC/postgres']::aclitem[])
+      then 'account_deletion_private.prepare_account_deletion'
+    when to_regnamespace('account_deletion_private') is null and exists(select 1 from pg_proc
+      where oid=to_regprocedure('public.begin_account_deletion(uuid,text)')
+      and md5(pg_get_functiondef(oid))='c281b1cb14e1082a47c0127cadb51a3a') then 'public.begin_account_deletion'
+    else 'denied' end`);
+  if (!['account_deletion_private.prepare_account_deletion', 'public.begin_account_deletion'].includes(operation)) throw new Error('Trusted isolated recovery operation unavailable');
+  sql(`select ${operation}(${literal(account)},${literal(receipt)})`);
+}
+
 // Fingerprint all unaffected public rows, including non-owner child records.
 // Only the exact deletion ownership closure and approved attribution are projected.
 export function preservationFingerprint(sql, targets, tableDigests = false, attribution = { concepts: new Map(), startedAt: 0 }) {
@@ -88,6 +116,7 @@ export async function runRecovery(env, checkpoint, outputDirectory) {
 async function reconcileLocked(env, checkpoint, directory) {
   const ready = `${directory}/READY.json`;
   try { unlinkSync(ready); } catch (error) { if (error.code !== 'ENOENT') throw error; }
+  try { unlinkSync(`${directory}/ADMINISTRATOR-RECOVERY-REQUIRED.json`); } catch (error) { if (error.code !== 'ENOENT') throw error; }
   writeFileSync(`${directory}/BLOCKED.json`, JSON.stringify({ state: 'isolated-unavailable', startedAt: new Date().toISOString() }), { mode: 0o600 });
   const sql = isolatedDatabase(env), config = ledgerConfig(env), ledger = createDeletionLedger(config);
   if (!checkpoint.backupPath || digest(readFileSync(checkpoint.backupPath)) !== checkpoint.backupSha256) throw new Error('Recovery backup identity does not match');
@@ -114,8 +143,7 @@ async function reconcileLocked(env, checkpoint, directory) {
       const provider = await admin.auth.admin.getUserById(id);
       if (provider.error || provider.data.user?.id !== id) throw new Error('Recovery API/database target mismatch');
       const receipt = digest(randomBytes(32));
-      const begun = await admin.rpc('begin_account_deletion', { p_user: id, p_receipt_hash: receipt });
-      if (begun.error) throw new Error('Approved cleanup could not begin');
+      await prepareConfirmedRecoveryDeletion({ ledger, snapshot, account: id, receipt, sql });
       ownedPaths.set(id, (await service.status(receipt)).objects);
       await continueDeletion(service, receipt);
     },
@@ -136,8 +164,13 @@ async function reconcileLocked(env, checkpoint, directory) {
       }
     },
     async writeReadiness(report) {
-      writeFileSync(ready, JSON.stringify(report, null, 2), { mode: 0o600, flag: 'wx' });
+      const destination = report.state === 'administrator-recovery-required'
+        ? `${directory}/ADMINISTRATOR-RECOVERY-REQUIRED.json` : ready;
+      writeFileSync(destination, JSON.stringify(report, null, 2), { flag: 'wx', mode: 0o600 });
       // BLOCKED remains: a certificate records proof, never permission to serve.
+    },
+    async hasActiveAdministrator() {
+      return sql("select exists(select 1 from public.user_roles r join public.account_deletion_state s on s.user_id=r.user_id where r.role='admin' and s.state='active')") === 't';
     },
   };
   return reconcileDeletions({ ledger, target, checkpoint });
