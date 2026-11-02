@@ -177,8 +177,20 @@ export async function resolveActiveLibraryContext({
   }
   const roleData = roleResult.data;
   const roleValue = roleData?.role;
-  const role: ActiveLibraryRole =
-    roleValue === 'admin' || roleValue === 'editor' ? roleValue : 'learner';
+  if (roleValue !== 'admin' && roleValue !== 'editor' && roleValue !== 'learner') {
+    // Never turn missing, stale or unknown application-role values into Learners.
+    return {
+      library: null,
+      role: 'anonymous',
+      user: null,
+      source: 'none',
+      canSwitch: false,
+      hasMembership: false,
+      needsSelection: false,
+      isUnauthorized: true,
+    };
+  }
+  const role: ActiveLibraryRole = roleValue;
   const membershipRows = membershipResult.data;
   const resolvedUser = {
     id: authenticatedUserId,

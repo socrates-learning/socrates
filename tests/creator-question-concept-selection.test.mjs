@@ -15,6 +15,19 @@ function setup(options) {
   h.render().setQuestionConceptsByTopicId({ topic: concepts });
   return h;
 }
+function deniedEditor(h) {
+  if (h.render().creatorAuthority.role !== 'editor') return false;
+  h.render().browseQuestionConcept('primary', 'topic');
+  h.render().associateQuestionConcept('primary', true);
+  h.render().makeQuestionConceptPrimary('related');
+  h.render().startNewQuestion();
+  const e = h.render();
+  assert.equal(e.creatorAuthority.canSaveQuestion, false);
+  assert.equal(e.creatorAuthority.canReadUnpublished, false, 'Historical owner drafts never grant staff reads');
+  assert.equal(nodes(e.tree).some(n => n.type === 'button' && text(n) === 'New Question'), false);
+  assert.equal(h.calls.length, 0);
+  return true;
+}
 function retained(e) {
   return plain({
     id: e.questionId, prompt: e.questionPrompt, answer: e.questionAnswer,
@@ -29,6 +42,7 @@ function retained(e) {
 for (const role of ['admin', 'editor']) {
   test(`${role}: fresh entry and the single-Concept browsing effect never assign Primary`, () => {
     const h = editor({ role, editing: true });
+    if (deniedEditor(h)) return;
     let e = h.render();
     assert.equal(e.questionConceptId, 'existing-concept', 'Content context may already be browsed');
     assert.equal(e.primaryQuestionConceptId, null);
@@ -45,6 +59,7 @@ for (const role of ['admin', 'editor']) {
 
   test(`${role}: Concept-name selection replaces Primary and preserves only explicitly Related choices`, () => {
     const h = setup({ role });
+    if (deniedEditor(h)) return;
     h.render().browseQuestionConcept('primary', 'topic');
     h.render().associateQuestionConcept('related', true);
     h.render().setQuestionPrompt('Keep Front'); h.render().setQuestionAnswer('Keep Answer');
@@ -67,6 +82,7 @@ for (const role of ['admin', 'editor']) {
     const images = { ...passiveQuestionImages(), dirty: true, guardActive: true,
       items: [{ placementId: 'image', altText: 'Synthetic image' }], reset() { resets++; } };
     const h = setup({ role, confirm: () => false, questionImages: images });
+    if (deniedEditor(h)) return;
     h.render().browseQuestionConcept('primary', 'topic');
     h.render().associateQuestionConcept('related', true);
     let e = h.render();
@@ -96,6 +112,7 @@ for (const role of ['admin', 'editor']) {
 
   test(`${role}: unchecking new Primary does not promote a Related Concept, but Make Primary is explicit`, () => {
     const h = setup({ role });
+    if (deniedEditor(h)) return;
     h.render().associateQuestionConcept('primary', true);
     h.render().associateQuestionConcept('related', true);
     h.render().associateQuestionConcept('primary', false);
@@ -111,6 +128,7 @@ for (const role of ['admin', 'editor']) {
   test(`${role}: explicit New can start without a browsed Concept and retains the discard confirmation`, () => {
     let discard = false;
     const h = setup({ role, confirm: () => discard });
+    if (deniedEditor(h)) return;
     assert.equal(button(h.render().tree, 'New Question').props.disabled, false);
     h.render().startNewQuestion();
     assert.equal(h.render().primaryQuestionConceptId, null);
@@ -130,6 +148,7 @@ for (const role of ['admin', 'editor']) {
 
   test(`${role}: existing Question browsing and direct calls cannot replace or clear saved Primary`, () => {
     const h = setup({ role });
+    if (deniedEditor(h)) return;
     h.render().selectExistingQuestion(question({ currentVersionId: 'version', promptFormat: 'legacy' }));
     h.render().setQuestionAnswer('Unsaved Answer');
     const before = retained(h.render());
@@ -148,6 +167,7 @@ for (const role of ['admin', 'editor']) {
 
   test(`${role}: unknown Concept selection is rejected and available row controls are keyboard-native`, () => {
     const h = setup({ role });
+    if (deniedEditor(h)) return;
     h.render().browseQuestionConcept('primary', 'topic');
     h.render().browseQuestionConcept('unavailable-or-wrong-library', 'other-topic');
     h.render().associateQuestionConcept('unavailable-or-wrong-library', true);

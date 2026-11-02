@@ -1,0 +1,2695 @@
+{
+  "baseline": "38cf5bd64b89d412a959d14abc97486d13ea8bd5",
+  "functions": [
+    {
+      "signature": "archive_catalog_tag(uuid)",
+      "beforeMd5": "faf64fe1e1b13098cdb8de73d1ad29a4",
+      "afterMd5": "d512e406fc0e6586a43d208d333fa972",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres",
+        "authenticated=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "archive_library_group(uuid)",
+      "beforeMd5": "819b8ca839f413cc47a9f74719ff7e84",
+      "afterMd5": "fc2305ff973428cd2f2944d0666a8490",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres",
+        "authenticated=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "archive_question(uuid)",
+      "beforeMd5": "720b581bc77e87986b4048e240baa3c0",
+      "afterMd5": "e31027b3de1c627926b6ea93e81a3c25",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres",
+        "authenticated=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "attach_question_source(uuid,uuid,text)",
+      "beforeMd5": "1b84e0e4afaecfefd8e0e2ae9002b7b8",
+      "afterMd5": "0c66217ade41f129c0c1b37764f3d181",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "can_manage_testing_angle_vocabulary()",
+      "beforeMd5": "8a69e379965e9f3624040d9b882f6c8e",
+      "afterMd5": "e18a1f0cd28381f2e255a8e1462f2777",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "authenticated=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "create_article_core_concept(uuid,text,text,uuid,uuid[],text)",
+      "beforeMd5": "555d5d471a6312c3741d72756f7fed02",
+      "afterMd5": "16de37a2ec28c8cfa6e73adf9a5c2bdd",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres",
+        "authenticated=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "create_catalog_tag(text)",
+      "beforeMd5": "d2e71b165b59a022e4e229e766332142",
+      "afterMd5": "a2799719653edce950defa864643bdbb",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres",
+        "authenticated=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "create_library_group(uuid,text)",
+      "beforeMd5": "11c3cb7ecbe084407bb4019abaff3075",
+      "afterMd5": "4d3e3f068942250ee450ccb8ed537a69",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres",
+        "authenticated=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "create_library_node_in_library(uuid,uuid,text,text,integer)",
+      "beforeMd5": "e6a9491c5893cbffb8686ecf8d3dfb92",
+      "afterMd5": "9cb065c654026caeec56e0c43ff7f102",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres",
+        "authenticated=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "create_library_with_root(uuid,text,text)",
+      "beforeMd5": "42b832d1525c4065d1a5c644803767cc",
+      "afterMd5": "ad0cb2f4e9388a010b7e3f9b1455f161",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres",
+        "authenticated=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "create_personal_concept_overlay(uuid,text,text,uuid,uuid,text)",
+      "beforeMd5": "c2121ba0c093b692559bfc9e887c935b",
+      "afterMd5": "b35da9ed1c27fbfad3fdcfded071dccb",
+      "replacements": [
+        [
+          "-- New legacy records are retired for Admins and Learners. Preserve the\n  -- separately managed legacy Editor authorization without trusting JWT roles.\n  if not public.is_editor_or_admin() or public.is_admin() then",
+          "-- New legacy Concepts and their creation overlays are retired for all\n  -- application roles. Historical owner updates use the separate save operation.\n  if true then"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres",
+        "authenticated=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "create_question(uuid,text,text,text,uuid,integer,text,text)",
+      "beforeMd5": "6b73d207a2988a6cdeb06d749dc9c9a6",
+      "afterMd5": "5c40939bea0e094629f26bf0e3c5ce4b",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "delete_development_content(text,uuid)",
+      "beforeMd5": "75b53add5dcd9419481a71f55a2a6994",
+      "afterMd5": "6ac76f86d88f6eb5cac9f6574275fa33",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres",
+        "authenticated=X/postgres"
+      ],
+      "config": [
+        "search_path=public, pg_temp"
+      ]
+    },
+    {
+      "signature": "delete_draft_question(uuid)",
+      "beforeMd5": "26ca569935d2f9410cd927a29398f740",
+      "afterMd5": "3debca037eddb65393f61f81a4aea098",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres",
+        "authenticated=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "delete_empty_library_group(uuid)",
+      "beforeMd5": "08113384f9c0229d9fd0f91c95246760",
+      "afterMd5": "8eecfd5329629a46c0552994e60f5948",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres",
+        "authenticated=X/postgres"
+      ],
+      "config": [
+        "search_path=public, pg_temp"
+      ]
+    },
+    {
+      "signature": "delete_empty_library_node_in_library(uuid,uuid)",
+      "beforeMd5": "c5bdab96718e361270e0a73a61711acd",
+      "afterMd5": "1e10bca40fd5af4e0f7c27c1914bec7e",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres",
+        "authenticated=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "delete_empty_library(uuid)",
+      "beforeMd5": "7cec42d422ac652e77966ceb19a02942",
+      "afterMd5": "9258f92e526b688b86140bdcb0287b5a",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres",
+        "authenticated=X/postgres"
+      ],
+      "config": [
+        "search_path=public, pg_temp"
+      ]
+    },
+    {
+      "signature": "delete_empty_tag(uuid)",
+      "beforeMd5": "ba7c43cc1bff40295fe1b649359b70ab",
+      "afterMd5": "0eabc639701def2ddd4d3f7ba4a397fa",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres",
+        "authenticated=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "delete_unused_source(uuid)",
+      "beforeMd5": "9fb3ccb6f0cd8ec2e4f084e7370124e7",
+      "afterMd5": "230464fef9ca99e8132fd075db747a9e",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "detach_question_source(uuid)",
+      "beforeMd5": "c31df266e285f22cfc382f15db34e35b",
+      "afterMd5": "edb5129facb96b9213fb39a52193bde4",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "empty_tag_delete_block_reason(uuid)",
+      "beforeMd5": "aafa3aa71c83db19d3cff0b87097ed24",
+      "afterMd5": "49218e68d7ffdfe9389a4a6155d34965",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres",
+        "authenticated=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "enforce_concept_lifecycle()",
+      "beforeMd5": "85ffc767519940f5e28680287db853bb",
+      "afterMd5": "8a6bd5fa4c9df8a621a433e7fb75ac2c",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "get_concept_prerequisites(uuid)",
+      "beforeMd5": "c9045c705dcee9a74f60557514cd6b87",
+      "afterMd5": "b247ba0fc573311143a3b31237799a4c",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres",
+        "authenticated=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "get_concept_tags(uuid)",
+      "beforeMd5": "402219b252c60a8fee0cd71e4c2db59c",
+      "afterMd5": "1178cad1c0c914528f0938e2dfb4c1f5",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres",
+        "authenticated=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "get_creator_algorithm_diagnostics(uuid)",
+      "beforeMd5": "22b9739ae3f6d641d3f17a4c99c2da25",
+      "afterMd5": "b230a3b40ecdfc72c5e97f2d151cf29b",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres",
+        "authenticated=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "get_creator_questions(uuid,uuid)",
+      "beforeMd5": "a0e3bcedc96d8ade5c6d59a490a7868f",
+      "afterMd5": "26514ab79a36888343d7d79b15330c58",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres",
+        "authenticated=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "get_development_delete_summary(text,uuid)",
+      "beforeMd5": "d73e38ef998055444c7464f8de6fca66",
+      "afterMd5": "a63b88deaed9a2159957434a24f69566",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres",
+        "authenticated=X/postgres"
+      ],
+      "config": [
+        "search_path=public, pg_temp"
+      ]
+    },
+    {
+      "signature": "get_library_organizer_delete_eligibility()",
+      "beforeMd5": "40db71b3f62d2a9e02d7d78b43f85e17",
+      "afterMd5": "8963629cf33a2bd5c80bd167d97e6689",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres",
+        "authenticated=X/postgres"
+      ],
+      "config": [
+        "search_path=public, pg_temp"
+      ]
+    },
+    {
+      "signature": "link_article_core_concept(uuid,uuid,text,text)",
+      "beforeMd5": "61215438bb396db60a4ef8bdb59a7bd4",
+      "afterMd5": "ddc5c66e952f3b74a08caf5a7947e956",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres",
+        "authenticated=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "m112_manage_asset(uuid)",
+      "beforeMd5": "919c10bf91fc95e611f1d57e0ec7ddc4",
+      "afterMd5": "80a63ca84d48fc4e15de420f0ab8ef22",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "authenticated=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "m112_target_allowed(uuid,uuid,uuid,uuid,uuid,uuid)",
+      "beforeMd5": "21664adf5575c55852acd32dd1ba0876",
+      "afterMd5": "2dfb50fb03dc59e7fe554a933469470f",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "m113_delivery(uuid,uuid,uuid)",
+      "beforeMd5": "c847184d99a2562a03e35f10d522aeb4",
+      "afterMd5": "74d94e72dcb6fac48326298cbf0dcaa9",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "m114_author(uuid,uuid)",
+      "beforeMd5": "b82d9e9cc006137a33024b2a6974efa3",
+      "afterMd5": "28ae2f13818015e0eb17604be7888978",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "m114_manifest(uuid,uuid,uuid)",
+      "beforeMd5": "8f75beb0c6cb6f4a16a76226fb63b84f",
+      "afterMd5": "1692096f518bc6f9c0d698c9796d4a6b",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "m115_author(uuid,uuid)",
+      "beforeMd5": "d70bb438455193db02c27e6587df6ccc",
+      "afterMd5": "53a3c4737ad34e1b3ec43379813a29cf",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "m115_read_target(uuid,uuid,uuid)",
+      "beforeMd5": "bba1688aa8e4c5f794c277f341ed9b92",
+      "afterMd5": "cc1740d9a1b72658cf78328e35a1beea",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "m116_concept_draft_core(uuid,text,text,uuid,uuid[],text[])",
+      "beforeMd5": "5ca13ccc1487e368a2764dbf959541d3",
+      "afterMd5": "3340655a54751d0f707866ba6f257a86",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "m116_concept_version_core(uuid,text,text,uuid,uuid[],uuid[],text,jsonb,text)",
+      "beforeMd5": "a955232a57bef987e3c06efd7a33dc4e",
+      "afterMd5": "1869bb90cfba418b42b3d7a75c3d4e24",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "m116_legacy_concept(uuid)",
+      "beforeMd5": "d546096e4586e701c5e7d69adcfab1dc",
+      "afterMd5": "4d4070b15998dc96cd514270d15613dd",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "m116_legacy_question(uuid,jsonb)",
+      "beforeMd5": "9a562ea36c71b9def29c68488e2ca1d7",
+      "afterMd5": "ebafe39185b36067239e62401c0654b7",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "m116_question_save_core(uuid,uuid,text,text,text,text,uuid,integer,text,text,jsonb,jsonb,uuid[],uuid[],uuid,uuid[],text[],text)",
+      "beforeMd5": "7040de96d7112ea1bb6be21e1522a56f",
+      "afterMd5": "f7ef017cb668093f7fc0992a9f4d12d7",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "m116_replace_answers_core(uuid,jsonb)",
+      "beforeMd5": "602d611b6245472c0e2a4f42c02f7fc8",
+      "afterMd5": "b31bbee19d996b5af6bf5d968965e10c",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "m116_update_question_core(uuid,text,text,text,text,uuid,integer,text,text)",
+      "beforeMd5": "41c8f78e0d684372fbec888afdce6436",
+      "afterMd5": "f6e8e126ffca33e1268d62095794d7d0",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "m122_require_library(uuid,boolean)",
+      "beforeMd5": "dadf7080fffd68bfa82734a1a62aad95",
+      "afterMd5": "92acedb1956a25a1abbf8a74d73622db",
+      "replacements": [
+        [
+          "(p_write and not public.is_editor_or_admin())",
+          "(p_write and not public.is_admin())"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "socrates_migrator=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "m132_legacy_structure_guard()",
+      "beforeMd5": "d40a9dfd750f39b3248819e0058aca76",
+      "afterMd5": "083b38e17d4060c165b1eec5d82df75a",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "socrates_migrator=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "move_library_group(uuid,uuid)",
+      "beforeMd5": "b4fddc9df2f4c9d85a179d011861a553",
+      "afterMd5": "edd5ce8bd49202c779d207a926b2710e",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres",
+        "authenticated=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "move_library_node_in_library(uuid,uuid,uuid)",
+      "beforeMd5": "7a060ccb66de2bbd2b0a5a303a6f1df8",
+      "afterMd5": "aed0d8baa1c691503236781386e346d0",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres",
+        "authenticated=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "move_library_to_group(uuid,uuid)",
+      "beforeMd5": "28a4f91fc0a21587ba285a6a54abff7e",
+      "afterMd5": "be2b58db39aa67eb166b0fb318827e90",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres",
+        "authenticated=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "position_library_node_in_library(uuid,uuid,uuid,uuid,uuid,uuid[],uuid[])",
+      "beforeMd5": "309a4b4c23c66fba4e9ced0493d9535b",
+      "afterMd5": "15037308dbc48d7c23331e45fcac874b",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "authenticated=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "prevent_article_version_mutation()",
+      "beforeMd5": "beb05d033cae56858a16b28a1bf6c63b",
+      "afterMd5": "485a95a32043f3a0d7c5dc24bf5baa8b",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "prevent_content_version_mutation()",
+      "beforeMd5": "7a46f119d6228fdae13b536a27293214",
+      "afterMd5": "0ebdad509bbb7bc97c3e30a418a782b3",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "protect_library_root_node()",
+      "beforeMd5": "7a280a4c70afcd65ecc0484229749f50",
+      "afterMd5": "f72776b67cfbae7d76083062a2caa45f",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "config": [
+        "search_path=public, pg_temp"
+      ]
+    },
+    {
+      "signature": "question_media_hint(questions)",
+      "beforeMd5": "1bd6074b75fe0267ce6574cb9ac9fa5e",
+      "afterMd5": "7593d8057603fd8e00651c583c875c42",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "authenticated=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "reactivate_catalog_tag(uuid)",
+      "beforeMd5": "d1974481d92de85ef4734f380d18bc5a",
+      "afterMd5": "19f0458a7b01a709eca2f42fd74f6a14",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres",
+        "authenticated=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "rename_catalog_tag(uuid,text)",
+      "beforeMd5": "1d24785b831cda8c2f1950eee89ba6ef",
+      "afterMd5": "4528319af7383f5bef435155d288ddc5",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres",
+        "authenticated=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "rename_library_group(uuid,text)",
+      "beforeMd5": "7afc636b6c49a91a54b6148f69467a5f",
+      "afterMd5": "ce84da37bb0dec96b782ad34ba84b525",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres",
+        "authenticated=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "rename_library_node_in_library(uuid,uuid,text)",
+      "beforeMd5": "dc824f76ddd893020bdf188afebb049d",
+      "afterMd5": "67fc108c753f5ff6bb92987794c0efc5",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres",
+        "authenticated=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "rename_library_with_root(uuid,text)",
+      "beforeMd5": "084c3cd45baa5a0625559e9277cdf1cf",
+      "afterMd5": "dd62dae1408d4c514c0fca33c160e662",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres",
+        "authenticated=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "reorder_library_group(uuid,text)",
+      "beforeMd5": "a7a7241359072b955275cec3b6acdde0",
+      "afterMd5": "49779d6aa2e5b929356817fffb0cd6b1",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres",
+        "authenticated=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "replace_question_accepted_answers(uuid,jsonb)",
+      "beforeMd5": "e5ebda7b7a1e19fac838a21662103adc",
+      "afterMd5": "23032d2ca47753d30bea7a967ede42a8",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "replace_question_options(uuid,jsonb)",
+      "beforeMd5": "0306736a96277e460952b66dbe2b2b12",
+      "afterMd5": "e6259c1efd5e1ee5792a26fc8aa1fa49",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "reserve_media_upload(uuid,text,uuid)",
+      "beforeMd5": "3cc7ec049aeff0b3fe54bd00ec2ddaf9",
+      "afterMd5": "e3ab54293df761d209dcf44d4ae59e4d",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ],
+        [
+          "p_key is null or (p_scope='official'",
+          "p_key is null or exists(select 1 from public.user_roles where user_id=auth.uid() and role='editor') or (p_scope='official'"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "authenticated=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "save_article_draft(uuid,text,text,text,uuid,uuid[],uuid,text[],boolean)",
+      "beforeMd5": "fbfc45ecf08d1b7382101d53e596b0fd",
+      "afterMd5": "020b1dae9ae6ef876812a041593fe0a2",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "save_article_draft(uuid,text,text,text,uuid,uuid[],uuid,uuid[],boolean)",
+      "beforeMd5": "eb70b05f18041ff1b75e7c5a8e610c6e",
+      "afterMd5": "9a146a7702aa65706af64d4d3985517e",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres",
+        "authenticated=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "save_concept_draft(uuid,text,text,uuid,uuid[],text[])",
+      "beforeMd5": "a65066ffd56b4fe6237e9ba0f9c6ff36",
+      "afterMd5": "d337ce95dec089eba71321f56e9eb0a1",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "save_concept_with_version(uuid,text,text,uuid,uuid[],text[],text,jsonb)",
+      "beforeMd5": "f658ac781503bd115bbfa186cb5febb4",
+      "afterMd5": "7d41b40a308dacd02d5f2be09998d812",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "save_concept_with_version(uuid,text,text,uuid,uuid[],uuid[],text,jsonb)",
+      "beforeMd5": "0ac4dfcfced6062c78a6b3036f34a67a",
+      "afterMd5": "7b12f19e0a39b8ca84f8c7ee9cfa14fc",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "save_question_with_relationships_v2(uuid,uuid,text,text,text,text,uuid,integer,text,text,jsonb,jsonb,uuid[],uuid[],uuid,uuid[],text[])",
+      "beforeMd5": "7590d9badb54f8424094c347b444c172",
+      "afterMd5": "84b7438ce86bc63f4481e2d6ef5f598a",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres",
+        "authenticated=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "save_question_with_version(uuid,uuid,text,text,text,text,uuid,integer,text,text,jsonb,jsonb,uuid[])",
+      "beforeMd5": "db1df03c773396176ee0ce81b83a92db",
+      "afterMd5": "14e8c3671b2ad2838be1cee0232eb478",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "search_creator_questions(uuid,text,text,text,text,uuid,uuid,text,uuid,integer,timestamp with time zone,uuid)",
+      "beforeMd5": "da3facc70b3748dc8c6482790bf5afa4",
+      "afterMd5": "ac629a56eae141f0b936b1bce9d2d10e",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres",
+        "authenticated=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "set_library_organizer_status(uuid,text)",
+      "beforeMd5": "55cf90034a7766c1db2c8bad4bfff7e8",
+      "afterMd5": "87abce6d9e4462cee366b1c45a0c9683",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres",
+        "authenticated=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "sync_concept_prerequisites(uuid,uuid,jsonb)",
+      "beforeMd5": "e296daa3851ffc6ca73387f740024dbf",
+      "afterMd5": "73590717b60087b523280d0f856e8d0c",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "sync_concept_references(uuid,jsonb)",
+      "beforeMd5": "39e3aea5f43655bb7369b7a43f1a88ee",
+      "afterMd5": "402b4d6801211ac86ab5654599afd4fa",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "unlink_article_core_concept(uuid)",
+      "beforeMd5": "55689fababa150e9dd912fb5d7bc1c13",
+      "afterMd5": "bc7e59044d2506b86318ac021ae2e9b3",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres",
+        "authenticated=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "update_question(uuid,text,text,text,text,uuid,integer,text,text)",
+      "beforeMd5": "326e8b52e2233aef4f6446393e919c36",
+      "afterMd5": "38d5772102a1d81cf132a239e173f91f",
+      "replacements": [
+        [
+          "public.is_editor_or_admin()",
+          "public.is_admin()"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "create_personal_topic(text,uuid,uuid,integer)",
+      "beforeMd5": "bf057617b3b828d536db526a12c11877",
+      "afterMd5": "7c50d52c52f500aef6fb4540a7e13647",
+      "replacements": [
+        [
+          "  if normalized_name is null or normalized_name = '' then",
+          "  if exists(select 1 from public.user_roles where user_id=caller_id and role='editor') then\n    raise exception 'Legacy Editor accounts cannot create new personal Topics' using errcode='42501';\n  end if;\n\n  if normalized_name is null or normalized_name = '' then"
+        ]
+      ],
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres",
+        "authenticated=X/postgres"
+      ],
+      "config": [
+        "search_path=\"\""
+      ]
+    }
+  ],
+  "policies": [
+    {
+      "before": {
+        "cmd": "SELECT",
+        "qual": "is_editor_or_admin()",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "article_category_placements",
+        "permissive": "PERMISSIVE",
+        "policyname": "Editors and admins read all article placements",
+        "schemaname": "public",
+        "with_check": null
+      },
+      "after": {
+        "cmd": "SELECT",
+        "qual": "is_admin()",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "article_category_placements",
+        "permissive": "PERMISSIVE",
+        "policyname": "Editors and admins read all article placements",
+        "schemaname": "public",
+        "with_check": null
+      }
+    },
+    {
+      "before": {
+        "cmd": "SELECT",
+        "qual": "is_editor_or_admin()",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "article_concepts",
+        "permissive": "PERMISSIVE",
+        "policyname": "Editors and admins read all article concepts",
+        "schemaname": "public",
+        "with_check": null
+      },
+      "after": {
+        "cmd": "SELECT",
+        "qual": "is_admin()",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "article_concepts",
+        "permissive": "PERMISSIVE",
+        "policyname": "Editors and admins read all article concepts",
+        "schemaname": "public",
+        "with_check": null
+      }
+    },
+    {
+      "before": {
+        "cmd": "SELECT",
+        "qual": "is_editor_or_admin()",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "article_sources",
+        "permissive": "PERMISSIVE",
+        "policyname": "Editors and admins read all article sources",
+        "schemaname": "public",
+        "with_check": null
+      },
+      "after": {
+        "cmd": "SELECT",
+        "qual": "is_admin()",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "article_sources",
+        "permissive": "PERMISSIVE",
+        "policyname": "Editors and admins read all article sources",
+        "schemaname": "public",
+        "with_check": null
+      }
+    },
+    {
+      "before": {
+        "cmd": "SELECT",
+        "qual": "is_editor_or_admin()",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "article_tags",
+        "permissive": "PERMISSIVE",
+        "policyname": "Editors and admins read all article tags",
+        "schemaname": "public",
+        "with_check": null
+      },
+      "after": {
+        "cmd": "SELECT",
+        "qual": "is_admin()",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "article_tags",
+        "permissive": "PERMISSIVE",
+        "policyname": "Editors and admins read all article tags",
+        "schemaname": "public",
+        "with_check": null
+      }
+    },
+    {
+      "before": {
+        "cmd": "SELECT",
+        "qual": "is_editor_or_admin()",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "article_versions",
+        "permissive": "PERMISSIVE",
+        "policyname": "Editors and admins read all article versions",
+        "schemaname": "public",
+        "with_check": null
+      },
+      "after": {
+        "cmd": "SELECT",
+        "qual": "is_admin()",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "article_versions",
+        "permissive": "PERMISSIVE",
+        "policyname": "Editors and admins read all article versions",
+        "schemaname": "public",
+        "with_check": null
+      }
+    },
+    {
+      "before": {
+        "cmd": "SELECT",
+        "qual": "is_editor_or_admin()",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "articles",
+        "permissive": "PERMISSIVE",
+        "policyname": "Editors and admins read all articles",
+        "schemaname": "public",
+        "with_check": null
+      },
+      "after": {
+        "cmd": "SELECT",
+        "qual": "is_admin()",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "articles",
+        "permissive": "PERMISSIVE",
+        "policyname": "Editors and admins read all articles",
+        "schemaname": "public",
+        "with_check": null
+      }
+    },
+    {
+      "before": {
+        "cmd": "ALL",
+        "qual": "(EXISTS ( SELECT 1\n   FROM user_roles ur\n  WHERE ((ur.user_id = auth.uid()) AND (ur.role = ANY (ARRAY['editor'::text, 'admin'::text])))))",
+        "roles": [
+          "public"
+        ],
+        "tablename": "concept_distinctions",
+        "permissive": "PERMISSIVE",
+        "policyname": "Editors manage concept distinctions",
+        "schemaname": "public",
+        "with_check": "((auth.uid() = created_by) AND (EXISTS ( SELECT 1\n   FROM user_roles ur\n  WHERE ((ur.user_id = auth.uid()) AND (ur.role = ANY (ARRAY['editor'::text, 'admin'::text]))))))"
+      },
+      "after": {
+        "cmd": "ALL",
+        "qual": "((EXISTS ( SELECT 1\n   FROM user_roles ur\n  WHERE ((ur.user_id = auth.uid()) AND (ur.role = ANY (ARRAY['editor'::text, 'admin'::text]))))) AND is_admin())",
+        "roles": [
+          "public"
+        ],
+        "tablename": "concept_distinctions",
+        "permissive": "PERMISSIVE",
+        "policyname": "Editors manage concept distinctions",
+        "schemaname": "public",
+        "with_check": "((auth.uid() = created_by) AND (EXISTS ( SELECT 1\n   FROM user_roles ur\n  WHERE ((ur.user_id = auth.uid()) AND (ur.role = ANY (ARRAY['editor'::text, 'admin'::text]))))) AND is_admin())"
+      }
+    },
+    {
+      "before": {
+        "cmd": "SELECT",
+        "qual": "(is_editor_or_admin() OR (has_socrates_role() AND (EXISTS ( SELECT 1\n   FROM concepts c\n  WHERE ((c.id = concept_distinctions.concept_id) AND (c.status = 'published'::text))))))",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "concept_distinctions",
+        "permissive": "PERMISSIVE",
+        "policyname": "Readable concept distinctions",
+        "schemaname": "public",
+        "with_check": null
+      },
+      "after": {
+        "cmd": "SELECT",
+        "qual": "(is_admin() OR (has_socrates_role() AND (EXISTS ( SELECT 1\n   FROM concepts c\n  WHERE ((c.id = concept_distinctions.concept_id) AND (c.status = 'published'::text))))))",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "concept_distinctions",
+        "permissive": "PERMISSIVE",
+        "policyname": "Readable concept distinctions",
+        "schemaname": "public",
+        "with_check": null
+      }
+    },
+    {
+      "before": {
+        "cmd": "SELECT",
+        "qual": "(is_editor_or_admin() OR (has_socrates_role() AND (EXISTS ( SELECT 1\n   FROM concepts c\n  WHERE ((c.id = concept_placements.concept_id) AND (c.status = 'published'::text))))))",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "concept_placements",
+        "permissive": "PERMISSIVE",
+        "policyname": "Readable concept placements",
+        "schemaname": "public",
+        "with_check": null
+      },
+      "after": {
+        "cmd": "SELECT",
+        "qual": "(is_admin() OR (has_socrates_role() AND (EXISTS ( SELECT 1\n   FROM concepts c\n  WHERE ((c.id = concept_placements.concept_id) AND (c.status = 'published'::text))))))",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "concept_placements",
+        "permissive": "PERMISSIVE",
+        "policyname": "Readable concept placements",
+        "schemaname": "public",
+        "with_check": null
+      }
+    },
+    {
+      "before": {
+        "cmd": "SELECT",
+        "qual": "is_editor_or_admin()",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "concept_prerequisites",
+        "permissive": "PERMISSIVE",
+        "policyname": "Editors read concept prerequisites",
+        "schemaname": "public",
+        "with_check": null
+      },
+      "after": {
+        "cmd": "SELECT",
+        "qual": "is_admin()",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "concept_prerequisites",
+        "permissive": "PERMISSIVE",
+        "policyname": "Editors read concept prerequisites",
+        "schemaname": "public",
+        "with_check": null
+      }
+    },
+    {
+      "before": {
+        "cmd": "DELETE",
+        "qual": "((created_by = auth.uid()) AND (EXISTS ( SELECT 1\n   FROM user_roles ur\n  WHERE ((ur.user_id = auth.uid()) AND (ur.role = ANY (ARRAY['editor'::text, 'admin'::text]))))))",
+        "roles": [
+          "public"
+        ],
+        "tablename": "concept_relationships",
+        "permissive": "PERMISSIVE",
+        "policyname": "Editors delete own concept relationships",
+        "schemaname": "public",
+        "with_check": null
+      },
+      "after": {
+        "cmd": "DELETE",
+        "qual": "((created_by = auth.uid()) AND (EXISTS ( SELECT 1\n   FROM user_roles ur\n  WHERE ((ur.user_id = auth.uid()) AND (ur.role = ANY (ARRAY['editor'::text, 'admin'::text]))))) AND is_admin())",
+        "roles": [
+          "public"
+        ],
+        "tablename": "concept_relationships",
+        "permissive": "PERMISSIVE",
+        "policyname": "Editors delete own concept relationships",
+        "schemaname": "public",
+        "with_check": null
+      }
+    },
+    {
+      "before": {
+        "cmd": "INSERT",
+        "qual": null,
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "concept_relationships",
+        "permissive": "PERMISSIVE",
+        "policyname": "Editors insert concept relationships",
+        "schemaname": "public",
+        "with_check": "(is_editor_or_admin() AND (created_by = ( SELECT auth.uid() AS uid)) AND (EXISTS ( SELECT 1\n   FROM concepts source_concept\n  WHERE (source_concept.id = concept_relationships.source_concept_id))) AND (EXISTS ( SELECT 1\n   FROM concepts target_concept\n  WHERE (target_concept.id = concept_relationships.target_concept_id))))"
+      },
+      "after": {
+        "cmd": "INSERT",
+        "qual": null,
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "concept_relationships",
+        "permissive": "PERMISSIVE",
+        "policyname": "Editors insert concept relationships",
+        "schemaname": "public",
+        "with_check": "(is_admin() AND (created_by = ( SELECT auth.uid() AS uid)) AND (EXISTS ( SELECT 1\n   FROM concepts source_concept\n  WHERE (source_concept.id = concept_relationships.source_concept_id))) AND (EXISTS ( SELECT 1\n   FROM concepts target_concept\n  WHERE (target_concept.id = concept_relationships.target_concept_id))))"
+      }
+    },
+    {
+      "before": {
+        "cmd": "SELECT",
+        "qual": "(is_editor_or_admin() OR (has_socrates_role() AND (EXISTS ( SELECT 1\n   FROM concepts source_concept\n  WHERE ((source_concept.id = concept_relationships.source_concept_id) AND (source_concept.status = 'published'::text)))) AND (EXISTS ( SELECT 1\n   FROM concepts target_concept\n  WHERE ((target_concept.id = concept_relationships.target_concept_id) AND (target_concept.status = 'published'::text))))))",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "concept_relationships",
+        "permissive": "PERMISSIVE",
+        "policyname": "Readable concept relationships",
+        "schemaname": "public",
+        "with_check": null
+      },
+      "after": {
+        "cmd": "SELECT",
+        "qual": "(is_admin() OR (has_socrates_role() AND (EXISTS ( SELECT 1\n   FROM concepts source_concept\n  WHERE ((source_concept.id = concept_relationships.source_concept_id) AND (source_concept.status = 'published'::text)))) AND (EXISTS ( SELECT 1\n   FROM concepts target_concept\n  WHERE ((target_concept.id = concept_relationships.target_concept_id) AND (target_concept.status = 'published'::text))))))",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "concept_relationships",
+        "permissive": "PERMISSIVE",
+        "policyname": "Readable concept relationships",
+        "schemaname": "public",
+        "with_check": null
+      }
+    },
+    {
+      "before": {
+        "cmd": "SELECT",
+        "qual": "(has_socrates_role() AND (is_editor_or_admin() OR (EXISTS ( SELECT 1\n   FROM concepts c\n  WHERE ((c.id = concept_tags.concept_id) AND (c.status = 'published'::text))))))",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "concept_tags",
+        "permissive": "PERMISSIVE",
+        "policyname": "Readable concept tags",
+        "schemaname": "public",
+        "with_check": null
+      },
+      "after": {
+        "cmd": "SELECT",
+        "qual": "(has_socrates_role() AND (is_admin() OR (EXISTS ( SELECT 1\n   FROM concepts c\n  WHERE ((c.id = concept_tags.concept_id) AND (c.status = 'published'::text))))))",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "concept_tags",
+        "permissive": "PERMISSIVE",
+        "policyname": "Readable concept tags",
+        "schemaname": "public",
+        "with_check": null
+      }
+    },
+    {
+      "before": {
+        "cmd": "SELECT",
+        "qual": "is_editor_or_admin()",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "concepts",
+        "permissive": "PERMISSIVE",
+        "policyname": "Editors read all concepts",
+        "schemaname": "public",
+        "with_check": null
+      },
+      "after": {
+        "cmd": "SELECT",
+        "qual": "is_admin()",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "concepts",
+        "permissive": "PERMISSIVE",
+        "policyname": "Editors read all concepts",
+        "schemaname": "public",
+        "with_check": null
+      }
+    },
+    {
+      "before": {
+        "cmd": "INSERT",
+        "qual": null,
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "content_source_notes",
+        "permissive": "PERMISSIVE",
+        "policyname": "Editors attach own sources to learn sections",
+        "schemaname": "public",
+        "with_check": "(is_editor_or_admin() AND (created_by = ( SELECT auth.uid() AS uid)) AND (concept_id IS NULL) AND (learn_section_id IS NOT NULL) AND (EXISTS ( SELECT 1\n   FROM sources s\n  WHERE ((s.id = content_source_notes.source_id) AND (s.created_by = ( SELECT auth.uid() AS uid))))) AND (EXISTS ( SELECT 1\n   FROM learn_sections ls\n  WHERE (ls.id = content_source_notes.learn_section_id))))"
+      },
+      "after": {
+        "cmd": "INSERT",
+        "qual": null,
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "content_source_notes",
+        "permissive": "PERMISSIVE",
+        "policyname": "Editors attach own sources to learn sections",
+        "schemaname": "public",
+        "with_check": "(is_admin() AND (created_by = ( SELECT auth.uid() AS uid)) AND (concept_id IS NULL) AND (learn_section_id IS NOT NULL) AND (EXISTS ( SELECT 1\n   FROM sources s\n  WHERE ((s.id = content_source_notes.source_id) AND (s.created_by = ( SELECT auth.uid() AS uid))))) AND (EXISTS ( SELECT 1\n   FROM learn_sections ls\n  WHERE (ls.id = content_source_notes.learn_section_id))))"
+      }
+    },
+    {
+      "before": {
+        "cmd": "SELECT",
+        "qual": "(is_editor_or_admin() OR (has_socrates_role() AND (((concept_id IS NOT NULL) AND (EXISTS ( SELECT 1\n   FROM concepts c\n  WHERE ((c.id = content_source_notes.concept_id) AND (c.status = 'published'::text))))) OR ((learn_section_id IS NOT NULL) AND (EXISTS ( SELECT 1\n   FROM (learn_sections ls\n     JOIN concepts c ON ((c.id = ls.concept_id)))\n  WHERE ((ls.id = content_source_notes.learn_section_id) AND (c.status = 'published'::text))))))))",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "content_source_notes",
+        "permissive": "PERMISSIVE",
+        "policyname": "Readable concept attribution",
+        "schemaname": "public",
+        "with_check": null
+      },
+      "after": {
+        "cmd": "SELECT",
+        "qual": "(is_admin() OR (has_socrates_role() AND (((concept_id IS NOT NULL) AND (EXISTS ( SELECT 1\n   FROM concepts c\n  WHERE ((c.id = content_source_notes.concept_id) AND (c.status = 'published'::text))))) OR ((learn_section_id IS NOT NULL) AND (EXISTS ( SELECT 1\n   FROM (learn_sections ls\n     JOIN concepts c ON ((c.id = ls.concept_id)))\n  WHERE ((ls.id = content_source_notes.learn_section_id) AND (c.status = 'published'::text))))))))",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "content_source_notes",
+        "permissive": "PERMISSIVE",
+        "policyname": "Readable concept attribution",
+        "schemaname": "public",
+        "with_check": null
+      }
+    },
+    {
+      "before": {
+        "cmd": "INSERT",
+        "qual": null,
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "learn_sections",
+        "permissive": "PERMISSIVE",
+        "policyname": "Editors insert learn sections",
+        "schemaname": "public",
+        "with_check": "(is_editor_or_admin() AND (created_by = ( SELECT auth.uid() AS uid)) AND (EXISTS ( SELECT 1\n   FROM concepts c\n  WHERE (c.id = learn_sections.concept_id))))"
+      },
+      "after": {
+        "cmd": "INSERT",
+        "qual": null,
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "learn_sections",
+        "permissive": "PERMISSIVE",
+        "policyname": "Editors insert learn sections",
+        "schemaname": "public",
+        "with_check": "(is_admin() AND (created_by = ( SELECT auth.uid() AS uid)) AND (EXISTS ( SELECT 1\n   FROM concepts c\n  WHERE (c.id = learn_sections.concept_id))))"
+      }
+    },
+    {
+      "before": {
+        "cmd": "UPDATE",
+        "qual": "is_editor_or_admin()",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "learn_sections",
+        "permissive": "PERMISSIVE",
+        "policyname": "Editors update learn sections",
+        "schemaname": "public",
+        "with_check": "is_editor_or_admin()"
+      },
+      "after": {
+        "cmd": "UPDATE",
+        "qual": "is_admin()",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "learn_sections",
+        "permissive": "PERMISSIVE",
+        "policyname": "Editors update learn sections",
+        "schemaname": "public",
+        "with_check": "is_admin()"
+      }
+    },
+    {
+      "before": {
+        "cmd": "SELECT",
+        "qual": "(is_editor_or_admin() OR (has_socrates_role() AND (EXISTS ( SELECT 1\n   FROM concepts c\n  WHERE ((c.id = learn_sections.concept_id) AND (c.status = 'published'::text))))))",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "learn_sections",
+        "permissive": "PERMISSIVE",
+        "policyname": "Readable learn sections",
+        "schemaname": "public",
+        "with_check": null
+      },
+      "after": {
+        "cmd": "SELECT",
+        "qual": "(is_admin() OR (has_socrates_role() AND (EXISTS ( SELECT 1\n   FROM concepts c\n  WHERE ((c.id = learn_sections.concept_id) AND (c.status = 'published'::text))))))",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "learn_sections",
+        "permissive": "PERMISSIVE",
+        "policyname": "Readable learn sections",
+        "schemaname": "public",
+        "with_check": null
+      }
+    },
+    {
+      "before": {
+        "cmd": "SELECT",
+        "qual": "(is_editor_or_admin() OR (has_socrates_role() AND (EXISTS ( SELECT 1\n   FROM library_groups group_record\n  WHERE ((group_record.id = library_group_libraries.group_id) AND (group_record.status = 'active'::text)))) AND (EXISTS ( SELECT 1\n   FROM libraries library_record\n  WHERE ((library_record.id = library_group_libraries.library_id) AND (library_record.status = 'active'::text))))))",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "library_group_libraries",
+        "permissive": "PERMISSIVE",
+        "policyname": "Authorized users read visible Library group placements",
+        "schemaname": "public",
+        "with_check": null
+      },
+      "after": {
+        "cmd": "SELECT",
+        "qual": "(is_admin() OR (has_socrates_role() AND (EXISTS ( SELECT 1\n   FROM library_groups group_record\n  WHERE ((group_record.id = library_group_libraries.group_id) AND (group_record.status = 'active'::text)))) AND (EXISTS ( SELECT 1\n   FROM libraries library_record\n  WHERE ((library_record.id = library_group_libraries.library_id) AND (library_record.status = 'active'::text))))))",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "library_group_libraries",
+        "permissive": "PERMISSIVE",
+        "policyname": "Authorized users read visible Library group placements",
+        "schemaname": "public",
+        "with_check": null
+      }
+    },
+    {
+      "before": {
+        "cmd": "SELECT",
+        "qual": "(is_editor_or_admin() OR (has_socrates_role() AND (status = 'active'::text)))",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "library_groups",
+        "permissive": "PERMISSIVE",
+        "policyname": "Authorized users read visible Library groups",
+        "schemaname": "public",
+        "with_check": null
+      },
+      "after": {
+        "cmd": "SELECT",
+        "qual": "(is_admin() OR (has_socrates_role() AND (status = 'active'::text)))",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "library_groups",
+        "permissive": "PERMISSIVE",
+        "policyname": "Authorized users read visible Library groups",
+        "schemaname": "public",
+        "with_check": null
+      }
+    },
+    {
+      "before": {
+        "cmd": "ALL",
+        "qual": "is_editor()",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "library_nodes",
+        "permissive": "PERMISSIVE",
+        "policyname": "Editors can manage library nodes",
+        "schemaname": "public",
+        "with_check": "is_editor()"
+      },
+      "after": {
+        "cmd": "ALL",
+        "qual": "is_admin()",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "library_nodes",
+        "permissive": "PERMISSIVE",
+        "policyname": "Editors can manage library nodes",
+        "schemaname": "public",
+        "with_check": "is_admin()"
+      }
+    },
+    {
+      "before": {
+        "cmd": "INSERT",
+        "qual": null,
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "library_nodes",
+        "permissive": "PERMISSIVE",
+        "policyname": "Editors insert library nodes",
+        "schemaname": "public",
+        "with_check": "(EXISTS ( SELECT 1\n   FROM user_roles ur\n  WHERE ((ur.user_id = ( SELECT auth.uid() AS uid)) AND (ur.role = ANY (ARRAY['editor'::text, 'admin'::text])))))"
+      },
+      "after": {
+        "cmd": "INSERT",
+        "qual": null,
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "library_nodes",
+        "permissive": "PERMISSIVE",
+        "policyname": "Editors insert library nodes",
+        "schemaname": "public",
+        "with_check": "((EXISTS ( SELECT 1\n   FROM user_roles ur\n  WHERE ((ur.user_id = ( SELECT auth.uid() AS uid)) AND (ur.role = ANY (ARRAY['editor'::text, 'admin'::text]))))) AND is_admin())"
+      }
+    },
+    {
+      "before": {
+        "cmd": "UPDATE",
+        "qual": "(EXISTS ( SELECT 1\n   FROM user_roles ur\n  WHERE ((ur.user_id = ( SELECT auth.uid() AS uid)) AND (ur.role = ANY (ARRAY['editor'::text, 'admin'::text])))))",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "library_nodes",
+        "permissive": "PERMISSIVE",
+        "policyname": "Editors update library nodes",
+        "schemaname": "public",
+        "with_check": "(EXISTS ( SELECT 1\n   FROM user_roles ur\n  WHERE ((ur.user_id = ( SELECT auth.uid() AS uid)) AND (ur.role = ANY (ARRAY['editor'::text, 'admin'::text])))))"
+      },
+      "after": {
+        "cmd": "UPDATE",
+        "qual": "((EXISTS ( SELECT 1\n   FROM user_roles ur\n  WHERE ((ur.user_id = ( SELECT auth.uid() AS uid)) AND (ur.role = ANY (ARRAY['editor'::text, 'admin'::text]))))) AND is_admin())",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "library_nodes",
+        "permissive": "PERMISSIVE",
+        "policyname": "Editors update library nodes",
+        "schemaname": "public",
+        "with_check": "((EXISTS ( SELECT 1\n   FROM user_roles ur\n  WHERE ((ur.user_id = ( SELECT auth.uid() AS uid)) AND (ur.role = ANY (ARRAY['editor'::text, 'admin'::text]))))) AND is_admin())"
+      }
+    },
+    {
+      "before": {
+        "cmd": "INSERT",
+        "qual": null,
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "personal_cards",
+        "permissive": "RESTRICTIVE",
+        "policyname": "personal_cards_legacy_insert_restriction",
+        "schemaname": "public",
+        "with_check": "((concept_id IS NULL) OR ( SELECT (is_editor_or_admin() AND (NOT is_admin()))))"
+      },
+      "after": {
+        "cmd": "INSERT",
+        "qual": null,
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "personal_cards",
+        "permissive": "RESTRICTIVE",
+        "policyname": "personal_cards_legacy_insert_restriction",
+        "schemaname": "public",
+        "with_check": "((concept_id IS NULL) AND (EXISTS ( SELECT 1\n   FROM user_roles r\n  WHERE ((r.user_id = auth.uid()) AND (r.role = 'learner'::text)))))"
+      }
+    },
+    {
+      "before": {
+        "cmd": "INSERT",
+        "qual": null,
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "personal_collections",
+        "permissive": "RESTRICTIVE",
+        "policyname": "personal_collections_legacy_insert_restriction",
+        "schemaname": "public",
+        "with_check": "( SELECT (is_editor_or_admin() AND (NOT is_admin())))"
+      },
+      "after": {
+        "cmd": "INSERT",
+        "qual": null,
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "personal_collections",
+        "permissive": "RESTRICTIVE",
+        "policyname": "personal_collections_legacy_insert_restriction",
+        "schemaname": "public",
+        "with_check": "false"
+      }
+    },
+    {
+      "before": {
+        "cmd": "INSERT",
+        "qual": null,
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "personal_concepts",
+        "permissive": "RESTRICTIVE",
+        "policyname": "personal_concepts_legacy_insert_restriction",
+        "schemaname": "public",
+        "with_check": "( SELECT (is_editor_or_admin() AND (NOT is_admin())))"
+      },
+      "after": {
+        "cmd": "INSERT",
+        "qual": null,
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "personal_concepts",
+        "permissive": "RESTRICTIVE",
+        "policyname": "personal_concepts_legacy_insert_restriction",
+        "schemaname": "public",
+        "with_check": "false"
+      }
+    },
+    {
+      "before": {
+        "cmd": "SELECT",
+        "qual": "is_editor_or_admin()",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "question_accepted_answers",
+        "permissive": "PERMISSIVE",
+        "policyname": "Editors read short-answer keys",
+        "schemaname": "public",
+        "with_check": null
+      },
+      "after": {
+        "cmd": "SELECT",
+        "qual": "is_admin()",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "question_accepted_answers",
+        "permissive": "PERMISSIVE",
+        "policyname": "Editors read short-answer keys",
+        "schemaname": "public",
+        "with_check": null
+      }
+    },
+    {
+      "before": {
+        "cmd": "SELECT",
+        "qual": "is_editor_or_admin()",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "question_additional_testing_angles",
+        "permissive": "PERMISSIVE",
+        "policyname": "question_additional_testing_angles_editor_read",
+        "schemaname": "public",
+        "with_check": null
+      },
+      "after": {
+        "cmd": "SELECT",
+        "qual": "is_admin()",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "question_additional_testing_angles",
+        "permissive": "PERMISSIVE",
+        "policyname": "question_additional_testing_angles_editor_read",
+        "schemaname": "public",
+        "with_check": null
+      }
+    },
+    {
+      "before": {
+        "cmd": "SELECT",
+        "qual": "is_editor_or_admin()",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "question_options",
+        "permissive": "PERMISSIVE",
+        "policyname": "Editors read all question options",
+        "schemaname": "public",
+        "with_check": null
+      },
+      "after": {
+        "cmd": "SELECT",
+        "qual": "is_admin()",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "question_options",
+        "permissive": "PERMISSIVE",
+        "policyname": "Editors read all question options",
+        "schemaname": "public",
+        "with_check": null
+      }
+    },
+    {
+      "before": {
+        "cmd": "SELECT",
+        "qual": "is_editor_or_admin()",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "question_related_concepts",
+        "permissive": "PERMISSIVE",
+        "policyname": "question_related_concepts_editor_read",
+        "schemaname": "public",
+        "with_check": null
+      },
+      "after": {
+        "cmd": "SELECT",
+        "qual": "is_admin()",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "question_related_concepts",
+        "permissive": "PERMISSIVE",
+        "policyname": "question_related_concepts_editor_read",
+        "schemaname": "public",
+        "with_check": null
+      }
+    },
+    {
+      "before": {
+        "cmd": "SELECT",
+        "qual": "is_editor_or_admin()",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "question_sources",
+        "permissive": "PERMISSIVE",
+        "policyname": "Editors read all question sources",
+        "schemaname": "public",
+        "with_check": null
+      },
+      "after": {
+        "cmd": "SELECT",
+        "qual": "is_admin()",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "question_sources",
+        "permissive": "PERMISSIVE",
+        "policyname": "Editors read all question sources",
+        "schemaname": "public",
+        "with_check": null
+      }
+    },
+    {
+      "before": {
+        "cmd": "SELECT",
+        "qual": "(has_socrates_role() AND (is_editor_or_admin() OR (EXISTS ( SELECT 1\n   FROM (questions q\n     JOIN concepts c ON ((c.id = q.concept_id)))\n  WHERE ((q.id = question_tags.question_id) AND (q.status = 'published'::text) AND (c.status = 'published'::text))))))",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "question_tags",
+        "permissive": "PERMISSIVE",
+        "policyname": "Readable question tags",
+        "schemaname": "public",
+        "with_check": null
+      },
+      "after": {
+        "cmd": "SELECT",
+        "qual": "(has_socrates_role() AND (is_admin() OR (EXISTS ( SELECT 1\n   FROM (questions q\n     JOIN concepts c ON ((c.id = q.concept_id)))\n  WHERE ((q.id = question_tags.question_id) AND (q.status = 'published'::text) AND (c.status = 'published'::text))))))",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "question_tags",
+        "permissive": "PERMISSIVE",
+        "policyname": "Readable question tags",
+        "schemaname": "public",
+        "with_check": null
+      }
+    },
+    {
+      "before": {
+        "cmd": "SELECT",
+        "qual": "is_editor_or_admin()",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "questions",
+        "permissive": "PERMISSIVE",
+        "policyname": "Editors read all questions",
+        "schemaname": "public",
+        "with_check": null
+      },
+      "after": {
+        "cmd": "SELECT",
+        "qual": "is_admin()",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "questions",
+        "permissive": "PERMISSIVE",
+        "policyname": "Editors read all questions",
+        "schemaname": "public",
+        "with_check": null
+      }
+    },
+    {
+      "before": {
+        "cmd": "DELETE",
+        "qual": "((created_by = ( SELECT auth.uid() AS uid)) AND (EXISTS ( SELECT 1\n   FROM user_roles ur\n  WHERE ((ur.user_id = ( SELECT auth.uid() AS uid)) AND (ur.role = ANY (ARRAY['editor'::text, 'admin'::text]))))))",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "sources",
+        "permissive": "PERMISSIVE",
+        "policyname": "Editors delete own sources",
+        "schemaname": "public",
+        "with_check": null
+      },
+      "after": {
+        "cmd": "DELETE",
+        "qual": "((created_by = ( SELECT auth.uid() AS uid)) AND (EXISTS ( SELECT 1\n   FROM user_roles ur\n  WHERE ((ur.user_id = ( SELECT auth.uid() AS uid)) AND (ur.role = ANY (ARRAY['editor'::text, 'admin'::text]))))) AND is_admin())",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "sources",
+        "permissive": "PERMISSIVE",
+        "policyname": "Editors delete own sources",
+        "schemaname": "public",
+        "with_check": null
+      }
+    },
+    {
+      "before": {
+        "cmd": "INSERT",
+        "qual": null,
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "sources",
+        "permissive": "PERMISSIVE",
+        "policyname": "Editors insert own sources",
+        "schemaname": "public",
+        "with_check": "((created_by = ( SELECT auth.uid() AS uid)) AND (EXISTS ( SELECT 1\n   FROM user_roles ur\n  WHERE ((ur.user_id = ( SELECT auth.uid() AS uid)) AND (ur.role = ANY (ARRAY['editor'::text, 'admin'::text]))))))"
+      },
+      "after": {
+        "cmd": "INSERT",
+        "qual": null,
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "sources",
+        "permissive": "PERMISSIVE",
+        "policyname": "Editors insert own sources",
+        "schemaname": "public",
+        "with_check": "((created_by = ( SELECT auth.uid() AS uid)) AND (EXISTS ( SELECT 1\n   FROM user_roles ur\n  WHERE ((ur.user_id = ( SELECT auth.uid() AS uid)) AND (ur.role = ANY (ARRAY['editor'::text, 'admin'::text]))))) AND is_admin())"
+      }
+    },
+    {
+      "before": {
+        "cmd": "SELECT",
+        "qual": "is_editor_or_admin()",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "sources",
+        "permissive": "PERMISSIVE",
+        "policyname": "Editors read all sources",
+        "schemaname": "public",
+        "with_check": null
+      },
+      "after": {
+        "cmd": "SELECT",
+        "qual": "is_admin()",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "sources",
+        "permissive": "PERMISSIVE",
+        "policyname": "Editors read all sources",
+        "schemaname": "public",
+        "with_check": null
+      }
+    },
+    {
+      "before": {
+        "cmd": "UPDATE",
+        "qual": "((created_by = ( SELECT auth.uid() AS uid)) AND (EXISTS ( SELECT 1\n   FROM user_roles ur\n  WHERE ((ur.user_id = ( SELECT auth.uid() AS uid)) AND (ur.role = ANY (ARRAY['editor'::text, 'admin'::text]))))))",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "sources",
+        "permissive": "PERMISSIVE",
+        "policyname": "Editors update own sources",
+        "schemaname": "public",
+        "with_check": "((created_by = ( SELECT auth.uid() AS uid)) AND (EXISTS ( SELECT 1\n   FROM user_roles ur\n  WHERE ((ur.user_id = ( SELECT auth.uid() AS uid)) AND (ur.role = ANY (ARRAY['editor'::text, 'admin'::text]))))))"
+      },
+      "after": {
+        "cmd": "UPDATE",
+        "qual": "((created_by = ( SELECT auth.uid() AS uid)) AND (EXISTS ( SELECT 1\n   FROM user_roles ur\n  WHERE ((ur.user_id = ( SELECT auth.uid() AS uid)) AND (ur.role = ANY (ARRAY['editor'::text, 'admin'::text]))))) AND is_admin())",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "sources",
+        "permissive": "PERMISSIVE",
+        "policyname": "Editors update own sources",
+        "schemaname": "public",
+        "with_check": "((created_by = ( SELECT auth.uid() AS uid)) AND (EXISTS ( SELECT 1\n   FROM user_roles ur\n  WHERE ((ur.user_id = ( SELECT auth.uid() AS uid)) AND (ur.role = ANY (ARRAY['editor'::text, 'admin'::text]))))) AND is_admin())"
+      }
+    },
+    {
+      "before": {
+        "cmd": "SELECT",
+        "qual": "is_editor_or_admin()",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "study_card_feedback",
+        "permissive": "PERMISSIVE",
+        "policyname": "Editors and admins read study card feedback",
+        "schemaname": "public",
+        "with_check": null
+      },
+      "after": {
+        "cmd": "SELECT",
+        "qual": "is_admin()",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "study_card_feedback",
+        "permissive": "PERMISSIVE",
+        "policyname": "Editors and admins read study card feedback",
+        "schemaname": "public",
+        "with_check": null
+      }
+    },
+    {
+      "before": {
+        "cmd": "SELECT",
+        "qual": "is_editor_or_admin()",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "user_libraries",
+        "permissive": "PERMISSIVE",
+        "policyname": "Editors read library memberships",
+        "schemaname": "public",
+        "with_check": null
+      },
+      "after": {
+        "cmd": "SELECT",
+        "qual": "is_admin()",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "user_libraries",
+        "permissive": "PERMISSIVE",
+        "policyname": "Editors read library memberships",
+        "schemaname": "public",
+        "with_check": null
+      }
+    }
+  ],
+  "preservedSharedDependencies": [
+    "get_existing_home_study_bootstrap(uuid)",
+    "get_home_study_bootstrap(uuid,uuid)",
+    "get_library_learner_progress(uuid)",
+    "get_library_official_availability_counts(uuid)",
+    "get_or_create_active_study_deck(uuid)",
+    "has_socrates_role()",
+    "is_editor_or_admin()",
+    "is_editor()",
+    "m109_effective_topics(uuid)",
+    "m111_validate_card_attachment()",
+    "m112_library_access(uuid)",
+    "m117_preference_state(uuid)",
+    "m123_require_library(uuid)",
+    "m125_require_question(uuid,uuid)",
+    "m136_card_allowed(uuid,uuid,boolean)",
+    "m138_reject_new_editor()",
+    "reset_study_progress(uuid,text,uuid,uuid)",
+    "resolve_effective_study_nodes(uuid)",
+    "resolve_study_candidates(uuid)",
+    "resolve_study_deck(uuid)",
+    "save_personal_concept_with_overlay(uuid,uuid,text,text,text,uuid,uuid)",
+    "set_personal_topic_official_placement(uuid,uuid)",
+    "set_study_deck_personal_collection_preference(uuid,uuid,integer)",
+    "set_study_deck_personal_collection_selection(uuid,uuid,boolean)",
+    "set_study_deck_personal_topic_preference(uuid,uuid,integer)",
+    "set_study_deck_personal_topic_selection(uuid,uuid,boolean)",
+    "set_study_deck_topic_subtree_preference(uuid,uuid,text,integer,text)",
+    "submit_study_suggestion_internal(uuid,uuid,uuid,uuid,text,text)",
+    "validate_personal_concept_official_placement()",
+    "validate_personal_topic_official_placement()",
+    "is_admin()",
+    "account_is_active()",
+    "m138_require_active_admin()"
+  ],
+  "preservedCompatibilityPolicies": [
+    [
+      "library_nodes",
+      "m117_nodes_read"
+    ],
+    [
+      "official_topic_locations",
+      "official_topic_locations_read"
+    ],
+    [
+      "official_topic_placements",
+      "m122_placement_read"
+    ],
+    [
+      "personal_concept_official_placements",
+      "Users create own personal Concept official placements"
+    ],
+    [
+      "personal_concept_official_placements",
+      "Users update own personal Concept official placements"
+    ],
+    [
+      "personal_topic_official_placements",
+      "Users create own personal Topic official placements"
+    ],
+    [
+      "personal_topic_official_placements",
+      "Users update own personal Topic official placements"
+    ],
+    [
+      "study_deck_location_selections",
+      "study_deck_location_selections_owner"
+    ],
+    [
+      "study_deck_node_preferences",
+      "m117_preference_write"
+    ],
+    [
+      "study_deck_personal_collection_preferences",
+      "m109_owned_settings"
+    ],
+    [
+      "study_deck_personal_topic_exclusions",
+      "m109_owned_settings"
+    ],
+    [
+      "study_deck_personal_topic_preferences",
+      "m109_owned_settings"
+    ],
+    [
+      "study_decks",
+      "Users create own study decks"
+    ],
+    [
+      "study_decks",
+      "Users update own study decks"
+    ],
+    [
+      "study_goals",
+      "study_goals_owner_read"
+    ]
+  ],
+  "addedPolicies": [
+    {
+      "cmd": "INSERT",
+      "qual": null,
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "personal_topics",
+      "permissive": "RESTRICTIVE",
+      "policyname": "personal_topics_retired_editor_insert_restriction",
+      "schemaname": "public",
+      "with_check": "(NOT (EXISTS ( SELECT 1\n   FROM user_roles r\n  WHERE ((r.user_id = auth.uid()) AND (r.role = 'editor'::text)))))"
+    }
+  ],
+  "preservedFunctionHashes": {
+    "get_existing_home_study_bootstrap(uuid)": "6a81b785faaf59526a7228342a38ff33",
+    "get_home_study_bootstrap(uuid,uuid)": "488b29c1a15d7fd568a4054a0a2f2494",
+    "get_library_learner_progress(uuid)": "7c8253097336b46952717933d8c76721",
+    "get_library_official_availability_counts(uuid)": "f631afc2c50cd906c5f65bdc08805949",
+    "get_or_create_active_study_deck(uuid)": "40e39c85b4f297220a1a3709c479c029",
+    "has_socrates_role()": "5accc889d68cf96200611b1ce0ec069e",
+    "is_editor_or_admin()": "9bd88fd353f5ea9bd2bd4fc1bc089721",
+    "is_editor()": "fd5b781ef591d7485008ac6c03d8e40c",
+    "m109_effective_topics(uuid)": "1835b57f892fe67dc377f5228cc9c437",
+    "m111_validate_card_attachment()": "8eb78e6b138f3864240f601f38283dd1",
+    "m112_library_access(uuid)": "0064ca9a7d6ac024b6b12d9e478c3fde",
+    "m117_preference_state(uuid)": "57c94d9bcc6b3ca6a1e5e6878add24ee",
+    "m123_require_library(uuid)": "dd239f9117caa4740424af932e3eccfd",
+    "m125_require_question(uuid,uuid)": "cb590d3b37a27d8a78239aacdd839cae",
+    "m136_card_allowed(uuid,uuid,boolean)": "d69e8c9eb7627d631a560e8ea0587ce8",
+    "m138_reject_new_editor()": "273e6e7ca4c754ed2e6bb89bf23b1810",
+    "reset_study_progress(uuid,text,uuid,uuid)": "ccbdc9e7959bfe2a354ef480764736ab",
+    "resolve_effective_study_nodes(uuid)": "cf470583dc0abaecfc2c0c03584fcedb",
+    "resolve_study_candidates(uuid)": "ba74359f5e0a6dd517d7abeff1d00cb0",
+    "resolve_study_deck(uuid)": "2783a085c65258095b09b9deee0f8cc0",
+    "save_personal_concept_with_overlay(uuid,uuid,text,text,text,uuid,uuid)": "f6655320672be29b96ee01046c8e3711",
+    "set_personal_topic_official_placement(uuid,uuid)": "78e63452fe615e36d8fff852d64407d4",
+    "set_study_deck_personal_collection_preference(uuid,uuid,integer)": "6b5e2fc3a43a4e6f8e921bb95321e3b2",
+    "set_study_deck_personal_collection_selection(uuid,uuid,boolean)": "5604b7adc752d752efb7fa97b4f73162",
+    "set_study_deck_personal_topic_preference(uuid,uuid,integer)": "fa0ceb17623f0c2a60eb97102eb59aea",
+    "set_study_deck_personal_topic_selection(uuid,uuid,boolean)": "3a74ac9c29206a20e559459cf4188b65",
+    "set_study_deck_topic_subtree_preference(uuid,uuid,text,integer,text)": "765bcef84c932090e59f64c700339605",
+    "submit_study_suggestion_internal(uuid,uuid,uuid,uuid,text,text)": "a17b05d46b259696ea2e9c5ad5e23d66",
+    "validate_personal_concept_official_placement()": "21fa7b9a1590e9d37f2d983c4058be11",
+    "validate_personal_topic_official_placement()": "ca1b708a255394e47f63777e658d9b5c",
+    "is_admin()": "2f7f89bd5f39eb8a6242577da290f5fb",
+    "account_is_active()": "9113b349cd943160670edc38831df9fd",
+    "m138_require_active_admin()": "bba974b166a34550bbc1703aabe3ba68"
+  }
+}

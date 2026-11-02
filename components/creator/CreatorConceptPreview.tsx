@@ -63,7 +63,7 @@ export async function loadConceptPreview(
   if (!libraryId || capabilities.library.activeLibraryId !== libraryId ||
     !capabilities.library.canAccessActiveLibrary || !capabilities.official.saveQuestion ||
     !capabilities.subject.userId ||
-    (capabilities.subject.role !== 'admin' && capabilities.subject.role !== 'editor')) {
+    capabilities.subject.role !== 'admin') {
     throw new Error('Concept preview unavailable.');
   }
 

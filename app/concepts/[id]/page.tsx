@@ -419,7 +419,7 @@ export default async function ConceptPage({
             relationships={relationships}
             networkRelationships={networkRelationships}
             canCreate={
-              authContext?.role === 'editor' || authContext?.role === 'admin'
+              authContext?.role === 'admin'
             }
           />
         </section>

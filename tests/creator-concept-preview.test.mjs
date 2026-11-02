@@ -52,6 +52,10 @@ const signal = () => new AbortController().signal;
 
 for (const role of ['admin', 'editor']) test(`${role}: exact Library-qualified persisted Concept and direct references load without any write`, async () => {
   const s = setup();
+  if (role === 'editor') {
+    await assert.rejects(s.loadConceptPreview(s.db, target, capability(role), 'library', signal()), /unavailable/);
+    assert.equal(s.db.reads.length, 0); return;
+  }
   const loaded = await s.loadConceptPreview(s.db, target, capability(role), 'library', signal());
   assert.equal(loaded.body, record().concepts.body_markdown);
   assert.equal(loaded.format, 'visual_markdown_v1');
@@ -205,6 +209,12 @@ for (const role of ['admin', 'editor']) for (const editing of [false, true]) tes
   const h = questionSetup(role, editing); let e = h.render();
   e.setQuestionPrompt('Unsaved Front **literal**'); e.setQuestionAnswer('Unsaved Answer'); e.setQuestionTags([{ id: 'tag', name: 'Tag', slug: 'tag', status: 'active' }]);
   e.setQuestionAdditionalTestingAngles(['Clinical Application']); const before = snapshot(h); assert.equal(before.dirty, true);
+  if (role === 'editor') {
+    for (const id of ['primary', 'related']) assert.equal(h.render().renderQuestionConceptPreviewAction('official', id, id), null);
+    h.render().closeQuestionConceptPreview();
+    assert.deepEqual(snapshot(h), before); assert.equal(h.calls.length, 0); assert.equal(h.routes.length, 0);
+    return;
+  }
   const calls = h.calls.length, routes = h.routes.length, confirms = h.confirmations.length;
   assert.equal(h.render().questionConceptPreview, null, 'Selection alone never opens a preview');
   for (const id of ['primary', 'related']) {

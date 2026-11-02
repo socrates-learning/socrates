@@ -249,6 +249,10 @@ for (const role of ['learner', 'admin', 'editor']) {
       e.selectedTopicIds.add('topic');
     }
     e.setConceptName('New concept'); e.setConcept('New content');
+    if (role === 'editor') {
+      await assert.rejects(h.render().saveCurrentConcept(), /not permitted/);
+      assert.equal(h.calls.length, 0); return;
+    }
     await h.render().saveCurrentConcept();
     assert.equal(h.calls[0].name || h.calls[0].table,
       destination === 'personal' ? 'personal_concepts' : 'save_concept_with_format');
@@ -266,6 +270,11 @@ for (const role of ['learner', 'admin', 'editor']) {
       e = h.render();
     }
     e.setQuestionPrompt('New question'); e.setQuestionAnswer('New answer');
+    if (role === 'editor') {
+      await h.render().saveCurrentQuestion();
+      assert.match(h.render().questionStatus.message, /Choose a topic and concept/);
+      assert.equal(h.calls.length, 0); return;
+    }
     await h.render().saveCurrentQuestion();
     assert.equal(h.calls[0].name || h.calls[0].table,
       destination === 'personal' ? 'personal_cards' : 'save_question_with_format');
@@ -290,14 +299,14 @@ for (const role of ['learner', 'admin', 'editor']) {
   test(`${role}: official records retain identity and learner remains read-only`, () => {
     const h = editor({ role, editing: true }); let e = h.render();
     assert.equal(e.conceptEditorState.identity.key, 'official:concept:existing-concept');
-    assert.equal(e.isCurrentContentReadOnly, role === 'learner');
+    assert.equal(e.isCurrentContentReadOnly, role !== 'admin');
     e.setActivePersonalTopicId('mine-topic'); e = h.render();
     e.selectExistingQuestion({ source: 'official', id: 'official-q', conceptId: 'existing-concept',
       prompt: 'Official?', answer: 'Yes', explanation: '', difficulty: 'medium', testingAngle: 'General Understanding',
       status: 'published', tags: [], primaryConceptName: 'Official' });
     e = h.render();
     assert.equal(e.questionEditorState.identity.key, 'official:question:official-q');
-    assert.equal(e.isCurrentQuestionReadOnly, role === 'learner');
+    assert.equal(e.isCurrentQuestionReadOnly, role !== 'admin');
     e.setActiveCreatorTab('questions'); e = h.render();
     assert.equal(e.showPersonalCreatorTopics, true);
     e.startNewQuestion();
@@ -521,45 +530,16 @@ test('standalone Cards use existing search, open without a Concept, and remain i
 });
 
 
-test('Legacy Editor Add Custom Card reuses the Content left pane and retains the Topic Tree without navigation', () => {
-  const h=editor({role:'editor',placed:true});let e=h.render();
-  e.setActiveCreatorTab('content');e.setConcept('Existing draft');e=h.render();
-  const control=nodes(e.tree).find(n=>n.props?.className==='treeControls');
-  nodes(control).find(n=>n.type==='button' && visibleText(n)==='Add Custom Card').props.onClick();e=h.render();
-  assert.equal(e.activeCreatorTab,'content');
-  assert.equal(e.standaloneRequest.attachment.topicId,'topic');
-  assert.ok(nodes(e.tree).some(n=>n.props?.['aria-label']==='Topic Tree'));
-  assert.ok(nodes(e.tree).some(n=>n.props?.className==='panel topicPanel'));
-  assert.equal(nodes(e.tree).filter(n=>n.props?.['aria-label']==='Concept or explanation').length,0);
-  assert.equal(nodes(e.tree).filter(n=>n.props?.['aria-label']==='Search concepts').length,0);
-  const left=nodes(e.tree).find(n=>n.props?.className==='panel conceptPanel');
-  const cardEditor=nodes(left).find(n=>n.type?.name==='StandaloneCustomCardWorkspace');
-  assert.ok(cardEditor);assert.equal(cardEditor.props.request,e.standaloneRequest);
-  assert.equal(nodes(e.tree).filter(n=>n.type?.name==='StandaloneCustomCardWorkspace').length,1);
-  cardEditor.props.onRequest(null);e=h.render();
-  assert.equal(nodes(e.tree).find(n=>n.props?.['aria-label']==='Concept or explanation').props.value,'Existing draft');
-  assert.ok(nodes(e.tree).some(n=>n.props?.['aria-label']==='Topic Tree'));
-  assert.deepEqual(h.routes,[]);assert.equal(h.calls.length,0);
-});
-
-for (const role of ['admin','editor']) test(`${role}: explicit Add Custom respects creation capability while normal destination stays role-derived`,()=>{
+for (const role of ['admin','editor']) test(`${role}: Add Custom Card is absent without losing existing owner records`,()=>{
   const h=editor({role,placed:true});let e=h.render();
-  const action=nodes(e.tree).find(n=>n.type==='button'&&visibleText(n)==='Add Custom Card');
-  if(role==='admin') {
-    assert.equal(action,undefined);
-    assert.equal(e.standaloneRequest,null);
-    assert.equal(e.creationDestination,'official');
-    assert.deepEqual(h.calls,[]);assert.deepEqual(h.routes,[]);
-    return;
-  }
-  assert.ok(action);
-  action.props.onClick();e=h.render();
-  assert.equal(e.creationDestination,role==='learner'?'personal':'official');
+  assert.equal(nodes(e.tree).some(n=>n.type==='button'&&visibleText(n)==='Add Custom Card'),false);
+  assert.equal(e.standaloneRequest,null);
+  e.setStandaloneCards([{id:'historical',owner_id:'owner',concept_id:null,question:'Front',answer:'Back',library_node_id:'topic',library_id:'library',personal_topic_id:null}]);
+  h.render().selectExistingQuestion({source:'personal',id:'historical',conceptId:null});e=h.render();
+  assert.equal(e.standaloneRequest.card.id,'historical');
   const cardEditor=nodes(e.tree).find(n=>n.type?.name==='StandaloneCustomCardWorkspace');
-  assert.equal(cardEditor.props.ownerId,'owner');assert.equal(cardEditor.props.canCreate,true);
-  assert.equal(cardEditor.props.request.card,null);assert.equal(cardEditor.props.request.attachment.topicId,'topic');
-  assert.doesNotMatch(visibleText(nodes(e.tree).find(n=>n.props?.className==='treeControls')),/Personal|Official|Mine|Create in/);
-  assert.deepEqual(h.routes,[]);
+  assert.equal(cardEditor.props.ownerId,'owner');assert.equal(cardEditor.props.canCreate,false);
+  assert.deepEqual(h.calls,[]);assert.deepEqual(h.routes,[]);
 });
 
 test('Card search opens the Content editor at its existing Topic and Topic changes respect busy state',()=>{

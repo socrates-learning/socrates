@@ -86,7 +86,6 @@ export function Header() {
     window.dispatchEvent(new Event('socrates-open-creator-dashboard'));
   }
 
-  const isEditor = role === 'editor' || role === 'admin';
   const isAdmin = role === 'admin';
   const navButtonStyle = {
     alignItems: 'center',
@@ -185,7 +184,7 @@ export function Header() {
           Home
         </Link>
 
-        {isEditor && (
+        {isAdmin && (
           <Link
             style={navButtonStyle}
             href="/creator/concepts/new"

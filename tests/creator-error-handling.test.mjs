@@ -93,6 +93,7 @@ async function runCreatorPage({
       async getServerCreatorCapabilityManifest({ activeLibraryContext }) {
         return {
           subject: { userId: ownerId, role },
+          official: { saveConcept: role === 'admin' },
           library: { activeLibraryId: activeLibraryContext.library.id },
         };
       },
@@ -136,7 +137,7 @@ test('a genuinely absent Concept remains legitimate not-found behavior', async (
   await assert.rejects(
     runCreatorPage({
       route: '[id]',
-      role: 'editor',
+      role: 'admin',
       results: { concepts: { data: null, error: null } },
     }),
     (error) => error instanceof NotFoundSignal
@@ -168,7 +169,7 @@ test('a generic Concept query failure propagates as an application error, not a 
   await assert.rejects(
     runCreatorPage({
       route: '[id]',
-      role: 'editor',
+      role: 'admin',
       results: { concepts: { data: null, error: databaseError } },
     }),
     (error) => {

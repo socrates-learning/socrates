@@ -95,7 +95,7 @@ export function canAccessCreatorRoute({
   const scope = classifyCreatorRoute(pathname);
 
   if (scope === 'outside') return true;
-  if (role === 'editor' || role === 'admin') return true;
+  if (role === 'admin') return true;
   if (scope === 'staff') return false;
 
   return canAccessSharedCreator({ learnerAllowlist, role, userId });

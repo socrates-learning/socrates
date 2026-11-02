@@ -63,12 +63,12 @@ test('cohort learner is denied on Article, Organizer, and unknown Creator routes
   }
 });
 
-test('editor and admin retain access to every Creator route', () => {
+test('Admin retains every Creator route; Editor retains only shared historical access', () => {
   for (const role of ['editor', 'admin']) {
     for (const pathname of [...sharedRoutes, ...staffRoutes]) {
       assert.equal(canAccessCreatorRoute({
         pathname, role, userId: learnerB, learnerAllowlist: undefined,
-      }), true);
+      }), role === 'admin' || sharedRoutes.includes(pathname));
     }
   }
 });

@@ -1,0 +1,30 @@
+{
+  "candidate": "0ebbd1789136536937a35684c6d0db6ea036dc8d7089424b37be6b01ef6b7f85",
+  "baseline": "c97c90b2a608153eff9e8e9268affa5a11c8d85d6fe03fe0fbd2ed4493a2d16b",
+  "hunks": [
+    [
+      "      ),\n    [activeLibraryId, creatorCapabilities]\n  );\n  // Published-only presentation also serves historical Editor owners. This does\n  // not change their role or grant any Learner creation capabilities.\n  const isLearnerReadOnly = !creatorAuthority.canReadUnpublished;\n  // Existing records retain their own identity; capabilities gate every new draft.\n  const creationDestination: ContentSource =\n    creatorCapabilities.subject.role === 'admin' ? 'official' : 'personal';\n  const [conceptEditorState, setConceptEditorStateValue] =\n    useState<CreatorConceptEditorState>(() =>\n      resolvedConcept.id || creationDestination === 'official'\n",
+      "      ),\n    [activeLibraryId, creatorCapabilities]\n  );\n  const isLearnerReadOnly = creatorAuthority.role === 'learner';\n  // New content follows verified role; existing records retain their own identity.\n  const creationDestination: ContentSource =\n    creatorCapabilities.subject.role === 'learner' ? 'personal' : 'official';\n  const [conceptEditorState, setConceptEditorStateValue] =\n    useState<CreatorConceptEditorState>(() =>\n      resolvedConcept.id || creationDestination === 'official'\n"
+    ],
+    [
+      "  }\n\n  function openPersonalTopicDialog() {\n    if (!creatorCapabilities.personal.createTopic) return;\n    if (creationDestination !== 'personal') {\n      openAddDialog();\n      return;\n",
+      "  }\n\n  function openPersonalTopicDialog() {\n    if (creationDestination !== 'personal') {\n      openAddDialog();\n      return;\n"
+    ],
+    [
+      "    name: string,\n    context: PersonalTopicCreationContext\n  ): Promise<boolean> {\n    if (creationDestination !== 'personal' || !creatorCapabilities.personal.createTopic) return false;\n    if (!context.parentPersonalTopicId && !context.officialLibraryNodeId) {\n      showStatus('error', 'Select a Topic in the canonical tree before creating a Topic.');\n      return false;\n",
+      "    name: string,\n    context: PersonalTopicCreationContext\n  ): Promise<boolean> {\n    if (creationDestination !== 'personal') return false;\n    if (!context.parentPersonalTopicId && !context.officialLibraryNodeId) {\n      showStatus('error', 'Select a Topic in the canonical tree before creating a Topic.');\n      return false;\n"
+    ],
+    [
+      "  }\n\n  function openLearnerDraft(attachment: StandaloneCardAttachment | null, topicName: string) {\n    if (!creatorCapabilities.personal.createCard) return;\n    if (isSaving || isSavingQuestion || !confirmDiscardQuestionChanges()) return;\n    resetQuestionEditor(null);\n    setStandaloneEditorVersion(current => current + 1);\n",
+      "  }\n\n  function openLearnerDraft(attachment: StandaloneCardAttachment | null, topicName: string) {\n    if (isSaving || isSavingQuestion || !confirmDiscardQuestionChanges()) return;\n    resetQuestionEditor(null);\n    setStandaloneEditorVersion(current => current + 1);\n"
+    ],
+    [
+      "                  }}>Add Custom Card</button>}\n                {standaloneRequest?.card && <button className={styles.toolButton} type=\"button\"\n                  onClick={() => void deleteSelectedStandaloneCard()}>Delete Card</button>}\n                <button className={styles.toolButton} type=\"button\" onClick={openAddDialog} disabled={(creationDestination === 'official' ? !creatorAuthority.canManageTopicTree : !creatorCapabilities.personal.createTopic) || isMutatingTopic}>\n                  <Plus size={18} /> Add Subtopic\n                </button>\n                <button className={styles.toolButton} type=\"button\" onClick={openPersonalTopicDialog} disabled={!creatorCapabilities.personal.createTopic || isMutatingTopic}>\n                  <Plus size={18} /> New Topic\n                </button>\n                {(!isLearnerReadOnly || !!activePersonalTopic) && <button className={styles.toolButton} type=\"button\" onClick={openRenameDialog} disabled={(!activePersonalTopic && !creatorAuthority.canManageTopicTree) || isMutatingTopic}>\n",
+      "                  }}>Add Custom Card</button>}\n                {standaloneRequest?.card && <button className={styles.toolButton} type=\"button\"\n                  onClick={() => void deleteSelectedStandaloneCard()}>Delete Card</button>}\n                <button className={styles.toolButton} type=\"button\" onClick={openAddDialog} disabled={(creationDestination === 'official' && !creatorAuthority.canManageTopicTree) || isMutatingTopic}>\n                  <Plus size={18} /> Add Subtopic\n                </button>\n                <button className={styles.toolButton} type=\"button\" onClick={openPersonalTopicDialog} disabled={isMutatingTopic}>\n                  <Plus size={18} /> New Topic\n                </button>\n                {(!isLearnerReadOnly || !!activePersonalTopic) && <button className={styles.toolButton} type=\"button\" onClick={openRenameDialog} disabled={(!activePersonalTopic && !creatorAuthority.canManageTopicTree) || isMutatingTopic}>\n"
+    ],
+    [
+      "    ) : null;\n\n  const learnerQuestions = <CreatorLearnerQuestionsWorkspace\n      canCreate={creatorCapabilities.personal.createCard}\n      busy={isSaving || isSavingQuestion || isMutatingTopic}\n      topics={learnerTopics}\n      cards={learnerCards.map(card => {\n",
+      "    ) : null;\n\n  const learnerQuestions = <CreatorLearnerQuestionsWorkspace\n      busy={isSaving || isSavingQuestion || isMutatingTopic}\n      topics={learnerTopics}\n      cards={learnerCards.map(card => {\n"
+    ]
+  ]
+}

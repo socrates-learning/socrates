@@ -126,11 +126,16 @@ test('learner receives published browse and own-personal capabilities only', () 
   assert.equal(manifest.administration.manageUsersAndRoles, false);
 });
 
-test('editor retains current official authoring while administration stays admin-only', () => {
+test('Editor retains identity and historical owner editing without new authoring', () => {
   const manifest = capabilities('editor');
 
-  assert.ok(Object.values(manifest.official).every(Boolean));
-  assert.ok(Object.values(manifest.personal).every(Boolean));
+  assert.equal(manifest.subject.role, 'editor');
+  for (const [capability, value] of Object.entries(manifest.official)) {
+    assert.equal(value, capability === 'browsePublished', capability);
+  }
+  for (const [capability, value] of Object.entries(manifest.personal)) {
+    assert.equal(value, !capability.startsWith('create'), capability);
+  }
   assert.equal(manifest.administration.manageUsersAndRoles, false);
   assert.equal(manifest.administration.manageLibraryMemberships, false);
 });
@@ -158,8 +163,8 @@ test('admin adds user and membership administration without cross-user personal 
 
 test('capability manifest is deeply immutable and Library-contextual authoring fails closed', () => {
   const manifest = deriveCreatorCapabilities({
-    role: 'editor',
-    userId: 'editor-user',
+    role: 'admin',
+    userId: 'admin-user',
     library: {
       activeLibraryId: null,
       canAccessActiveLibrary: false,
@@ -192,8 +197,8 @@ test('command routing keeps targets explicit for every role', () => {
       ),
     /not permitted/
   );
-  assert.equal(
-    resolveCreatorCommandRoute(
+  assert.throws(
+    () => resolveCreatorCommandRoute(
       {
         type: 'create-concept',
         target: 'personal',
@@ -202,7 +207,7 @@ test('command routing keeps targets explicit for every role', () => {
       },
       editor
     ),
-    'personal-concept-owner-write'
+    /not permitted/
   );
   assert.equal(
     resolveCreatorCommandRoute(
@@ -212,7 +217,7 @@ test('command routing keeps targets explicit for every role', () => {
         libraryId: 'library-a',
         conceptKey: 'official:concept:concept-a',
       },
-      editor
+      capabilities('admin')
     ),
     'official-question-versioned-save'
   );
@@ -241,7 +246,7 @@ test('personal Card contract has no official Question-only metadata', () => {
 test('server capability boundary reuses resolved context and never accepts a browser manifest', () => {
   assert.match(serverCapabilitySource, /import 'server-only'/);
   assert.match(serverCapabilitySource, /activeLibraryContext \?\?/);
-  assert.match(serverCapabilitySource, /getVerifiedRequestAuthContext\(\)/);
+  assert.match(serverCapabilitySource, /getServerCreatorRouteActor\(\)/);
   assert.doesNotMatch(serverCapabilitySource, /manifest\s*:/);
 });
 

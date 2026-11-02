@@ -66,12 +66,12 @@ for (const origin of ['questions', 'flagged']) {
   });
 }
 
-test('Admin gets distinct View and Edit actions; Editor retains only existing View and Learner gets neither', () => {
+test('Admin gets distinct View and Edit actions; Editor and Learner receive neither official authoring action', () => {
   for (const role of ['admin', 'editor', 'learner']) {
     const h = setup({ role });
     const controls = nodes(render(h).renderQuestionConceptPreviewAction('official', 'primary', 'Primary'));
     const labels = controls.filter(n => n.type === 'button').map(n => text(n).trim());
-    assert.deepEqual(labels, role === 'admin' ? ['View Concept', 'Edit Concept'] : role === 'editor' ? ['View Concept'] : []);
+    assert.deepEqual(labels, role === 'admin' ? ['View Concept', 'Edit Concept'] : []);
     const flagged = nodes(expandChrome(render(h).tree)).filter(n => n.type?.name === 'StudyCreatorFlaggedBrowser');
     assert.equal(flagged.length, 0);
     render(h).setActiveCreatorTab('flagged');

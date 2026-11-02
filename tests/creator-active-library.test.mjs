@@ -28,7 +28,8 @@ for (const route of ['new','[id]']) {
     '@/lib/library-context':{resolveActiveLibraryContext:async()=>({library:{id:library}})},
     '@/lib/server-creator-capabilities':{
       getServerCreatorCapabilityManifest:async({activeLibraryContext})=>({
-        subject:{userId:'editor-user',role:'editor'},
+        subject:{userId:'admin-user',role:'admin'},
+        official:{saveConcept:true},
         library:{activeLibraryId:activeLibraryContext.library.id},
       }),
     },
@@ -43,7 +44,7 @@ for (const route of ['new','[id]']) {
    const result=await exports.default({params:Promise.resolve({id:'concept'})});
    assert.equal(result.activeLibraryId,library);
    assert.equal(result.creatorCapabilities.library.activeLibraryId,library);
-   assert.equal(result.initialPersonalContent.ownerId,'editor-user');
+   assert.equal(result.initialPersonalContent.ownerId,'admin-user');
    assert.equal(result.initialTopics[0].id,`${library}-topic`);
    assert.ok(calls.some(([table,column,value])=>table==='libraries'&&column==='id'&&value===library));
    assert.ok(!calls.some(([,column])=>column==='slug'));

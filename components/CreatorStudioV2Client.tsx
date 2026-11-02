@@ -884,10 +884,12 @@ export function CreatorStudioV2Client({
       ),
     [activeLibraryId, creatorCapabilities]
   );
-  const isLearnerReadOnly = creatorAuthority.role === 'learner';
-  // New content follows verified role; existing records retain their own identity.
+  // Published-only presentation also serves historical Editor owners. This does
+  // not change their role or grant any Learner creation capabilities.
+  const isLearnerReadOnly = !creatorAuthority.canReadUnpublished;
+  // Existing records retain their own identity; capabilities gate every new draft.
   const creationDestination: ContentSource =
-    creatorCapabilities.subject.role === 'learner' ? 'personal' : 'official';
+    creatorCapabilities.subject.role === 'admin' ? 'official' : 'personal';
   const [conceptEditorState, setConceptEditorStateValue] =
     useState<CreatorConceptEditorState>(() =>
       resolvedConcept.id || creationDestination === 'official'
@@ -3884,6 +3886,7 @@ export function CreatorStudioV2Client({
   }
 
   function openPersonalTopicDialog() {
+    if (!creatorCapabilities.personal.createTopic) return;
     if (creationDestination !== 'personal') {
       openAddDialog();
       return;
@@ -3902,7 +3905,7 @@ export function CreatorStudioV2Client({
     name: string,
     context: PersonalTopicCreationContext
   ): Promise<boolean> {
-    if (creationDestination !== 'personal') return false;
+    if (creationDestination !== 'personal' || !creatorCapabilities.personal.createTopic) return false;
     if (!context.parentPersonalTopicId && !context.officialLibraryNodeId) {
       showStatus('error', 'Select a Topic in the canonical tree before creating a Topic.');
       return false;
@@ -7076,6 +7079,7 @@ export function CreatorStudioV2Client({
   }
 
   function openLearnerDraft(attachment: StandaloneCardAttachment | null, topicName: string) {
+    if (!creatorCapabilities.personal.createCard) return;
     if (isSaving || isSavingQuestion || !confirmDiscardQuestionChanges()) return;
     resetQuestionEditor(null);
     setStandaloneEditorVersion(current => current + 1);
@@ -7120,10 +7124,10 @@ export function CreatorStudioV2Client({
                   }}>Add Custom Card</button>}
                 {standaloneRequest?.card && <button className={styles.toolButton} type="button"
                   onClick={() => void deleteSelectedStandaloneCard()}>Delete Card</button>}
-                <button className={styles.toolButton} type="button" onClick={openAddDialog} disabled={(creationDestination === 'official' && !creatorAuthority.canManageTopicTree) || isMutatingTopic}>
+                <button className={styles.toolButton} type="button" onClick={openAddDialog} disabled={(creationDestination === 'official' ? !creatorAuthority.canManageTopicTree : !creatorCapabilities.personal.createTopic) || isMutatingTopic}>
                   <Plus size={18} /> Add Subtopic
                 </button>
-                <button className={styles.toolButton} type="button" onClick={openPersonalTopicDialog} disabled={isMutatingTopic}>
+                <button className={styles.toolButton} type="button" onClick={openPersonalTopicDialog} disabled={!creatorCapabilities.personal.createTopic || isMutatingTopic}>
                   <Plus size={18} /> New Topic
                 </button>
                 {(!isLearnerReadOnly || !!activePersonalTopic) && <button className={styles.toolButton} type="button" onClick={openRenameDialog} disabled={(!activePersonalTopic && !creatorAuthority.canManageTopicTree) || isMutatingTopic}>
@@ -7275,6 +7279,7 @@ export function CreatorStudioV2Client({
     ) : null;
 
   const learnerQuestions = <CreatorLearnerQuestionsWorkspace
+      canCreate={creatorCapabilities.personal.createCard}
       busy={isSaving || isSavingQuestion || isMutatingTopic}
       topics={learnerTopics}
       cards={learnerCards.map(card => {

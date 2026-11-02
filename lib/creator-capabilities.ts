@@ -70,7 +70,7 @@ export function deriveCreatorCapabilities({
     throw new Error('Creator capabilities require a canonical Socrates role.');
   }
 
-  const isStaff = role === 'editor' || role === 'admin';
+  const isStaff = role === 'admin';
   const canAuthorInLibrary =
     isStaff &&
     Boolean(library.activeLibraryId) &&
@@ -96,12 +96,12 @@ export function deriveCreatorCapabilities({
       manageArticles: canAuthorInLibrary,
     },
     personal: {
-      createTopic: true,
-      createConcept: role === 'editor',
-      createCard: role !== 'admin',
+      createTopic: role !== 'editor',
+      createConcept: false,
+      createCard: role === 'learner',
       editOwnContent: true,
       deleteOwnContent: true,
-      createOfficialContextOverlay: role === 'editor',
+      createOfficialContextOverlay: false,
       managePersonalDecks: true,
       manageFlags: true,
     },

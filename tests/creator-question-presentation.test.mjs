@@ -60,6 +60,12 @@ for (const role of ['admin', 'editor']) {
   test(`${role}: complete Questions body opts in without styling Content, Tags, Flagged or Search`, () => {
     const h = editor({ role, placed: true }); h.render().setActiveCreatorTab('questions');
     let e = h.render(), tree = expandChrome(e.tree);
+    if (role === 'editor') {
+      assert.equal(nodes(tree).some(n => n.props?.className === 'questionDesign'), false);
+      assert.equal(e.creatorAuthority.canSaveQuestion, false);
+      assert.equal(nodes(e.tree).some(n => n.type?.name === 'QuestionMarkdownField'), false);
+      assert.equal(h.calls.length, 0); return;
+    }
     const body = nodes(tree).find(n => n.props?.className === 'questionDesign'); assert.ok(body);
     for (const label of ['Question / Answer', 'Topic Tree', 'Additional Options', 'Testing Angles', 'Tags', 'Existing Questions', 'New Questions are saved as Published']) assert.ok(text(body).includes(label), label);
     const fields = nodes(e.tree).filter(n => n.type?.name === 'QuestionMarkdownField');
@@ -85,6 +91,12 @@ for (const role of ['admin', 'editor']) {
     e.setQuestionConceptsByTopicId({ topic: [{ id: 'primary', name: 'Primary' }] });
     h.render(); h.runEffect('setQuestionConceptOptions(options)'); e = h.render();
     assert.equal(e.questionConceptId, 'primary'); assert.equal(e.primaryQuestionConceptId, null);
+    if (role === 'editor') {
+      e.associateQuestionConcept('primary', true);
+      assert.equal(h.render().primaryQuestionConceptId, null);
+      assert.equal(h.render().creatorAuthority.canSaveQuestion, false);
+      assert.equal(h.calls.length, 0); return;
+    }
     e.setQuestionConceptsByTopicId({ topic: [{ id: 'primary', name: 'Primary' }, { id: 'related', name: 'Related' }] });
     e = h.render(); e.browseQuestionConcept('primary', 'topic'); e = h.render(); assert.equal(e.primaryQuestionConceptId, 'primary');
     e.associateQuestionConcept('related', true); e = h.render(); assert.deepEqual(plain(e.questionRelatedConceptIds), ['related']);

@@ -7,7 +7,8 @@ import styles from '../CreatorStudioV2Client.module.css';
 import toolStyles from './LearnerCardTools.module.css';
 
 // Presentation only: ownership, attachment validation and persistence stay in Creator.
-export function CreatorLearnerQuestionsWorkspace({ editor, topicTree, cards, busy, onOpen, onNew, topics = [] }: {
+export function CreatorLearnerQuestionsWorkspace({ editor, topicTree, cards, busy, onOpen, onNew, topics = [], canCreate = true }: {
+  canCreate?: boolean;
   editor: ReactNode;
   topicTree: ReactNode;
   cards: readonly LearnerSearchCard[];
@@ -46,12 +47,12 @@ export function CreatorLearnerQuestionsWorkspace({ editor, topicTree, cards, bus
       </details>
       <div className={styles.existingQuestionList}>
         {visible.map(card => <button key={`personal:card:${card.id}`} className={styles.questionSearchResult} type="button" disabled={busy} onClick={() => onOpen(card.id)}>{card.standalone ? cardMarkdownSummary(card.front) : card.front}</button>)}
-        {!cards.length && <p>No Cards yet. Select a Topic to create one.</p>}
+        {!cards.length && <p>{canCreate ? 'No Cards yet. Select a Topic to create one.' : 'No existing Cards.'}</p>}
         {!!cards.length && !visible.length && <p role="status">No Cards match your search and filters.</p>}
       </div>
     </section>
         <h2>1. Question / Answer</h2>
-        <button className={styles.secondaryButton} type="button" disabled={busy} onClick={onNew}>New Card</button>
+        {canCreate && <button className={styles.secondaryButton} type="button" disabled={busy} onClick={onNew}>New Card</button>}
         {editor}
       </section>
       {topicTree}

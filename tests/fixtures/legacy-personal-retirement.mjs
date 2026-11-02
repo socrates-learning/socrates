@@ -1,3 +1,4 @@
+import { projectEditorRetirement } from './editor-retirement.mjs';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
@@ -7,6 +8,7 @@ import assert from 'node:assert/strict';
 const proof = JSON.parse(readFileSync(new URL('./legacy-personal-retirement-proof.json', import.meta.url)));
 export function projectLegacyRetirement(path, source) {
   if (typeof source !== 'string' || !String(path).endsWith('components/CreatorStudioV2Client.tsx')) return source;
+  source = projectEditorRetirement(path, source);
   const hash = value => createHash('sha256').update(value).digest('hex');
   assert.equal(hash(source), proof.candidate, 'Exact learner Card tools integration: legacy compatibility navigation');
   for (const [candidate, baseline] of [...proof.hunks].reverse()) {

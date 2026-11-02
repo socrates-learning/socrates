@@ -22,7 +22,7 @@ export default async function EditConceptPage({
     activeLibraryContext: context,
   });
   if (!capabilities) redirect(`/login?next=/creator/concepts/${id}`);
-  if (capabilities.subject.role === 'learner') redirect('/creator');
+  if (!capabilities.official.saveConcept) redirect('/creator');
   const supabase = await createSupabaseServerClient();
   const [activeLibraryResult, conceptResult, personalContent, topicGraph] = await Promise.all([
     supabase

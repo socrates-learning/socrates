@@ -57,7 +57,7 @@ const editPageSource = readFileSync(
   new URL('../app/creator/concepts/[id]/page.tsx', import.meta.url),
   'utf8'
 );
-function staffCapabilities(role = 'editor') {
+function staffCapabilities(role = 'admin') {
   return deriveCreatorCapabilities({
     role,
     userId: `${role}-user`,
@@ -81,7 +81,7 @@ function learnerCapabilities() {
   });
 }
 
-function authority(role = 'editor') {
+function authority(role = 'admin') {
   return createOfficialCreatorPresentationAuthority(
     staffCapabilities(role),
     activeLibraryId
@@ -129,7 +129,7 @@ test('server pages derive capabilities from the already-resolved trusted Library
   }
 });
 
-test('editor and admin capabilities preserve current official presentation authority', () => {
+test('Admin retains official presentation authority; Editor has no official mutation capability', () => {
   for (const role of ['editor', 'admin']) {
     const manifest = staffCapabilities(role);
     const presentation = authority(role);
@@ -139,9 +139,9 @@ test('editor and admin capabilities preserve current official presentation autho
     assert.equal(presentation.activeLibraryId, activeLibraryId);
     assert.equal(presentation.canSaveConcept, manifest.official.saveConcept);
     assert.equal(presentation.canSaveQuestion, manifest.official.saveQuestion);
-    assert.equal(presentation.canManageTopicTree, true);
-    assert.equal(presentation.canManageTags, true);
-    assert.equal(presentation.canManageTestingAngleVocabulary, true);
+    assert.equal(presentation.canManageTopicTree, role === 'admin');
+    assert.equal(presentation.canManageTags, role === 'admin');
+    assert.equal(presentation.canManageTestingAngleVocabulary, role === 'admin');
   }
 });
 

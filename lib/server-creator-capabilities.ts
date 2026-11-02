@@ -9,7 +9,7 @@ import {
   resolveActiveLibraryContext,
   type ActiveLibraryContext,
 } from '@/lib/library-context';
-import { getVerifiedRequestAuthContext } from '@/lib/server-auth-context';
+import { getServerCreatorRouteActor } from '@/lib/server-creator-route-access';
 
 export function deriveCreatorLibraryAuthority(
   context: ActiveLibraryContext,
@@ -19,7 +19,7 @@ export function deriveCreatorLibraryAuthority(
     throw new Error('Active Library context belongs to a different user.');
   }
 
-  const isStaff = context.role === 'editor' || context.role === 'admin';
+  const isStaff = context.role === 'admin';
   const canAccessActiveLibrary = Boolean(context.library) && !context.isUnauthorized;
 
   return Object.freeze({
@@ -33,8 +33,8 @@ export async function getServerCreatorCapabilityManifest({
 }: {
   activeLibraryContext?: ActiveLibraryContext;
 } = {}): Promise<CreatorCapabilityManifest | null> {
-  const auth = await getVerifiedRequestAuthContext();
-  if (!auth) return null;
+  const auth = await getServerCreatorRouteActor();
+  if (!auth?.role) return null;
 
   // Callers that already resolved Library context should pass it so capability
   // derivation adds no duplicate auth, membership, or Library reads.

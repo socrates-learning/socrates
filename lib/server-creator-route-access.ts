@@ -27,14 +27,22 @@ function canonicalRole(value: unknown): RequestAuthRole | null {
 export const getServerCreatorRouteActor = cache(
   async (): Promise<ServerCreatorRouteActor | null> => {
     const requestAuth = await getVerifiedRequestAuthContext();
+    const supabase = await createSupabaseServerClient();
+    const authResult = requestAuth ? null : await supabase.auth.getUser();
+    if (authResult) {
+      assertCreatorQuerySucceeded(authResult.error, 'the signed-in Creator user');
+    }
+    const user = authResult?.data.user;
+    // The activity RPC is authenticated-only. Preserve the signed-out redirect
+    // instead of turning its expected permission denial into a route error.
+    if (!requestAuth && !user) return null;
+    // A known role alone is insufficient while an account is inactive or its
+    // deletion is pending. This RPC uses the existing account/ownership fence.
+    const activity = await supabase.rpc('account_is_active');
+    assertCreatorQuerySucceeded(activity.error, 'the active Creator account');
+    if (activity.data !== true) return null;
     if (requestAuth) return requestAuth;
 
-    const supabase = await createSupabaseServerClient();
-    const authResult = await supabase.auth.getUser();
-    assertCreatorQuerySucceeded(authResult.error, 'the signed-in Creator user');
-    const {
-      data: { user },
-    } = authResult;
     if (!user) return null;
 
     const roleResult = await supabase
@@ -71,6 +79,6 @@ export function canActorAccessSharedCreator(
 export async function requireStaffCreatorRoute(): Promise<ServerCreatorRouteActor> {
   const actor = await getServerCreatorRouteActor();
   if (!actor) redirect('/login');
-  if (actor.role !== 'editor' && actor.role !== 'admin') redirect('/');
+  if (actor.role !== 'admin') redirect('/');
   return actor;
 }
